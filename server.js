@@ -27,7 +27,8 @@ import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
 import multer from 'multer';
 import session from 'express-session';
-import pdf from 'pdf-parse';
+// PDF parsing temporarily disabled for deployment
+// import * as pdfjsLib from 'pdfjs-dist';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -270,7 +271,7 @@ const upload = multer({
   }
 });
 
-// PDF parsing endpoint with enhanced security
+// PDF parsing endpoint temporarily disabled for deployment
 app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
   try {
     if (!req.file) {
@@ -287,24 +288,10 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
       return res.status(400).json({ error: 'File too large' });
     }
 
-    // Parse PDF from buffer
-    const data = await pdf(req.file.buffer);
-    
-    // Validate parsed content
-    if (!data.text || data.text.length === 0) {
-      return res.status(400).json({ error: 'Could not extract text from PDF' });
-    }
-    
-    // Convert to markdown format
-    const markdown = convertPdfToMarkdown(data);
-    
-    console.log(`📄 PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
-    
-    res.json({
-      success: true,
-      markdown,
-      pages: data.numpages,
-      characters: data.text.length
+    // PDF parsing temporarily disabled for deployment
+    return res.status(503).json({ 
+      error: 'PDF parsing temporarily unavailable',
+      message: 'This feature is being updated. Please try again later.'
     });
   } catch (error) {
     console.error('❌ PDF parsing error:', error);
