@@ -927,7 +927,7 @@ export default defineComponent({
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: currentUser.value?.username || null
+                userId: currentUser.value?.userId || currentUser.value?.username || null
               })
             }
           );
@@ -1280,7 +1280,7 @@ export default defineComponent({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              userId: currentUser.value?.username || null,
+              userId: currentUser.value?.userId || currentUser.value?.username || null,
             }),
           }
         );
@@ -1372,7 +1372,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: currentUser.value?.username,
+                owner: currentUser.value?.userId || currentUser.value?.username,
               }),
             }
           );
@@ -1398,8 +1398,8 @@ export default defineComponent({
                               body: JSON.stringify({
                   kbId: kb.uuid,
                   kbName: kb.name,
-                  owner: currentUser.value?.username,
-                  description: `Protected by ${currentUser.value?.displayName || currentUser.value?.username}`,
+                  owner: currentUser.value?.userId || currentUser.value?.username,
+                  description: `Protected by ${currentUser.value?.displayName || currentUser.value?.userId || currentUser.value?.username}`,
                 }),
             }
           );
