@@ -1,17 +1,18 @@
 name: maia-cloud-clean
 services:
-  - name: maia-backend
+  - name: maia-app
     source_dir: /
     github:
       repo: agropper/maia-cloud-clean
       branch: main
+    build_command: npm run build
     run_command: node server.js
     environment_slug: node-js
     instance_count: 1
     instance_size_slug: basic-xxs
     http_port: 3001
     routes:
-      - path: /api
+      - path: /
     envs:
       - key: NODE_ENV
         value: production
@@ -71,21 +72,6 @@ services:
       - key: COUCHDB_DATABASE
         value: ${COUCHDB_DATABASE}
         type: SECRET
-
-  - name: maia-frontend
-    source_dir: /
-    github:
-      repo: agropper/maia-cloud-clean
-      branch: main
-    build_command: npm run build
-    run_command: npm run preview
-    environment_slug: node-js
-    instance_count: 1
-    instance_size_slug: basic-xxs
-    http_port: 4173
-    routes:
-      - path: /
-    envs:
       - key: VITE_API_BASE_URL
-        value: ${VITE_API_BASE_URL}
+        value: "/api"
         type: SECRET 
