@@ -54,7 +54,7 @@ const convertStoredCredential = (storedCredential) => {
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
-const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use production domain or localhost for dev
+const rpID = process.env.NODE_ENV === 'production' ? 'ondigitalocean.app' : 'localhost'; // Use parent domain for production
 const origin = process.env.ORIGIN || `http://localhost:5173`; // Use frontend origin for passkey auth
 
 // Check if user ID is available
