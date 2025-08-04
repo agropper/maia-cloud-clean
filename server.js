@@ -27,6 +27,7 @@ import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
 import multer from 'multer';
 import session from 'express-session';
+import pdf from 'pdf-parse';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
