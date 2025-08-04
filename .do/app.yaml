@@ -55,5 +55,13 @@ services:
         value: "21340f475d40052c304a36aac046df3a"
       - key: COUCHDB_DATABASE
         value: "maia_chats"
+      - key: CLOUDANT_URL
+        value: "https://101aa9c8-aee0-475f-b6c0-cd5b68e28c24-bluemix.cloudantnosqldb.appdomain.cloud"
+      - key: CLOUDANT_USERNAME
+        value: "apikey-v2-eddelp7dcgxzao6urqtv5g5fp8802s6dbsuovnyy8ia"
+      - key: CLOUDANT_PASSWORD
+        value: "21340f475d40052c304a36aac046df3a"
+      - key: CLOUDANT_DATABASE
+        value: "maia_chats"
       - key: VITE_API_BASE_URL
         value: "/api" 
