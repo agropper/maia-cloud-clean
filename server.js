@@ -39,6 +39,13 @@ const couchDBClient = createCouchDBClient();
 
 const initializeDatabase = async () => {
   try {
+    // Debug: Log environment variables (masked for security)
+    console.log('🔍 Debug: Environment variables check:');
+    console.log('🔍 COUCHDB_URL:', process.env.COUCHDB_URL ? 'SET' : 'NOT SET');
+    console.log('🔍 COUCHDB_USERNAME:', process.env.COUCHDB_USERNAME ? 'SET' : 'NOT SET');
+    console.log('🔍 COUCHDB_PASSWORD:', process.env.COUCHDB_PASSWORD ? 'SET' : 'NOT SET');
+    console.log('🔍 COUCHDB_DATABASE:', process.env.COUCHDB_DATABASE ? 'SET' : 'NOT SET');
+    
     // Test the connection
     const connected = await couchDBClient.testConnection();
     if (connected) {
