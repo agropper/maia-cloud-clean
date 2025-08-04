@@ -40,12 +40,7 @@
               color="primary"
               @click="updateAgent"
               :loading="isUpdating"
-              :disable="!knowledgeBase"
-              :title="
-                knowledgeBase
-                  ? 'Update agent settings'
-                  : 'Select a knowledge base first'
-              "
+              :title="'Select a different agent to use'"
             />
             <q-btn label="Close" flat v-close-popup />
           </div>
@@ -346,6 +341,62 @@
       </q-card>
     </q-dialog>
 
+    <!-- Agent Selection Dialog -->
+    <q-dialog v-model="showAgentSelectionDialog" persistent>
+      <q-card style="min-width: 600px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">🤖 Select Agent</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <div v-if="availableAgents.length === 0" class="text-center q-pa-md">
+            <q-icon name="smart_toy" size="3rem" color="grey-4" />
+            <div class="text-h6 q-mt-md">No Agents Available</div>
+            <div class="text-caption q-mb-md">
+              No agents found. Create a new agent first.
+            </div>
+          </div>
+
+          <div v-else>
+            <div class="text-subtitle2 q-mb-md">
+              Select an agent to use as the current agent:
+            </div>
+
+            <div v-for="agent in availableAgents" :key="agent.uuid" class="q-mb-sm">
+              <q-item clickable @click="selectAndUpdateAgent(agent)" class="agent-item">
+                <q-item-section>
+                  <q-item-label>
+                    {{ agent.name }}
+                    <q-chip
+                      v-if="currentAgent && currentAgent.id === agent.uuid"
+                      size="sm"
+                      color="primary"
+                      text-color="white"
+                      class="q-ml-sm"
+                    >
+                      Current
+                    </q-chip>
+                  </q-item-label>
+                  <q-item-label caption>{{ agent.description }}</q-item-label>
+                  <q-item-label caption>
+                    Model: {{ agent.model?.name || 'Unknown' }} • Status: {{ agent.status }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-icon 
+                    name="chevron_right" 
+                    color="grey-6"
+                    v-if="currentAgent && currentAgent.id === agent.uuid"
+                  />
+                </q-item-section>
+              </q-item>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <!-- Delete Confirmation Dialog -->
     <q-dialog v-model="showDeleteConfirm">
       <q-card>
@@ -584,6 +635,7 @@ export default defineComponent({
     const showAddDocumentDialog = ref(false);
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
+    const showAgentSelectionDialog = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
@@ -776,11 +828,61 @@ export default defineComponent({
 
     // Update agent
     const updateAgent = async () => {
-      // TODO: Implement agent update functionality
-      $q.notify({
-        type: "info",
-        message: "Agent update functionality coming soon",
-      });
+      console.log("🔍 Update Agent clicked - showing agent selection dialog");
+      showAgentSelectionDialog.value = true;
+    };
+
+    // Select and update agent
+    const selectAndUpdateAgent = async (agent: DigitalOceanAgent) => {
+      isUpdating.value = true;
+      try {
+        console.log(`🔄 Updating current agent to: ${agent.name} (${agent.uuid})`);
+        
+        const response = await fetch(`${API_BASE_URL}/current-agent`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agentId: agent.uuid,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to update agent: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.success) {
+          // Update the current agent in the UI
+          currentAgent.value = result.agent;
+          
+          $q.notify({
+            type: "positive",
+            message: `Successfully updated to agent: ${agent.name}`,
+          });
+          
+          // Close the selection dialog
+          showAgentSelectionDialog.value = false;
+          
+          // Emit the updated agent to parent component
+          emit("agent-updated", result.agent);
+          
+          // Refresh agent info to get updated KB associations
+          await loadAgentInfo();
+        } else {
+          throw new Error("Failed to update agent");
+        }
+      } catch (error: any) {
+        console.error("❌ Failed to update agent:", error);
+        $q.notify({
+          type: "negative",
+          message: `Failed to update agent: ${error.message}`,
+        });
+      } finally {
+        isUpdating.value = false;
+      }
     };
 
     // Delete agent
@@ -1442,6 +1544,7 @@ export default defineComponent({
       showAddDocumentDialog,
       showCreateKbDialog,
       showSwitchKbDialog,
+      showAgentSelectionDialog,
       selectedKnowledgeBase,
       newKbName,
       newKbDescription,
@@ -1451,6 +1554,7 @@ export default defineComponent({
       onAgentSelected,
       selectAgent,
       updateAgent,
+      selectAndUpdateAgent,
       confirmDelete,
       deleteAgent,
       onDialogOpen,

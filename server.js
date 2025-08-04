@@ -1173,6 +1173,23 @@ app.post('/api/current-agent', async (req, res) => {
     const endpoint = selectedAgent.deployment?.url + '/api/v1';
     process.env.DIGITALOCEAN_GENAI_ENDPOINT = endpoint;
     
+    // Store the current agent in Cloudant database for persistence
+    try {
+      const currentAgentDoc = {
+        _id: 'current_agent',
+        agentId: agentId,
+        agentName: selectedAgent.name,
+        endpoint: endpoint,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await couchDBClient.saveDocument('maia_config', currentAgentDoc);
+      console.log(`💾 Current agent saved to database: ${selectedAgent.name} (${agentId})`);
+    } catch (dbError) {
+      console.error('❌ Failed to save current agent to database:', dbError);
+      // Continue even if database save fails
+    }
+    
     console.log(`✅ Set current agent to: ${selectedAgent.name} (${agentId})`);
     console.log(`🔗 Endpoint: ${endpoint}`);
     
