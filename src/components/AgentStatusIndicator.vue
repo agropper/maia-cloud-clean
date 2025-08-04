@@ -121,7 +121,7 @@ export default defineComponent({
       }
       
       // Get current user from props or use default
-      const userName = props.currentUser?.username || props.currentUser?.displayName || 'Unknown User'
+      const userName = props.currentUser?.userId || props.currentUser?.displayName || props.currentUser?.username || 'Unknown User'
       
       console.log('🔍 AgentStatusIndicator - currentUser prop:', props.currentUser)
       console.log('🔍 AgentStatusIndicator - userName:', userName)
