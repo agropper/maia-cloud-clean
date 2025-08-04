@@ -1254,18 +1254,55 @@ export default defineComponent({
     const connectKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
       if (!currentAgent.value) return;
 
+      // Check if user is authenticated for protected KBs
+      if (kb.isProtected && !currentUser.value) {
+        $q.notify({
+          type: "negative",
+          message: "You must be signed in to connect to protected knowledge bases.",
+        });
+        return;
+      }
+
       isUpdating.value = true;
       try {
         const response = await fetch(
           `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
           {
             method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userId: currentUser.value?.username || null,
+            }),
           }
         );
 
         const result = await response.json();
 
         if (!response.ok) {
+          // Check for authentication errors
+          if (response.status === 401) {
+            console.error("❌ Authentication required:", result);
+            $q.notify({
+              type: "negative",
+              message: `Authentication required: ${result.error}`,
+              timeout: 5000,
+            });
+            return;
+          }
+          
+          // Check for access denied errors
+          if (response.status === 403) {
+            console.error("❌ Access denied:", result);
+            $q.notify({
+              type: "negative",
+              message: result.error,
+              timeout: 5000,
+            });
+            return;
+          }
+          
           // Check if this is the DigitalOcean API limitation
           if (result.api_limitation) {
             console.error(

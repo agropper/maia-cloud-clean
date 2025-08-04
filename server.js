@@ -1348,7 +1348,7 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
 });
 
 // Associate knowledge base with agent
-app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
+app.post('/api/agents/:agentId/knowledge-bases/:kbId', checkKBProtection, async (req, res) => {
   try {
     const { agentId, kbId } = req.params;
     console.log(`🔗 [DO API] Attaching KB ${kbId} to agent ${agentId}`);
@@ -1666,8 +1666,8 @@ setPasskeyCouchDBClient(couchDBClient);
 // Mount passkey routes
 app.use('/api/passkey', passkeyRoutes);
 
-// Add KB protection check middleware
-app.use('/api/connect-kb/:kbId', async (req, res, next) => {
+// KB protection check middleware for knowledge base operations
+const checkKBProtection = async (req, res, next) => {
   try {
     const { kbId } = req.params;
     
@@ -1680,20 +1680,24 @@ app.use('/api/connect-kb/:kbId', async (req, res, next) => {
       
       if (!userId) {
         return res.status(401).json({ 
-          error: 'Authentication required',
+          error: 'Authentication required to access protected knowledge base',
           requiresAuth: true,
-          kbName: protectionDoc.kbName
+          kbName: protectionDoc.kbName,
+          owner: protectionDoc.owner
         });
       }
       
       // Check if user is the owner
       if (protectionDoc.owner !== userId) {
         return res.status(403).json({ 
-          error: 'Access denied. You are not the owner of this knowledge base.',
+          error: `Access denied. Knowledge base "${protectionDoc.kbName}" is owned by ${protectionDoc.owner}.`,
           requiresAuth: true,
-          kbName: protectionDoc.kbName
+          kbName: protectionDoc.kbName,
+          owner: protectionDoc.owner
         });
       }
+      
+      console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
     }
     
     next();
@@ -1701,7 +1705,7 @@ app.use('/api/connect-kb/:kbId', async (req, res, next) => {
     console.error('❌ Error checking KB protection:', error);
     next();
   }
-});
+};
 
 // =============================================================================
 // KNOWLEDGE BASE PROTECTION ROUTES
