@@ -1,0 +1,91 @@
+name: maia-cloud-clean
+services:
+  - name: maia-backend
+    source_dir: /
+    github:
+      repo: agropper/maia-cloud-clean
+      branch: main
+    run_command: node server.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 3001
+    routes:
+      - path: /api
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: DIGITALOCEAN_PERSONAL_API_KEY
+        value: ${DIGITALOCEAN_PERSONAL_API_KEY}
+        type: SECRET
+      - key: ANTHROPIC_API_KEY
+        value: ${ANTHROPIC_API_KEY}
+        type: SECRET
+      - key: OPENAI_API_KEY
+        value: ${OPENAI_API_KEY}
+        type: SECRET
+      - key: DEEPSEEK_API_KEY
+        value: ${DEEPSEEK_API_KEY}
+        type: SECRET
+      - key: GEMINI_API_KEY
+        value: ${GEMINI_API_KEY}
+        type: SECRET
+      - key: DIGITALOCEAN_GENAI_ENDPOINT
+        value: ${DIGITALOCEAN_GENAI_ENDPOINT}
+        type: SECRET
+      - key: DIGITALOCEAN_TOKEN
+        value: ${DIGITALOCEAN_TOKEN}
+        type: SECRET
+      - key: DIGITALOCEAN_BASE_URL
+        value: ${DIGITALOCEAN_BASE_URL}
+        type: SECRET
+      - key: DIGITALOCEAN_PROJECT_ID
+        value: ${DIGITALOCEAN_PROJECT_ID}
+        type: SECRET
+      - key: ALLOWED_ORIGINS
+        value: ${ALLOWED_ORIGINS}
+        type: SECRET
+      - key: ENABLE_REQUEST_LOGGING
+        value: ${ENABLE_REQUEST_LOGGING}
+        type: SECRET
+      - key: SINGLE_PATIENT_MODE
+        value: ${SINGLE_PATIENT_MODE}
+        type: SECRET
+      - key: DEFAULT_AGENT
+        value: ${DEFAULT_AGENT}
+        type: SECRET
+      - key: ORIGIN
+        value: ${ORIGIN}
+        type: SECRET
+      - key: COUCHDB_URL
+        value: ${COUCHDB_URL}
+        type: SECRET
+      - key: COUCHDB_USERNAME
+        value: ${COUCHDB_USERNAME}
+        type: SECRET
+      - key: COUCHDB_PASSWORD
+        value: ${COUCHDB_PASSWORD}
+        type: SECRET
+      - key: COUCHDB_DATABASE
+        value: ${COUCHDB_DATABASE}
+        type: SECRET
+
+  - name: maia-frontend
+    source_dir: /
+    github:
+      repo: agropper/maia-cloud-clean
+      branch: main
+    build_command: npm run build
+    run_command: npm run preview
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 4173
+    routes:
+      - path: /
+    envs:
+      - key: VITE_API_BASE_URL
+        value: ${VITE_API_BASE_URL}
+        type: SECRET 
