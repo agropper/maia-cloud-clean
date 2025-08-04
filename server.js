@@ -101,6 +101,7 @@ app.use((req, res, next) => {
 
 // KB protection check middleware for knowledge base operations
 const checkKBProtection = async (req, res, next) => {
+  console.log(`🔒 KB Protection Check: MIDDLEWARE CALLED`);
   try {
     const { kbId } = req.params;
     
