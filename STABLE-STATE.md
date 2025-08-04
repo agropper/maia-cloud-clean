@@ -1,4 +1,4 @@
-# Stable Working State - v1.0.2
+# Stable Working State - v1.0.3
 
 ## Date: January 27, 2025
 
@@ -13,6 +13,7 @@
 - ✅ Frontend-backend communication working
 - ✅ App deployed and running on DigitalOcean App Platform
 - ✅ Build process fixed - completely removed PDF parsing functionality
+- ✅ KB protection system working - users can now attach their own protected knowledge bases
 
 ### Key Fixes Applied:
 1. **Environment Variables Fixed**: Removed all env vars from `app.yaml` to prevent overwriting during deployments
@@ -20,12 +21,13 @@
 3. **API Keys Restored**: All API keys properly set via DigitalOcean Bulk Editor
 4. **Database Connection**: Cloudant credentials working correctly
 5. **PDF Parsing Issue Resolved**: Completely removed PDF parsing functionality from both frontend and backend
+6. **KB Protection System Fixed**: Added userId to knowledge base attachment requests to enable proper access control
 
 ### Current Configuration:
 - **App URL**: https://maia-cloud-clean-kjho4.ondigitalocean.app
 - **Region**: Toronto (tor1)
 - **Environment Variables**: Managed via DigitalOcean dashboard (not in `app.yaml`)
-- **Git Tag**: `v1.0.2-stable`
+- **Git Tag**: `v1.0.3-stable`
 - **Backup Branch**: `backup/stable-working-version`
 
 ### Environment Variables (Set in DigitalOcean Dashboard):
@@ -39,7 +41,7 @@ All environment variables are properly configured in the DigitalOcean App Platfo
 *Note: Actual API keys and credentials are stored securely in DigitalOcean dashboard, not in this repository.*
 
 ### How to Restore This State:
-1. **Git Tag**: `git checkout v1.0.2-stable`
+1. **Git Tag**: `git checkout v1.0.3-stable`
 2. **Backup Branch**: `git checkout backup/stable-working-version`
 3. **Environment Variables**: Use the Bulk Editor in DigitalOcean dashboard
 
