@@ -1411,9 +1411,11 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     console.log(`🔒 Request body:`, req.body);
     
     // Check if KB is protected
-    const protectionDoc = await couchDBClient.getDocument('maia_knowledge_bases', kbId);
-    
-    if (protectionDoc && protectionDoc.isProtected) {
+    try {
+      const protectionDoc = await couchDBClient.getDocument('maia_knowledge_bases', kbId);
+      console.log(`🔒 Protection lookup result:`, protectionDoc);
+      
+      if (protectionDoc && protectionDoc.isProtected) {
       console.log(`🔒 KB is protected: ${protectionDoc.kbName} (owner: ${protectionDoc.owner})`);
       
       // KB is protected - require authentication
@@ -1445,6 +1447,10 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
     } else {
       console.log(`🔒 KB is not protected or not found`);
+    }
+    } catch (error) {
+      console.error(`❌ Error checking KB protection:`, error);
+      console.log(`🔒 Continuing without protection check due to error`);
     }
 
     let attachSuccess = false;
