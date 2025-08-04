@@ -36,6 +36,7 @@
           <div class="text-subtitle2 q-mb-md">Enter your User ID:</div>
 
           <q-input
+            ref="userIdInputRef"
             v-model="userId"
             label="User ID"
             outlined
@@ -239,9 +240,17 @@ export default defineComponent({
       "choose" | "userId" | "register" | "authenticate" | "success" | "error"
     >("choose");
 
-    // Debug current step changes
+    // Debug current step changes and set focus
     watch(currentStep, (newStep) => {
       console.log("🔍 currentStep changed to:", newStep);
+      if (newStep === 'userId') {
+        // Set focus to user ID input after a short delay to ensure DOM is ready
+        setTimeout(() => {
+          if (userIdInputRef.value) {
+            userIdInputRef.value.focus();
+          }
+        }, 100);
+      }
     });
     const userId = ref("");
     const userIdError = ref(false);
@@ -252,6 +261,7 @@ export default defineComponent({
     const errorMessage = ref("");
     const isCreatingNewUser = ref(false);
     const registrationUserData = ref(null);
+    const userIdInputRef = ref(null);
 
     const startSignIn = () => {
       console.log("🔍 startSignIn called");
@@ -615,6 +625,7 @@ export default defineComponent({
       authenticatePasskey,
       onSuccess,
       isCreatingNewUser,
+      userIdInputRef,
     };
   },
 });

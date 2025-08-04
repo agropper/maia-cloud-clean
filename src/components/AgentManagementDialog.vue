@@ -364,7 +364,7 @@
             </div>
 
             <div v-for="agent in availableAgents" :key="agent.uuid" class="q-mb-sm">
-              <q-item clickable @click="selectAndUpdateAgent(agent)" class="agent-item">
+              <q-item class="agent-item">
                 <q-item-section>
                   <q-item-label>
                     {{ agent.name }}
@@ -384,10 +384,19 @@
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
+                  <q-btn
+                    v-if="!currentAgent || currentAgent.id !== agent.uuid"
+                    label="Choose"
+                    color="primary"
+                    size="sm"
+                    @click="selectAndUpdateAgent(agent)"
+                    :loading="isUpdating"
+                  />
                   <q-icon 
-                    name="chevron_right" 
-                    color="grey-6"
-                    v-if="currentAgent && currentAgent.id === agent.uuid"
+                    v-else
+                    name="check_circle" 
+                    color="positive"
+                    size="sm"
                   />
                 </q-item-section>
               </q-item>
