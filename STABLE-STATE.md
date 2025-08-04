@@ -1,8 +1,8 @@
-# Stable Working State - v1.0.4
+# Stable Working State - v1.0.5
 
 ## Date: August 4, 2025
 
-## Current Status: ✅ WORKING - Knowledge Base Protection Milestone
+## Current Status: ✅ WORKING - Complete Authentication & Agent Management Milestone
 
 ### What's Working:
 - ✅ Environment variables properly configured (not being overwritten)
@@ -16,6 +16,9 @@
 - ✅ **KNOWLEDGE BASE PROTECTION SYSTEM WORKING** - Users can now authenticate and attach their own protected knowledge bases
 - ✅ **Authentication Flow Complete** - Passkey authentication properly integrated with KB protection
 - ✅ **UI Components Fixed** - Attach/detach icons working, currentUser state properly managed
+- ✅ **Agent Selection System** - Users can now select and update their current agent with persistence
+- ✅ **Cosmetic Improvements** - Choose buttons for agent selection and auto-focus on user ID input
+- ✅ **Authentication Flow Complete** - Current user properly updates after sign-in with correct field mapping
 
 ### Key Fixes Applied:
 1. **Environment Variables Fixed**: Removed all env vars from `app.yaml` to prevent overwriting during deployments
@@ -27,12 +30,15 @@
 7. **Authentication Integration**: Fixed user ID field mapping (`userId` vs `username`) in AgentManagementDialog
 8. **Vue 3 Composition API Fixes**: Fixed props access in templates and setup functions
 9. **Current User State Management**: Properly implemented computed properties for currentUser prop access
+10. **Agent Selection System**: Implemented persistent agent selection with Cloudant database storage
+11. **UI/UX Improvements**: Added Choose buttons for agent selection and auto-focus on authentication dialogs
+12. **Field Mapping Fix**: Fixed userId vs username field mapping in authentication flow
 
 ### Current Configuration:
 - **App URL**: https://maia-cloud-clean-kjho4.ondigitalocean.app
 - **Region**: Toronto (tor1)
 - **Environment Variables**: Managed via DigitalOcean dashboard (not in `app.yaml`)
-- **Git Tag**: `v1.0.4-stable` (to be created)
+- **Git Tag**: `v1.0.5-stable` (to be created)
 - **Backup Branch**: `backup/stable-working-version`
 
 ### Knowledge Base Protection Features:
@@ -42,6 +48,14 @@
 - ✅ **UI Integration**: Proper authentication flow in AgentManagementDialog
 - ✅ **Error Handling**: Proper 401/403 error responses for unauthorized access
 - ✅ **State Management**: Current user state properly maintained across components
+
+### Agent Management Features:
+- ✅ **Agent Selection**: Users can choose from available agents via dialog
+- ✅ **Persistent Storage**: Selected agent saved to Cloudant database (`maia_config` collection)
+- ✅ **UI Improvements**: Clear "Choose" buttons for non-current agents
+- ✅ **Visual Feedback**: Current agent marked with check icon, others with Choose buttons
+- ✅ **Loading States**: Proper loading indicators during agent updates
+- ✅ **Error Handling**: Comprehensive error handling for agent selection failures
 
 ### Environment Variables (Set in DigitalOcean Dashboard):
 All environment variables are properly configured in the DigitalOcean App Platform dashboard via Bulk Editor. The configuration includes:
@@ -54,7 +68,7 @@ All environment variables are properly configured in the DigitalOcean App Platfo
 *Note: Actual API keys and credentials are stored securely in DigitalOcean dashboard, not in this repository.*
 
 ### How to Restore This State:
-1. **Git Tag**: `git checkout v1.0.4-stable` (to be created)
+1. **Git Tag**: `git checkout v1.0.5-stable` (to be created)
 2. **Backup Branch**: `git checkout backup/stable-working-version`
 3. **Environment Variables**: Use the Bulk Editor in DigitalOcean dashboard
 
@@ -62,12 +76,16 @@ All environment variables are properly configured in the DigitalOcean App Platfo
 - **Vue 3 Composition API**: Properly implemented computed properties for prop access
 - **Authentication Flow**: Complete passkey authentication with proper user state management
 - **Knowledge Base Protection**: Server-side access control with user ownership validation
-- **Error Handling**: Comprehensive error handling for authentication and authorization
-- **UI State Management**: Proper reactive state management for current user
+- **Agent Management System**: Persistent agent selection with database storage
+- **UI/UX Improvements**: Enhanced user experience with clear action buttons and auto-focus
+- **Error Handling**: Comprehensive error handling for authentication, authorization, and agent management
+- **UI State Management**: Proper reactive state management for current user and agent selection
+- **Field Mapping**: Fixed authentication data structure mapping between frontend and backend
 
 ### Next Steps:
 - Test knowledge base protection with multiple users
 - Add additional security features if needed
 - Document the knowledge base protection system
 - Consider adding audit logging for KB access
+- Implement agent startup loading from database (GET /api/current-agent endpoint)
 - Re-enable PDF parsing with proper Node.js-compatible library when needed (currently completely removed) 
