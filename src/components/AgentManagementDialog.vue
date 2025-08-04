@@ -182,7 +182,7 @@
                           <!-- Protection Toggle (only for KB owner) -->
                           <q-btn
                             v-if="
-                              props.currentUser && kb.owner === props.currentUser.username
+                              currentUser && kb.owner === currentUser.username
                             "
                             :icon="kb.isProtected ? 'lock_open' : 'lock'"
                             :color="kb.isProtected ? 'warning' : 'grey'"
@@ -592,8 +592,8 @@ export default defineComponent({
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
-    // Use the currentUser prop instead of creating a local ref
-    // const currentUser = ref<any>(null);
+    // Create a computed property to access the currentUser prop
+    const currentUser = computed(() => props.currentUser);
     const isAuthenticated = ref(false);
 
     // Dialog state for confirmations
@@ -830,7 +830,7 @@ export default defineComponent({
         username: userData.username,
         displayName: userData.displayName,
       };
-              // currentUser.value = userInfo; // Use props.currentUser instead
+              // currentUser.value = userInfo; // Use currentUser computed instead
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
 
@@ -927,7 +927,7 @@ export default defineComponent({
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: props.currentUser?.username || null
+                userId: currentUser.value?.username || null
               })
             }
           );
@@ -1047,10 +1047,10 @@ export default defineComponent({
     // Handle create new KB
     const handleCreateKnowledgeBase = () => {
       console.log("🔍 handleCreateKnowledgeBase called");
-      console.log("🔍 currentUser:", props.currentUser);
+      console.log("🔍 currentUser:", currentUser.value);
       console.log("🔍 showPasskeyAuthDialog:", showPasskeyAuthDialog.value);
 
-      if (!props.currentUser) {
+      if (!currentUser.value) {
         // Show passkey auth dialog for existing users
         console.log("🔍 Showing passkey auth dialog - user not signed in");
         showPasskeyAuthDialog.value = true;
@@ -1058,7 +1058,7 @@ export default defineComponent({
         // User is already authenticated, show KB creation dialog
         console.log(
           "🔍 Showing KB creation dialog - user already signed in as:",
-          props.currentUser.username
+          currentUser.value.username
         );
         showCreateKbDialog.value = true;
       }
@@ -1262,7 +1262,7 @@ export default defineComponent({
       if (!currentAgent.value) return;
 
       // Check if user is authenticated for protected KBs
-      if (kb.isProtected && !props.currentUser) {
+              if (kb.isProtected && !currentUser.value) {
         $q.notify({
           type: "negative",
           message: "You must be signed in to connect to protected knowledge bases.",
@@ -1280,7 +1280,7 @@ export default defineComponent({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              userId: props.currentUser?.username || null,
+              userId: currentUser.value?.username || null,
             }),
           }
         );
@@ -1372,7 +1372,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: props.currentUser?.username,
+                owner: currentUser.value?.username,
               }),
             }
           );
@@ -1398,8 +1398,8 @@ export default defineComponent({
                               body: JSON.stringify({
                   kbId: kb.uuid,
                   kbName: kb.name,
-                  owner: props.currentUser?.username,
-                  description: `Protected by ${props.currentUser?.displayName || props.currentUser?.username}`,
+                  owner: currentUser.value?.username,
+                  description: `Protected by ${currentUser.value?.displayName || currentUser.value?.username}`,
                 }),
             }
           );
@@ -1472,7 +1472,7 @@ export default defineComponent({
       confirmMessage,
       confirmTitle,
       executeConfirmAction,
-      // currentUser, // Removed - using props.currentUser instead
+      currentUser,
       toggleKBProtection,
       showPasskeyAuthDialog,
       handleUserAuthenticated,

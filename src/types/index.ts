@@ -34,7 +34,7 @@ export interface UploadedFile {
   id: string
   name: string
   size: number
-  type: 'transcript' | 'timeline' | 'pdf' | 'markdown' | 'text'
+  type: 'transcript' | 'timeline' | 'markdown' | 'text'
   content: string
   uploadedAt: Date
 }
