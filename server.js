@@ -1401,10 +1401,52 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
 });
 
 // Associate knowledge base with agent
-app.post('/api/agents/:agentId/knowledge-bases/:kbId', checkKBProtection, async (req, res) => {
+app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
   try {
     const { agentId, kbId } = req.params;
     console.log(`🔗 [DO API] Attaching KB ${kbId} to agent ${agentId}`);
+    
+    // KB Protection Check
+    console.log(`🔒 KB Protection Check: MIDDLEWARE CALLED`);
+    console.log(`🔒 KB Protection Check: ${kbId}`);
+    console.log(`🔒 Request body:`, req.body);
+    
+    // Check if KB is protected
+    const protectionDoc = await couchDBClient.getDocument('maia_knowledge_bases', kbId);
+    
+    if (protectionDoc && protectionDoc.isProtected) {
+      console.log(`🔒 KB is protected: ${protectionDoc.kbName} (owner: ${protectionDoc.owner})`);
+      
+      // KB is protected - require authentication
+      const { userId } = req.body;
+      
+      console.log(`🔒 User ID from request: ${userId}`);
+      
+      if (!userId) {
+        console.log(`❌ No user ID provided for protected KB`);
+        return res.status(401).json({ 
+          error: 'Authentication required to access protected knowledge base',
+          requiresAuth: true,
+          kbName: protectionDoc.kbName,
+          owner: protectionDoc.owner
+        });
+      }
+      
+      // Check if user is the owner
+      if (protectionDoc.owner !== userId) {
+        console.log(`❌ Access denied: ${userId} is not the owner (${protectionDoc.owner})`);
+        return res.status(403).json({ 
+          error: `Access denied. Knowledge base "${protectionDoc.kbName}" is owned by ${protectionDoc.owner}.`,
+          requiresAuth: true,
+          kbName: protectionDoc.kbName,
+          owner: protectionDoc.owner
+        });
+      }
+      
+      console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
+    } else {
+      console.log(`🔒 KB is not protected or not found`);
+    }
 
     let attachSuccess = false;
     let attachResult = null;
