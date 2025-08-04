@@ -44,7 +44,7 @@ export default defineComponent({
       const colors = {
         transcript: 'blue',
         timeline: 'green',
-        pdf: 'teal',
+        // pdf: 'teal', // Temporarily disabled for deployment
         markdown: 'purple',
         text: 'grey'
       }
@@ -54,7 +54,7 @@ export default defineComponent({
       const icons = {
         transcript: 'chat',
         timeline: 'timeline',
-        pdf: 'picture_as_pdf',
+        // pdf: 'picture_as_pdf', // Temporarily disabled for deployment
         markdown: 'description',
         text: 'text_snippet'
       }

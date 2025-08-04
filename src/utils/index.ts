@@ -482,22 +482,24 @@ const parseTranscriptFromMarkdown = (markdownContent: string): ChatHistoryItem[]
   return chatHistory
 }
 
-const extractTextFromPDF = async (file: File): Promise<string> => {
-  // For now, return a placeholder since PDF parsing requires additional libraries
-  // In a full implementation, you would use a library like pdf-parse or pdfjs-dist
-  return `PDF content from ${file.name} (PDF parsing not yet implemented)`
-}
+// PDF parsing temporarily disabled for deployment
+// const extractTextFromPDF = async (file: File): Promise<string> => {
+//   // For now, return a placeholder since PDF parsing requires additional libraries
+//   // In a full implementation, you would use a library like pdf-parse or pdfjs-dist
+//   return `PDF content from ${file.name} (PDF parsing not yet implemented)`
+// }
 
-const detectFileType = (fileName: string, content: string): 'transcript' | 'timeline' | 'pdf' | 'markdown' | 'text' => {
+const detectFileType = (fileName: string, content: string): 'transcript' | 'timeline' | 'markdown' | 'text' => {
   const extension = fileName.toLowerCase().split('.').pop()
   
   if (content.includes('### Conversation') && content.includes('##### user:') && content.includes('##### assistant:')) {
     return 'transcript'
   }
   
-  if (extension === 'pdf') {
-    return 'pdf'
-  }
+  // PDF parsing temporarily disabled for deployment
+  // if (extension === 'pdf') {
+  //   return 'pdf'
+  // }
   
   if (extension === 'md' || extension === 'markdown') {
     return 'markdown'
@@ -528,6 +530,6 @@ export {
   estimateTokenCount,
   PAUSE_THRESHOLD,
   parseTranscriptFromMarkdown,
-  extractTextFromPDF,
+  // extractTextFromPDF,
   detectFileType
 }

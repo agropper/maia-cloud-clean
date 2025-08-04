@@ -1,5 +1,5 @@
 import type { AppState, ValidationResult, UploadedFile } from '../types'
-import { convertJSONtoMarkdown, processTimeline, validateFile, estimateTokenCount, parseTranscriptFromMarkdown, extractTextFromPDF, detectFileType } from '../utils'
+import { convertJSONtoMarkdown, processTimeline, validateFile, estimateTokenCount, parseTranscriptFromMarkdown, detectFileType } from '../utils'
 import { useTranscript } from '../composables/useTranscript'
 
 const showAuth = (appState: AppState, writeMessage: (message: string, type: string) => void) => {
