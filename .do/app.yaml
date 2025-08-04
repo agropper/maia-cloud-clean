@@ -13,27 +13,4 @@ services:
     instance_size_slug: basic-xxs
     http_port: 3001
     routes:
-      - path: /
-    envs:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: "3001"
-      - key: DIGITALOCEAN_GENAI_ENDPOINT
-        value: "https://vzfujeetn2dkj4d5awhvvibo.agents.do-ai.run/api/v1"
-      - key: DIGITALOCEAN_BASE_URL
-        value: "https://api.digitalocean.com"
-      - key: DIGITALOCEAN_PROJECT_ID
-        value: ""
-      - key: ALLOWED_ORIGINS
-        value: "https://maia.adriang.xyz,https://maia-cloud-clean-kjho4.ondigitalocean.app"
-      - key: ENABLE_REQUEST_LOGGING
-        value: "true"
-      - key: SINGLE_PATIENT_MODE
-        value: "false"
-      - key: DEFAULT_AGENT
-        value: "agent-05102025"
-      - key: ORIGIN
-        value: "https://maia-cloud-clean-kjho4.ondigitalocean.app"
-      - key: VITE_API_BASE_URL
-        value: "/api" 
+      - path: / 
