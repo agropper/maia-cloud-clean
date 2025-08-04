@@ -1,4 +1,5 @@
 name: maia-cloud-clean
+region: tor1
 services:
   - name: maia-app
     source_dir: /
