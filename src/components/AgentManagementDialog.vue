@@ -922,6 +922,12 @@ export default defineComponent({
             `/api/agents/${currentAgent.value.id}/knowledge-bases/${selectedKnowledgeBase.value.uuid}`,
             {
               method: "POST",
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: currentUser.value?.username || null
+              })
             }
           );
           if (!postResponse.ok) {
