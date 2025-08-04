@@ -25,7 +25,6 @@ import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
-import pdf from 'pdf-parse';
 import multer from 'multer';
 import session from 'express-session';
 
