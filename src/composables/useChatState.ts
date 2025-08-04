@@ -31,7 +31,7 @@ export const useChatState = () => {
     access: [],
     currentQuery: "",
     currentFile: null,
-    selectedAI: "http://localhost:3001/api/personal-chat",
+    selectedAI: "/api/personal-chat",
     timeline: "",
     timelineChunks: [],
     selectedEpoch: 0,
