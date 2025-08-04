@@ -592,7 +592,8 @@ export default defineComponent({
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
-    const currentUser = ref<any>(null);
+    // Use the currentUser prop instead of creating a local ref
+    // const currentUser = ref<any>(null);
     const isAuthenticated = ref(false);
 
     // Dialog state for confirmations
@@ -829,7 +830,7 @@ export default defineComponent({
         username: userData.username,
         displayName: userData.displayName,
       };
-      currentUser.value = userInfo;
+              // currentUser.value = userInfo; // Use props.currentUser instead
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
 
@@ -926,7 +927,7 @@ export default defineComponent({
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: currentUser.value?.username || null
+                userId: props.currentUser?.username || null
               })
             }
           );
@@ -1150,7 +1151,7 @@ export default defineComponent({
             name: newKbName.value,
             description: newKbDescription.value,
             document_uuids: selectedDocuments.value,
-            owner: currentUser.value?.username, // Add owner information
+            owner: props.currentUser?.username, // Add owner information
           }),
         });
 
@@ -1261,7 +1262,7 @@ export default defineComponent({
       if (!currentAgent.value) return;
 
       // Check if user is authenticated for protected KBs
-      if (kb.isProtected && !currentUser.value) {
+      if (kb.isProtected && !props.currentUser) {
         $q.notify({
           type: "negative",
           message: "You must be signed in to connect to protected knowledge bases.",
@@ -1279,7 +1280,7 @@ export default defineComponent({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              userId: currentUser.value?.username || null,
+              userId: props.currentUser?.username || null,
             }),
           }
         );
@@ -1371,7 +1372,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: currentUser.value?.username,
+                owner: props.currentUser?.username,
               }),
             }
           );
@@ -1394,12 +1395,12 @@ export default defineComponent({
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kbId: kb.uuid,
-                kbName: kb.name,
-                owner: currentUser.value?.username,
-                description: `Protected by ${currentUser.value?.displayName || currentUser.value?.username}`,
-              }),
+                              body: JSON.stringify({
+                  kbId: kb.uuid,
+                  kbName: kb.name,
+                  owner: props.currentUser?.username,
+                  description: `Protected by ${props.currentUser?.displayName || props.currentUser?.username}`,
+                }),
             }
           );
 
