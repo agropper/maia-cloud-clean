@@ -46,7 +46,7 @@ services:
       - key: DEFAULT_AGENT
         value: "agent-05102025"
       - key: ORIGIN
-        value: "https://maia.adriang.xyz"
+        value: "https://maia-cloud-clean-kjho4.ondigitalocean.app"
       - key: COUCHDB_URL
         value: "https://101aa9c8-aee0-475f-b6c0-cd5b68e28c24-bluemix.cloudantnosqldb.appdomain.cloud"
       - key: COUCHDB_USERNAME
