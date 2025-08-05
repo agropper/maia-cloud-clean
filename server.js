@@ -730,10 +730,8 @@ app.get('/api/load-chats/:patientId?', async (req, res) => {
     let filteredChats = allChats.filter(chat => chat.patientId === patientId);
     
     if (userId) {
-      // Authenticated user: only show their own chats + unauthenticated chats
-      filteredChats = filteredChats.filter(chat => 
-        chat.userId === userId || chat.userId === null
-      );
+      // Authenticated user: only show their own chats
+      filteredChats = filteredChats.filter(chat => chat.userId === userId);
       console.log(`📋 Loaded chats for authenticated user ${userId}`);
     } else {
       // Unauthenticated user: only show unauthenticated chats
@@ -778,8 +776,8 @@ app.get('/api/load-chat/:chatId', async (req, res) => {
     
     // Check access permissions
     if (userId) {
-      // Authenticated user: can access their own chats or unauthenticated chats
-      if (chat.userId && chat.userId !== userId) {
+      // Authenticated user: can only access their own chats
+      if (!chat.userId || chat.userId !== userId) {
         return res.status(403).json({ message: 'Access denied: You can only access your own chats' });
       }
     } else {
