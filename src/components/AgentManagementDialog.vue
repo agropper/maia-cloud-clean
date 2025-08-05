@@ -1372,15 +1372,26 @@ export default defineComponent({
             }
           );
 
+          const result = await response.json();
+
           if (!response.ok) {
             throw new Error(`Failed to detach KB: ${response.statusText}`);
           }
 
-          console.log(`✅ Detached KB: ${kb.name}`);
-          $q.notify({
-            type: "positive",
-            message: `Knowledge base "${kb.name}" detached from agent.`,
-          });
+          // Check if the detachment was actually successful
+          if (result.success === false) {
+            console.error(`❌ Detachment failed: ${result.message}`);
+            $q.notify({
+              type: "negative",
+              message: `Failed to detach KB: ${result.message}`,
+            });
+          } else {
+            console.log(`✅ Detached KB: ${kb.name}`);
+            $q.notify({
+              type: "positive",
+              message: `Knowledge base "${kb.name}" detached from agent.`,
+            });
+          }
         }
 
         // Refresh the current agent data to get updated KB associations
@@ -1503,11 +1514,26 @@ export default defineComponent({
               throw new Error(`Failed to connect KB: ${response.statusText}`);
             }
           } else {
-            console.log(`✅ Connected KB: ${kb.name}`);
-            $q.notify({
-              type: "positive",
-              message: `Knowledge base "${kb.name}" connected to agent.`,
-            });
+            // Check if this is the DigitalOcean API limitation
+            if (result.api_limitation) {
+              console.error(
+                "❌ DigitalOcean API limitation detected:",
+                result.message
+              );
+              $q.notify({
+                type: "warning",
+                message:
+                  "⚠️ DigitalOcean API Limitation: Knowledge base attachment operations are not working correctly. Please use the DigitalOcean dashboard to manually attach knowledge bases.",
+                timeout: 10000,
+                position: "top",
+              });
+            } else {
+              console.log(`✅ Connected KB: ${kb.name}`);
+              $q.notify({
+                type: "positive",
+                message: `Knowledge base "${kb.name}" connected to agent.`,
+              });
+            }
           }
         }
 
