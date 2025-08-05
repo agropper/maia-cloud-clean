@@ -83,7 +83,12 @@ export default defineComponent({
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/current-agent`);
+        // Include user ID in request if available
+        const url = currentUser.value?.userId 
+          ? `${API_BASE_URL}/current-agent?userId=${currentUser.value.userId}`
+          : `${API_BASE_URL}/current-agent`;
+        
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.agent) {

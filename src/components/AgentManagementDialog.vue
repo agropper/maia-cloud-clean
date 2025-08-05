@@ -854,6 +854,7 @@ export default defineComponent({
           },
           body: JSON.stringify({
             agentId: agent.uuid,
+            userId: currentUser.value?.userId || null,
           }),
         });
 
@@ -1334,22 +1335,53 @@ export default defineComponent({
 
       isUpdating.value = true;
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
-          {
+        // Use user-specific session management if user is authenticated
+        if (currentUser.value?.userId) {
+          console.log(`🔍 Disconnecting KB from user session: ${currentUser.value.userId}`);
+          
+          const response = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
             method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userId: currentUser.value.userId,
+              kbUuid: kb.uuid
+            }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(`Failed to disconnect KB from user session: ${result.message}`);
+          } else {
+            console.log(`✅ Disconnected KB from user session: ${kb.name}`);
+            $q.notify({
+              type: "positive",
+              message: `Knowledge base "${kb.name}" disconnected from your session.`,
+            });
           }
-        );
+        } else {
+          // Fallback to DigitalOcean API for unauthenticated users
+          console.log(`🔍 Disconnecting KB via DigitalOcean API (unauthenticated user)`);
+          
+          const response = await fetch(
+            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+            {
+              method: "DELETE",
+            }
+          );
 
-        if (!response.ok) {
-          throw new Error(`Failed to detach KB: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`Failed to detach KB: ${response.statusText}`);
+          }
+
+          console.log(`✅ Detached KB: ${kb.name}`);
+          $q.notify({
+            type: "positive",
+            message: `Knowledge base "${kb.name}" detached from agent.`,
+          });
         }
-
-        console.log(`✅ Detached KB: ${kb.name}`);
-        $q.notify({
-          type: "positive",
-          message: `Knowledge base "${kb.name}" detached from agent.`,
-        });
 
         // Refresh the current agent data to get updated KB associations
         await loadAgentInfo();
@@ -1373,7 +1405,7 @@ export default defineComponent({
       if (!currentAgent.value) return;
 
       // Check if user is authenticated for protected KBs
-              if (kb.isProtected && !currentUser.value) {
+      if (kb.isProtected && !currentUser.value) {
         $q.notify({
           type: "negative",
           message: "You must be signed in to connect to protected knowledge bases.",
@@ -1383,66 +1415,100 @@ export default defineComponent({
 
       isUpdating.value = true;
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
-          {
+        // Use user-specific session management if user is authenticated
+        if (currentUser.value?.userId) {
+          console.log(`🔍 Connecting KB to user session: ${currentUser.value.userId}`);
+          
+          const response = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              userId: currentUser.value?.userId || currentUser.value?.username || null,
+              userId: currentUser.value.userId,
+              kbUuid: kb.uuid,
+              kbName: kb.name,
+              isProtected: kb.isProtected,
+              owner: kb.owner
             }),
-          }
-        );
+          });
 
-        const result = await response.json();
+          const result = await response.json();
 
-        if (!response.ok) {
-          // Check for authentication errors
-          if (response.status === 401) {
-            console.error("❌ Authentication required:", result);
-            $q.notify({
-              type: "negative",
-              message: `Authentication required: ${result.error}`,
-              timeout: 5000,
-            });
-            return;
-          }
-          
-          // Check for access denied errors
-          if (response.status === 403) {
-            console.error("❌ Access denied:", result);
-            $q.notify({
-              type: "negative",
-              message: result.error,
-              timeout: 5000,
-            });
-            return;
-          }
-          
-          // Check if this is the DigitalOcean API limitation
-          if (result.api_limitation) {
-            console.error(
-              "❌ DigitalOcean API limitation detected:",
-              result.message
-            );
-            $q.notify({
-              type: "warning",
-              message:
-                "⚠️ DigitalOcean API Limitation: Knowledge base attachment operations are not working correctly. Please use the DigitalOcean dashboard to manually attach knowledge bases.",
-              timeout: 10000,
-              position: "top",
-            });
+          if (!response.ok) {
+            throw new Error(`Failed to connect KB to user session: ${result.message}`);
           } else {
-            throw new Error(`Failed to connect KB: ${response.statusText}`);
+            console.log(`✅ Connected KB to user session: ${kb.name}`);
+            $q.notify({
+              type: "positive",
+              message: `Knowledge base "${kb.name}" connected to your session.`,
+            });
           }
         } else {
-          console.log(`✅ Connected KB: ${kb.name}`);
-          $q.notify({
-            type: "positive",
-            message: `Knowledge base "${kb.name}" connected to agent.`,
-          });
+          // Fallback to DigitalOcean API for unauthenticated users
+          console.log(`🔍 Connecting KB via DigitalOcean API (unauthenticated user)`);
+          
+          const response = await fetch(
+            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userId: currentUser.value?.userId || currentUser.value?.username || null,
+              }),
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            // Check for authentication errors
+            if (response.status === 401) {
+              console.error("❌ Authentication required:", result);
+              $q.notify({
+                type: "negative",
+                message: `Authentication required: ${result.error}`,
+                timeout: 5000,
+              });
+              return;
+            }
+            
+            // Check for access denied errors
+            if (response.status === 403) {
+              console.error("❌ Access denied:", result);
+              $q.notify({
+                type: "negative",
+                message: result.error,
+                timeout: 5000,
+              });
+              return;
+            }
+            
+            // Check if this is the DigitalOcean API limitation
+            if (result.api_limitation) {
+              console.error(
+                "❌ DigitalOcean API limitation detected:",
+                result.message
+              );
+              $q.notify({
+                type: "warning",
+                message:
+                  "⚠️ DigitalOcean API Limitation: Knowledge base attachment operations are not working correctly. Please use the DigitalOcean dashboard to manually attach knowledge bases.",
+                timeout: 10000,
+                position: "top",
+              });
+            } else {
+              throw new Error(`Failed to connect KB: ${response.statusText}`);
+            }
+          } else {
+            console.log(`✅ Connected KB: ${kb.name}`);
+            $q.notify({
+              type: "positive",
+              message: `Knowledge base "${kb.name}" connected to agent.`,
+            });
+          }
         }
 
         // Refresh the current agent data to get updated KB associations

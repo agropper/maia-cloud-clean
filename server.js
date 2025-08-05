@@ -868,97 +868,126 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API routes are working' });
 });
 
-// Get current agent
+// Get current agent (user-specific)
 app.get('/api/current-agent', async (req, res) => {
   try {
-    if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
-      console.log('🤖 No agent endpoint configured');
-      return res.json({ agent: null });
-    }
-
-    // Extract agent UUID from the endpoint URL
-    const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
-    console.log(`🔍 Endpoint URL: ${endpointUrl}`);
+    // Get user ID from query parameter or headers
+    const userId = req.query.userId || req.headers['x-user-id'];
     
-    // Get all agents and find the one with matching deployment URL
-    const agentsResponse = await doRequest('/v2/gen-ai/agents');
-    const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
-    
-    // Find the agent whose deployment URL matches our endpoint
-    const matchingAgent = agents.find(agent => 
-      agent.deployment?.url === endpointUrl.replace('/api/v1', '')
-    );
-    
-    if (!matchingAgent) {
-      console.log('❌ No agent found with matching deployment URL');
-      return res.json({ agent: null, message: 'No agent found with this deployment URL' });
-    }
-    
-    const agentId = matchingAgent.uuid;
-    console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
-    
-    // Get agent details including associated knowledge bases
-    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
-    
-    console.log(`📋 Agent details from API:`, JSON.stringify(agentData, null, 2));
-    
-    // Extract knowledge base information
-    let connectedKnowledgeBases = [];
-    let warning = null;
-    
-    if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
-      if (agentData.knowledge_bases.length > 1) {
-        // Multiple KBs detected - check if they're owned by the same user
-        console.log(`🚨 Multiple KBs detected: ${agentData.knowledge_bases.length} KBs attached to agent`);
-        
-        // Get protection information for all connected KBs
-        const kbProtectionInfo = [];
-        for (const kb of agentData.knowledge_bases) {
-          try {
-            const protectionDoc = await couchDBClient.getDocument('maia_knowledge_bases', kb.uuid);
-            kbProtectionInfo.push({
-              uuid: kb.uuid,
-              name: kb.name,
-              owner: protectionDoc?.owner || null,
-              isProtected: protectionDoc?.isProtected || false
-            });
-          } catch (error) {
-            console.log(`🔍 No protection info found for KB: ${kb.name} (${kb.uuid})`);
-            kbProtectionInfo.push({
-              uuid: kb.uuid,
-              name: kb.name,
-              owner: null,
-              isProtected: false
-            });
-          }
-        }
-        
+    if (!userId) {
+      console.log('🔍 No user ID provided, using global agent state');
+      // Fallback to global state for unauthenticated users
+      if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
+        console.log('🤖 No agent endpoint configured');
+        return res.json({ agent: null });
+      }
+      
+      // Use existing global logic for backward compatibility
+      const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
+      console.log(`🔍 Endpoint URL: ${endpointUrl}`);
+      
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      const matchingAgent = agents.find(agent => 
+        agent.deployment?.url === endpointUrl.replace('/api/v1', '')
+      );
+      
+      if (!matchingAgent) {
+        console.log('❌ No agent found with matching deployment URL');
+        return res.json({ agent: null, message: 'No agent found with this deployment URL' });
+      }
+      
+      const agentId = matchingAgent.uuid;
+      console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
+      
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
+      
+      // Get user-specific knowledge bases from session
+      const userSession = getUserSession(userId || 'anonymous');
+      const connectedKnowledgeBases = userSession.connectedKnowledgeBases;
+      
+      let warning = null;
+      if (connectedKnowledgeBases.length > 1) {
         // Check if all KBs are owned by the same user
-        const protectedKBs = kbProtectionInfo.filter(kb => kb.isProtected && kb.owner);
-        const uniqueOwners = [...new Set(protectedKBs.map(kb => kb.owner))];
-        
-        if (protectedKBs.length > 1 && uniqueOwners.length === 1) {
-          // All protected KBs are owned by the same user
-          const owner = uniqueOwners[0];
+        const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
+        if (protectedKBs.length > 1) {
           const kbCount = protectedKBs.length;
           warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
-          console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${owner}`);
+          console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
         } else {
-          // Multiple KBs from different owners or mixed protected/unprotected
-          warning = `⚠️ WARNING: Agent has ${agentData.knowledge_bases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
-          console.log(`⚠️ Multiple KBs from different owners or mixed protection status`);
+          warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
         }
       }
       
-      connectedKnowledgeBases = agentData.knowledge_bases; // Return ALL connected KBs
-      console.log(`📚 Found ${connectedKnowledgeBases.length} associated KBs:`);
-      connectedKnowledgeBases.forEach((kb, index) => {
-        console.log(`  ${index + 1}. ${kb.name} (${kb.uuid})`);
-      });
-    } else {
-      console.log(`📚 No knowledge bases associated with agent`);
+      const transformedAgent = {
+        id: agentData.uuid,
+        name: agentData.name,
+        description: agentData.instruction || '',
+        model: agentData.model?.name || 'Unknown',
+        status: agentData.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
+        instructions: agentData.instruction || '',
+        uuid: agentData.uuid,
+        deployment: agentData.deployment,
+        knowledgeBase: connectedKnowledgeBases[0],
+        knowledgeBases: connectedKnowledgeBases
+      };
+
+      const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
+      
+      console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
+      if (connectedKnowledgeBases.length > 0) {
+        console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
+      }
+
+      const response = { 
+        agent: transformedAgent,
+        endpoint: endpoint
+      };
+      
+      if (warning) {
+        response.warning = warning;
+      }
+
+      return res.json(response);
     }
+    
+    // User-specific agent state
+    console.log(`🔍 Getting agent state for user: ${userId}`);
+    const userSession = getUserSession(userId);
+    
+    if (!userSession.currentAgent) {
+      console.log(`🤖 No agent configured for user: ${userId}`);
+      return res.json({ agent: null });
+    }
+    
+    // Get agent details from DigitalOcean API
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${userSession.currentAgent}`);
+    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
+    
+    console.log(`📋 Agent details for user ${userId}:`, JSON.stringify(agentData, null, 2));
+    
+    // Use user-specific knowledge bases from session
+    const connectedKnowledgeBases = userSession.connectedKnowledgeBases;
+    let warning = null;
+    
+    if (connectedKnowledgeBases.length > 1) {
+      // Check if all KBs are owned by the same user
+      const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
+      if (protectedKBs.length > 1) {
+        const kbCount = protectedKBs.length;
+        warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
+        console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
+      } else {
+        warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+      }
+    }
+    
+    console.log(`📚 Found ${connectedKnowledgeBases.length} associated KBs for user ${userId}:`);
+    connectedKnowledgeBases.forEach((kb, index) => {
+      console.log(`  ${index + 1}. ${kb.name} (${kb.uuid})`);
+    });
 
     // Transform agent data for frontend
     const transformedAgent = {
@@ -970,15 +999,15 @@ app.get('/api/current-agent', async (req, res) => {
       instructions: agentData.instruction || '',
       uuid: agentData.uuid,
       deployment: agentData.deployment,
-      knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
-      knowledgeBases: connectedKnowledgeBases // Add all connected KBs
+      knowledgeBase: connectedKnowledgeBases[0],
+      knowledgeBases: connectedKnowledgeBases
     };
 
-    const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
+    const endpoint = agentData.deployment?.url + '/api/v1';
     
-    console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
+    console.log(`🤖 Current agent for user ${userId}: ${transformedAgent.name} (${transformedAgent.id})`);
     if (connectedKnowledgeBases.length > 0) {
-      console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
+      console.log(`📚 Current KB for user ${userId}: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
     }
 
     const response = { 
@@ -1188,10 +1217,10 @@ app.get('/api/models', async (req, res) => {
   }
 });
 
-// Set current agent
+// Set current agent (user-specific)
 app.post('/api/current-agent', async (req, res) => {
   try {
-    const { agentId } = req.body;
+    const { agentId, userId } = req.body;
     
     if (!agentId) {
       return res.status(400).json({ message: 'Agent ID is required' });
@@ -1206,29 +1235,36 @@ app.post('/api/current-agent', async (req, res) => {
       return res.status(404).json({ message: 'Agent not found' });
     }
     
-    // Set the current agent endpoint
-    const endpoint = selectedAgent.deployment?.url + '/api/v1';
-    process.env.DIGITALOCEAN_GENAI_ENDPOINT = endpoint;
-    
-    // Store the current agent in Cloudant database for persistence
-    try {
-      const currentAgentDoc = {
-        _id: 'current_agent',
-        agentId: agentId,
-        agentName: selectedAgent.name,
-        endpoint: endpoint,
-        updatedAt: new Date().toISOString()
-      };
+    if (userId) {
+      // User-specific agent selection
+      console.log(`🔍 Setting agent for user: ${userId}`);
+      updateUserSession(userId, { currentAgent: agentId });
+      console.log(`✅ Set current agent for user ${userId} to: ${selectedAgent.name} (${agentId})`);
+    } else {
+      // Global agent selection (backward compatibility)
+      console.log(`🔍 Setting global agent`);
+      const endpoint = selectedAgent.deployment?.url + '/api/v1';
+      process.env.DIGITALOCEAN_GENAI_ENDPOINT = endpoint;
       
-      await couchDBClient.saveDocument('maia_config', currentAgentDoc);
-      console.log(`💾 Current agent saved to database: ${selectedAgent.name} (${agentId})`);
-    } catch (dbError) {
-      console.error('❌ Failed to save current agent to database:', dbError);
-      // Continue even if database save fails
+      // Store the current agent in Cloudant database for persistence
+      try {
+        const currentAgentDoc = {
+          _id: 'current_agent',
+          agentId: agentId,
+          agentName: selectedAgent.name,
+          endpoint: endpoint,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await couchDBClient.saveDocument('maia_config', currentAgentDoc);
+        console.log(`💾 Current agent saved to database: ${selectedAgent.name} (${agentId})`);
+      } catch (dbError) {
+        console.error('❌ Failed to save current agent to database:', dbError);
+      }
+      
+      console.log(`✅ Set current agent to: ${selectedAgent.name} (${agentId})`);
+      console.log(`🔗 Endpoint: ${endpoint}`);
     }
-    
-    console.log(`✅ Set current agent to: ${selectedAgent.name} (${agentId})`);
-    console.log(`🔗 Endpoint: ${endpoint}`);
     
     res.json({ 
       success: true, 
@@ -1242,11 +1278,81 @@ app.post('/api/current-agent', async (req, res) => {
         uuid: selectedAgent.uuid,
         deployment: selectedAgent.deployment
       },
-      endpoint: endpoint
+      endpoint: selectedAgent.deployment?.url + '/api/v1'
     });
   } catch (error) {
     console.error('❌ Set current agent error:', error);
     res.status(500).json({ message: `Failed to set current agent: ${error.message}` });
+  }
+});
+
+// User session management endpoints
+app.post('/api/user-session/connect-kb', async (req, res) => {
+  try {
+    const { userId, kbUuid, kbName, isProtected, owner } = req.body;
+    
+    if (!userId || !kbUuid) {
+      return res.status(400).json({ message: 'User ID and KB UUID are required' });
+    }
+    
+    console.log(`🔍 Connecting KB ${kbName} (${kbUuid}) to user session: ${userId}`);
+    
+    const userSession = getUserSession(userId);
+    const kbInfo = {
+      uuid: kbUuid,
+      name: kbName,
+      isProtected: isProtected || false,
+      owner: owner || null
+    };
+    
+    // Add KB to user session (don't actually attach to DigitalOcean agent)
+    userSession.connectedKnowledgeBases.push(kbInfo);
+    updateUserSession(userId, { connectedKnowledgeBases: userSession.connectedKnowledgeBases });
+    
+    console.log(`✅ Connected KB ${kbName} to user session: ${userId}`);
+    res.json({ success: true, message: `Knowledge base "${kbName}" connected to your session.` });
+  } catch (error) {
+    console.error('❌ Connect KB to user session error:', error);
+    res.status(500).json({ message: `Failed to connect KB to user session: ${error.message}` });
+  }
+});
+
+app.delete('/api/user-session/disconnect-kb', async (req, res) => {
+  try {
+    const { userId, kbUuid } = req.body;
+    
+    if (!userId || !kbUuid) {
+      return res.status(400).json({ message: 'User ID and KB UUID are required' });
+    }
+    
+    console.log(`🔍 Disconnecting KB ${kbUuid} from user session: ${userId}`);
+    
+    const userSession = getUserSession(userId);
+    const updatedKBs = userSession.connectedKnowledgeBases.filter(kb => kb.uuid !== kbUuid);
+    updateUserSession(userId, { connectedKnowledgeBases: updatedKBs });
+    
+    console.log(`✅ Disconnected KB ${kbUuid} from user session: ${userId}`);
+    res.json({ success: true, message: 'Knowledge base disconnected from your session.' });
+  } catch (error) {
+    console.error('❌ Disconnect KB from user session error:', error);
+    res.status(500).json({ message: `Failed to disconnect KB from user session: ${error.message}` });
+  }
+});
+
+app.get('/api/user-session/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userSession = getUserSession(userId);
+    
+    res.json({
+      userId: userId,
+      currentAgent: userSession.currentAgent,
+      connectedKnowledgeBases: userSession.connectedKnowledgeBases,
+      lastActivity: userSession.lastActivity
+    });
+  } catch (error) {
+    console.error('❌ Get user session error:', error);
+    res.status(500).json({ message: `Failed to get user session: ${error.message}` });
   }
 });
 
@@ -1838,3 +1944,40 @@ app.listen(PORT, () => {
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
 }); 
+
+// User session management for agent state isolation
+const userSessions = new Map();
+
+// Session management functions
+const getUserSession = (userId) => {
+  if (!userSessions.has(userId)) {
+    userSessions.set(userId, {
+      currentAgent: null,
+      connectedKnowledgeBases: [],
+      lastActivity: Date.now()
+    });
+  }
+  return userSessions.get(userId);
+};
+
+const updateUserSession = (userId, updates) => {
+  const session = getUserSession(userId);
+  Object.assign(session, updates, { lastActivity: Date.now() });
+  return session;
+};
+
+// Clean up old sessions (older than 24 hours)
+const cleanupOldSessions = () => {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  
+  for (const [userId, session] of userSessions.entries()) {
+    if (now - session.lastActivity > maxAge) {
+      userSessions.delete(userId);
+      console.log(`🧹 Cleaned up session for user: ${userId}`);
+    }
+  }
+};
+
+// Run cleanup every hour
+setInterval(cleanupOldSessions, 60 * 60 * 1000);
