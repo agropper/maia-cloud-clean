@@ -1564,41 +1564,41 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       console.log(`🔒 Protection lookup result:`, protectionDoc);
       
       if (protectionDoc && protectionDoc.isProtected) {
-      console.log(`🔒 KB is protected: ${protectionDoc.kbName} (owner: ${protectionDoc.owner})`);
-      
-      // KB is protected - require authentication
-      const { userId } = req.body;
-      
-      console.log(`🔒 User ID from request: ${userId}`);
-      
-      if (!userId) {
-        console.log(`❌ No user ID provided for protected KB`);
-        return res.status(401).json({ 
-          error: 'Authentication required to access protected knowledge base',
-          requiresAuth: true,
-          kbName: protectionDoc.kbName,
-          owner: protectionDoc.owner
-        });
+        console.log(`🔒 KB is protected: ${protectionDoc.kbName} (owner: ${protectionDoc.owner})`);
+        
+        // KB is protected - require authentication
+        const { userId } = req.body;
+        
+        console.log(`🔒 User ID from request: ${userId}`);
+        
+        if (!userId) {
+          console.log(`❌ No user ID provided for protected KB`);
+          return res.status(401).json({ 
+            error: 'Authentication required to access protected knowledge base',
+            requiresAuth: true,
+            kbName: protectionDoc.kbName,
+            owner: protectionDoc.owner
+          });
+        }
+        
+        // Check if user is the owner
+        if (protectionDoc.owner !== userId) {
+          console.log(`❌ Access denied: ${userId} is not the owner (${protectionDoc.owner})`);
+          return res.status(403).json({ 
+            error: `Access denied. Knowledge base "${protectionDoc.kbName}" is owned by ${protectionDoc.owner}.`,
+            requiresAuth: true,
+            kbName: protectionDoc.kbName,
+            owner: protectionDoc.owner
+          });
+        }
+        
+        console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
+      } else {
+        console.log(`🔒 KB is not protected or not found - allowing access for unauthenticated users`);
       }
-      
-      // Check if user is the owner
-      if (protectionDoc.owner !== userId) {
-        console.log(`❌ Access denied: ${userId} is not the owner (${protectionDoc.owner})`);
-        return res.status(403).json({ 
-          error: `Access denied. Knowledge base "${protectionDoc.kbName}" is owned by ${protectionDoc.owner}.`,
-          requiresAuth: true,
-          kbName: protectionDoc.kbName,
-          owner: protectionDoc.owner
-        });
-      }
-      
-      console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
-    } else {
-      console.log(`🔒 KB is not protected or not found`);
-    }
     } catch (error) {
       console.error(`❌ Error checking KB protection:`, error);
-      console.log(`🔒 Continuing without protection check due to error`);
+      console.log(`🔒 Continuing without protection check due to error - allowing access for unauthenticated users`);
     }
 
     let attachSuccess = false;
