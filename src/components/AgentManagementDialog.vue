@@ -757,12 +757,15 @@ export default defineComponent({
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
       try {
-        const response = await fetch(`/api/set-current-agent`, {
+        const response = await fetch(`${API_BASE_URL}/current-agent`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ agentId }),
+          body: JSON.stringify({ 
+            agentId,
+            userId: currentUser.value?.userId 
+          }),
         });
 
         if (response.ok) {
