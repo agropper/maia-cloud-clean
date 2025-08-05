@@ -904,19 +904,31 @@ app.get('/api/current-agent', async (req, res) => {
       const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
       const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
       
-      // Get user-specific knowledge bases from session
-      const userSession = getUserSession(userId || 'anonymous');
-      const connectedKnowledgeBases = userSession.connectedKnowledgeBases;
-      
+      // For unauthenticated users, use the actual DigitalOcean API data
+      let connectedKnowledgeBases = [];
       let warning = null;
-      if (connectedKnowledgeBases.length > 1) {
-        // Check if all KBs are owned by the same user
-        const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
-        if (protectedKBs.length > 1) {
-          const kbCount = protectedKBs.length;
-          warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
-          console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
-        } else {
+      
+      if (userId) {
+        // Authenticated users: use user session
+        const userSession = getUserSession(userId);
+        connectedKnowledgeBases = userSession.connectedKnowledgeBases;
+        
+        if (connectedKnowledgeBases.length > 1) {
+          // Check if all KBs are owned by the same user
+          const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
+          if (protectedKBs.length > 1) {
+            const kbCount = protectedKBs.length;
+            warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
+            console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
+          } else {
+            warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+          }
+        }
+      } else {
+        // Unauthenticated users: use actual DigitalOcean API data
+        connectedKnowledgeBases = agentData.knowledge_bases || [];
+        
+        if (connectedKnowledgeBases.length > 1) {
           warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
         }
       }
