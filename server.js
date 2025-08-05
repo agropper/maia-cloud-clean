@@ -909,9 +909,46 @@ app.get('/api/current-agent', async (req, res) => {
     
     if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
       if (agentData.knowledge_bases.length > 1) {
-        // Multiple KBs detected - this is a safety issue
-        warning = `⚠️ WARNING: Agent has ${agentData.knowledge_bases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+        // Multiple KBs detected - check if they're owned by the same user
         console.log(`🚨 Multiple KBs detected: ${agentData.knowledge_bases.length} KBs attached to agent`);
+        
+        // Get protection information for all connected KBs
+        const kbProtectionInfo = [];
+        for (const kb of agentData.knowledge_bases) {
+          try {
+            const protectionDoc = await couchDBClient.getDocument('maia_knowledge_bases', kb.uuid);
+            kbProtectionInfo.push({
+              uuid: kb.uuid,
+              name: kb.name,
+              owner: protectionDoc?.owner || null,
+              isProtected: protectionDoc?.isProtected || false
+            });
+          } catch (error) {
+            console.log(`🔍 No protection info found for KB: ${kb.name} (${kb.uuid})`);
+            kbProtectionInfo.push({
+              uuid: kb.uuid,
+              name: kb.name,
+              owner: null,
+              isProtected: false
+            });
+          }
+        }
+        
+        // Check if all KBs are owned by the same user
+        const protectedKBs = kbProtectionInfo.filter(kb => kb.isProtected && kb.owner);
+        const uniqueOwners = [...new Set(protectedKBs.map(kb => kb.owner))];
+        
+        if (protectedKBs.length > 1 && uniqueOwners.length === 1) {
+          // All protected KBs are owned by the same user
+          const owner = uniqueOwners[0];
+          const kbCount = protectedKBs.length;
+          warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
+          console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${owner}`);
+        } else {
+          // Multiple KBs from different owners or mixed protected/unprotected
+          warning = `⚠️ WARNING: Agent has ${agentData.knowledge_bases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+          console.log(`⚠️ Multiple KBs from different owners or mixed protection status`);
+        }
       }
       
       connectedKnowledgeBases = agentData.knowledge_bases; // Return ALL connected KBs

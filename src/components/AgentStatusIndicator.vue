@@ -36,8 +36,8 @@
             </div>
             <div class="text-caption text-grey">{{ statusText }}</div>
             <!-- Show warning prominently if present -->
-            <div v-if="warning" class="text-caption text-warning q-mt-xs warning-text">
-              <q-icon name="warning" size="1rem" class="q-mr-xs" />
+            <div v-if="warning" :class="warningClass" class="text-caption q-mt-xs warning-text">
+              <q-icon :name="warningIcon" size="1rem" class="q-mr-xs" />
               {{ warning }}
             </div>
           </div>
@@ -188,6 +188,31 @@ export default defineComponent({
       }
     })
 
+    // Warning styling based on content
+    const warningClass = computed(() => {
+      if (!props.warning) return '';
+      
+      // Check if it's a purple note (same-owner multiple KBs)
+      if (props.warning.includes('💜 NOTE:')) {
+        return 'text-purple q-mt-xs warning-text';
+      }
+      
+      // Default warning styling
+      return 'text-warning q-mt-xs warning-text';
+    })
+
+    const warningIcon = computed(() => {
+      if (!props.warning) return 'warning';
+      
+      // Check if it's a purple note (same-owner multiple KBs)
+      if (props.warning.includes('💜 NOTE:')) {
+        return 'info';
+      }
+      
+      // Default warning icon
+      return 'warning';
+    })
+
     // Debug currentUser prop changes
     watch(() => props.currentUser, (newUser) => {
       console.log('🔍 AgentStatusIndicator - currentUser prop changed:', newUser)
@@ -197,7 +222,9 @@ export default defineComponent({
       agentName,
       statusText,
       statusIcon,
-      statusColor
+      statusColor,
+      warningClass,
+      warningIcon
     }
   }
 })
@@ -228,11 +255,21 @@ export default defineComponent({
 }
 
 .warning-text {
-  background-color: #ffebee;
-  border: 1px solid #f44336;
   border-radius: 4px;
   padding: 4px 8px;
   margin-top: 4px;
   font-weight: 500;
+}
+
+/* Default warning styling (yellow) */
+.text-warning.warning-text {
+  background-color: #ffebee;
+  border: 1px solid #f44336;
+}
+
+/* Purple note styling for same-owner multiple KBs */
+.text-purple.warning-text {
+  background-color: #f3e5f5;
+  border: 1px solid #9c27b0;
 }
 </style> 
