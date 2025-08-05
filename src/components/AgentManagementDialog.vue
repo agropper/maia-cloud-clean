@@ -610,6 +610,10 @@ export default defineComponent({
       type: Object,
       default: null,
     },
+    currentAgent: {
+      type: Object,
+      default: null,
+    },
   },
   emits: [
     "update:modelValue",
@@ -627,8 +631,8 @@ export default defineComponent({
       set: (value) => emit("update:modelValue", value),
     });
 
-    // Agent state
-    const currentAgent = ref<DigitalOceanAgent | null>(null);
+    // Agent state - use prop instead of local ref
+    const currentAgent = computed(() => props.currentAgent);
     const availableAgents = ref<DigitalOceanAgent[]>([]);
     const selectedAgentId = ref<string>("");
     const knowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
@@ -667,36 +671,25 @@ export default defineComponent({
     const loadAgentInfo = async () => {
       isLoading.value = true;
       try {
-        // Load current agent info (this includes KB associations)
-        const currentAgentResponse = await fetch(
-          `${API_BASE_URL}/current-agent`
-        );
-        if (!currentAgentResponse.ok) {
-          throw new Error("Failed to load current agent");
-        }
-
-        const currentAgentData = await currentAgentResponse.json();
-
-        if (currentAgentData.agent) {
-          currentAgent.value = currentAgentData.agent;
+        // Current agent is now passed as prop, so we just log its state
+        if (currentAgent.value) {
           console.log(
-            `🤖 Current agent loaded: ${currentAgentData.agent.name}`
+            `🤖 Current agent loaded: ${currentAgent.value.name}`
           );
 
-          if (currentAgentData.agent.knowledgeBase) {
+          if (currentAgent.value.knowledgeBase) {
             console.log(
-              `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
+              `📚 Current KB: ${currentAgent.value.knowledgeBase.name}`
             );
           } else {
             console.log(`📚 No KB assigned`);
           }
 
           // Handle warnings from the API
-          if (currentAgentData.warning) {
-            console.warn(currentAgentData.warning);
+          if (currentAgent.value.warning) {
+            console.warn(currentAgent.value.warning);
           }
         } else {
-          currentAgent.value = null;
           console.log("🤖 No agent configured");
         }
 
@@ -973,6 +966,14 @@ export default defineComponent({
     const onDialogOpen = () => {
       loadAgentInfo();
     };
+
+    // Watch for changes in currentAgent prop and refresh KB list
+    watch(() => props.currentAgent, async (newAgent) => {
+      if (newAgent) {
+        console.log("🔍 AgentManagementDialog - currentAgent prop changed, refreshing KB list");
+        await refreshKnowledgeBases();
+      }
+    }, { immediate: true });
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;

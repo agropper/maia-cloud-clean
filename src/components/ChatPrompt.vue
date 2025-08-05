@@ -525,6 +525,7 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :uploadedFiles="appState.uploadedFiles"
     :currentUser="currentUser"
+    :currentAgent="currentAgent"
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"
     @user-authenticated="handleUserAuthenticated"
