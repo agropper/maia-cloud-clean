@@ -1376,9 +1376,35 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       return res.json({ success: true, message: `Knowledge base "${kbName}" is already connected to your session.` });
     }
     
-    // Add KB to user session (don't actually attach to DigitalOcean agent)
+    // Add KB to user session
     userSession.connectedKnowledgeBases.push(kbInfo);
     updateUserSession(userId, { connectedKnowledgeBases: userSession.connectedKnowledgeBases });
+    
+    // Also attach KB to DigitalOcean agent for actual chat processing
+    try {
+      const currentAgent = await getCurrentAgent();
+      if (currentAgent && currentAgent.id) {
+        console.log(`🔍 Attaching KB ${kbName} (${kbUuid}) to DigitalOcean agent: ${currentAgent.id}`);
+        
+        const attachResponse = await fetch(`${currentAgent.endpoint}/knowledge-bases/${kbUuid}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (attachResponse.ok) {
+          console.log(`✅ Successfully attached KB ${kbName} to DigitalOcean agent`);
+        } else {
+          console.warn(`⚠️ Failed to attach KB ${kbName} to DigitalOcean agent: ${attachResponse.status}`);
+          // Don't fail the request, just log the warning
+        }
+      }
+    } catch (attachError) {
+      console.warn(`⚠️ Error attaching KB to DigitalOcean agent:`, attachError);
+      // Don't fail the request, just log the warning
+    }
     
     console.log(`✅ Connected KB ${kbName} to user session: ${userId}`);
     res.json({ success: true, message: `Knowledge base "${kbName}" connected to your session.` });
@@ -1399,8 +1425,35 @@ app.delete('/api/user-session/disconnect-kb', async (req, res) => {
     console.log(`🔍 Disconnecting KB ${kbUuid} from user session: ${userId}`);
     
     const userSession = getUserSession(userId);
+    const kbToRemove = userSession.connectedKnowledgeBases.find(kb => kb.uuid === kbUuid);
     const updatedKBs = userSession.connectedKnowledgeBases.filter(kb => kb.uuid !== kbUuid);
     updateUserSession(userId, { connectedKnowledgeBases: updatedKBs });
+    
+    // Also detach KB from DigitalOcean agent for actual chat processing
+    try {
+      const currentAgent = await getCurrentAgent();
+      if (currentAgent && currentAgent.id && kbToRemove) {
+        console.log(`🔍 Detaching KB ${kbToRemove.name} (${kbUuid}) from DigitalOcean agent: ${currentAgent.id}`);
+        
+        const detachResponse = await fetch(`${currentAgent.endpoint}/knowledge-bases/${kbUuid}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (detachResponse.ok) {
+          console.log(`✅ Successfully detached KB ${kbToRemove.name} from DigitalOcean agent`);
+        } else {
+          console.warn(`⚠️ Failed to detach KB ${kbToRemove.name} from DigitalOcean agent: ${detachResponse.status}`);
+          // Don't fail the request, just log the warning
+        }
+      }
+    } catch (detachError) {
+      console.warn(`⚠️ Error detaching KB from DigitalOcean agent:`, detachError);
+      // Don't fail the request, just log the warning
+    }
     
     console.log(`✅ Disconnected KB ${kbUuid} from user session: ${userId}`);
     res.json({ success: true, message: 'Knowledge base disconnected from your session.' });
@@ -2015,6 +2068,31 @@ app.listen(PORT, () => {
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
 }); 
+
+// Helper function to get current agent details
+const getCurrentAgent = async () => {
+  try {
+    // Get the current agent from DigitalOcean API
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const agents = agentsResponse.agents || [];
+    
+    // Find the agent we're using (agent-05102025)
+    const currentAgent = agents.find(agent => agent.name === 'agent-05102025');
+    
+    if (currentAgent) {
+      return {
+        id: currentAgent.uuid,
+        name: currentAgent.name,
+        endpoint: currentAgent.deployment?.url ? `${currentAgent.deployment.url}/api/v1` : null
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('❌ Error getting current agent:', error);
+    return null;
+  }
+};
 
 // User session management for agent state isolation
 const userSessions = new Map();
