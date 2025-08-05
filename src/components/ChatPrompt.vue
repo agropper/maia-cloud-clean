@@ -159,9 +159,12 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
-    const handleUserAuthenticated = (userData: any) => {
+    const handleUserAuthenticated = async (userData: any) => {
       currentUser.value = userData;
       console.log("🔍 User authenticated in ChatPrompt:", userData);
+
+      // Refresh agent data to get user-specific state
+      await fetchCurrentAgent();
 
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
@@ -176,9 +179,12 @@ export default defineComponent({
       showPasskeyAuthDialog.value = true;
     };
 
-    const handleSignOut = () => {
+    const handleSignOut = async () => {
       console.log("🔍 Sign-out requested");
       currentUser.value = null;
+      
+      // Refresh agent data to get global state
+      await fetchCurrentAgent();
     };
 
     const handleSignInCancelled = () => {

@@ -1126,10 +1126,9 @@ export default defineComponent({
           const knowledgeBases: DigitalOceanKnowledgeBase[] =
             await kbResponse.json();
 
-          // Get all connected KBs from the current agent
-          const connectedKBs = currentAgent.value?.knowledgeBase
-            ? [currentAgent.value.knowledgeBase]
-            : [];
+          // Get all connected KBs from the current agent (use knowledgeBases array if available)
+          const connectedKBs = currentAgent.value?.knowledgeBases || 
+            (currentAgent.value?.knowledgeBase ? [currentAgent.value.knowledgeBase] : []);
 
           // Combine available KBs with connected KBs, avoiding duplicates
           const allKBs = [...knowledgeBases];
