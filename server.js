@@ -678,17 +678,18 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
 // Save chat to CouchDB
 app.post('/api/save-chat', async (req, res) => {
   try {
-    const { chatHistory, uploadedFiles, patientId = 'demo_patient_001' } = req.body;
+    const { chatHistory, uploadedFiles, patientId = 'demo_patient_001', userId } = req.body;
     
     if (!chatHistory || chatHistory.length === 0) {
       return res.status(400).json({ message: 'No chat history to save' });
     }
 
-    console.log(`💾 Attempting to save chat with ${chatHistory.length} messages`);
+    console.log(`💾 Attempting to save chat with ${chatHistory.length} messages for ${userId ? `user ${userId}` : 'unauthenticated user'}`);
 
     const chatDoc = {
       _id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       patientId,
+      userId: userId || null, // null for unauthenticated users
       chatHistory,
       uploadedFiles: uploadedFiles || [],
       createdAt: new Date().toISOString(),
@@ -720,14 +721,31 @@ app.post('/api/save-chat', async (req, res) => {
 app.get('/api/load-chats/:patientId?', async (req, res) => {
   try {
     const patientId = req.params.patientId || 'demo_patient_001';
+    const userId = req.query.userId;
     
     // Use Cloudant client
     const allChats = await couchDBClient.getAllChats();
-    const chats = allChats
-      .filter(chat => chat.patientId === patientId)
+    
+    // Filter chats based on user authentication
+    let filteredChats = allChats.filter(chat => chat.patientId === patientId);
+    
+    if (userId) {
+      // Authenticated user: only show their own chats + unauthenticated chats
+      filteredChats = filteredChats.filter(chat => 
+        chat.userId === userId || chat.userId === null
+      );
+      console.log(`📋 Loaded chats for authenticated user ${userId}`);
+    } else {
+      // Unauthenticated user: only show unauthenticated chats
+      filteredChats = filteredChats.filter(chat => chat.userId === null);
+      console.log(`📋 Loaded chats for unauthenticated user`);
+    }
+    
+    const chats = filteredChats
       .map(chat => ({
         id: chat._id,
         patientId: chat.patientId,
+        userId: chat.userId,
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
         participantCount: chat.participantCount,
@@ -749,6 +767,7 @@ app.get('/api/load-chats/:patientId?', async (req, res) => {
 app.get('/api/load-chat/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
+    const userId = req.query.userId;
     
     // Use Cloudant client
     const chat = await couchDBClient.getChat(chatId);
@@ -757,10 +776,24 @@ app.get('/api/load-chat/:chatId', async (req, res) => {
       return res.status(404).json({ message: 'Chat not found' });
     }
     
-    console.log(`📄 Loaded chat: ${chatId}`);
+    // Check access permissions
+    if (userId) {
+      // Authenticated user: can access their own chats or unauthenticated chats
+      if (chat.userId && chat.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied: You can only access your own chats' });
+      }
+    } else {
+      // Unauthenticated user: can only access unauthenticated chats
+      if (chat.userId) {
+        return res.status(403).json({ message: 'Access denied: This chat requires authentication' });
+      }
+    }
+    
+    console.log(`📄 Loaded chat: ${chatId} for ${userId ? `user ${userId}` : 'unauthenticated user'}`);
     res.json({
       id: chat._id,
       patientId: chat.patientId,
+      userId: chat.userId,
       chatHistory: chat.chatHistory,
       uploadedFiles: chat.uploadedFiles || [],
       createdAt: chat.createdAt,
@@ -776,11 +809,32 @@ app.get('/api/load-chat/:chatId', async (req, res) => {
 app.delete('/api/delete-chat/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
+    const userId = req.query.userId;
+    
+    // Get the chat first to check permissions
+    const chat = await couchDBClient.getChat(chatId);
+    
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+    
+    // Check access permissions
+    if (userId) {
+      // Authenticated user: can only delete their own chats
+      if (chat.userId && chat.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied: You can only delete your own chats' });
+      }
+    } else {
+      // Unauthenticated user: can only delete unauthenticated chats
+      if (chat.userId) {
+        return res.status(403).json({ message: 'Access denied: This chat requires authentication to delete' });
+      }
+    }
     
     // Use Cloudant client
     await couchDBClient.deleteChat(chatId);
     
-    console.log(`🗑️  Deleted chat: ${chatId}`);
+    console.log(`🗑️  Deleted chat: ${chatId} for ${userId ? `user ${userId}` : 'unauthenticated user'}`);
     res.json({ success: true, message: 'Chat deleted successfully' });
   } catch (error) {
     console.error('❌ Delete chat error:', error);

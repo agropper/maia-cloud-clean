@@ -246,9 +246,12 @@ export default defineComponent({
 
       try {
         console.log("🔍 Calling saveChat...");
+        const userId = currentUser.value?.userId;
         const result = await saveChat(
           appState.chatHistory,
-          appState.uploadedFiles
+          appState.uploadedFiles,
+          'demo_patient_001',
+          userId
         );
         console.log("🔍 saveChat result:", result);
         writeMessage(result.message, "success");
@@ -516,6 +519,7 @@ export default defineComponent({
   <SavedChatsDialog
     v-model="showSavedChatsDialog"
     :patientId="'demo_patient_001'"
+    :currentUser="currentUser"
     @chat-selected="handleChatSelected"
   />
 

@@ -88,6 +88,7 @@ import {
   QSpace,
 } from "quasar";
 import { useCouchDB, type SavedChat } from "../composables/useCouchDB";
+import { API_BASE_URL } from "../utils/apiBase";
 
 export default defineComponent({
   name: "SavedChatsDialog",
@@ -115,6 +116,10 @@ export default defineComponent({
       type: String,
       default: "demo_patient_001",
     },
+    currentUser: {
+      type: Object,
+      default: null,
+    },
   },
   emits: ["update:modelValue", "chat-selected"],
   setup(props, { emit }) {
@@ -131,7 +136,8 @@ export default defineComponent({
       error.value = "";
 
       try {
-        savedChats.value = await loadChats(props.patientId);
+        const userId = props.currentUser?.userId;
+        savedChats.value = await loadChats(props.patientId, userId);
       } catch (err) {
         error.value =
           err instanceof Error ? err.message : "Failed to load chats";
@@ -147,7 +153,18 @@ export default defineComponent({
 
     const handleDeleteChat = async (chatId: string) => {
       try {
-        await deleteChat(chatId);
+        const userId = props.currentUser?.userId;
+        const url = userId 
+          ? `${API_BASE_URL}/delete-chat/${chatId}?userId=${userId}`
+          : `${API_BASE_URL}/delete-chat/${chatId}`;
+        
+        const response = await fetch(url, { method: 'DELETE' });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to delete chat');
+        }
+        
         // Remove from local list
         savedChats.value = savedChats.value.filter(
           (chat) => chat.id !== chatId

@@ -4,6 +4,7 @@ import type { ChatHistoryItem, UploadedFile } from '../types'
 export interface SavedChat {
   id: string
   patientId: string
+  userId?: string // Optional - null/undefined for unauthenticated users
   createdAt: string
   updatedAt: string
   participantCount: number
@@ -22,7 +23,8 @@ export const useCouchDB = () => {
   const saveChat = async (
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
-    patientId: string = 'demo_patient_001'
+    patientId: string = 'demo_patient_001',
+    userId?: string
   ): Promise<SaveChatResponse> => {
     try {
       const response = await fetch(`${API_BASE_URL}/save-chat`, {
@@ -33,7 +35,8 @@ export const useCouchDB = () => {
         body: JSON.stringify({
           chatHistory,
           uploadedFiles,
-          patientId
+          patientId,
+          userId
         }),
       })
 
@@ -48,9 +51,12 @@ export const useCouchDB = () => {
     }
   }
 
-  const loadChats = async (patientId: string = 'demo_patient_001'): Promise<SavedChat[]> => {
+  const loadChats = async (patientId: string = 'demo_patient_001', userId?: string): Promise<SavedChat[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/load-chats/${patientId}`)
+      const url = userId 
+        ? `${API_BASE_URL}/load-chats/${patientId}?userId=${userId}`
+        : `${API_BASE_URL}/load-chats/${patientId}`;
+      const response = await fetch(url)
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
