@@ -163,6 +163,28 @@ export default defineComponent({
       currentUser.value = userData;
       console.log("🔍 User authenticated in ChatPrompt:", userData);
 
+      // Set the current agent for authenticated users if not already set
+      if (userData?.userId) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/current-agent`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              agentId: "16c9edf6-2dee-11f0-bf8f-4e013e2ddde4", // Default agent
+              userId: userData.userId
+            }),
+          });
+          
+          if (response.ok) {
+            console.log("🔍 Auto-set current agent for authenticated user");
+          }
+        } catch (error) {
+          console.error("🔍 Failed to auto-set current agent:", error);
+        }
+      }
+
       // Refresh agent data to get user-specific state
       await fetchCurrentAgent();
 
