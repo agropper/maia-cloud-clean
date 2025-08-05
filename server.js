@@ -1317,6 +1317,13 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       owner: owner || null
     };
     
+    // Check if KB is already connected to prevent duplicates
+    const existingKB = userSession.connectedKnowledgeBases.find(kb => kb.uuid === kbUuid);
+    if (existingKB) {
+      console.log(`⚠️ KB ${kbName} (${kbUuid}) is already connected to user session: ${userId}`);
+      return res.json({ success: true, message: `Knowledge base "${kbName}" is already connected to your session.` });
+    }
+    
     // Add KB to user session (don't actually attach to DigitalOcean agent)
     userSession.connectedKnowledgeBases.push(kbInfo);
     updateUserSession(userId, { connectedKnowledgeBases: userSession.connectedKnowledgeBases });
