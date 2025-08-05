@@ -218,6 +218,13 @@ export default defineComponent({
       console.log('🔍 AgentStatusIndicator - currentUser prop changed:', newUser)
     })
 
+    // Debug warning prop changes
+    watch(() => props.warning, (newWarning) => {
+      console.log('🔍 AgentStatusIndicator - warning prop changed:', newWarning)
+      console.log('🔍 AgentStatusIndicator - warning includes 💜:', newWarning?.includes('💜'))
+      console.log('🔍 AgentStatusIndicator - warning includes NOTE:', newWarning?.includes('NOTE'))
+    })
+
     return {
       agentName,
       statusText,
