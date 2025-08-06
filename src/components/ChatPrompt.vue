@@ -106,6 +106,45 @@ export default defineComponent({
       resetInactivityTimer();
     };
 
+    // Clear KB connections for expired sessions
+    const clearExpiredSessionKBs = async () => {
+      try {
+        console.log("🔍 Clearing KB connections for expired session");
+        
+        // Get current agent to see what KBs are connected
+        const response = await fetch(`${API_BASE_URL}/current-agent`);
+        const data = await response.json();
+        
+        if (data.agent && data.agent.knowledgeBases && data.agent.knowledgeBases.length > 0) {
+          console.log(`🔍 Found ${data.agent.knowledgeBases.length} KBs connected to expired session`);
+          
+          // Disconnect all KBs from the agent
+          for (const kb of data.agent.knowledgeBases) {
+            console.log(`🔍 Disconnecting KB: ${kb.name} (${kb.uuid})`);
+            
+            const disconnectResponse = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: 'expired',
+                kbUuid: kb.uuid
+              })
+            });
+            
+            if (disconnectResponse.ok) {
+              console.log(`✅ Disconnected KB: ${kb.name}`);
+            } else {
+              console.warn(`⚠️ Failed to disconnect KB: ${kb.name}`);
+            }
+          }
+          
+          console.log("✅ Cleared all KB connections for expired session");
+        }
+      } catch (error) {
+        console.error("❌ Error clearing expired session KBs:", error);
+      }
+    };
+
     // Auto-connect appropriate KB for unknown users
     const autoConnectAppropriateKB = async (agentId: string) => {
       try {
@@ -188,7 +227,7 @@ export default defineComponent({
     };
 
     // Check for existing user session on component mount
-    const checkExistingSession = () => {
+    const checkExistingSession = async () => {
       const sessionData = sessionStorage.getItem('maia_user_session');
       if (sessionData) {
         try {
@@ -203,11 +242,17 @@ export default defineComponent({
             resetInactivityTimer();
           } else {
             // Session expired, clearing
+            console.log("🔍 Session expired, clearing user session and KB connections");
             sessionStorage.removeItem('maia_user_session');
+            currentUser.value = null;
+            
+            // Clear any lingering KB connections for expired session
+            await clearExpiredSessionKBs();
           }
         } catch (error) {
           console.warn("⚠️ Failed to parse session data:", error);
           sessionStorage.removeItem('maia_user_session');
+          currentUser.value = null;
         }
       }
     };
@@ -260,8 +305,8 @@ export default defineComponent({
       // Start with loading state
       isAgentLoading.value = true;
       
-      // First, check for existing session
-      checkExistingSession();
+      // First, check for existing session and clear expired KBs if needed
+      await checkExistingSession();
       
       // Wait a moment for user state to settle
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -372,6 +417,9 @@ export default defineComponent({
         clearTimeout(inactivityTimer.value);
         inactivityTimer.value = null;
       }
+      
+      // Clear KB connections for signed-out user
+      await clearExpiredSessionKBs();
       
       // Refresh agent data to get global state
       await fetchCurrentAgent();
@@ -594,6 +642,7 @@ export default defineComponent({
       trackActivity,
       resetInactivityTimer,
       checkExistingSession,
+      clearExpiredSessionKBs,
       autoConnectAppropriateKB,
       showPasskeyAuthDialog,
     };
