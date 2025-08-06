@@ -82,6 +82,7 @@ export default defineComponent({
     const inactivityTimer = ref<NodeJS.Timeout | null>(null);
     const lastActivity = ref<number>(Date.now());
     const lastUnprotectedKB = ref<string | null>(null);
+    const isInitialLoad = ref<boolean>(true);
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -108,9 +109,9 @@ export default defineComponent({
     const handleKBAccess = async (agentData: any) => {
       const connectedKB = agentData.agent?.knowledgeBases?.[0];
       
-      if (!connectedKB) {
-        // No KB connected - auto-attach an unprotected KB for demo
-        console.log("🔍 No KB connected, auto-attaching demo KB");
+      if (!connectedKB && isInitialLoad.value) {
+        // No KB connected and this is initial load - auto-attach an unprotected KB for demo
+        console.log("🔍 No KB connected on initial load, auto-attaching demo KB");
         try {
           // Get available knowledge bases to find an unprotected one
           const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
@@ -237,6 +238,11 @@ export default defineComponent({
 
           // Apply smart KB access logic
           await handleKBAccess(data);
+          
+          // Mark initial load as complete
+          if (isInitialLoad.value) {
+            isInitialLoad.value = false;
+          }
         } else {
           currentAgent.value = null;
           console.log("🤖 No agent configured");
@@ -253,6 +259,7 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
+      isInitialLoad.value = false; // User is actively managing the agent
       await fetchCurrentAgent();
     };
 

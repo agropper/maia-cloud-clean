@@ -708,8 +708,8 @@ export default defineComponent({
             `${API_BASE_URL}/knowledge-bases`
           );
           if (knowledgeBasesResponse.ok) {
-            const knowledgeBases: DigitalOceanKnowledgeBase[] =
-              await knowledgeBasesResponse.json();
+            const kbData = await knowledgeBasesResponse.json();
+            const knowledgeBases: DigitalOceanKnowledgeBase[] = kbData.knowledge_bases || [];
 
             // Get all connected KBs from the current agent
             const connectedKBs =
