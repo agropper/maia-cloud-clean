@@ -671,26 +671,24 @@ export default defineComponent({
     const loadAgentInfo = async () => {
       isLoading.value = true;
       try {
-        // Current agent is now passed as prop, so we just log its state
-        if (currentAgent.value) {
-          console.log(
-            `🤖 Current agent loaded: ${currentAgent.value.name}`
-          );
-
-          if (currentAgent.value.knowledgeBase) {
-            console.log(
-              `📚 Current KB: ${currentAgent.value.knowledgeBase.name}`
-            );
+        // Always fetch fresh agent data from API to ensure consistency
+        const agentResponse = await fetch(`${API_BASE_URL}/current-agent`);
+        if (agentResponse.ok) {
+          const agentData = await agentResponse.json();
+          console.log(`🤖 Fresh agent data loaded: ${agentData.agent?.name}`);
+          
+          if (agentData.agent?.knowledgeBases?.length > 0) {
+            console.log(`📚 Current KB: ${agentData.agent.knowledgeBases[0].name}`);
           } else {
             console.log(`📚 No KB assigned`);
           }
 
           // Handle warnings from the API
-          if (currentAgent.value.warning) {
-            console.warn(currentAgent.value.warning);
+          if (agentData.warning) {
+            console.warn(agentData.warning);
           }
         } else {
-          console.log("🤖 No agent configured");
+          console.log("🤖 Failed to load fresh agent data");
         }
 
         // Load all agents for the agent list
@@ -1122,14 +1120,21 @@ export default defineComponent({
     // Refresh knowledge bases list
     const refreshKnowledgeBases = async () => {
       try {
+        // First get fresh agent data to know what's actually connected
+        const agentResponse = await fetch(`${API_BASE_URL}/current-agent`);
+        let connectedKBs: DigitalOceanKnowledgeBase[] = [];
+        
+        if (agentResponse.ok) {
+          const agentData = await agentResponse.json();
+          connectedKBs = agentData.agent?.knowledgeBases || [];
+          console.log(`📚 Fresh agent data shows ${connectedKBs.length} connected KBs`);
+        }
+
+        // Then get all available KBs
         const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
         if (kbResponse.ok) {
           const knowledgeBases: DigitalOceanKnowledgeBase[] =
             await kbResponse.json();
-
-          // Get all connected KBs from the current agent (use knowledgeBases array if available)
-          const connectedKBs = currentAgent.value?.knowledgeBases || 
-            (currentAgent.value?.knowledgeBase ? [currentAgent.value.knowledgeBase] : []);
 
           // Combine available KBs with connected KBs, avoiding duplicates
           const allKBs = [...knowledgeBases];
@@ -1145,7 +1150,7 @@ export default defineComponent({
           );
 
           // Update the current knowledge base to reflect the switch
-          if (currentAgent.value && selectedKnowledgeBase.value) {
+          if (selectedKnowledgeBase.value) {
             knowledgeBase.value = selectedKnowledgeBase.value;
           }
         }
@@ -1397,12 +1402,16 @@ export default defineComponent({
           }
         }
 
+        // Notify parent component to refresh agent data first
+        emit("refresh-agent-data");
+        
+        // Wait a moment for the API to update, then refresh our local data
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Refresh the current agent data to get updated KB associations
         await loadAgentInfo();
         // Also refresh the knowledge base list
         await refreshKnowledgeBases();
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to detach KB:", error);
         $q.notify({
@@ -1540,12 +1549,16 @@ export default defineComponent({
           }
         }
 
+        // Notify parent component to refresh agent data first
+        emit("refresh-agent-data");
+        
+        // Wait a moment for the API to update, then refresh our local data
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Refresh the current agent data to get updated KB associations
         await loadAgentInfo();
         // Also refresh the knowledge base list
         await refreshKnowledgeBases();
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to connect KB:", error);
         $q.notify({
