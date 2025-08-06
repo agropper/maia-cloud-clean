@@ -519,7 +519,6 @@ export default defineComponent({
       trackActivity,
       resetInactivityTimer,
       checkExistingSession,
-      lastUnprotectedKB,
       showPasskeyAuthDialog,
     };
   },
