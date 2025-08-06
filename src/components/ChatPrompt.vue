@@ -81,6 +81,7 @@ export default defineComponent({
     const currentUser = ref<any>(null);
     const inactivityTimer = ref<NodeJS.Timeout | null>(null);
     const lastActivity = ref<number>(Date.now());
+    const lastUnprotectedKB = ref<string | null>(null);
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -117,11 +118,28 @@ export default defineComponent({
             const kbData = await kbResponse.json();
             const availableKBs = kbData.knowledge_bases || [];
             
-            // Find an unprotected KB
-            const unprotectedKB = availableKBs.find(kb => !kb.isProtected);
+            // Find an unprotected KB - prefer the last used one
+            let unprotectedKB = null;
+            
+            if (lastUnprotectedKB.value) {
+              // Try to find the last used unprotected KB
+              unprotectedKB = availableKBs.find(kb => kb.id === lastUnprotectedKB.value && !kb.isProtected);
+              if (unprotectedKB) {
+                console.log(`✅ Found last used unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
+              }
+            }
+            
+            // If no last used KB or it's not available, find any unprotected KB
+            if (!unprotectedKB) {
+              unprotectedKB = availableKBs.find(kb => !kb.isProtected);
+              if (unprotectedKB) {
+                console.log(`✅ Found new unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
+              }
+            }
             
             if (unprotectedKB) {
-              console.log(`✅ Found unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
+              // Store this as the last used unprotected KB
+              lastUnprotectedKB.value = unprotectedKB.id;
               
               // Attach the unprotected KB
               const attachResponse = await fetch(`${API_BASE_URL}/agents/${agentData.agent.id}/knowledge-bases/${unprotectedKB.id}`, {
@@ -137,6 +155,7 @@ export default defineComponent({
               }
             } else {
               console.warn("⚠️ No unprotected KBs available for auto-attach");
+              console.log("🔍 Available KBs:", availableKBs.map(kb => `${kb.name} (protected: ${kb.isProtected})`));
               // All KBs are protected - show sign-in dialog
               console.log("🔍 All KBs are protected, showing sign-in dialog");
               showPasskeyAuthDialog.value = true;
@@ -363,30 +382,48 @@ export default defineComponent({
               const kbData = await kbResponse.json();
               const availableKBs = kbData.knowledge_bases || [];
               
-              // Find an unprotected KB
-              const unprotectedKB = availableKBs.find(kb => !kb.isProtected);
-              
+                          // Find an unprotected KB - prefer the last used one
+            let unprotectedKB = null;
+            
+            if (lastUnprotectedKB.value) {
+              // Try to find the last used unprotected KB
+              unprotectedKB = availableKBs.find(kb => kb.id === lastUnprotectedKB.value && !kb.isProtected);
               if (unprotectedKB) {
-                console.log(`✅ Found unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
-                
-                // Attach the unprotected KB
-                const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${unprotectedKB.id}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' }
-                });
-                
-                if (attachResponse.ok) {
-                  console.log("✅ Attached unprotected KB for anonymous access");
-                  await fetchCurrentAgent(); // Refresh to show the new KB
-                } else {
-                  console.warn("⚠️ Failed to attach unprotected KB");
-                }
-              } else {
-                console.warn("⚠️ No unprotected KBs available");
-                // All KBs are protected - show sign-in dialog
-                console.log("🔍 All KBs are protected, showing sign-in dialog");
-                showPasskeyAuthDialog.value = true;
+                console.log(`✅ Found last used unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
               }
+            }
+            
+            // If no last used KB or it's not available, find any unprotected KB
+            if (!unprotectedKB) {
+              unprotectedKB = availableKBs.find(kb => !kb.isProtected);
+              if (unprotectedKB) {
+                console.log(`✅ Found new unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
+              }
+            }
+            
+            if (unprotectedKB) {
+              // Store this as the last used unprotected KB
+              lastUnprotectedKB.value = unprotectedKB.id;
+              
+              // Attach the unprotected KB
+              const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${unprotectedKB.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              
+              if (attachResponse.ok) {
+                console.log("✅ Attached unprotected KB for anonymous access");
+                await fetchCurrentAgent(); // Refresh to show the new KB
+              } else {
+                console.warn("⚠️ Failed to attach unprotected KB");
+              }
+            } else {
+              console.warn("⚠️ No unprotected KBs available");
+              console.log("🔍 Available KBs:", availableKBs.map(kb => `${kb.name} (protected: ${kb.isProtected})`));
+              // All KBs are protected - show sign-in dialog
+              console.log("🔍 All KBs are protected, showing sign-in dialog");
+              showPasskeyAuthDialog.value = true;
+            }
             } else {
               console.warn("⚠️ Failed to get available KBs");
             }
@@ -614,6 +651,7 @@ export default defineComponent({
       trackActivity,
       resetInactivityTimer,
       checkExistingSession,
+      lastUnprotectedKB,
       showPasskeyAuthDialog,
     };
   },
