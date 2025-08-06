@@ -83,6 +83,7 @@ export default defineComponent({
     const lastActivity = ref<number>(Date.now());
     const lastUnprotectedKB = ref<string | null>(null);
     const isInitialLoad = ref<boolean>(true);
+    const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -148,6 +149,8 @@ export default defineComponent({
     // Fetch current agent information from DO API (single source of truth)
     const fetchCurrentAgent = async () => {
       try {
+        isAgentLoading.value = true; // Start loading
+        
         const response = await fetch(`${API_BASE_URL}/current-agent`);
         const data = await response.json();
 
@@ -179,12 +182,32 @@ export default defineComponent({
       } catch (error) {
         console.error("❌ Error fetching current agent:", error);
         currentAgent.value = null;
+      } finally {
+        isAgentLoading.value = false; // End loading
       }
     };
 
-    // Check for existing session and fetch current agent when component mounts
-    checkExistingSession();
-    fetchCurrentAgent();
+    // Stable initialization - wait for user state to settle before loading agent
+    const initializeStableState = async () => {
+      console.log("🔍 Starting stable initialization...");
+      
+      // Start with loading state
+      isAgentLoading.value = true;
+      
+      // First, check for existing session
+      checkExistingSession();
+      
+      // Wait a moment for user state to settle
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Now fetch agent data with stable user state
+      await fetchCurrentAgent();
+      
+      console.log("🔍 Stable initialization complete");
+    };
+    
+    // Initialize with stable state
+    initializeStableState();
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
@@ -647,6 +670,7 @@ export default defineComponent({
     :currentAgent="currentAgent"
     :warning="agentWarning"
     :currentUser="currentUser"
+    :isAgentLoading="isAgentLoading"
     @manage-agent="handleManageAgent"
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"

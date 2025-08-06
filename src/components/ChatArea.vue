@@ -5,6 +5,7 @@
       :agent="currentAgent"
       :warning="warning"
       :currentUser="currentUser"
+      :isLoading="isAgentLoading"
       @manage="$emit('manage-agent')"
       @sign-in="$emit('sign-in')"
       @sign-out="$emit('sign-out')"
@@ -136,6 +137,10 @@ export default defineComponent({
     currentUser: {
       type: Object as PropType<any>,
       default: null
+    },
+    isAgentLoading: {
+      type: Boolean,
+      default: false
     }
   },
   emits: [

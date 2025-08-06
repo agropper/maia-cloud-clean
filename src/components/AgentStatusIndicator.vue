@@ -4,17 +4,18 @@
       <q-card-section class="q-pa-sm">
         <div class="row items-center">
           <q-icon 
-            :name="statusIcon" 
-            :color="statusColor" 
+            :name="isLoading ? 'hourglass_empty' : statusIcon" 
+            :color="isLoading ? 'grey' : statusColor" 
             size="1.5rem"
             class="q-mr-sm"
           />
           <div class="status-text">
             <div class="text-body2">
-              {{ agentName }}
+              <span v-if="isLoading">Loading agent...</span>
+              <span v-else>{{ agentName }}</span>
               <!-- Sign-in/Sign-out buttons -->
               <q-btn
-                v-if="!currentUser"
+                v-if="!isLoading && !currentUser"
                 flat
                 dense
                 size="sm"
@@ -24,7 +25,7 @@
                 class="q-ml-sm"
               />
               <q-btn
-                v-else
+                v-if="!isLoading && currentUser"
                 flat
                 dense
                 size="sm"
@@ -34,15 +35,18 @@
                 class="q-ml-sm"
               />
             </div>
-            <div class="text-caption text-grey">{{ statusText }}</div>
+            <div class="text-caption text-grey">
+              <span v-if="isLoading">Checking agent status...</span>
+              <span v-else>{{ statusText }}</span>
+            </div>
             <!-- Show warning prominently if present -->
-            <div v-if="warning" :class="warningClass" class="text-caption q-mt-xs warning-text">
+            <div v-if="!isLoading && warning" :class="warningClass" class="text-caption q-mt-xs warning-text">
               <q-icon :name="warningIcon" size="1rem" class="q-mr-xs" />
               {{ warning }}
             </div>
           </div>
           <q-btn
-            v-if="showManageButton"
+            v-if="!isLoading && showManageButton"
             flat
             round
             dense
@@ -111,6 +115,10 @@ export default defineComponent({
     currentUser: {
       type: Object as () => any,
       default: null
+    },
+    isLoading: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['manage', 'sign-in', 'sign-out'],
