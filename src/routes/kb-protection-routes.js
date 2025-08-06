@@ -13,20 +13,58 @@ export const setCouchDBClient = (client) => {
 // Get all KBs with protection status
 router.get('/knowledge-bases', async (req, res) => {
   try {
+    // Get all KBs from DigitalOcean API
+    const doRequest = (endpoint, options = {}) => {
+      const baseUrl = 'https://api.digitalocean.com';
+      const url = `${baseUrl}${endpoint}`;
+      
+      const config = {
+        method: options.method || 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.DIGITALOCEAN_PERSONAL_API_KEY}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        ...options
+      };
+      
+      if (options.body) {
+        config.body = JSON.stringify(options.body);
+      }
+      
+      return fetch(url, config).then(res => res.json());
+    };
+
+    // Get all KBs from DigitalOcean
+    const doKBs = await doRequest('/v2/gen-ai/knowledge_bases');
+    const allDOKnowledgeBases = doKBs.knowledge_bases || [];
+    
     // Fetch protection metadata from Cloudant
     const protectionDocs = await couchDBClient.getAllDocuments('maia_knowledge_bases');
     
-    // Transform to expected format
-    const knowledgeBases = protectionDocs.map(doc => ({
-      id: doc.kbId || doc._id,
-      name: doc.kbName || doc.name,
-      description: doc.description || 'No description',
-      isProtected: !!doc.isProtected,
-      owner: doc.owner || null,
-      created: doc.created || doc.created_at,
-      updated: doc.updated || doc.updated_at,
-      region: doc.region || 'tor1'
-    }));
+    // Create a map of protected KBs
+    const protectedKBs = new Map();
+    protectionDocs.forEach(doc => {
+      protectedKBs.set(doc.kbId || doc._id, {
+        isProtected: !!doc.isProtected,
+        owner: doc.owner || null
+      });
+    });
+    
+    // Transform all KBs to expected format
+    const knowledgeBases = allDOKnowledgeBases.map(kb => {
+      const protection = protectedKBs.get(kb.uuid);
+      return {
+        id: kb.uuid,
+        name: kb.name,
+        description: kb.description || 'No description',
+        isProtected: protection ? protection.isProtected : false,
+        owner: protection ? protection.owner : null,
+        created: kb.created_at,
+        updated: kb.updated_at,
+        region: kb.region || 'tor1'
+      };
+    });
     
     res.json({ knowledge_bases: knowledgeBases });
   } catch (error) {
