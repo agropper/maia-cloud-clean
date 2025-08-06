@@ -719,7 +719,7 @@ export default defineComponent({
                 : []);
 
             // Combine available KBs with connected KBs, avoiding duplicates
-            const allKBs = [...knowledgeBases];
+            const allKBs = [...(knowledgeBases || [])];
             connectedKBs.forEach((connectedKB) => {
               if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
                 allKBs.push(connectedKB);
@@ -1137,7 +1137,7 @@ export default defineComponent({
           const knowledgeBases: DigitalOceanKnowledgeBase[] = kbData.knowledge_bases || [];
 
           // Combine available KBs with connected KBs, avoiding duplicates
-          const allKBs = [...knowledgeBases];
+          const allKBs = [...(knowledgeBases || [])];
           connectedKBs.forEach((connectedKB) => {
             if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
               allKBs.push(connectedKB);
