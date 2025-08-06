@@ -105,81 +105,19 @@ export default defineComponent({
       resetInactivityTimer();
     };
 
-    // Smart KB access logic
-    const handleKBAccess = async (agentData: any) => {
-      const connectedKB = agentData.agent?.knowledgeBases?.[0];
+    // Simple access control - check if user can access current KBs
+    const checkAccessControl = () => {
+      const connectedKBs = currentAgent.value?.knowledgeBases || [];
       
-      if (!connectedKB && isInitialLoad.value) {
-        // No KB connected and this is initial load - auto-attach an unprotected KB for demo
-        console.log("🔍 No KB connected on initial load, auto-attaching demo KB");
-        try {
-          // Get available knowledge bases to find an unprotected one
-          const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
-          if (kbResponse.ok) {
-            const kbData = await kbResponse.json();
-            const availableKBs = kbData.knowledge_bases || [];
-            
-            // Find an unprotected KB - prefer the last used one
-            let unprotectedKB = null;
-            
-            if (lastUnprotectedKB.value) {
-              // Try to find the last used unprotected KB
-              unprotectedKB = availableKBs.find(kb => kb.id === lastUnprotectedKB.value && !kb.isProtected);
-              if (unprotectedKB) {
-                console.log(`✅ Found last used unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
-              }
-            }
-            
-            // If no last used KB or it's not available, find any unprotected KB
-            if (!unprotectedKB) {
-              unprotectedKB = availableKBs.find(kb => !kb.isProtected);
-              if (unprotectedKB) {
-                console.log(`✅ Found new unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
-              }
-            }
-            
-            if (unprotectedKB) {
-              // Store this as the last used unprotected KB
-              lastUnprotectedKB.value = unprotectedKB.id;
-              
-              // Attach the unprotected KB
-              const attachResponse = await fetch(`${API_BASE_URL}/agents/${agentData.agent.id}/knowledge-bases/${unprotectedKB.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-              });
-              
-              if (attachResponse.ok) {
-                console.log("✅ Auto-attached unprotected KB for new user");
-                await fetchCurrentAgent(); // Refresh to show the new KB
-              } else {
-                console.warn("⚠️ Failed to attach unprotected KB");
-              }
-            } else {
-              console.warn("⚠️ No unprotected KBs available for auto-attach");
-              console.log("🔍 Available KBs:", availableKBs.map(kb => `${kb.name} (protected: ${kb.isProtected})`));
-              // All KBs are protected - show sign-in dialog
-              console.log("🔍 All KBs are protected, showing sign-in dialog");
-              showPasskeyAuthDialog.value = true;
-            }
-          } else {
-            console.warn("⚠️ Failed to get available KBs for auto-attach");
-          }
-        } catch (error) {
-          console.warn("⚠️ Failed to auto-attach demo KB:", error);
-        }
-        return;
-      }
-
-      // Check if connected KB is protected
-      if (connectedKB && connectedKB.isProtected && !currentUser.value) {
+      // Check if any connected KB is protected and user is not authenticated
+      const protectedKB = connectedKBs.find(kb => kb.isProtected);
+      if (protectedKB && !currentUser.value) {
         console.log("🔍 Protected KB detected, user not signed in");
-        // Show sign-in dialog or offer to switch KB
         showPasskeyAuthDialog.value = true;
-        return;
+        return false;
       }
-
-      // KB is unprotected or user is signed in - allow access
-      console.log("🔍 KB access allowed:", connectedKB ? (connectedKB.isProtected ? "protected KB with signed-in user" : "unprotected KB") : "no KB connected");
+      
+      return true;
     };
 
     // Check for existing user session on component mount
@@ -207,42 +145,33 @@ export default defineComponent({
       }
     };
 
-    // Fetch current agent information on component mount
+    // Fetch current agent information from DO API (single source of truth)
     const fetchCurrentAgent = async () => {
       try {
-        // Include user ID in request if available
-        const url = currentUser.value?.userId 
-          ? `${API_BASE_URL}/current-agent?userId=${currentUser.value.userId}`
-          : `${API_BASE_URL}/current-agent`;
-        
-        const response = await fetch(url);
+        const response = await fetch(`${API_BASE_URL}/current-agent`);
         const data = await response.json();
 
         if (data.agent) {
           currentAgent.value = data.agent;
-          console.log(`🤖 Current agent loaded: ${data.agent.name}`);
+          console.log(`🤖 Current agent: ${data.agent.name}`);
 
-          if (data.agent.knowledgeBase) {
-            console.log(`📚 Current KB: ${data.agent.knowledgeBase.name}`);
+          // Log connected KBs
+          const connectedKBs = data.agent.knowledgeBases || [];
+          if (connectedKBs.length > 0) {
+            console.log(`📚 Connected KBs: ${connectedKBs.map(kb => kb.name).join(', ')}`);
           } else {
-            console.log(`📚 No KB assigned`);
+            console.log(`📚 No KBs connected`);
           }
 
           // Handle warnings from the API
           if (data.warning) {
-            console.warn(data.warning);
             agentWarning.value = data.warning;
           } else {
             agentWarning.value = "";
           }
-
-          // Apply smart KB access logic
-          await handleKBAccess(data);
           
-          // Mark initial load as complete
-          if (isInitialLoad.value) {
-            isInitialLoad.value = false;
-          }
+          // Check access control after agent data is loaded
+          checkAccessControl();
         } else {
           currentAgent.value = null;
           console.log("🤖 No agent configured");

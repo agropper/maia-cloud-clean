@@ -1290,7 +1290,7 @@ app.post('/api/current-agent', async (req, res) => {
   }
 });
 
-// User session management endpoints
+// Simplified KB connection endpoint - uses DO API only
 app.post('/api/user-session/connect-kb', async (req, res) => {
   try {
     const { userId, kbUuid, kbName, isProtected, owner } = req.body;
@@ -1299,22 +1299,7 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       return res.status(400).json({ message: 'User ID and KB UUID are required' });
     }
     
-    console.log(`🔍 Connecting KB ${kbName} (${kbUuid}) to user session: ${userId}`);
-    
-    const userSession = getUserSession(userId);
-    const kbInfo = {
-      uuid: kbUuid,
-      name: kbName,
-      isProtected: isProtected || false,
-      owner: owner || null
-    };
-    
-    // Check if KB is already connected to prevent duplicates
-    const existingKB = userSession.connectedKnowledgeBases.find(kb => kb.uuid === kbUuid);
-    if (existingKB) {
-      console.log(`⚠️ KB ${kbName} (${kbUuid}) is already connected to user session: ${userId}`);
-      return res.json({ success: true, message: `Knowledge base "${kbName}" is already connected to your session.` });
-    }
+    console.log(`🔍 Connecting KB ${kbName} (${kbUuid}) for user: ${userId}`);
     
     // SECURITY CHECK: Verify user owns protected KBs
     if (isProtected && owner && owner !== userId) {
@@ -1324,33 +1309,24 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       });
     }
     
-    // Add KB to user session
-    userSession.connectedKnowledgeBases.push(kbInfo);
-    updateUserSession(userId, { connectedKnowledgeBases: userSession.connectedKnowledgeBases });
-    
-    // Also attach KB to DigitalOcean agent for actual chat processing
-    try {
-      const currentAgent = await getCurrentAgent();
-      if (currentAgent && currentAgent.id) {
-        console.log(`🔍 Attaching KB ${kbName} (${kbUuid}) to DigitalOcean agent: ${currentAgent.id}`);
-        
-        // Use DigitalOcean API directly to attach KB to agent
-        const attachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
-          method: 'POST'
-        });
-        
-        console.log(`✅ Successfully attached KB ${kbName} to DigitalOcean agent`);
-      }
-    } catch (attachError) {
-      console.warn(`⚠️ Error attaching KB to DigitalOcean agent:`, attachError);
-      // Don't fail the request, just log the warning
+    // Get current agent and attach KB directly to DO API
+    const currentAgent = await getCurrentAgent();
+    if (!currentAgent || !currentAgent.id) {
+      return res.status(404).json({ message: 'No agent found' });
     }
     
-    console.log(`✅ Connected KB ${kbName} to user session: ${userId}`);
-    res.json({ success: true, message: `Knowledge base "${kbName}" connected to your session.` });
+    console.log(`🔍 Attaching KB ${kbName} (${kbUuid}) to DigitalOcean agent: ${currentAgent.id}`);
+    
+    // Use DigitalOcean API directly to attach KB to agent
+    const attachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
+      method: 'POST'
+    });
+    
+    console.log(`✅ Successfully attached KB ${kbName} to DigitalOcean agent`);
+    res.json({ success: true, message: `Knowledge base "${kbName}" connected successfully.` });
   } catch (error) {
-    console.error('❌ Connect KB to user session error:', error);
-    res.status(500).json({ message: `Failed to connect KB to user session: ${error.message}` });
+    console.error('❌ Connect KB error:', error);
+    res.status(500).json({ message: `Failed to connect KB: ${error.message}` });
   }
 });
 
@@ -1362,36 +1338,26 @@ app.delete('/api/user-session/disconnect-kb', async (req, res) => {
       return res.status(400).json({ message: 'User ID and KB UUID are required' });
     }
     
-    console.log(`🔍 Disconnecting KB ${kbUuid} from user session: ${userId}`);
+    console.log(`🔍 Disconnecting KB ${kbUuid} for user: ${userId}`);
     
-    const userSession = getUserSession(userId);
-    const kbToRemove = userSession.connectedKnowledgeBases.find(kb => kb.uuid === kbUuid);
-    const updatedKBs = userSession.connectedKnowledgeBases.filter(kb => kb.uuid !== kbUuid);
-    updateUserSession(userId, { connectedKnowledgeBases: updatedKBs });
-    
-    // Also detach KB from DigitalOcean agent for actual chat processing
-    try {
-      const currentAgent = await getCurrentAgent();
-      if (currentAgent && currentAgent.id && kbToRemove) {
-        console.log(`🔍 Detaching KB ${kbToRemove.name} (${kbUuid}) from DigitalOcean agent: ${currentAgent.id}`);
-        
-        // Use DigitalOcean API directly to detach KB from agent
-        const detachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
-          method: 'DELETE'
-        });
-        
-        console.log(`✅ Successfully detached KB ${kbToRemove.name} from DigitalOcean agent`);
-      }
-    } catch (detachError) {
-      console.warn(`⚠️ Error detaching KB from DigitalOcean agent:`, detachError);
-      // Don't fail the request, just log the warning
+    // Get current agent and detach KB directly from DO API
+    const currentAgent = await getCurrentAgent();
+    if (!currentAgent || !currentAgent.id) {
+      return res.status(404).json({ message: 'No agent found' });
     }
     
-    console.log(`✅ Disconnected KB ${kbUuid} from user session: ${userId}`);
-    res.json({ success: true, message: 'Knowledge base disconnected from your session.' });
+    console.log(`🔍 Detaching KB ${kbUuid} from DigitalOcean agent: ${currentAgent.id}`);
+    
+    // Use DigitalOcean API directly to detach KB from agent
+    const detachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
+      method: 'DELETE'
+    });
+    
+    console.log(`✅ Successfully detached KB from DigitalOcean agent`);
+    res.json({ success: true, message: 'Knowledge base disconnected successfully.' });
   } catch (error) {
-    console.error('❌ Disconnect KB from user session error:', error);
-    res.status(500).json({ message: `Failed to disconnect KB from user session: ${error.message}` });
+    console.error('❌ Disconnect KB error:', error);
+    res.status(500).json({ message: `Failed to disconnect KB: ${error.message}` });
   }
 });
 
