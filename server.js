@@ -957,19 +957,38 @@ app.get('/api/current-agent', async (req, res) => {
     const connectedKnowledgeBases = agentData.knowledge_bases || [];
     let warning = null;
     
-    if (connectedKnowledgeBases.length > 1) {
+    // Get KB protection information from CouchDB
+    let protectedKBs = [];
+    try {
+      const protectionDocs = await couchDBClient.getAllDocuments('maia_knowledge_bases');
+      protectedKBs = protectionDocs.filter(doc => doc.isProtected);
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch KB protection data:', error);
+    }
+    
+    // Add protection information to connected KBs
+    const enrichedKnowledgeBases = connectedKnowledgeBases.map(kb => {
+      const protectionDoc = protectedKBs.find(doc => doc.kbId === kb.uuid);
+      return {
+        ...kb,
+        isProtected: protectionDoc ? protectionDoc.isProtected : false,
+        owner: protectionDoc ? protectionDoc.owner : null
+      };
+    });
+    
+    if (enrichedKnowledgeBases.length > 1) {
       if (userId) {
         // For authenticated users, check if multiple KBs are owned by the same user
-        const protectedKBs = connectedKnowledgeBases.filter(kb => kb.owner === userId);
-        if (protectedKBs.length > 1) {
-          const kbCount = protectedKBs.length;
+        const userProtectedKBs = enrichedKnowledgeBases.filter(kb => kb.owner === userId);
+        if (userProtectedKBs.length > 1) {
+          const kbCount = userProtectedKBs.length;
           warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
           console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
         } else {
-          warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+          warning = `⚠️ WARNING: Agent has ${enrichedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
         }
       } else {
-        warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+        warning = `⚠️ WARNING: Agent has ${enrichedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
       }
     }
     
@@ -982,8 +1001,8 @@ app.get('/api/current-agent', async (req, res) => {
       instructions: agentData.instruction || '',
       uuid: agentData.uuid,
       deployment: agentData.deployment,
-      knowledgeBase: connectedKnowledgeBases[0],
-      knowledgeBases: connectedKnowledgeBases
+      knowledgeBase: enrichedKnowledgeBases[0],
+      knowledgeBases: enrichedKnowledgeBases
     };
 
     const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';

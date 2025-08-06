@@ -137,6 +137,31 @@ export default defineComponent({
       console.log("🔍 KB access allowed:", connectedKB.isProtected ? "protected KB with signed-in user" : "unprotected KB");
     };
 
+    // Check for existing user session on component mount
+    const checkExistingSession = () => {
+      const sessionData = sessionStorage.getItem('maia_user_session');
+      if (sessionData) {
+        try {
+          const userData = JSON.parse(sessionData);
+          const sessionTime = userData.sessionTime || 0;
+          const now = Date.now();
+          
+          // Check if session is still valid (within 5 minutes)
+          if (now - sessionTime < 5 * 60 * 1000) {
+            console.log("🔍 Restoring user session:", userData.userId);
+            currentUser.value = userData;
+            resetInactivityTimer();
+          } else {
+            console.log("🔍 Session expired, clearing");
+            sessionStorage.removeItem('maia_user_session');
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to parse session data:", error);
+          sessionStorage.removeItem('maia_user_session');
+        }
+      }
+    };
+
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
       try {
@@ -178,7 +203,8 @@ export default defineComponent({
       }
     };
 
-    // Call fetchCurrentAgent when component mounts
+    // Check for existing session and fetch current agent when component mounts
+    checkExistingSession();
     fetchCurrentAgent();
 
     // Method to refresh agent data (called from AgentManagementDialog)
@@ -222,6 +248,13 @@ export default defineComponent({
     const handleUserAuthenticated = async (userData: any) => {
       currentUser.value = userData;
       console.log("🔍 User authenticated in ChatPrompt:", userData);
+
+      // Save user session to sessionStorage
+      const sessionData = {
+        ...userData,
+        sessionTime: Date.now()
+      };
+      sessionStorage.setItem('maia_user_session', JSON.stringify(sessionData));
 
       // Start inactivity timer for authenticated user
       resetInactivityTimer();
@@ -267,6 +300,9 @@ export default defineComponent({
     const handleSignOut = async () => {
       console.log("🔍 Sign-out requested");
       currentUser.value = null;
+      
+      // Clear session storage
+      sessionStorage.removeItem('maia_user_session');
       
       // Clear inactivity timer
       if (inactivityTimer.value) {
@@ -499,6 +535,7 @@ export default defineComponent({
       handleSignInCancelled,
       trackActivity,
       resetInactivityTimer,
+      checkExistingSession,
       showPasskeyAuthDialog,
     };
   },
