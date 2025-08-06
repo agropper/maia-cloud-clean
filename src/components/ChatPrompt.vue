@@ -273,16 +273,6 @@ export default defineComponent({
             agentWarning.value = "";
           }
           
-          // Check if agent has no KBs and user is "Unknown User" - auto-connect appropriate KB
-          const connectedKBs = data.agent.knowledgeBases || [];
-          const isUnknownUser = !currentUser.value;
-          
-          // Only auto-connect if there are no KBs AND user is truly unknown (not during sign-in process or cleanup)
-          if (connectedKBs.length === 0 && isUnknownUser && !showPasskeyAuthDialog.value && !isCleaningUp.value) {
-            console.log("🔍 Agent has no KBs and user is unknown - auto-connecting appropriate KB");
-            await autoConnectAppropriateKB(data.agent.id);
-          }
-          
           // Check access control after agent data is loaded
           checkAccessControl();
         } else {
@@ -319,6 +309,14 @@ export default defineComponent({
         // Refresh agent data after cleanup
         await fetchCurrentAgent();
         isCleaningUp.value = false; // Re-enable auto-connect
+      }
+      
+      // After cleanup (if any), check if we need to auto-connect for unknown users
+      if (!currentUser.value && currentAgent.value?.knowledgeBases?.length === 0 && !showPasskeyAuthDialog.value && !isCleaningUp.value) {
+        console.log("🔍 Agent has no KBs and user is unknown - auto-connecting appropriate KB");
+        await autoConnectAppropriateKB(currentAgent.value.id);
+        // Refresh agent data after auto-connect
+        await fetchCurrentAgent();
       }
     };
     
