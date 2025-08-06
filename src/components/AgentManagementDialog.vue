@@ -1466,6 +1466,13 @@ export default defineComponent({
         throw new Error(`Failed to connect KB: ${result.message}`);
       } else {
         console.log(`✅ Connected KB to agent: ${kb.name}`);
+        
+        // Save KB selection to sessionStorage for unknown users
+        if (!currentUser.value?.userId) {
+          sessionStorage.setItem('maia_last_unprotected_kb', kb.uuid);
+          console.log(`💾 Saved KB selection to sessionStorage: ${kb.name} (${kb.uuid})`);
+        }
+        
         $q.notify({
           type: "positive",
           message: `Knowledge base "${kb.name}" connected successfully.`,
