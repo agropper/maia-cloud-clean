@@ -1818,8 +1818,36 @@ app.delete('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
   try {
     const { agentId, kbId } = req.params;
     console.log(`🔗 [DO API] Detaching KB ${kbId} from agent ${agentId}`);
+    
+    // First, let's check what KBs are actually attached to this agent
+    try {
+      const agentDetails = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
+      const attachedKBs = agentData.knowledge_bases || [];
+      
+      console.log(`📚 [DEBUG] Agent ${agentId} currently has ${attachedKBs.length} KBs attached:`);
+      attachedKBs.forEach((kb, index) => {
+        console.log(`  ${index + 1}. ${kb.name} (${kb.uuid})`);
+      });
+      
+      const targetKB = attachedKBs.find(kb => kb.uuid === kbId);
+      if (!targetKB) {
+        console.log(`❌ [DEBUG] KB ${kbId} is not attached to agent ${agentId}`);
+        return res.status(404).json({ 
+          message: `Knowledge base ${kbId} is not attached to agent ${agentId}`,
+          attachedKBs: attachedKBs.map(kb => ({ name: kb.name, uuid: kb.uuid }))
+        });
+      }
+      
+      console.log(`✅ [DEBUG] Found target KB: ${targetKB.name} (${targetKB.uuid})`);
+    } catch (error) {
+      console.error(`❌ [DEBUG] Error checking agent details:`, error);
+      return res.status(500).json({ message: `Failed to check agent details: ${error.message}` });
+    }
 
     // Use the correct DigitalOcean API endpoint for detach
+    console.log(`🔍 [DO API] Making DELETE request to: /v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`);
+    
     const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
       method: 'DELETE'
     });
