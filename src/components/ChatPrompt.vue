@@ -81,8 +81,8 @@ export default defineComponent({
     const currentUser = ref<any>(null);
     const inactivityTimer = ref<NodeJS.Timeout | null>(null);
     const lastActivity = ref<number>(Date.now());
-    const lastUnprotectedKB = ref<string | null>(null);
-    const isInitialLoad = ref<boolean>(true);
+    // Removed unused lastUnprotectedKB variable
+    // Removed unused isInitialLoad variable
     const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
 
     // Auto sign-out after 5 minutes of inactivity
@@ -95,7 +95,7 @@ export default defineComponent({
       
       if (currentUser.value) {
         inactivityTimer.value = setTimeout(() => {
-          console.log("🔍 Auto sign-out due to inactivity");
+          // Auto sign-out due to inactivity
           handleSignOut();
         }, 5 * 60 * 1000); // 5 minutes
       }
@@ -113,7 +113,7 @@ export default defineComponent({
       // Check if any connected KB is protected and user is not authenticated
       const protectedKB = connectedKBs.find(kb => kb.isProtected);
       if (protectedKB && !currentUser.value) {
-        console.log("🔍 Protected KB detected, user not signed in");
+        // Protected KB detected, user not signed in
         showPasskeyAuthDialog.value = true;
         return false;
       }
@@ -132,11 +132,11 @@ export default defineComponent({
           
           // Check if session is still valid (within 5 minutes)
           if (now - sessionTime < 5 * 60 * 1000) {
-            console.log("🔍 Restoring user session:", userData.userId);
+            // Restoring user session
             currentUser.value = userData;
             resetInactivityTimer();
           } else {
-            console.log("🔍 Session expired, clearing");
+            // Session expired, clearing
             sessionStorage.removeItem('maia_user_session');
           }
         } catch (error) {
@@ -156,15 +156,7 @@ export default defineComponent({
 
         if (data.agent) {
           currentAgent.value = data.agent;
-          console.log(`🤖 Current agent: ${data.agent.name}`);
-
-          // Log connected KBs
-          const connectedKBs = data.agent.knowledgeBases || [];
-          if (connectedKBs.length > 0) {
-            console.log(`📚 Connected KBs: ${connectedKBs.map(kb => kb.name).join(', ')}`);
-          } else {
-            console.log(`📚 No KBs connected`);
-          }
+          // Agent loaded successfully
 
           // Handle warnings from the API
           if (data.warning) {
@@ -177,7 +169,7 @@ export default defineComponent({
           checkAccessControl();
         } else {
           currentAgent.value = null;
-          console.log("🤖 No agent configured");
+          // No agent configured
         }
       } catch (error) {
         console.error("❌ Error fetching current agent:", error);
@@ -189,8 +181,6 @@ export default defineComponent({
 
     // Stable initialization - wait for user state to settle before loading agent
     const initializeStableState = async () => {
-      console.log("🔍 Starting stable initialization...");
-      
       // Start with loading state
       isAgentLoading.value = true;
       
@@ -202,8 +192,6 @@ export default defineComponent({
       
       // Now fetch agent data with stable user state
       await fetchCurrentAgent();
-      
-      console.log("🔍 Stable initialization complete");
     };
     
     // Initialize with stable state
@@ -229,7 +217,7 @@ export default defineComponent({
       if (agentInfo) {
         // Update the current agent with the new information
         currentAgent.value = agentInfo;
-        console.log("🤖 Agent updated:", agentInfo.name);
+        // Agent updated
 
         // Update the AI options to use the new agent endpoint if available
         const personalChatOption = AIoptions.find(
@@ -240,7 +228,7 @@ export default defineComponent({
         }
       } else {
         currentAgent.value = null;
-        console.log("🤖 Agent cleared");
+        // Agent cleared
       }
     };
 
@@ -250,7 +238,7 @@ export default defineComponent({
 
     const handleUserAuthenticated = async (userData: any) => {
       currentUser.value = userData;
-      console.log("🔍 User authenticated in ChatPrompt:", userData);
+      // User authenticated
 
       // Save user session to sessionStorage
       const sessionData = {
@@ -277,10 +265,10 @@ export default defineComponent({
           });
           
           if (response.ok) {
-            console.log("🔍 Auto-set current agent for authenticated user");
+            // Auto-set current agent for authenticated user
           }
         } catch (error) {
-          console.error("🔍 Failed to auto-set current agent:", error);
+          console.error("Failed to auto-set current agent:", error);
         }
       }
 
@@ -289,19 +277,16 @@ export default defineComponent({
 
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
-      setTimeout(() => {
-        console.log("🔍 Current user after timeout:", currentUser.value);
-      }, 100);
     };
 
     const handleSignIn = () => {
-      console.log("🔍 Sign-in requested");
+      // Sign-in requested
       // Open a dedicated sign-in dialog instead of Agent Management
       showPasskeyAuthDialog.value = true;
     };
 
     const handleSignOut = async () => {
-      console.log("🔍 Sign-out requested");
+      // Sign-out requested
       currentUser.value = null;
       
       // Clear session storage
@@ -318,85 +303,14 @@ export default defineComponent({
     };
 
     const handleSignInCancelled = async () => {
-      console.log("🔍 Sign-in cancelled in ChatPrompt");
+      // Sign-in cancelled
       showPasskeyAuthDialog.value = false;
       
-      // If there's a protected KB connected, detach it and connect to an unprotected KB
-      if (currentAgent.value?.knowledgeBases?.[0]?.isProtected) {
-        console.log("🔍 Detaching protected KB and connecting to unprotected KB");
-        try {
-          // First detach the protected KB
-          const protectedKB = currentAgent.value.knowledgeBases[0];
-          const detachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${protectedKB.uuid}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (detachResponse.ok) {
-            console.log("✅ Detached protected KB");
-            
-            // Get available knowledge bases to find an unprotected one
-            const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
-            if (kbResponse.ok) {
-              const kbData = await kbResponse.json();
-              const availableKBs = kbData.knowledge_bases || [];
-              
-                          // Find an unprotected KB - prefer the last used one
-            let unprotectedKB = null;
-            
-            if (lastUnprotectedKB.value) {
-              // Try to find the last used unprotected KB
-              unprotectedKB = availableKBs.find(kb => kb.id === lastUnprotectedKB.value && !kb.isProtected);
-              if (unprotectedKB) {
-                console.log(`✅ Found last used unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
-              }
-            }
-            
-            // If no last used KB or it's not available, find any unprotected KB
-            if (!unprotectedKB) {
-              unprotectedKB = availableKBs.find(kb => !kb.isProtected);
-              if (unprotectedKB) {
-                console.log(`✅ Found new unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
-              }
-            }
-            
-            if (unprotectedKB) {
-              // Store this as the last used unprotected KB
-              lastUnprotectedKB.value = unprotectedKB.id;
-              
-              // Attach the unprotected KB
-              const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${unprotectedKB.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-              });
-              
-              if (attachResponse.ok) {
-                console.log("✅ Attached unprotected KB for anonymous access");
-                await fetchCurrentAgent(); // Refresh to show the new KB
-              } else {
-                console.warn("⚠️ Failed to attach unprotected KB");
-              }
-            } else {
-              console.warn("⚠️ No unprotected KBs available");
-              console.log("🔍 Available KBs:", availableKBs.map(kb => `${kb.name} (protected: ${kb.isProtected})`));
-              // All KBs are protected - show sign-in dialog
-              console.log("🔍 All KBs are protected, showing sign-in dialog");
-              showPasskeyAuthDialog.value = true;
-            }
-            } else {
-              console.warn("⚠️ Failed to get available KBs");
-            }
-          }
-        } catch (error) {
-          console.warn("⚠️ Failed to switch KBs:", error);
-        }
-      }
+      // Refresh agent data to get current state
+      await fetchCurrentAgent();
     };
 
-    // Debug currentUser changes
-    watch(currentUser, (newUser) => {
-      console.log("🔍 ChatPrompt - currentUser changed:", newUser);
-    });
+    // Debug logging removed for cleaner console output
 
     const editMessage = (idx: number) => {
       appState.editBox.push(idx);
@@ -419,12 +333,7 @@ export default defineComponent({
     };
 
     const triggerSaveToCouchDB = async () => {
-      console.log("🔍 triggerSaveToCouchDB called");
-      console.log("🔍 chatHistory length:", appState.chatHistory.length);
-      console.log("🔍 uploadedFiles length:", appState.uploadedFiles.length);
-
       try {
-        console.log("🔍 Calling saveChat...");
         const userId = currentUser.value?.userId;
         const result = await saveChat(
           appState.chatHistory,

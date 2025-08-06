@@ -13,10 +13,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Debug environment variables
-console.log('🔍 Environment Debug:');
-console.log('Current working directory:', process.cwd());
-console.log('DIGITALOCEAN_PERSONAL_API_KEY exists:', !!process.env.DIGITALOCEAN_PERSONAL_API_KEY);
-console.log('DIGITALOCEAN_PERSONAL_API_KEY length:', process.env.DIGITALOCEAN_PERSONAL_API_KEY?.length || 0);
+// Environment debug info removed for cleaner logs
 
 import express from 'express';
 import cors from 'cors';
@@ -41,11 +38,7 @@ const couchDBClient = createCouchDBClient();
 const initializeDatabase = async () => {
   try {
     // Debug: Log environment variables (masked for security)
-    console.log('🔍 Debug: Environment variables check:');
-    console.log('🔍 COUCHDB_URL:', process.env.COUCHDB_URL ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_USERNAME:', process.env.COUCHDB_USERNAME ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_PASSWORD:', process.env.COUCHDB_PASSWORD ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_DATABASE:', process.env.COUCHDB_DATABASE ? 'SET' : 'NOT SET');
+    // Environment variables check removed for cleaner logs
     
     // Test the connection
     const connected = await couchDBClient.testConnection();
@@ -118,10 +111,10 @@ const checkKBProtection = async (req, res, next) => {
       // KB is protected - require authentication
       const { userId } = req.body;
       
-      console.log(`🔒 User ID from request: ${userId}`);
+      // User ID from request
       
       if (!userId) {
-        console.log(`❌ No user ID provided for protected KB`);
+        // No user ID provided for protected KB
         return res.status(401).json({ 
           error: 'Authentication required to access protected knowledge base',
           requiresAuth: true,
@@ -132,7 +125,7 @@ const checkKBProtection = async (req, res, next) => {
       
       // Check if user is the owner
       if (protectionDoc.owner !== userId) {
-        console.log(`❌ Access denied: ${userId} is not the owner (${protectionDoc.owner})`);
+        // Access denied - user is not the owner
         return res.status(403).json({ 
           error: `Access denied. Knowledge base "${protectionDoc.kbName}" is owned by ${protectionDoc.owner}.`,
           requiresAuth: true,
@@ -141,9 +134,9 @@ const checkKBProtection = async (req, res, next) => {
         });
       }
       
-      console.log(`✅ KB protection check passed: ${userId} can access ${protectionDoc.kbName}`);
+      // KB protection check passed
     } else {
-      console.log(`🔒 KB is not protected or not found`);
+      // KB is not protected or not found
     }
     
     next();
@@ -864,13 +857,7 @@ const doRequest = async (endpoint, options = {}) => {
 
   // Log the request details for debugging agent creation
   if (options.method === 'POST' && endpoint.includes('/agents')) {
-    console.log('🌐 DIGITALOCEAN API REQUEST DETAILS:');
-    console.log('=====================================');
-    console.log(`URL: ${url}`);
-    console.log(`Method: ${config.method || 'GET'}`);
-    console.log(`Headers: ${JSON.stringify(headers, null, 2)}`);
-    console.log(`Body: ${options.body}`);
-    console.log('=====================================');
+    // DigitalOcean API request details removed for cleaner logs
   }
 
   const response = await fetch(url, config);
@@ -1097,13 +1084,7 @@ app.post('/api/agents', async (req, res) => {
     };
 
     // Log the exact payload being sent to DigitalOcean
-    console.log('🚀 DIGITALOCEAN AGENT CREATION PAYLOAD:');
-    console.log('========================================');
-    console.log(JSON.stringify(agentData, null, 2));
-    console.log('========================================');
-    console.log(`🔗 Endpoint: ${process.env.DIGITALOCEAN_BASE_URL}/v2/gen-ai/agents`);
-    console.log(`🔑 Token: ${process.env.DIGITALOCEAN_TOKEN ? 'Present' : 'Missing'}`);
-    console.log(`📋 Project ID: ${agentData.project_id}`);
+    // DigitalOcean agent creation payload details removed for cleaner logs
 
     const agent = await doRequest('/v2/gen-ai/agents', {
       method: 'POST',
@@ -1576,9 +1557,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     console.log(`🔗 [DO API] Attaching KB ${kbId} to agent ${agentId}`);
     
     // KB Protection Check
-    console.log(`🔒 KB Protection Check: MIDDLEWARE CALLED`);
-    console.log(`🔒 KB Protection Check: ${kbId}`);
-    console.log(`🔒 Request body:`, req.body);
+    // KB protection check middleware called
     
     // Check if KB is protected
     try {

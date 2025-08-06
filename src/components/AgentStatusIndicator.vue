@@ -131,9 +131,7 @@ export default defineComponent({
       // Get current user from props or use default
       const userName = props.currentUser?.userId || props.currentUser?.displayName || props.currentUser?.username || 'Unknown User'
       
-      console.log('🔍 AgentStatusIndicator - currentUser prop:', props.currentUser)
-      console.log('🔍 AgentStatusIndicator - userName:', userName)
-      console.log('🔍 AgentStatusIndicator - !props.currentUser:', !props.currentUser)
+      // Debug logging removed for cleaner console output
       
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
@@ -223,14 +221,12 @@ export default defineComponent({
 
     // Debug currentUser prop changes
     watch(() => props.currentUser, (newUser) => {
-      console.log('🔍 AgentStatusIndicator - currentUser prop changed:', newUser)
+      // Debug logging removed for cleaner console output
     })
 
     // Debug warning prop changes
     watch(() => props.warning, (newWarning) => {
-      console.log('🔍 AgentStatusIndicator - warning prop changed:', newWarning)
-      console.log('🔍 AgentStatusIndicator - warning includes 💜:', newWarning?.includes('💜'))
-      console.log('🔍 AgentStatusIndicator - warning includes NOTE:', newWarning?.includes('NOTE'))
+      // Debug logging removed for cleaner console output
     })
 
     return {
