@@ -84,6 +84,7 @@ export default defineComponent({
     // Removed unused lastUnprotectedKB variable
     // Removed unused isInitialLoad variable
     const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
+    const isCleaningUp = ref<boolean>(false); // New: Track cleanup state to prevent auto-connect
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -276,8 +277,8 @@ export default defineComponent({
           const connectedKBs = data.agent.knowledgeBases || [];
           const isUnknownUser = !currentUser.value;
           
-          // Only auto-connect if there are no KBs AND user is truly unknown (not during sign-in process)
-          if (connectedKBs.length === 0 && isUnknownUser && !showPasskeyAuthDialog.value) {
+          // Only auto-connect if there are no KBs AND user is truly unknown (not during sign-in process or cleanup)
+          if (connectedKBs.length === 0 && isUnknownUser && !showPasskeyAuthDialog.value && !isCleaningUp.value) {
             console.log("🔍 Agent has no KBs and user is unknown - auto-connecting appropriate KB");
             await autoConnectAppropriateKB(data.agent.id);
           }
@@ -313,9 +314,11 @@ export default defineComponent({
       // After agent is loaded, check if we need to clear expired session KBs
       if (!currentUser.value && currentAgent.value?.knowledgeBases?.length > 0) {
         console.log("🔍 No authenticated user but KBs are connected - clearing expired session KBs");
+        isCleaningUp.value = true; // Prevent auto-connect during cleanup
         await clearExpiredSessionKBs();
         // Refresh agent data after cleanup
         await fetchCurrentAgent();
+        isCleaningUp.value = false; // Re-enable auto-connect
       }
     };
     
