@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, ref, watch } from "vue";
-import { QFile, QIcon, QBtnToggle } from "quasar";
+import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QCardActions, QBtn } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
@@ -41,6 +41,11 @@ export default defineComponent({
     SavedChatsDialog,
     AgentManagementDialog,
     PasskeyAuthDialog,
+    QDialog,
+    QCard,
+    QCardSection,
+    QCardActions,
+    QBtn,
   },
   computed: {
     placeholderText() {
@@ -85,6 +90,7 @@ export default defineComponent({
     // Removed unused isInitialLoad variable
     const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
     const isCleaningUp = ref<boolean>(false); // New: Track cleanup state to prevent auto-connect
+    const showNoKBWarning = ref<boolean>(false); // New: Show warning when no KB is connected
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -117,7 +123,7 @@ export default defineComponent({
           console.log(`🔍 Found ${currentAgent.value.knowledgeBases.length} KBs connected to expired session`);
           
           // Disconnect all KBs from the agent
-          for (const kb of currentAgent.value.knowledgeBases) {
+          for (const kb of currentAgent.value.knowledgeBases as any[]) {
             console.log(`🔍 Disconnecting KB: ${kb.name} (${kb.uuid})`);
             
             const disconnectResponse = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
@@ -165,7 +171,7 @@ export default defineComponent({
         
         // First, try to find the last connected unprotected KB
         if (lastConnectedKB) {
-          kbToConnect = availableKBs.find(kb => kb.id === lastConnectedKB && !kb.isProtected);
+          kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
           if (kbToConnect) {
             console.log(`✅ Auto-connected last used unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
           }
@@ -173,7 +179,7 @@ export default defineComponent({
         
         // If no last connected KB or it's not available, pick the first unprotected KB
         if (!kbToConnect) {
-          kbToConnect = availableKBs.find(kb => !kb.isProtected);
+          kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
           if (kbToConnect) {
             console.log(`✅ Auto-connected first available unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
           }
@@ -216,7 +222,7 @@ export default defineComponent({
       const connectedKBs = currentAgent.value?.knowledgeBases || [];
       
       // Check if any connected KB is protected and user is not authenticated
-      const protectedKB = connectedKBs.find(kb => kb.isProtected);
+      const protectedKB = connectedKBs.find((kb: any) => kb.isProtected);
       if (protectedKB && !currentUser.value) {
         // Protected KB detected, user not signed in
         showPasskeyAuthDialog.value = true;
@@ -438,6 +444,14 @@ export default defineComponent({
       
       // Refresh agent data to get global state
       await fetchCurrentAgent();
+
+      // Check if no KBs are connected after sign-out
+      if (currentAgent.value?.knowledgeBases?.length === 0) {
+        showNoKBWarning.value = true;
+        setTimeout(() => {
+          showNoKBWarning.value = false;
+        }, 5000); // Hide after 5 seconds
+      }
     };
 
     const handleSignInCancelled = async () => {
@@ -661,6 +675,7 @@ export default defineComponent({
       autoConnectAppropriateKB,
       clearChat,
       showPasskeyAuthDialog,
+      showNoKBWarning,
     };
   },
 });
@@ -774,4 +789,19 @@ export default defineComponent({
     @authenticated="handleUserAuthenticated"
     @cancelled="handleSignInCancelled"
   />
+
+  <!-- No KB Warning Modal -->
+  <q-dialog v-model="showNoKBWarning" persistent>
+    <q-card>
+      <q-card-section>
+        <div class="text-h6">No Knowledge Base Connected</div>
+      </q-card-section>
+      <q-card-section>
+        <p>You have signed out and no knowledge base is currently connected. Please sign in again to access your data.</p>
+      </q-card-section>
+      <q-card-actions align="right">
+        <q-btn flat label="OK" color="primary" v-close-popup />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
