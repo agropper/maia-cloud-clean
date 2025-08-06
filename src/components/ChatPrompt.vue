@@ -137,6 +137,9 @@ export default defineComponent({
               }
             } else {
               console.warn("⚠️ No unprotected KBs available for auto-attach");
+              // All KBs are protected - show sign-in dialog
+              console.log("🔍 All KBs are protected, showing sign-in dialog");
+              showPasskeyAuthDialog.value = true;
             }
           } else {
             console.warn("⚠️ Failed to get available KBs for auto-attach");
@@ -380,6 +383,9 @@ export default defineComponent({
                 }
               } else {
                 console.warn("⚠️ No unprotected KBs available");
+                // All KBs are protected - show sign-in dialog
+                console.log("🔍 All KBs are protected, showing sign-in dialog");
+                showPasskeyAuthDialog.value = true;
               }
             } else {
               console.warn("⚠️ Failed to get available KBs");
