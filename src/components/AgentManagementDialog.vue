@@ -1133,8 +1133,8 @@ export default defineComponent({
         // Then get all available KBs
         const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
         if (kbResponse.ok) {
-          const knowledgeBases: DigitalOceanKnowledgeBase[] =
-            await kbResponse.json();
+          const kbData = await kbResponse.json();
+          const knowledgeBases: DigitalOceanKnowledgeBase[] = kbData.knowledge_bases || [];
 
           // Combine available KBs with connected KBs, avoiding duplicates
           const allKBs = [...knowledgeBases];
