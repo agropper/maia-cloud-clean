@@ -171,7 +171,7 @@ export default defineComponent({
       }
 
       // Check if connected KB is protected
-      if (connectedKB.isProtected && !currentUser.value) {
+      if (connectedKB && connectedKB.isProtected && !currentUser.value) {
         console.log("🔍 Protected KB detected, user not signed in");
         // Show sign-in dialog or offer to switch KB
         showPasskeyAuthDialog.value = true;
@@ -179,7 +179,7 @@ export default defineComponent({
       }
 
       // KB is unprotected or user is signed in - allow access
-      console.log("🔍 KB access allowed:", connectedKB.isProtected ? "protected KB with signed-in user" : "unprotected KB");
+      console.log("🔍 KB access allowed:", connectedKB ? (connectedKB.isProtected ? "protected KB with signed-in user" : "unprotected KB") : "no KB connected");
     };
 
     // Check for existing user session on component mount
