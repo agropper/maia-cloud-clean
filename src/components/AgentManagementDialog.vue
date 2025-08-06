@@ -1431,6 +1431,15 @@ export default defineComponent({
         });
         return;
       }
+      
+      // SECURITY CHECK: Verify user owns protected KBs
+      if (kb.isProtected && kb.owner && currentUser.value?.userId && kb.owner !== currentUser.value.userId) {
+        $q.notify({
+          type: "negative",
+          message: `Access denied: You do not own the knowledge base "${kb.name}". This KB is owned by ${kb.owner}.`,
+        });
+        return;
+      }
 
       isUpdating.value = true;
       try {

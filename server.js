@@ -1316,6 +1316,14 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       return res.json({ success: true, message: `Knowledge base "${kbName}" is already connected to your session.` });
     }
     
+    // SECURITY CHECK: Verify user owns protected KBs
+    if (isProtected && owner && owner !== userId) {
+      console.log(`❌ ACCESS DENIED: User ${userId} attempted to connect to protected KB owned by ${owner}`);
+      return res.status(403).json({ 
+        message: `Access denied: You do not own the knowledge base "${kbName}". This KB is owned by ${owner}.` 
+      });
+    }
+    
     // Add KB to user session
     userSession.connectedKnowledgeBases.push(kbInfo);
     updateUserSession(userId, { connectedKnowledgeBases: userSession.connectedKnowledgeBases });
