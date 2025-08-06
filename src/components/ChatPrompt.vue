@@ -111,15 +111,12 @@ export default defineComponent({
       try {
         console.log("🔍 Clearing KB connections for expired session");
         
-        // Get current agent to see what KBs are connected
-        const response = await fetch(`${API_BASE_URL}/current-agent`);
-        const data = await response.json();
-        
-        if (data.agent && data.agent.knowledgeBases && data.agent.knowledgeBases.length > 0) {
-          console.log(`🔍 Found ${data.agent.knowledgeBases.length} KBs connected to expired session`);
+        // Use the current agent data instead of fetching again
+        if (currentAgent.value && currentAgent.value.knowledgeBases && currentAgent.value.knowledgeBases.length > 0) {
+          console.log(`🔍 Found ${currentAgent.value.knowledgeBases.length} KBs connected to expired session`);
           
           // Disconnect all KBs from the agent
-          for (const kb of data.agent.knowledgeBases) {
+          for (const kb of currentAgent.value.knowledgeBases) {
             console.log(`🔍 Disconnecting KB: ${kb.name} (${kb.uuid})`);
             
             const disconnectResponse = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
@@ -139,6 +136,8 @@ export default defineComponent({
           }
           
           console.log("✅ Cleared all KB connections for expired session");
+        } else {
+          console.log("🔍 No KBs found to disconnect");
         }
       } catch (error) {
         console.error("❌ Error clearing expired session KBs:", error);
@@ -242,12 +241,9 @@ export default defineComponent({
             resetInactivityTimer();
           } else {
             // Session expired, clearing
-            console.log("🔍 Session expired, clearing user session and KB connections");
+            console.log("🔍 Session expired, clearing user session");
             sessionStorage.removeItem('maia_user_session');
             currentUser.value = null;
-            
-            // Clear any lingering KB connections for expired session
-            await clearExpiredSessionKBs();
           }
         } catch (error) {
           console.warn("⚠️ Failed to parse session data:", error);
@@ -305,7 +301,7 @@ export default defineComponent({
       // Start with loading state
       isAgentLoading.value = true;
       
-      // First, check for existing session and clear expired KBs if needed
+      // First, check for existing session
       await checkExistingSession();
       
       // Wait a moment for user state to settle
@@ -313,6 +309,14 @@ export default defineComponent({
       
       // Now fetch agent data with stable user state
       await fetchCurrentAgent();
+      
+      // After agent is loaded, check if we need to clear expired session KBs
+      if (!currentUser.value && currentAgent.value?.knowledgeBases?.length > 0) {
+        console.log("🔍 No authenticated user but KBs are connected - clearing expired session KBs");
+        await clearExpiredSessionKBs();
+        // Refresh agent data after cleanup
+        await fetchCurrentAgent();
+      }
     };
     
     // Initialize with stable state
