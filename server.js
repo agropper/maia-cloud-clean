@@ -1196,7 +1196,7 @@ app.get('/api/knowledge-bases', async (req, res) => {
       };
     });
 
-    res.json(mergedKBs);
+    res.json({ knowledge_bases: mergedKBs });
   } catch (error) {
     console.error('❌ Failed to fetch merged knowledge bases:', error);
     res.status(500).json({ error: 'Failed to fetch knowledge bases' });
