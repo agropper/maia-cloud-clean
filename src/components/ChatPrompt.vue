@@ -79,6 +79,63 @@ export default defineComponent({
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>(null);
+    const inactivityTimer = ref<NodeJS.Timeout | null>(null);
+    const lastActivity = ref<number>(Date.now());
+
+    // Auto sign-out after 5 minutes of inactivity
+    const resetInactivityTimer = () => {
+      lastActivity.value = Date.now();
+      
+      if (inactivityTimer.value) {
+        clearTimeout(inactivityTimer.value);
+      }
+      
+      if (currentUser.value) {
+        inactivityTimer.value = setTimeout(() => {
+          console.log("🔍 Auto sign-out due to inactivity");
+          handleSignOut();
+        }, 5 * 60 * 1000); // 5 minutes
+      }
+    };
+
+    // Track user activity
+    const trackActivity = () => {
+      resetInactivityTimer();
+    };
+
+    // Smart KB access logic
+    const handleKBAccess = async (agentData: any) => {
+      const connectedKB = agentData.agent?.knowledgeBases?.[0];
+      
+      if (!connectedKB) {
+        // No KB connected - auto-attach last unprotected KB for demo
+        console.log("🔍 No KB connected, auto-attaching demo KB");
+        try {
+          const response = await fetch(`${API_BASE_URL}/agents/${agentData.agent.id}/knowledge-bases/casandra-fhir-download-json-06162025`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (response.ok) {
+            console.log("✅ Auto-attached demo KB for new user");
+            await fetchCurrentAgent(); // Refresh to show the new KB
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to auto-attach demo KB:", error);
+        }
+        return;
+      }
+
+      // Check if connected KB is protected
+      if (connectedKB.isProtected && !currentUser.value) {
+        console.log("🔍 Protected KB detected, user not signed in");
+        // Show sign-in dialog or offer to switch KB
+        showPasskeyAuthDialog.value = true;
+        return;
+      }
+
+      // KB is unprotected or user is signed in - allow access
+      console.log("🔍 KB access allowed:", connectedKB.isProtected ? "protected KB with signed-in user" : "unprotected KB");
+    };
 
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
@@ -108,6 +165,9 @@ export default defineComponent({
           } else {
             agentWarning.value = "";
           }
+
+          // Apply smart KB access logic
+          await handleKBAccess(data);
         } else {
           currentAgent.value = null;
           console.log("🤖 No agent configured");
@@ -163,6 +223,9 @@ export default defineComponent({
       currentUser.value = userData;
       console.log("🔍 User authenticated in ChatPrompt:", userData);
 
+      // Start inactivity timer for authenticated user
+      resetInactivityTimer();
+
       // Set the current agent for authenticated users if not already set
       if (userData?.userId) {
         try {
@@ -204,6 +267,12 @@ export default defineComponent({
     const handleSignOut = async () => {
       console.log("🔍 Sign-out requested");
       currentUser.value = null;
+      
+      // Clear inactivity timer
+      if (inactivityTimer.value) {
+        clearTimeout(inactivityTimer.value);
+        inactivityTimer.value = null;
+      }
       
       // Refresh agent data to get global state
       await fetchCurrentAgent();
@@ -428,13 +497,15 @@ export default defineComponent({
       handleSignIn,
       handleSignOut,
       handleSignInCancelled,
+      trackActivity,
+      resetInactivityTimer,
       showPasskeyAuthDialog,
     };
   },
 });
 </script>
 
-<template>
+<template @mousemove="trackActivity" @keydown="trackActivity" @click="trackActivity">
   <!-- AI Selection Toggle -->
   <!--
   <q-btn-toggle
