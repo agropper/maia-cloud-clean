@@ -920,140 +920,59 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API routes are working' });
 });
 
-// Get current agent (user-specific)
+// Get current agent (always use DigitalOcean API as single source of truth)
 app.get('/api/current-agent', async (req, res) => {
   try {
     // Get user ID from query parameter or headers
     const userId = req.query.userId || req.headers['x-user-id'];
     
-    if (!userId) {
-      console.log('🔍 No user ID provided, using global agent state');
-      // Fallback to global state for unauthenticated users
-      if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
-        console.log('🤖 No agent endpoint configured');
-        return res.json({ agent: null });
-      }
-      
-      // Use existing global logic for backward compatibility
-      const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
-      console.log(`🔍 Endpoint URL: ${endpointUrl}`);
-      
-      const agentsResponse = await doRequest('/v2/gen-ai/agents');
-      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
-      
-      const matchingAgent = agents.find(agent => 
-        agent.deployment?.url === endpointUrl.replace('/api/v1', '')
-      );
-      
-      if (!matchingAgent) {
-        console.log('❌ No agent found with matching deployment URL');
-        return res.json({ agent: null, message: 'No agent found with this deployment URL' });
-      }
-      
-      const agentId = matchingAgent.uuid;
-      console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
-      
-      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-      const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
-      
-      // For unauthenticated users, use the actual DigitalOcean API data
-      let connectedKnowledgeBases = [];
-      let warning = null;
-      
-      if (userId) {
-        // Authenticated users: use user session
-        const userSession = getUserSession(userId);
-        connectedKnowledgeBases = userSession.connectedKnowledgeBases;
-        
-        if (connectedKnowledgeBases.length > 1) {
-          // Check if all KBs are owned by the same user
-          const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
-          if (protectedKBs.length > 1) {
-            const kbCount = protectedKBs.length;
-            warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
-            console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
-          } else {
-            warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
-          }
-        }
-      } else {
-        // Unauthenticated users: use actual DigitalOcean API data
-        connectedKnowledgeBases = agentData.knowledge_bases || [];
-        
-        if (connectedKnowledgeBases.length > 1) {
-          warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
-        }
-      }
-      
-      const transformedAgent = {
-        id: agentData.uuid,
-        name: agentData.name,
-        description: agentData.instruction || '',
-        model: agentData.model?.name || 'Unknown',
-        status: agentData.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
-        instructions: agentData.instruction || '',
-        uuid: agentData.uuid,
-        deployment: agentData.deployment,
-        knowledgeBase: connectedKnowledgeBases[0],
-        knowledgeBases: connectedKnowledgeBases
-      };
-
-      const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
-      
-      console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
-      if (connectedKnowledgeBases.length > 0) {
-        console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
-      }
-
-      const response = { 
-        agent: transformedAgent,
-        endpoint: endpoint
-      };
-      
-      if (warning) {
-        response.warning = warning;
-      }
-
-      return res.json(response);
-    }
-    
-    // User-specific agent state
-    console.log(`🔍 Getting agent state for user: ${userId}`);
-    const userSession = getUserSession(userId);
-    
-    if (!userSession.currentAgent) {
-      console.log(`🤖 No agent configured for user: ${userId}`);
+    if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
+      console.log('🤖 No agent endpoint configured');
       return res.json({ agent: null });
     }
     
-    // Get agent details from DigitalOcean API
-    const agentResponse = await doRequest(`/v2/gen-ai/agents/${userSession.currentAgent}`);
+    // Always use DigitalOcean API as single source of truth
+    const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
+    console.log(`🔍 Endpoint URL: ${endpointUrl}`);
+    
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+    
+    const matchingAgent = agents.find(agent => 
+      agent.deployment?.url === endpointUrl.replace('/api/v1', '')
+    );
+    
+    if (!matchingAgent) {
+      console.log('❌ No agent found with matching deployment URL');
+      return res.json({ agent: null, message: 'No agent found with this deployment URL' });
+    }
+    
+    const agentId = matchingAgent.uuid;
+    console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
+    
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
     const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
     
-    console.log(`📋 Agent details for user ${userId}:`, JSON.stringify(agentData, null, 2));
-    
-    // Use user-specific knowledge bases from session
-    const connectedKnowledgeBases = userSession.connectedKnowledgeBases;
+    // Always use actual DigitalOcean API data for connected KBs
+    const connectedKnowledgeBases = agentData.knowledge_bases || [];
     let warning = null;
     
     if (connectedKnowledgeBases.length > 1) {
-      // Check if all KBs are owned by the same user
-      const protectedKBs = connectedKnowledgeBases.filter(kb => kb.isProtected && kb.owner === userId);
-      if (protectedKBs.length > 1) {
-        const kbCount = protectedKBs.length;
-        warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
-        console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
+      if (userId) {
+        // For authenticated users, check if multiple KBs are owned by the same user
+        const protectedKBs = connectedKnowledgeBases.filter(kb => kb.owner === userId);
+        if (protectedKBs.length > 1) {
+          const kbCount = protectedKBs.length;
+          warning = `💜 NOTE: You have ${kbCount} knowledge bases connected to the agent at the same time.`;
+          console.log(`💜 Same-owner multiple KBs: ${kbCount} KBs owned by ${userId}`);
+        } else {
+          warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
+        }
       } else {
         warning = `⚠️ WARNING: Agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
       }
     }
     
-    console.log(`📚 Found ${connectedKnowledgeBases.length} associated KBs for user ${userId}:`);
-    connectedKnowledgeBases.forEach((kb, index) => {
-      console.log(`  ${index + 1}. ${kb.name} (${kb.uuid})`);
-    });
-
-    // Transform agent data for frontend
     const transformedAgent = {
       id: agentData.uuid,
       name: agentData.name,
@@ -1067,11 +986,13 @@ app.get('/api/current-agent', async (req, res) => {
       knowledgeBases: connectedKnowledgeBases
     };
 
-    const endpoint = agentData.deployment?.url + '/api/v1';
+    const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
     
-    console.log(`🤖 Current agent for user ${userId}: ${transformedAgent.name} (${transformedAgent.id})`);
+    console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
     if (connectedKnowledgeBases.length > 0) {
-      console.log(`📚 Current KB for user ${userId}: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
+      console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
+    } else {
+      console.log(`📚 No KB assigned`);
     }
 
     const response = { 
@@ -1083,7 +1004,7 @@ app.get('/api/current-agent', async (req, res) => {
       response.warning = warning;
     }
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('❌ Get current agent error:', error);
     res.status(500).json({ message: `Failed to get current agent: ${error.message}` });
