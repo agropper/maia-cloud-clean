@@ -1307,20 +1307,12 @@ app.post('/api/user-session/connect-kb', async (req, res) => {
       if (currentAgent && currentAgent.id) {
         console.log(`🔍 Attaching KB ${kbName} (${kbUuid}) to DigitalOcean agent: ${currentAgent.id}`);
         
-        const attachResponse = await fetch(`${currentAgent.endpoint}/knowledge-bases/${kbUuid}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
+        // Use DigitalOcean API directly to attach KB to agent
+        const attachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
+          method: 'POST'
         });
         
-        if (attachResponse.ok) {
-          console.log(`✅ Successfully attached KB ${kbName} to DigitalOcean agent`);
-        } else {
-          console.warn(`⚠️ Failed to attach KB ${kbName} to DigitalOcean agent: ${attachResponse.status}`);
-          // Don't fail the request, just log the warning
-        }
+        console.log(`✅ Successfully attached KB ${kbName} to DigitalOcean agent`);
       }
     } catch (attachError) {
       console.warn(`⚠️ Error attaching KB to DigitalOcean agent:`, attachError);
@@ -1356,20 +1348,12 @@ app.delete('/api/user-session/disconnect-kb', async (req, res) => {
       if (currentAgent && currentAgent.id && kbToRemove) {
         console.log(`🔍 Detaching KB ${kbToRemove.name} (${kbUuid}) from DigitalOcean agent: ${currentAgent.id}`);
         
-        const detachResponse = await fetch(`${currentAgent.endpoint}/knowledge-bases/${kbUuid}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
+        // Use DigitalOcean API directly to detach KB from agent
+        const detachResponse = await doRequest(`/v2/gen-ai/agents/${currentAgent.id}/knowledge_bases/${kbUuid}`, {
+          method: 'DELETE'
         });
         
-        if (detachResponse.ok) {
-          console.log(`✅ Successfully detached KB ${kbToRemove.name} from DigitalOcean agent`);
-        } else {
-          console.warn(`⚠️ Failed to detach KB ${kbToRemove.name} from DigitalOcean agent: ${detachResponse.status}`);
-          // Don't fail the request, just log the warning
-        }
+        console.log(`✅ Successfully detached KB ${kbToRemove.name} from DigitalOcean agent`);
       }
     } catch (detachError) {
       console.warn(`⚠️ Error detaching KB from DigitalOcean agent:`, detachError);

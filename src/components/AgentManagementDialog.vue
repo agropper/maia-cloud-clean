@@ -1402,16 +1402,12 @@ export default defineComponent({
           }
         }
 
-        // Notify parent component to refresh agent data first
-        emit("refresh-agent-data");
-        
-        // Wait a moment for the API to update, then refresh our local data
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Refresh the current agent data to get updated KB associations
+        // Immediately refresh our local data from the API
         await loadAgentInfo();
-        // Also refresh the knowledge base list
         await refreshKnowledgeBases();
+        
+        // Notify parent component to refresh agent data
+        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to detach KB:", error);
         $q.notify({
@@ -1549,16 +1545,12 @@ export default defineComponent({
           }
         }
 
-        // Notify parent component to refresh agent data first
-        emit("refresh-agent-data");
-        
-        // Wait a moment for the API to update, then refresh our local data
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Refresh the current agent data to get updated KB associations
+        // Immediately refresh our local data from the API
         await loadAgentInfo();
-        // Also refresh the knowledge base list
         await refreshKnowledgeBases();
+        
+        // Notify parent component to refresh agent data
+        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to connect KB:", error);
         $q.notify({
