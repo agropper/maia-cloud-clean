@@ -332,15 +332,35 @@ export default defineComponent({
           if (detachResponse.ok) {
             console.log("✅ Detached protected KB");
             
-            // Then attach an unprotected KB
-            const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/casandra-fhir-download-json-06162025`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
-            
-            if (attachResponse.ok) {
-              console.log("✅ Attached unprotected KB for anonymous access");
-              await fetchCurrentAgent(); // Refresh to show the new KB
+            // Get available knowledge bases to find an unprotected one
+            const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+            if (kbResponse.ok) {
+              const kbData = await kbResponse.json();
+              const availableKBs = kbData.knowledge_bases || [];
+              
+              // Find an unprotected KB
+              const unprotectedKB = availableKBs.find(kb => !kb.isProtected);
+              
+              if (unprotectedKB) {
+                console.log(`✅ Found unprotected KB: ${unprotectedKB.name} (${unprotectedKB.id})`);
+                
+                // Attach the unprotected KB
+                const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${unprotectedKB.id}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (attachResponse.ok) {
+                  console.log("✅ Attached unprotected KB for anonymous access");
+                  await fetchCurrentAgent(); // Refresh to show the new KB
+                } else {
+                  console.warn("⚠️ Failed to attach unprotected KB");
+                }
+              } else {
+                console.warn("⚠️ No unprotected KBs available");
+              }
+            } else {
+              console.warn("⚠️ Failed to get available KBs");
             }
           }
         } catch (error) {
