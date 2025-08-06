@@ -66,7 +66,7 @@ export default defineComponent({
     },
   },
   setup() {
-    const { appState, writeMessage, clearLocalStorageKeys } = useChatState();
+    const { appState, writeMessage, clearLocalStorageKeys, clearChat } = useChatState();
     const { logMessage, logContextSwitch, logSystemEvent, setTimelineChunks } =
       useChatLogger();
     const { generateTranscript } = useTranscript();
@@ -242,9 +242,10 @@ export default defineComponent({
             resetInactivityTimer();
           } else {
             // Session expired, clearing
-            console.log("🔍 Session expired, clearing user session");
+            console.log("🔍 Session expired, clearing user session and chat history");
             sessionStorage.removeItem('maia_user_session');
             currentUser.value = null;
+            clearChat(); // Clear chat history for expired session
           }
         } catch (error) {
           console.warn("⚠️ Failed to parse session data:", error);
@@ -362,6 +363,10 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
+      // Clear chat history when user changes to prevent data mixing
+      console.log("🔍 User authenticated - clearing chat history to prevent data mixing");
+      clearChat();
+      
       currentUser.value = userData;
       // User authenticated
 
@@ -412,6 +417,11 @@ export default defineComponent({
 
     const handleSignOut = async () => {
       // Sign-out requested
+      
+      // Clear chat history when user changes to prevent data mixing
+      console.log("🔍 User signed out - clearing chat history to prevent data mixing");
+      clearChat();
+      
       currentUser.value = null;
       
       // Clear session storage
@@ -649,6 +659,7 @@ export default defineComponent({
       checkExistingSession,
       clearExpiredSessionKBs,
       autoConnectAppropriateKB,
+      clearChat,
       showPasskeyAuthDialog,
     };
   },
