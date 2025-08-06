@@ -314,9 +314,39 @@ export default defineComponent({
       await fetchCurrentAgent();
     };
 
-    const handleSignInCancelled = () => {
+    const handleSignInCancelled = async () => {
       console.log("🔍 Sign-in cancelled in ChatPrompt");
       showPasskeyAuthDialog.value = false;
+      
+      // If there's a protected KB connected, detach it and connect to an unprotected KB
+      if (currentAgent.value?.knowledgeBases?.[0]?.isProtected) {
+        console.log("🔍 Detaching protected KB and connecting to unprotected KB");
+        try {
+          // First detach the protected KB
+          const protectedKB = currentAgent.value.knowledgeBases[0];
+          const detachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${protectedKB.uuid}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (detachResponse.ok) {
+            console.log("✅ Detached protected KB");
+            
+            // Then attach an unprotected KB
+            const attachResponse = await fetch(`${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/casandra-fhir-download-json-06162025`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (attachResponse.ok) {
+              console.log("✅ Attached unprotected KB for anonymous access");
+              await fetchCurrentAgent(); // Refresh to show the new KB
+            }
+          }
+        } catch (error) {
+          console.warn("⚠️ Failed to switch KBs:", error);
+        }
+      }
     };
 
     // Debug currentUser changes

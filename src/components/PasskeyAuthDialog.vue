@@ -4,7 +4,7 @@
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🔐 Passkey Authentication</div>
         <q-space />
-        <q-btn icon="close" flat round dense v-close-popup />
+        <q-btn icon="close" flat round dense @click="handleClose" />
       </q-card-section>
 
       <q-card-section>
@@ -605,6 +605,19 @@ export default defineComponent({
       registrationUserData.value = null;
     };
 
+    const handleClose = () => {
+      console.log("🔍 PasskeyAuthDialog close button clicked");
+      emit("cancelled");
+      showDialog.value = false;
+      // Reset for next use
+      currentStep.value = "choose";
+      userId.value = "";
+      userIdError.value = false;
+      userIdErrorMessage.value = "";
+      errorMessage.value = "";
+      registrationUserData.value = null;
+    };
+
     return {
       showDialog,
       currentStep,
@@ -624,6 +637,7 @@ export default defineComponent({
       registerPasskey,
       authenticatePasskey,
       onSuccess,
+      handleClose,
       isCreatingNewUser,
       userIdInputRef,
     };
