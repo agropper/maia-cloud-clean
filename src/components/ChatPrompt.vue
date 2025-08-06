@@ -235,7 +235,8 @@ export default defineComponent({
           const connectedKBs = data.agent.knowledgeBases || [];
           const isUnknownUser = !currentUser.value;
           
-          if (connectedKBs.length === 0 && isUnknownUser) {
+          // Only auto-connect if there are no KBs AND user is truly unknown (not during sign-in process)
+          if (connectedKBs.length === 0 && isUnknownUser && !showPasskeyAuthDialog.value) {
             console.log("🔍 Agent has no KBs and user is unknown - auto-connecting appropriate KB");
             await autoConnectAppropriateKB(data.agent.id);
           }
@@ -274,7 +275,6 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      isInitialLoad.value = false; // User is actively managing the agent
       await fetchCurrentAgent();
     };
 

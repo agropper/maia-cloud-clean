@@ -1443,116 +1443,34 @@ export default defineComponent({
 
       isUpdating.value = true;
       try {
-        // Use user-specific session management if user is authenticated
-        if (currentUser.value?.userId) {
-          console.log(`🔍 Connecting KB to user session: ${currentUser.value.userId}`);
-          
-          const response = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: currentUser.value.userId,
-              kbUuid: kb.uuid,
-              kbName: kb.name,
-              isProtected: kb.isProtected,
-              owner: kb.owner
-            }),
-          });
+              // Connect KB directly to DO API (simplified approach)
+      console.log(`🔍 Connecting KB to agent: ${kb.name}`);
+      
+      const response = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: currentUser.value?.userId || 'unknown',
+          kbUuid: kb.uuid,
+          kbName: kb.name,
+          isProtected: kb.isProtected,
+          owner: kb.owner
+        }),
+      });
 
-          const result = await response.json();
+      const result = await response.json();
 
-          if (!response.ok) {
-            throw new Error(`Failed to connect KB to user session: ${result.message}`);
-          } else {
-            console.log(`✅ Connected KB to user session: ${kb.name}`);
-            $q.notify({
-              type: "positive",
-              message: `Knowledge base "${kb.name}" connected to your session.`,
-            });
-          }
-        } else {
-          // Fallback to DigitalOcean API for unauthenticated users
-          console.log(`🔍 Connecting KB via DigitalOcean API (unauthenticated user)`);
-          
-          const response = await fetch(
-            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                userId: currentUser.value?.userId || currentUser.value?.username || null,
-              }),
-            }
-          );
-
-          const result = await response.json();
-
-          if (!response.ok) {
-            // Check for authentication errors
-            if (response.status === 401) {
-              console.error("❌ Authentication required:", result);
-              $q.notify({
-                type: "negative",
-                message: `Authentication required: ${result.error}`,
-                timeout: 5000,
-              });
-              return;
-            }
-            
-            // Check for access denied errors
-            if (response.status === 403) {
-              console.error("❌ Access denied:", result);
-              $q.notify({
-                type: "negative",
-                message: result.error,
-                timeout: 5000,
-              });
-              return;
-            }
-            
-            // Check if this is the DigitalOcean API limitation
-            if (result.api_limitation) {
-              console.error(
-                "❌ DigitalOcean API limitation detected:",
-                result.message
-              );
-              $q.notify({
-                type: "warning",
-                message:
-                  "⚠️ DigitalOcean API Limitation: Knowledge base attachment operations are not working correctly. Please use the DigitalOcean dashboard to manually attach knowledge bases.",
-                timeout: 10000,
-                position: "top",
-              });
-            } else {
-              throw new Error(`Failed to connect KB: ${response.statusText}`);
-            }
-          } else {
-            // Check if this is the DigitalOcean API limitation
-            if (result.api_limitation) {
-              console.error(
-                "❌ DigitalOcean API limitation detected:",
-                result.message
-              );
-              $q.notify({
-                type: "warning",
-                message:
-                  "⚠️ DigitalOcean API Limitation: Knowledge base attachment operations are not working correctly. Please use the DigitalOcean dashboard to manually attach knowledge bases.",
-                timeout: 10000,
-                position: "top",
-              });
-            } else {
-              console.log(`✅ Connected KB: ${kb.name}`);
-              $q.notify({
-                type: "positive",
-                message: `Knowledge base "${kb.name}" connected to agent.`,
-              });
-            }
-          }
-        }
+      if (!response.ok) {
+        throw new Error(`Failed to connect KB: ${result.message}`);
+      } else {
+        console.log(`✅ Connected KB to agent: ${kb.name}`);
+        $q.notify({
+          type: "positive",
+          message: `Knowledge base "${kb.name}" connected successfully.`,
+        });
+      }
 
         // Immediately refresh our local data from the API
         await loadAgentInfo();
