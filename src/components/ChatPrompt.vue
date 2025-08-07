@@ -217,6 +217,72 @@ export default defineComponent({
       }
     };
 
+    // Auto-connect user's appropriate KB after authentication
+    const autoConnectUserKB = async (userId: string, agentId: string) => {
+      try {
+        // Get available knowledge bases
+        const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+        if (!kbResponse.ok) {
+          console.warn("⚠️ Failed to get available KBs for auto-connect");
+          return;
+        }
+        
+        const kbData = await kbResponse.json();
+        const availableKBs = kbData.knowledge_bases || [];
+        
+        // Get last connected unprotected KB from session storage
+        const lastConnectedKB = sessionStorage.getItem('maia_last_unprotected_kb');
+        
+        let kbToConnect = null;
+        
+        // First, try to find the last connected unprotected KB
+        if (lastConnectedKB) {
+          kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
+          if (kbToConnect) {
+            console.log(`✅ Auto-connected last used unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
+          }
+        }
+        
+        // If no last connected KB or it's not available, pick the first unprotected KB
+        if (!kbToConnect) {
+          kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
+          if (kbToConnect) {
+            console.log(`✅ Auto-connected first available unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
+          }
+        }
+        
+        if (kbToConnect) {
+          // Store this as the last connected unprotected KB
+          sessionStorage.setItem('maia_last_unprotected_kb', kbToConnect.id);
+          
+          // Connect the KB to the agent
+          const connectResponse = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: userId,
+              kbUuid: kbToConnect.id,
+              kbName: kbToConnect.name,
+              isProtected: false,
+              owner: null
+            })
+          });
+          
+          if (connectResponse.ok) {
+            console.log(`✅ Successfully auto-connected KB for user: ${userId}`);
+            // Refresh agent data to show the connected KB
+            await fetchCurrentAgent();
+          } else {
+            console.warn(`⚠️ Failed to auto-connect KB for user: ${userId}`);
+          }
+        } else {
+          console.warn(`⚠️ No unprotected KBs available for user: ${userId}`);
+        }
+      } catch (error) {
+        console.error("❌ Error auto-connecting KB for user:", error);
+      }
+    };
+
     // Simple access control - check if user can access current KBs
     const checkAccessControl = () => {
       const connectedKBs = currentAgent.value?.knowledgeBases || [];
@@ -410,6 +476,13 @@ export default defineComponent({
 
       // Refresh agent data to get user-specific state
       await fetchCurrentAgent();
+
+      // Auto-connect user's appropriate KB after authentication
+      if (userData?.userId && currentAgent.value) {
+        await autoConnectUserKB(userData.userId, currentAgent.value.id);
+        // Refresh agent data again to show the connected KB
+        await fetchCurrentAgent();
+      }
 
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
@@ -673,6 +746,7 @@ export default defineComponent({
       checkExistingSession,
       clearExpiredSessionKBs,
       autoConnectAppropriateKB,
+      autoConnectUserKB,
       clearChat,
       showPasskeyAuthDialog,
       showNoKBWarning,
