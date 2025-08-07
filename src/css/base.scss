@@ -11,6 +11,28 @@ body {
   line-height: 1.6;
   font-family: sans-serif;
   font-size: 15px;
+  user-select: text; // Allow text selection globally
+}
+
+// Allow text selection in content areas
+.q-message,
+.q-card,
+.vue-markdown,
+.chat-area,
+.system-content {
+  user-select: text;
+  cursor: text;
+}
+
+// Preserve input field behavior
+input, textarea, select {
+  user-select: text;
+  cursor: text;
+}
+
+// Allow button text selection
+button {
+  user-select: text;
 }
 .wrapper {
   width: 90%;

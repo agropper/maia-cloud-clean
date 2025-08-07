@@ -2,9 +2,37 @@
 
 .chat-area {
   padding: 1em 0 240px;
+  user-select: text; // Allow text selection in chat area
+  
   .q-message-text-content {
     textarea {
       width: 100%;
+    }
+    
+    // Make message content selectable
+    div {
+      user-select: text;
+      cursor: text;
+    }
+  }
+  
+  // Make all chat message content selectable
+  .q-message {
+    user-select: text;
+    
+    .q-message-text {
+      user-select: text;
+      cursor: text;
+    }
+  }
+  
+  // Make markdown content selectable
+  .vue-markdown {
+    user-select: text;
+    cursor: text;
+    
+    * {
+      user-select: text;
     }
   }
 }
