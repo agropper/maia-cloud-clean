@@ -994,13 +994,6 @@ app.get('/api/current-agent', async (req, res) => {
 
     const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
     
-    console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
-    if (connectedKnowledgeBases.length > 0) {
-      console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
-    } else {
-      console.log(`📚 No KB assigned`);
-    }
-
     const response = { 
       agent: transformedAgent,
       endpoint: endpoint

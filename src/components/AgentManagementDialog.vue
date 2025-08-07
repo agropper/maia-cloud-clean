@@ -671,18 +671,10 @@ export default defineComponent({
     const loadAgentInfo = async () => {
       isLoading.value = true;
       try {
-        // Always fetch fresh agent data from API to ensure consistency
         const agentResponse = await fetch(`${API_BASE_URL}/current-agent`);
         if (agentResponse.ok) {
           const agentData = await agentResponse.json();
-          console.log(`🤖 Fresh agent data loaded: ${agentData.agent?.name}`);
           
-          if (agentData.agent?.knowledgeBases?.length > 0) {
-            console.log(`📚 Current KB: ${agentData.agent.knowledgeBases[0].name}`);
-          } else {
-            console.log(`📚 No KB assigned`);
-          }
-
           // Handle warnings from the API
           if (agentData.warning) {
             console.warn(agentData.warning);
@@ -727,9 +719,6 @@ export default defineComponent({
             });
 
             availableKnowledgeBases.value = allKBs;
-            console.log(
-              `📚 Loaded ${allKBs.length} knowledge bases (${connectedKBs.length} connected)`
-            );
           }
         } catch (kbError) {
           console.warn("Failed to load knowledge bases:", kbError);
@@ -1349,7 +1338,6 @@ export default defineComponent({
           if (!response.ok) {
             throw new Error(`Failed to disconnect KB from user session: ${result.message}`);
           } else {
-            console.log(`✅ Disconnected KB from user session: ${kb.name}`);
             $q.notify({
               type: "positive",
               message: `Knowledge base "${kb.name}" disconnected from your session.`,
@@ -1357,7 +1345,6 @@ export default defineComponent({
           }
         } else {
           // Fallback to DigitalOcean API for unauthenticated users
-          console.log(`🔍 Disconnecting KB via DigitalOcean API (unauthenticated user)`);
           
           const response = await fetch(
             `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
@@ -1380,7 +1367,6 @@ export default defineComponent({
               message: `Failed to detach KB: ${result.message}`,
             });
           } else {
-            console.log(`✅ Detached KB: ${kb.name}`);
             $q.notify({
               type: "positive",
               message: `Knowledge base "${kb.name}" detached from agent.`,
@@ -1430,7 +1416,6 @@ export default defineComponent({
       isUpdating.value = true;
       try {
               // Connect KB directly to DO API (simplified approach)
-      console.log(`🔍 Connecting KB to agent: ${kb.name}`);
       
       const response = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
         method: "POST",
@@ -1451,12 +1436,9 @@ export default defineComponent({
       if (!response.ok) {
         throw new Error(`Failed to connect KB: ${result.message}`);
       } else {
-        console.log(`✅ Connected KB to agent: ${kb.name}`);
-        
         // Save KB selection to sessionStorage for unknown users
         if (!currentUser.value?.userId) {
           sessionStorage.setItem('maia_last_unprotected_kb', kb.uuid);
-          console.log(`💾 Saved KB selection to sessionStorage: ${kb.name} (${kb.uuid})`);
         }
         
         $q.notify({
