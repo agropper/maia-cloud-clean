@@ -968,7 +968,6 @@ export default defineComponent({
     // Watch for changes in currentAgent prop and refresh KB list
     watch(() => props.currentAgent, async (newAgent) => {
       if (newAgent) {
-        console.log("🔍 AgentManagementDialog - currentAgent prop changed, refreshing KB list");
         await refreshKnowledgeBases();
       }
     }, { immediate: true });
@@ -1127,7 +1126,6 @@ export default defineComponent({
         if (agentResponse.ok) {
           const agentData = await agentResponse.json();
           connectedKBs = agentData.agent?.knowledgeBases || [];
-          console.log(`📚 Fresh agent data shows ${connectedKBs.length} connected KBs`);
         }
 
         // Then get all available KBs
@@ -1145,9 +1143,6 @@ export default defineComponent({
           });
 
           availableKnowledgeBases.value = allKBs;
-          console.log(
-            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected)`
-          );
 
           // Update the current knowledge base to reflect the switch
           if (selectedKnowledgeBase.value) {
@@ -1166,20 +1161,11 @@ export default defineComponent({
 
     // Handle create new KB
     const handleCreateKnowledgeBase = () => {
-      console.log("🔍 handleCreateKnowledgeBase called");
-      console.log("🔍 currentUser:", currentUser.value);
-      console.log("🔍 showPasskeyAuthDialog:", showPasskeyAuthDialog.value);
-
       if (!currentUser.value) {
         // Show passkey auth dialog for existing users
-        console.log("🔍 Showing passkey auth dialog - user not signed in");
         showPasskeyAuthDialog.value = true;
       } else {
         // User is already authenticated, show KB creation dialog
-        console.log(
-          "🔍 Showing KB creation dialog - user already signed in as:",
-          currentUser.value.username
-        );
         showCreateKbDialog.value = true;
       }
     };
