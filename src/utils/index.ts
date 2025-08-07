@@ -482,12 +482,28 @@ const parseTranscriptFromMarkdown = (markdownContent: string): ChatHistoryItem[]
   return chatHistory
 }
 
-// PDF parsing temporarily disabled for deployment
-// const extractTextFromPDF = async (file: File): Promise<string> => {
-//   // For now, return a placeholder since PDF parsing requires additional libraries
-//   // In a full implementation, you would use a library like pdf-parse or pdfjs-dist
-//   return `PDF content from ${file.name} (PDF parsing not yet implemented)`
-// }
+const extractTextFromPDF = async (file: File): Promise<string> => {
+  try {
+    const formData = new FormData();
+    formData.append('pdfFile', file);
+    
+    const response = await fetch('/api/parse-pdf', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to parse PDF');
+    }
+    
+    const result = await response.json();
+    return result.markdown || result.text;
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    throw new Error(`Failed to parse PDF: ${error.message}`);
+  }
+}
 
 const detectFileType = (fileName: string, content: string): 'transcript' | 'timeline' | 'markdown' | 'text' => {
   const extension = fileName.toLowerCase().split('.').pop()
@@ -496,10 +512,9 @@ const detectFileType = (fileName: string, content: string): 'transcript' | 'time
     return 'transcript'
   }
   
-  // PDF parsing temporarily disabled for deployment
-  // if (extension === 'pdf') {
-  //   return 'pdf'
-  // }
+  if (extension === 'pdf') {
+    return 'pdf'
+  }
   
   if (extension === 'md' || extension === 'markdown') {
     return 'markdown'
@@ -530,6 +545,6 @@ export {
   estimateTokenCount,
   PAUSE_THRESHOLD,
   parseTranscriptFromMarkdown,
-  // extractTextFromPDF,
+  extractTextFromPDF,
   detectFileType
 }
