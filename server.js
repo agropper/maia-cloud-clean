@@ -304,14 +304,14 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
       // Write the PDF buffer to a temporary file
       fs.writeFileSync(inputFile, buffer);
       
-      // Use pandoc to convert PDF to markdown
-      const pandocCommand = `pandoc "${inputFile}" -f pdf -t markdown -o "${outputFile}" --wrap=none`;
+             // Use pandoc to convert PDF to markdown
+       const pandocCommand = `pandoc "${inputFile}" -f pdf -t markdown -o "${outputFile}" --wrap=none`;
       
       console.log('🔄 Running pandoc command:', pandocCommand);
       const { stdout, stderr } = await execAsync(pandocCommand);
       
       if (stderr) {
-        console.warn('⚠️ Pandoc stderr:', stderr);
+        console.warn('⚠️ pandoc stderr:', stderr);
       }
       
       // Read the converted markdown
@@ -345,18 +345,18 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
           }
         }
         
-        console.log('✅ Pandoc successfully processed PDF:', {
+        console.log('✅ pandoc successfully processed PDF:', {
           pages: numPages,
           characters: extractedText.length,
           fileName: req.file.originalname
         });
         
       } else {
-        throw new Error('Pandoc output file not found');
+        throw new Error('pandoc output file not found');
       }
       
     } catch (error) {
-      console.warn('⚠️ Pandoc PDF parsing failed:', error.message);
+      console.warn('⚠️ pandoc PDF parsing failed:', error.message);
       
       // Fallback: Basic text extraction
       const text = buffer.toString('utf8');
@@ -377,7 +377,7 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
 File Size: ${(req.file.size / 1024).toFixed(1)} KB
 Estimated Pages: ${Math.max(1, Math.floor(req.file.size / 5000))}
 
-Pandoc PDF parsing encountered an error: ${error.message}
+pandoc PDF parsing encountered an error: ${error.message}
 
 This PDF may require specialized parsing tools. Please try:
 1. Opening the PDF in a viewer and copying the text
