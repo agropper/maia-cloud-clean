@@ -284,10 +284,10 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
     const buffer = req.file.buffer;
     const text = buffer.toString('utf8');
     
-    // Extract text content using regex patterns for PDF text objects
+    // Extract text content using multiple approaches for PDF text objects
     let extractedText = '';
     
-    // Pattern 1: Look for text objects in PDF
+    // Pattern 1: Look for text objects in PDF (more comprehensive)
     const textMatches = text.match(/\/Text\s*<<[^>]*\/T\s*\(([^)]+)\)/g);
     if (textMatches) {
       extractedText = textMatches
@@ -299,7 +299,32 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
         .join('\n');
     }
     
-    // Pattern 2: Look for stream content
+    // Pattern 2: Look for BT/ET text blocks (more reliable)
+    if (!extractedText || extractedText.length < 100) {
+      const btMatches = text.match(/BT[\s\S]*?ET/g);
+      if (btMatches) {
+        const btText = btMatches
+          .map(block => {
+            // Extract text from BT/ET blocks
+            const textMatches = block.match(/\(([^)]+)\)/g);
+            if (textMatches) {
+              return textMatches
+                .map(match => match.replace(/^\(|\)$/g, ''))
+                .filter(text => text.length > 0 && text.length < 200) // Filter out very long strings
+                .join(' ');
+            }
+            return '';
+          })
+          .filter(text => text.length > 0)
+          .join('\n');
+        
+        if (btText.length > 50) {
+          extractedText = btText;
+        }
+      }
+    }
+    
+    // Pattern 3: Look for stream content and try to decode
     if (!extractedText || extractedText.length < 100) {
       const streamMatches = text.match(/stream\s*([\s\S]*?)\s*endstream/g);
       if (streamMatches) {
@@ -310,29 +335,36 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
           })
           .join('\n');
         
-        // Clean up stream content
+        // Clean up stream content more aggressively
         const cleanedStream = streamText
           .replace(/[^\x20-\x7E\n]/g, '') // Remove non-printable characters
           .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
+          .replace(/[^\w\s\-\.\,\:\;\(\)\[\]\{\}\/\+\=\*\&\^\%\$\#\@\!\?]/g, ' ') // Keep only readable characters
+          .replace(/\s+/g, ' ') // Normalize whitespace
           .trim();
         
-        if (cleanedStream.length > 50) {
+        if (cleanedStream.length > 100) {
           extractedText = cleanedStream;
         }
       }
     }
     
-    // If still no text, use a structured placeholder
-    if (!extractedText || extractedText.length < 100) {
+    // If still no readable text, create a structured placeholder
+    if (!extractedText || extractedText.length < 100 || extractedText.match(/[^\x20-\x7E\s]/)) {
       extractedText = `PDF Document: ${req.file.originalname}
 File Size: ${(req.file.size / 1024).toFixed(1)} KB
-Pages: Estimated based on file size
+Estimated Pages: ${Math.max(1, Math.floor(req.file.size / 5000))}
 
-This PDF contains structured data that requires specialized parsing tools. 
+This PDF appears to be compressed or encoded in a format that requires 
+specialized PDF parsing libraries. The content may contain:
+- Tables and structured data
+- Images and graphics
+- Formatted text
+- Binary data
+
 For full text extraction, please use a PDF viewer or specialized tools.
-
-Note: This is a simplified text extraction. The actual PDF content may contain 
-tables, images, and formatted text that require advanced parsing libraries.`;
+The file contains ${req.file.size} bytes of data that requires 
+advanced PDF parsing capabilities.`;
     }
     
     const pdfData = {
