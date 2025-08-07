@@ -11,28 +11,40 @@ body {
   line-height: 1.6;
   font-family: sans-serif;
   font-size: 15px;
-  user-select: text; // Allow text selection globally
+  user-select: text !important; // Allow text selection globally
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
 }
 
-// Allow text selection in content areas
+// Allow text selection in content areas with high priority
 .q-message,
 .q-card,
 .vue-markdown,
 .chat-area,
 .system-content {
-  user-select: text;
-  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: text !important;
 }
 
 // Preserve input field behavior
 input, textarea, select {
-  user-select: text;
-  cursor: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: text !important;
 }
 
 // Allow button text selection
 button {
-  user-select: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
 }
 .wrapper {
   width: 90%;
