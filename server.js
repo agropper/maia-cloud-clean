@@ -2236,3 +2236,37 @@ const parseAppleHealthPDF = (text) => {
   
   return markdown;
 };
+
+// Manual text processing endpoint for Apple Health PDFs
+app.post('/api/process-apple-health-text', async (req, res) => {
+  try {
+    const { text, fileName } = req.body;
+    
+    if (!text || text.length < 100) {
+      return res.status(400).json({ 
+        error: 'Please provide the text content from your Apple Health PDF (at least 100 characters)' 
+      });
+    }
+
+    // Use the specialized Apple Health parser
+    const markdown = parseAppleHealthPDF(text);
+    
+    // Return structured response
+    res.json({
+      success: true,
+      pages: 'Unknown (manual extraction)',
+      characters: text.length,
+      markdown: markdown,
+      text: text,
+      info: {
+        Title: fileName || 'Apple Health Record',
+        Author: 'Apple Health',
+        Creator: 'Maia Cloud - Manual Processing'
+      },
+      note: 'Apple Health PDF processed from manually extracted text'
+    });
+  } catch (error) {
+    console.error('❌ Apple Health text processing error:', error);
+    res.status(500).json({ error: `Failed to process Apple Health text: ${error.message}` });
+  }
+});

@@ -91,6 +91,8 @@ export default defineComponent({
     const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
     const isCleaningUp = ref<boolean>(false); // New: Track cleanup state to prevent auto-connect
     const showNoKBWarning = ref<boolean>(false); // New: Show warning when no KB is connected
+    const showAppleHealthTextInput = ref<boolean>(false); // New: Show Apple Health text input
+    const appleHealthText = ref<string>(''); // New: Apple Health text content
 
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
@@ -248,6 +250,39 @@ export default defineComponent({
         }
       } catch (error) {
         console.error("❌ Error auto-connecting KB for user:", error);
+      }
+    };
+
+    // Process Apple Health PDF text manually
+    const processAppleHealthText = async () => {
+      try {
+        if (!appleHealthText.value || appleHealthText.value.length < 100) {
+          writeMessage("Please provide at least 100 characters of Apple Health PDF text content.", "error");
+          return;
+        }
+
+        appState.isLoading = true;
+        
+        // Import the function
+        const { processAppleHealthText: processText } = await import('../utils');
+        const processedMarkdown = await processText(appleHealthText.value, "Apple Health Record");
+        
+        // Add the processed content to chat
+        appState.chatHistory.push({
+          role: 'system',
+          content: `Apple Health PDF Processed:\n\n${processedMarkdown}`
+        });
+        
+        // Clear the input
+        appleHealthText.value = '';
+        showAppleHealthTextInput.value = false;
+        
+        appState.isLoading = false;
+        writeMessage("Apple Health PDF text processed successfully!", "success");
+      } catch (error) {
+        console.error("Error processing Apple Health text:", error);
+        writeMessage(`Failed to process Apple Health text: ${error.message}`, "error");
+        appState.isLoading = false;
       }
     };
 
@@ -716,6 +751,10 @@ export default defineComponent({
       clearChat,
       showPasskeyAuthDialog,
       showNoKBWarning,
+      showAppleHealthTextInput,
+      appleHealthText,
+      processAppleHealthText,
+      isAgentLoading,
     };
   },
 });
@@ -753,6 +792,38 @@ export default defineComponent({
       <q-icon name="attach_file"></q-icon>
     </template>
   </q-file>
+
+  <!-- Manual Apple Health PDF Text Processing -->
+  <div v-if="showAppleHealthTextInput" class="apple-health-text-input">
+    <q-card class="q-mt-md">
+      <q-card-section>
+        <div class="text-h6">Apple Health PDF Text Processing</div>
+        <div class="text-caption q-mb-md">
+          Since the PDF is compressed, please copy the text content from your Apple Health PDF and paste it below.
+        </div>
+        <q-textarea
+          v-model="appleHealthText"
+          label="Paste Apple Health PDF text content here..."
+          rows="10"
+          outlined
+          class="q-mb-md"
+        />
+        <div class="row q-gutter-sm">
+          <q-btn
+            color="primary"
+            label="Process Apple Health Text"
+            @click="processAppleHealthText"
+            :disable="!appleHealthText || appleHealthText.length < 100"
+          />
+          <q-btn
+            color="secondary"
+            label="Cancel"
+            @click="showAppleHealthTextInput = false"
+          />
+        </div>
+      </q-card-section>
+    </q-card>
+  </div>
 
   <!-- Chat Area Component -->
   <ChatArea

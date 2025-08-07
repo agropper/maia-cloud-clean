@@ -527,6 +527,28 @@ const detectFileType = (fileName: string, content: string): 'transcript' | 'time
   return 'text'
 }
 
+// Process manually extracted Apple Health PDF text
+const processAppleHealthText = async (text: string, fileName: string): Promise<string> => {
+  try {
+    const response = await fetch('/api/process-apple-health-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, fileName })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to process Apple Health text');
+    }
+    
+    const result = await response.json();
+    return result.markdown || result.text;
+  } catch (error) {
+    console.error('Error processing Apple Health text:', error);
+    throw new Error(`Failed to process Apple Health text: ${error.message}`);
+  }
+};
+
 export {
   createEpochOptions,
   getChunkDates,
@@ -546,5 +568,6 @@ export {
   PAUSE_THRESHOLD,
   parseTranscriptFromMarkdown,
   extractTextFromPDF,
-  detectFileType
+  detectFileType,
+  processAppleHealthText
 }
