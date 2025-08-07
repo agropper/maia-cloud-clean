@@ -24,7 +24,12 @@ import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
 import multer from 'multer';
 import session from 'express-session';
-// PDF parsing functionality - using built-in text extraction
+// PDF parsing functionality - using pandoc for reliable PDF processing
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+
+const execAsync = promisify(exec);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -280,101 +285,113 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
       return res.status(400).json({ error: 'File too large' });
     }
 
-    // Extract text from PDF buffer using built-in methods
+    // Parse PDF using pandoc for reliable text extraction
     const buffer = req.file.buffer;
-    const text = buffer.toString('utf8');
-    
-    // Extract text content using multiple approaches for PDF text objects
     let extractedText = '';
-    
-    // Pattern 1: Look for text objects in PDF (more comprehensive)
-    const textMatches = text.match(/\/Text\s*<<[^>]*\/T\s*\(([^)]+)\)/g);
-    if (textMatches) {
-      extractedText = textMatches
-        .map(match => {
-          const textMatch = match.match(/\/T\s*\(([^)]+)\)/);
-          return textMatch ? textMatch[1] : '';
-        })
-        .filter(text => text.length > 0)
-        .join('\n');
-    }
-    
-    // Pattern 2: Look for BT/ET text blocks (more reliable)
-    if (!extractedText || extractedText.length < 100) {
-      const btMatches = text.match(/BT[\s\S]*?ET/g);
-      if (btMatches) {
-        const btText = btMatches
-          .map(block => {
-            // Extract text from BT/ET blocks
-            const textMatches = block.match(/\(([^)]+)\)/g);
-            if (textMatches) {
-              return textMatches
-                .map(match => match.replace(/^\(|\)$/g, ''))
-                .filter(text => text.length > 0 && text.length < 200) // Filter out very long strings
-                .join(' ');
-            }
-            return '';
-          })
-          .filter(text => text.length > 0)
-          .join('\n');
-        
-        if (btText.length > 50) {
-          extractedText = btText;
-        }
+    let numPages = 0;
+    let pdfInfo = {
+      Title: req.file.originalname,
+      Author: 'Unknown',
+      Creator: 'Maia Cloud'
+    };
+
+    try {
+      // Create temporary files for pandoc processing
+      const tempDir = '/tmp';
+      const inputFile = path.join(tempDir, `input-${Date.now()}.pdf`);
+      const outputFile = path.join(tempDir, `output-${Date.now()}.md`);
+      
+      // Write the PDF buffer to a temporary file
+      fs.writeFileSync(inputFile, buffer);
+      
+      // Use pandoc to convert PDF to markdown
+      const pandocCommand = `pandoc "${inputFile}" -f pdf -t markdown -o "${outputFile}" --wrap=none`;
+      
+      console.log('🔄 Running pandoc command:', pandocCommand);
+      const { stdout, stderr } = await execAsync(pandocCommand);
+      
+      if (stderr) {
+        console.warn('⚠️ Pandoc stderr:', stderr);
       }
-    }
-    
-    // Pattern 3: Look for stream content and try to decode
-    if (!extractedText || extractedText.length < 100) {
-      const streamMatches = text.match(/stream\s*([\s\S]*?)\s*endstream/g);
-      if (streamMatches) {
-        const streamText = streamMatches
-          .map(match => {
-            const content = match.replace(/stream\s*/, '').replace(/\s*endstream/, '');
-            return content;
-          })
-          .join('\n');
+      
+      // Read the converted markdown
+      if (fs.existsSync(outputFile)) {
+        extractedText = fs.readFileSync(outputFile, 'utf8');
         
-        // Clean up stream content more aggressively
-        const cleanedStream = streamText
-          .replace(/[^\x20-\x7E\n]/g, '') // Remove non-printable characters
+        // Clean up temporary files
+        fs.unlinkSync(inputFile);
+        fs.unlinkSync(outputFile);
+        
+        // Clean up the extracted text
+        extractedText = extractedText
           .replace(/\n{3,}/g, '\n\n') // Normalize line breaks
-          .replace(/[^\w\s\-\.\,\:\;\(\)\[\]\{\}\/\+\=\*\&\^\%\$\#\@\!\?]/g, ' ') // Keep only readable characters
           .replace(/\s+/g, ' ') // Normalize whitespace
           .trim();
         
-        if (cleanedStream.length > 100) {
-          extractedText = cleanedStream;
+        // Estimate pages based on file size
+        numPages = Math.max(1, Math.floor(req.file.size / 5000));
+        
+        // Try to extract page count from content
+        if (extractedText.length > 100) {
+          const pageMatches = extractedText.match(/Page\s+\d+/gi);
+          if (pageMatches) {
+            const pageNumbers = pageMatches
+              .map(match => parseInt(match.replace(/Page\s+/i, '')))
+              .filter(num => !isNaN(num));
+            
+            if (pageNumbers.length > 0) {
+              numPages = Math.max(...pageNumbers);
+            }
+          }
         }
+        
+        console.log('✅ Pandoc successfully processed PDF:', {
+          pages: numPages,
+          characters: extractedText.length,
+          fileName: req.file.originalname
+        });
+        
+      } else {
+        throw new Error('Pandoc output file not found');
       }
-    }
-    
-    // If still no readable text, create a structured placeholder
-    if (!extractedText || extractedText.length < 100 || extractedText.match(/[^\x20-\x7E\s]/)) {
-      extractedText = `PDF Document: ${req.file.originalname}
+      
+    } catch (error) {
+      console.warn('⚠️ Pandoc PDF parsing failed:', error.message);
+      
+      // Fallback: Basic text extraction
+      const text = buffer.toString('utf8');
+      const textMatches = text.match(/\/Text\s*<<[^>]*\/T\s*\(([^)]+)\)/g);
+      
+      if (textMatches) {
+        extractedText = textMatches
+          .map(match => {
+            const textMatch = match.match(/\/T\s*\(([^)]+)\)/);
+            return textMatch ? textMatch[1] : '';
+          })
+          .filter(text => text.length > 0)
+          .join('\n');
+      }
+      
+      if (!extractedText || extractedText.length < 100) {
+        extractedText = `PDF Document: ${req.file.originalname}
 File Size: ${(req.file.size / 1024).toFixed(1)} KB
 Estimated Pages: ${Math.max(1, Math.floor(req.file.size / 5000))}
 
-This PDF appears to be compressed or encoded in a format that requires 
-specialized PDF parsing libraries. The content may contain:
-- Tables and structured data
-- Images and graphics
-- Formatted text
-- Binary data
+Pandoc PDF parsing encountered an error: ${error.message}
 
-For full text extraction, please use a PDF viewer or specialized tools.
-The file contains ${req.file.size} bytes of data that requires 
-advanced PDF parsing capabilities.`;
+This PDF may require specialized parsing tools. Please try:
+1. Opening the PDF in a viewer and copying the text
+2. Using a different PDF format
+3. Converting the PDF to a text format first.`;
+      }
+      
+      numPages = Math.max(1, Math.floor(req.file.size / 5000));
     }
     
     const pdfData = {
       text: extractedText,
-      numpages: Math.max(1, Math.floor(req.file.size / 5000)), // Estimate pages based on file size
-      info: {
-        Title: req.file.originalname,
-        Author: 'Unknown',
-        Creator: 'Maia Cloud'
-      }
+      numpages: numPages,
+      info: pdfInfo
     };
     const processedText = extractedText;
     
