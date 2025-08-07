@@ -351,6 +351,7 @@ tables, images, and formatted text that require advanced parsing libraries.`;
                              req.file.originalname.toLowerCase().includes('health') ||
                              req.file.originalname.toLowerCase().includes('medical');
 
+    let markdown;
     if (isAppleHealthPDF) {
       // Use specialized Apple Health parser
       markdown = parseAppleHealthPDF(processedText);
