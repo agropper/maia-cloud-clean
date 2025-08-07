@@ -7,7 +7,7 @@ services:
       repo: agropper/maia-cloud-clean
       branch: main
     build_command: |
-      apt-get update && apt-get install -y pandoc && apt-get clean
+      apt-get update && apt-get install -y poppler-utils && apt-get clean
       npm install --include=dev && npm run build
     run_command: node server.js
     environment_slug: node-js

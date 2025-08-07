@@ -296,25 +296,25 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
     };
 
     try {
-      // Create temporary files for pandoc processing
+      // Create temporary files for pdftotext processing
       const tempDir = '/tmp';
       const inputFile = path.join(tempDir, `input-${Date.now()}.pdf`);
-      const outputFile = path.join(tempDir, `output-${Date.now()}.md`);
+      const outputFile = path.join(tempDir, `output-${Date.now()}.txt`);
       
       // Write the PDF buffer to a temporary file
       fs.writeFileSync(inputFile, buffer);
       
-             // Use pandoc to convert PDF to markdown
-       const pandocCommand = `pandoc "${inputFile}" -f pdf -t markdown -o "${outputFile}" --wrap=none`;
+      // Use pdftotext to extract text from PDF
+      const pdftotextCommand = `pdftotext "${inputFile}" "${outputFile}"`;
       
-      console.log('🔄 Running pandoc command:', pandocCommand);
-      const { stdout, stderr } = await execAsync(pandocCommand);
+      console.log('🔄 Running pdftotext command:', pdftotextCommand);
+      const { stdout, stderr } = await execAsync(pdftotextCommand);
       
       if (stderr) {
-        console.warn('⚠️ pandoc stderr:', stderr);
+        console.warn('⚠️ pdftotext stderr:', stderr);
       }
       
-      // Read the converted markdown
+      // Read the extracted text
       if (fs.existsSync(outputFile)) {
         extractedText = fs.readFileSync(outputFile, 'utf8');
         
@@ -345,14 +345,14 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
           }
         }
         
-        console.log('✅ pandoc successfully processed PDF:', {
+        console.log('✅ pdftotext successfully processed PDF:', {
           pages: numPages,
           characters: extractedText.length,
           fileName: req.file.originalname
         });
         
       } else {
-        throw new Error('pandoc output file not found');
+        throw new Error('pdftotext output file not found');
       }
       
     } catch (error) {
