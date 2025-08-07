@@ -62,3 +62,4 @@ See `.env` file for all required configuration variables.
 ## License
 
 GPL-3
+# Rollback to stable state
