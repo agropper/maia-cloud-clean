@@ -116,16 +116,10 @@ export default defineComponent({
     // Clear KB connections for expired sessions
     const clearExpiredSessionKBs = async () => {
       try {
-        console.log("🔍 Clearing KB connections for expired session");
-        
         // Use the current agent data instead of fetching again
         if (currentAgent.value && currentAgent.value.knowledgeBases && currentAgent.value.knowledgeBases.length > 0) {
-          console.log(`🔍 Found ${currentAgent.value.knowledgeBases.length} KBs connected to expired session`);
-          
           // Disconnect all KBs from the agent
           for (const kb of currentAgent.value.knowledgeBases as any[]) {
-            console.log(`🔍 Disconnecting KB: ${kb.name} (${kb.uuid})`);
-            
             const disconnectResponse = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
@@ -135,16 +129,10 @@ export default defineComponent({
               })
             });
             
-            if (disconnectResponse.ok) {
-              console.log(`✅ Disconnected KB: ${kb.name}`);
-            } else {
+            if (!disconnectResponse.ok) {
               console.warn(`⚠️ Failed to disconnect KB: ${kb.name}`);
             }
           }
-          
-          console.log("✅ Cleared all KB connections for expired session");
-        } else {
-          console.log("🔍 No KBs found to disconnect");
         }
       } catch (error) {
         console.error("❌ Error clearing expired session KBs:", error);
@@ -172,17 +160,11 @@ export default defineComponent({
         // First, try to find the last connected unprotected KB
         if (lastConnectedKB) {
           kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
-          if (kbToConnect) {
-            console.log(`✅ Auto-connected last used unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
-          }
         }
         
         // If no last connected KB or it's not available, pick the first unprotected KB
         if (!kbToConnect) {
           kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
-          if (kbToConnect) {
-            console.log(`✅ Auto-connected first available unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
-          }
         }
         
         if (kbToConnect) {
@@ -202,11 +184,7 @@ export default defineComponent({
             })
           });
           
-          if (connectResponse.ok) {
-            console.log("✅ Successfully auto-connected KB for unknown user");
-            // Refresh agent data to show the connected KB
-            await fetchCurrentAgent();
-          } else {
+          if (!connectResponse.ok) {
             console.warn("⚠️ Failed to auto-connect KB");
           }
         } else {
@@ -238,17 +216,11 @@ export default defineComponent({
         // First, try to find the last connected unprotected KB
         if (lastConnectedKB) {
           kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
-          if (kbToConnect) {
-            console.log(`✅ Auto-connected last used unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
-          }
         }
         
         // If no last connected KB or it's not available, pick the first unprotected KB
         if (!kbToConnect) {
           kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
-          if (kbToConnect) {
-            console.log(`✅ Auto-connected first available unprotected KB: ${kbToConnect.name} (${kbToConnect.id})`);
-          }
         }
         
         if (kbToConnect) {
@@ -268,11 +240,7 @@ export default defineComponent({
             })
           });
           
-          if (connectResponse.ok) {
-            console.log(`✅ Successfully auto-connected KB for user: ${userId}`);
-            // Refresh agent data to show the connected KB
-            await fetchCurrentAgent();
-          } else {
+          if (!connectResponse.ok) {
             console.warn(`⚠️ Failed to auto-connect KB for user: ${userId}`);
           }
         } else {
@@ -376,7 +344,6 @@ export default defineComponent({
       
       // After agent is loaded, check if we need to clear expired session KBs
       if (!currentUser.value && currentAgent.value?.knowledgeBases?.length > 0) {
-        console.log("🔍 No authenticated user but KBs are connected - clearing expired session KBs");
         isCleaningUp.value = true; // Prevent auto-connect during cleanup
         await clearExpiredSessionKBs();
         // Refresh agent data after cleanup
@@ -386,7 +353,6 @@ export default defineComponent({
       
       // After cleanup (if any), check if we need to auto-connect for unknown users
       if (!currentUser.value && currentAgent.value?.knowledgeBases?.length === 0 && !showPasskeyAuthDialog.value && !isCleaningUp.value) {
-        console.log("🔍 Agent has no KBs and user is unknown - auto-connecting appropriate KB");
         await autoConnectAppropriateKB(currentAgent.value.id);
         // Refresh agent data after auto-connect
         await fetchCurrentAgent();
