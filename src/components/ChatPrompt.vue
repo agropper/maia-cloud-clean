@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, ref, watch } from "vue";
+import { defineComponent, ref, watch, nextTick } from "vue";
 import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QCardActions, QBtn } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
@@ -86,8 +86,6 @@ export default defineComponent({
     const currentUser = ref<any>(null);
     const inactivityTimer = ref<NodeJS.Timeout | null>(null);
     const lastActivity = ref<number>(Date.now());
-    // Removed unused lastUnprotectedKB variable
-    // Removed unused isInitialLoad variable
     const isAgentLoading = ref<boolean>(true); // New: Track agent loading state
     const isCleaningUp = ref<boolean>(false); // New: Track cleanup state to prevent auto-connect
     const showNoKBWarning = ref<boolean>(false); // New: Show warning when no KB is connected
@@ -97,30 +95,21 @@ export default defineComponent({
     // Auto sign-out after 5 minutes of inactivity
     const resetInactivityTimer = () => {
       lastActivity.value = Date.now();
-      
-      if (inactivityTimer.value) {
-        clearTimeout(inactivityTimer.value);
-      }
-      
+      if (inactivityTimer.value) clearTimeout(inactivityTimer.value);
       if (currentUser.value) {
         inactivityTimer.value = setTimeout(() => {
-          // Auto sign-out due to inactivity
           handleSignOut();
-        }, 5 * 60 * 1000); // 5 minutes
+        }, 5 * 60 * 1000);
       }
     };
 
-    // Track user activity
     const trackActivity = () => {
       resetInactivityTimer();
     };
 
-    // Clear KB connections for expired sessions
     const clearExpiredSessionKBs = async () => {
       try {
-        // Use the current agent data instead of fetching again
         if (currentAgent.value && currentAgent.value.knowledgeBases && currentAgent.value.knowledgeBases.length > 0) {
-          // Disconnect all KBs from the agent
           for (const kb of currentAgent.value.knowledgeBases as any[]) {
             const disconnectResponse = await fetch(`${API_BASE_URL}/user-session/disconnect-kb`, {
               method: 'DELETE',
@@ -130,10 +119,7 @@ export default defineComponent({
                 kbUuid: kb.uuid
               })
             });
-            
-            if (!disconnectResponse.ok) {
-              console.warn(`⚠️ Failed to disconnect KB: ${kb.name}`);
-            }
+            if (!disconnectResponse.ok) console.warn(`⚠️ Failed to disconnect KB: ${kb.name}`);
           }
         }
       } catch (error) {
@@ -141,54 +127,31 @@ export default defineComponent({
       }
     };
 
-    // Auto-connect appropriate KB for unknown users
     const autoConnectAppropriateKB = async (agentId: string) => {
       try {
-        // Get available knowledge bases
         const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
         if (!kbResponse.ok) {
           console.warn("⚠️ Failed to get available KBs for auto-connect");
           return;
         }
-        
         const kbData = await kbResponse.json();
         const availableKBs = kbData.knowledge_bases || [];
-        
-        // Get last connected unprotected KB from session storage
         const lastConnectedKB = sessionStorage.getItem('maia_last_unprotected_kb');
-        
         let kbToConnect = null;
-        
-        // First, try to find the last connected unprotected KB
         if (lastConnectedKB) {
           kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
         }
-        
-        // If no last connected KB or it's not available, pick the first unprotected KB
         if (!kbToConnect) {
           kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
         }
-        
         if (kbToConnect) {
-          // Store this as the last connected unprotected KB
           sessionStorage.setItem('maia_last_unprotected_kb', kbToConnect.id);
-          
-          // Connect the KB to the agent
           const connectResponse = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: 'unknown',
-              kbUuid: kbToConnect.id,
-              kbName: kbToConnect.name,
-              isProtected: false,
-              owner: null
-            })
+            body: JSON.stringify({ userId: 'unknown', kbUuid: kbToConnect.id, kbName: kbToConnect.name, isProtected: false, owner: null })
           });
-          
-          if (!connectResponse.ok) {
-            console.warn("⚠️ Failed to auto-connect KB");
-          }
+          if (!connectResponse.ok) console.warn("⚠️ Failed to auto-connect KB");
         } else {
           console.warn("⚠️ No unprotected KBs available for auto-connect");
         }
@@ -197,54 +160,31 @@ export default defineComponent({
       }
     };
 
-    // Auto-connect user's appropriate KB after authentication
     const autoConnectUserKB = async (userId: string, agentId: string) => {
       try {
-        // Get available knowledge bases
         const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
         if (!kbResponse.ok) {
           console.warn("⚠️ Failed to get available KBs for auto-connect");
           return;
         }
-        
         const kbData = await kbResponse.json();
         const availableKBs = kbData.knowledge_bases || [];
-        
-        // Get last connected unprotected KB from session storage
         const lastConnectedKB = sessionStorage.getItem('maia_last_unprotected_kb');
-        
         let kbToConnect = null;
-        
-        // First, try to find the last connected unprotected KB
         if (lastConnectedKB) {
           kbToConnect = availableKBs.find((kb: any) => kb.id === lastConnectedKB && !kb.isProtected);
         }
-        
-        // If no last connected KB or it's not available, pick the first unprotected KB
         if (!kbToConnect) {
           kbToConnect = availableKBs.find((kb: any) => !kb.isProtected);
         }
-        
         if (kbToConnect) {
-          // Store this as the last connected unprotected KB
           sessionStorage.setItem('maia_last_unprotected_kb', kbToConnect.id);
-          
-          // Connect the KB to the agent
           const connectResponse = await fetch(`${API_BASE_URL}/user-session/connect-kb`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: userId,
-              kbUuid: kbToConnect.id,
-              kbName: kbToConnect.name,
-              isProtected: false,
-              owner: null
-            })
+            body: JSON.stringify({ userId, kbUuid: kbToConnect.id, kbName: kbToConnect.name, isProtected: false, owner: null })
           });
-          
-          if (!connectResponse.ok) {
-            console.warn(`⚠️ Failed to auto-connect KB for user: ${userId}`);
-          }
+          if (!connectResponse.ok) console.warn(`⚠️ Failed to auto-connect KB for user: ${userId}`);
         } else {
           console.warn(`⚠️ No unprotected KBs available for user: ${userId}`);
         }
@@ -253,30 +193,18 @@ export default defineComponent({
       }
     };
 
-    // Process Apple Health PDF text manually
     const processAppleHealthText = async () => {
       try {
         if (!appleHealthText.value || appleHealthText.value.length < 100) {
           writeMessage("Please provide at least 100 characters of Apple Health PDF text content.", "error");
           return;
         }
-
         appState.isLoading = true;
-        
-        // Import the function
         const { processAppleHealthText: processText } = await import('../utils');
         const processedMarkdown = await processText(appleHealthText.value, "Apple Health Record");
-        
-        // Add the processed content to chat
-        appState.chatHistory.push({
-          role: 'system',
-          content: `Apple Health PDF Processed:\n\n${processedMarkdown}`
-        });
-        
-        // Clear the input
+        appState.chatHistory.push({ role: 'system', content: `Apple Health PDF Processed:\n\n${processedMarkdown}` });
         appleHealthText.value = '';
         showAppleHealthTextInput.value = false;
-        
         appState.isLoading = false;
         writeMessage("Apple Health PDF text processed successfully!", "success");
       } catch (error) {
@@ -286,22 +214,16 @@ export default defineComponent({
       }
     };
 
-    // Simple access control - check if user can access current KBs
     const checkAccessControl = () => {
       const connectedKBs = currentAgent.value?.knowledgeBases || [];
-      
-      // Check if any connected KB is protected and user is not authenticated
       const protectedKB = connectedKBs.find((kb: any) => kb.isProtected);
       if (protectedKB && !currentUser.value) {
-        // Protected KB detected, user not signed in
         showPasskeyAuthDialog.value = true;
         return false;
       }
-      
       return true;
     };
 
-    // Check for existing user session on component mount
     const checkExistingSession = async () => {
       const sessionData = sessionStorage.getItem('maia_user_session');
       if (sessionData) {
@@ -309,18 +231,14 @@ export default defineComponent({
           const userData = JSON.parse(sessionData);
           const sessionTime = userData.sessionTime || 0;
           const now = Date.now();
-          
-          // Check if session is still valid (within 5 minutes)
           if (now - sessionTime < 5 * 60 * 1000) {
-            // Restoring user session
             currentUser.value = userData;
             resetInactivityTimer();
           } else {
-            // Session expired, clearing
             console.log("🔍 Session expired, clearing user session and chat history");
             sessionStorage.removeItem('maia_user_session');
             currentUser.value = null;
-            clearChat(); // Clear chat history for expired session
+            clearChat();
           }
         } catch (error) {
           console.warn("⚠️ Failed to parse session data:", error);
@@ -330,74 +248,45 @@ export default defineComponent({
       }
     };
 
-    // Fetch current agent information from DO API (single source of truth)
     const fetchCurrentAgent = async () => {
       try {
-        isAgentLoading.value = true; // Start loading
-        
+        isAgentLoading.value = true;
         const response = await fetch(`${API_BASE_URL}/current-agent`);
         const data = await response.json();
-
         if (data.agent) {
           currentAgent.value = data.agent;
-          // Agent loaded successfully
-
-          // Handle warnings from the API
-          if (data.warning) {
-            agentWarning.value = data.warning;
-          } else {
-            agentWarning.value = "";
-          }
-          
-          // Check access control after agent data is loaded
+          if (data.warning) agentWarning.value = data.warning; else agentWarning.value = "";
           checkAccessControl();
         } else {
           currentAgent.value = null;
-          // No agent configured
         }
       } catch (error) {
         console.error("❌ Error fetching current agent:", error);
         currentAgent.value = null;
       } finally {
-        isAgentLoading.value = false; // End loading
+        isAgentLoading.value = false;
       }
     };
 
-    // Stable initialization - wait for user state to settle before loading agent
     const initializeStableState = async () => {
-      // Start with loading state
       isAgentLoading.value = true;
-      
-      // First, check for existing session
       await checkExistingSession();
-      
-      // Wait a moment for user state to settle
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Now fetch agent data with stable user state
       await fetchCurrentAgent();
-      
-      // After agent is loaded, check if we need to clear expired session KBs
       if (!currentUser.value && currentAgent.value?.knowledgeBases?.length > 0) {
-        isCleaningUp.value = true; // Prevent auto-connect during cleanup
+        isCleaningUp.value = true;
         await clearExpiredSessionKBs();
-        // Refresh agent data after cleanup
         await fetchCurrentAgent();
-        isCleaningUp.value = false; // Re-enable auto-connect
+        isCleaningUp.value = false;
       }
-      
-      // After cleanup (if any), check if we need to auto-connect for unknown users
       if (!currentUser.value && currentAgent.value?.knowledgeBases?.length === 0 && !showPasskeyAuthDialog.value && !isCleaningUp.value) {
         await autoConnectAppropriateKB(currentAgent.value.id);
-        // Refresh agent data after auto-connect
         await fetchCurrentAgent();
       }
     };
-    
-    // Initialize with stable state
+
     initializeStableState();
 
-    // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
       await fetchCurrentAgent();
     };
@@ -414,11 +303,7 @@ export default defineComponent({
 
     const handleAgentUpdated = (agentInfo: any) => {
       if (agentInfo) {
-        // Update the current agent with the new information
         currentAgent.value = agentInfo;
-        // Agent updated
-
-        // Update the AI options to use the new agent endpoint if available
         const personalChatOption = AIoptions.find(
           (option) => option.label === "Personal Chat"
         );
@@ -427,7 +312,6 @@ export default defineComponent({
         }
       } else {
         currentAgent.value = null;
-        // Agent cleared
       }
     };
 
@@ -436,107 +320,58 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      // Clear chat history when user changes to prevent data mixing
       console.log("🔍 User authenticated - clearing chat history to prevent data mixing");
       clearChat();
-      
       currentUser.value = userData;
-      // User authenticated
-
-      // Save user session to sessionStorage
-      const sessionData = {
-        ...userData,
-        sessionTime: Date.now()
-      };
+      const sessionData = { ...userData, sessionTime: Date.now() };
       sessionStorage.setItem('maia_user_session', JSON.stringify(sessionData));
-
-      // Start inactivity timer for authenticated user
       resetInactivityTimer();
-
-      // Set the current agent for authenticated users if not already set
       if (userData?.userId) {
         try {
           const response = await fetch(`${API_BASE_URL}/current-agent`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              agentId: "16c9edf6-2dee-11f0-bf8f-4e013e2ddde4", // Default agent
-              userId: userData.userId
-            }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agentId: "16c9edf6-2dee-11f0-bf8f-4e013e2ddde4", userId: userData.userId }),
           });
-          
           if (response.ok) {
-            // Auto-set current agent for authenticated user
+            // ok
           }
         } catch (error) {
           console.error("Failed to auto-set current agent:", error);
         }
       }
-
-      // Refresh agent data to get user-specific state
       await fetchCurrentAgent();
-
-      // Auto-connect user's appropriate KB after authentication
       if (userData?.userId && currentAgent.value) {
         await autoConnectUserKB(userData.userId, currentAgent.value.id);
-        // Refresh agent data again to show the connected KB
         await fetchCurrentAgent();
       }
-
-      // Force a reactive update by triggering a re-render
-      // This ensures the UI updates immediately
     };
 
     const handleSignIn = () => {
-      // Sign-in requested
-      // Open a dedicated sign-in dialog instead of Agent Management
       showPasskeyAuthDialog.value = true;
     };
 
     const handleSignOut = async () => {
-      // Sign-out requested
-      
-      // Clear chat history when user changes to prevent data mixing
       console.log("🔍 User signed out - clearing chat history to prevent data mixing");
       clearChat();
-      
       currentUser.value = null;
-      
-      // Clear session storage
       sessionStorage.removeItem('maia_user_session');
-      
-      // Clear inactivity timer
       if (inactivityTimer.value) {
         clearTimeout(inactivityTimer.value);
         inactivityTimer.value = null;
       }
-      
-      // Clear KB connections for signed-out user
       await clearExpiredSessionKBs();
-      
-      // Refresh agent data to get global state
       await fetchCurrentAgent();
-
-      // Check if no KBs are connected after sign-out
       if (currentAgent.value?.knowledgeBases?.length === 0) {
         showNoKBWarning.value = true;
-        setTimeout(() => {
-          showNoKBWarning.value = false;
-        }, 5000); // Hide after 5 seconds
+        setTimeout(() => { showNoKBWarning.value = false; }, 5000);
       }
     };
 
     const handleSignInCancelled = async () => {
-      // Sign-in cancelled
       showPasskeyAuthDialog.value = false;
-      
-      // Refresh agent data to get current state
       await fetchCurrentAgent();
     };
-
-    // Debug logging removed for cleaner console output
 
     const editMessage = (idx: number) => {
       appState.editBox.push(idx);
@@ -598,7 +433,6 @@ export default defineComponent({
     };
 
     const triggerSendQuery = async () => {
-      // If Personal Chat is selected and chatHistory is empty, only use the default if the input is empty or matches the default
       const personalChatValue = AIoptions.find(
         (option) => option.label === "Personal Chat"
       )?.value;
@@ -607,7 +441,6 @@ export default defineComponent({
         appState.selectedAI === personalChatValue &&
         appState.chatHistory.length === 0
       ) {
-        // If the user has typed something, use that instead of the default
         if (
           !appState.currentQuery ||
           appState.currentQuery.trim() === "" ||
@@ -615,7 +448,6 @@ export default defineComponent({
         ) {
           appState.currentQuery = defaultPrompt;
         }
-        // Otherwise, use what the user typed (do nothing)
       }
 
       try {
@@ -634,10 +466,7 @@ export default defineComponent({
         appState.isLoading = false;
       }
 
-      logMessage({
-        role: "user",
-        content: `Sent query to ${appState.selectedAI}`,
-      });
+      logMessage({ role: "user", content: `Sent query to ${appState.selectedAI}` });
     };
 
     const triggerUploadFile = async (file: File) => {
@@ -647,21 +476,14 @@ export default defineComponent({
 
     const handleFileUpload = (event: Event) => {
       const files = (event.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        triggerUploadFile(files[0]);
-      }
+      if (files && files.length > 0) triggerUploadFile(files[0]);
     };
 
     const saveMessage = (idx: number, content: string) => {
       appState.chatHistory[idx].content = content;
       const index = appState.editBox.indexOf(idx);
-      if (index > -1) {
-        appState.editBox.splice(index, 1);
-      }
-      logMessage({
-        role: "user",
-        content: `Saved message at index ${idx}`,
-      });
+      if (index > -1) appState.editBox.splice(index, 1);
+      logMessage({ role: "user", content: `Saved message at index ${idx}` });
     };
 
     const saveToFile = () => {
@@ -697,11 +519,11 @@ export default defineComponent({
         appState.popupContent = "";
         appState.popupContentFunction = () => {};
       };
-      showPopup();
+      appState.currentViewingFile = file;
+      nextTick(() => { showPopup(); });
       logSystemEvent("File viewed", { fileName: file.name }, appState);
     };
 
-    // Call this to initialize timeline chunks, assuming you have them in `appState.timelineChunks`
     setTimelineChunks(appState.timelineChunks, appState);
 
     return {
@@ -761,158 +583,148 @@ export default defineComponent({
 </script>
 
 <template @mousemove="trackActivity" @keydown="trackActivity" @click="trackActivity">
-  <!-- AI Selection Toggle -->
-  <!--
-  <q-btn-toggle
-    v-if="appState.chatHistory.length === 0"
-    v-model="appState.selectedAI"
-    toggle-color="primary"
-    :options="AIoptions"
-  >
-  </q-btn-toggle>
-  <q-btn-toggle
-    v-if="appState.chatHistory.length > 0"
-    v-model="appState.selectedAI"
-    color="primary"
-    :options="aiOption"
-  >
-  </q-btn-toggle>
-  -->
+  <div class="page-wrapper">
+    <!-- File Upload -->
+    <q-file
+      v-model="appState.currentFile"
+      filled
+      counter
+      multiple
+      append
+      @input="handleFileUpload"
+    >
+      <template v-slot:prepend>
+        <q-icon name="attach_file"></q-icon>
+      </template>
+    </q-file>
 
-  <!-- File Upload -->
-  <q-file
-    v-model="appState.currentFile"
-    filled
-    counter
-    multiple
-    append
-    @input="handleFileUpload"
-  >
-    <template v-slot:prepend>
-      <q-icon name="attach_file"></q-icon>
-    </template>
-  </q-file>
+    <!-- Manual Apple Health PDF Text Processing -->
+    <div v-if="showAppleHealthTextInput" class="apple-health-text-input">
+      <q-card class="q-mt-md">
+        <q-card-section>
+          <div class="text-h6">Apple Health PDF Text Processing</div>
+          <div class="text-caption q-mb-md">
+            Since the PDF is compressed, please copy the text content from your Apple Health PDF and paste it below.
+          </div>
+          <textarea
+            v-model="appleHealthText"
+            placeholder="Paste Apple Health PDF text content here..."
+            rows="10"
+            class="q-mb-md"
+            style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;"
+          />
+          <div class="row q-gutter-sm">
+            <q-btn color="primary" label="Process Apple Health Text" @click="processAppleHealthText" :disable="!appleHealthText || appleHealthText.length < 100" />
+            <q-btn color="secondary" label="Cancel" @click="showAppleHealthTextInput = false" />
+          </div>
+        </q-card-section>
+      </q-card>
+    </div>
 
-  <!-- Manual Apple Health PDF Text Processing -->
-  <div v-if="showAppleHealthTextInput" class="apple-health-text-input">
-    <q-card class="q-mt-md">
-      <q-card-section>
-        <div class="text-h6">Apple Health PDF Text Processing</div>
-        <div class="text-caption q-mb-md">
-          Since the PDF is compressed, please copy the text content from your Apple Health PDF and paste it below.
-        </div>
-        <q-textarea
-          v-model="appleHealthText"
-          label="Paste Apple Health PDF text content here..."
-          rows="10"
-          outlined
-          class="q-mb-md"
+    <!-- Chat layout: scroll only messages, keep input fixed -->
+    <div class="chat-layout">
+      <div class="chat-scroll">
+        <ChatArea
+          :appState="appState"
+          :AIoptions="AIoptions"
+          @edit-message="editMessage"
+          @save-message="saveMessage"
+          @view-system-message="
+            (content: string) => {
+              appState.popupContent = content;
+              showPopup();
+            }
+          "
+          @view-file="viewFile"
+          @save-to-file="saveToFile"
+          @trigger-save-to-couchdb="triggerSaveToCouchDB"
+          @close-no-save="closeNoSave"
+          @get-system-message-type="getSystemMessageType"
+          :currentAgent="currentAgent"
+          :warning="agentWarning"
+          :currentUser="currentUser"
+          :isAgentLoading="isAgentLoading"
+          @manage-agent="handleManageAgent"
+          @sign-in="handleSignIn"
+          @sign-out="handleSignOut"
         />
-        <div class="row q-gutter-sm">
-          <q-btn
-            color="primary"
-            label="Process Apple Health Text"
-            @click="processAppleHealthText"
-            :disable="!appleHealthText || appleHealthText.length < 100"
-          />
-          <q-btn
-            color="secondary"
-            label="Cancel"
-            @click="showAppleHealthTextInput = false"
-          />
-        </div>
-      </q-card-section>
-    </q-card>
+      </div>
+
+      <!-- Bottom Toolbar (fixed at bottom of layout) -->
+      <BottomToolbar
+        :appState="appState"
+        :pickFiles="pickFiles"
+        :triggerSendQuery="triggerSendQuery"
+        :triggerAuth="triggerAuth"
+        :triggerJWT="triggerJWT"
+        :triggerLoadSavedChats="triggerLoadSavedChats"
+        :placeholderText="placeholderText"
+        :clearLocalStorageKeys="clearLocalStorageKeys"
+        :AIoptions="AIoptions"
+        :triggerAgentManagement="triggerAgentManagement"
+      />
+    </div>
+
+    <!-- Popup for displaying system messages -->
+    <PopUp
+      ref="popupRef"
+      :appState="appState"
+      :content="appState.popupContent"
+      :current-file="appState.currentViewingFile"
+      button-text="Close"
+      :on-close="() => appState.popupContentFunction()"
+    />
+
+    <!-- Saved Chats Dialog -->
+    <SavedChatsDialog v-model="showSavedChatsDialog" :patientId="'demo_patient_001'" :currentUser="currentUser" @chat-selected="handleChatSelected" />
+
+    <!-- Agent Management Dialog -->
+    <AgentManagementDialog
+      v-model="showAgentManagementDialog"
+      :AIoptions="AIoptions"
+      :uploadedFiles="appState.uploadedFiles"
+      :currentUser="currentUser"
+      :currentAgent="currentAgent"
+      @agent-updated="handleAgentUpdated"
+      @refresh-agent-data="refreshAgentData"
+      @user-authenticated="handleUserAuthenticated"
+    />
+
+    <!-- Sign In Dialog -->
+    <PasskeyAuthDialog v-model="showPasskeyAuthDialog" @authenticated="handleUserAuthenticated" @cancelled="handleSignInCancelled" />
+
+    <!-- No KB Warning Modal -->
+    <q-dialog v-model="showNoKBWarning" persistent>
+      <q-card>
+        <q-card-section>
+          <div class="text-h6">No Knowledge Base Connected</div>
+        </q-card-section>
+        <q-card-section>
+          <p>You have signed out and no knowledge base is currently connected. Please sign in again to access your data.</p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="OK" color="primary" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
-
-  <!-- Chat Area Component -->
-  <ChatArea
-    :appState="appState"
-    :AIoptions="AIoptions"
-    @edit-message="editMessage"
-    @save-message="saveMessage"
-    @view-system-message="
-      (content: string) => {
-        appState.popupContent = content;
-        showPopup();
-      }
-    "
-    @view-file="viewFile"
-    @save-to-file="saveToFile"
-    @trigger-save-to-couchdb="triggerSaveToCouchDB"
-    @close-no-save="closeNoSave"
-    @get-system-message-type="getSystemMessageType"
-    :currentAgent="currentAgent"
-    :warning="agentWarning"
-    :currentUser="currentUser"
-    :isAgentLoading="isAgentLoading"
-    @manage-agent="handleManageAgent"
-    @sign-in="handleSignIn"
-    @sign-out="handleSignOut"
-  />
-
-  <!-- Bottom Toolbar -->
-  <BottomToolbar
-    :appState="appState"
-    :pickFiles="pickFiles"
-    :triggerSendQuery="triggerSendQuery"
-    :triggerAuth="triggerAuth"
-    :triggerJWT="triggerJWT"
-    :triggerLoadSavedChats="triggerLoadSavedChats"
-    :placeholderText="placeholderText"
-    :clearLocalStorageKeys="clearLocalStorageKeys"
-    :AIoptions="AIoptions"
-    :triggerAgentManagement="triggerAgentManagement"
-  />
-
-  <!-- Popup for displaying system messages -->
-  <PopUp
-    ref="popupRef"
-    :appState="appState"
-    :content="appState.popupContent"
-    button-text="Close"
-    :on-close="() => appState.popupContentFunction()"
-  />
-
-  <!-- Saved Chats Dialog -->
-  <SavedChatsDialog
-    v-model="showSavedChatsDialog"
-    :patientId="'demo_patient_001'"
-    :currentUser="currentUser"
-    @chat-selected="handleChatSelected"
-  />
-
-  <!-- Agent Management Dialog -->
-  <AgentManagementDialog
-    v-model="showAgentManagementDialog"
-    :AIoptions="AIoptions"
-    :uploadedFiles="appState.uploadedFiles"
-    :currentUser="currentUser"
-    :currentAgent="currentAgent"
-    @agent-updated="handleAgentUpdated"
-    @refresh-agent-data="refreshAgentData"
-    @user-authenticated="handleUserAuthenticated"
-  />
-
-  <!-- Sign In Dialog -->
-  <PasskeyAuthDialog
-    v-model="showPasskeyAuthDialog"
-    @authenticated="handleUserAuthenticated"
-    @cancelled="handleSignInCancelled"
-  />
-
-  <!-- No KB Warning Modal -->
-  <q-dialog v-model="showNoKBWarning" persistent>
-    <q-card>
-      <q-card-section>
-        <div class="text-h6">No Knowledge Base Connected</div>
-      </q-card-section>
-      <q-card-section>
-        <p>You have signed out and no knowledge base is currently connected. Please sign in again to access your data.</p>
-      </q-card-section>
-      <q-card-actions align="right">
-        <q-btn flat label="OK" color="primary" v-close-popup />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
 </template>
+
+<style scoped>
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.chat-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.chat-scroll {
+  flex: 1 1 auto;
+  min-height: 0; /* allow flex child to shrink for overflow */
+  overflow-y: auto;
+}
+</style>

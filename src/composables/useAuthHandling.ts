@@ -1,5 +1,5 @@
 import type { AppState, ValidationResult, UploadedFile } from '../types'
-import { convertJSONtoMarkdown, processTimeline, validateFile, estimateTokenCount, parseTranscriptFromMarkdown, detectFileType } from '../utils'
+import { convertJSONtoMarkdown, processTimeline, validateFile, estimateTokenCount, parseTranscriptFromMarkdown, detectFileType, processRTFFile } from '../utils'
 import { useTranscript } from '../composables/useTranscript'
 
 const showAuth = (appState: AppState, writeMessage: (message: string, type: string) => void) => {
@@ -207,12 +207,17 @@ const uploadPDFFile = async (
 
     const result = await response.json()
     
+    // Create a URL for the original PDF file
+    const pdfUrl = URL.createObjectURL(file)
+    
     const uploadedFile: UploadedFile = {
       id: `file-${Date.now()}-${Math.random()}`,
       name: file.name,
       size: file.size,
       type: 'pdf',
       content: result.markdown,
+      originalFile: file,
+      fileUrl: pdfUrl,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
@@ -323,6 +328,36 @@ const uploadTextFile = async (
   }
 }
 
+const uploadRTFFile = async (
+  file: File,
+  appState: AppState,
+  writeMessage: (message: string, type: string) => void
+) => {
+  appState.isLoading = true
+  try {
+    const markdownContent = await processRTFFile(file)
+    const uploadedFile: UploadedFile = {
+      id: `file-${Date.now()}-${Math.random()}`,
+      name: file.name.replace('.rtf', '.md'),
+      size: file.size,
+      type: 'markdown',
+      content: markdownContent,
+      uploadedAt: new Date()
+    }
+    appState.uploadedFiles.push(uploadedFile)
+    writeMessage('RTF file processed and converted to Markdown successfully', 'success')
+  } catch (error) {
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    console.error('Error processing RTF file:', error)
+    writeMessage(`Error: ${errorMessage}`, 'error')
+  } finally {
+    appState.isLoading = false
+  }
+}
+
 export const uploadFile = async (
   file: File,
   appState: AppState,
@@ -331,7 +366,7 @@ export const uploadFile = async (
   const content = await file.text()
   const fileType = detectFileType(file.name, content)
   
-  console.log(`📁 File upload: ${file.name} (${fileType}) - ${Math.round(file.size / 1024)}KB`)
+  
   
   switch (fileType) {
     case 'transcript':
@@ -345,6 +380,9 @@ export const uploadFile = async (
       break
     case 'timeline':
       await uploadTimelineFile(file, appState, writeMessage)
+      break
+    case 'rtf':
+      await uploadRTFFile(file, appState, writeMessage)
       break
     case 'text':
       await uploadTextFile(file, appState, writeMessage)

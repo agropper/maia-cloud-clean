@@ -268,6 +268,38 @@ const upload = multer({
   }
 });
 
+// RTF file upload configuration
+const uploadRTF = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // RTF file type validation
+    const allowedMimeTypes = ['application/rtf', 'text/rtf', 'application/octet-stream'];
+    const allowedExtensions = ['.rtf'];
+    
+    // Check MIME type (be more permissive for RTF)
+    if (!allowedMimeTypes.includes(file.mimetype) && !file.mimetype.startsWith('application/')) {
+      return cb(new Error('Only RTF files are allowed'));
+    }
+    
+    // Check file extension
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      return cb(new Error('Only RTF files are allowed'));
+    }
+    
+    // Check for suspicious file names
+    const suspiciousPatterns = /[<>:"|?*]/;
+    if (suspiciousPatterns.test(file.originalname)) {
+      return cb(new Error('Invalid file name'));
+    }
+    
+    cb(null, true);
+  }
+});
+
 // PDF parsing endpoint
 app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
   try {
@@ -2285,5 +2317,84 @@ app.post('/api/process-apple-health-text', async (req, res) => {
   } catch (error) {
     console.error('❌ Apple Health text processing error:', error);
     res.status(500).json({ error: `Failed to process Apple Health text: ${error.message}` });
+  }
+});
+
+// RTF Processing endpoint
+app.post('/api/process-rtf', uploadRTF.single('rtfFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No RTF file uploaded' });
+    }
+
+    console.log(`🔄 Processing RTF file: ${req.file.originalname}`);
+    
+    // Save uploaded file temporarily
+    const tempRtfPath = `/tmp/${Date.now()}-${req.file.originalname}`;
+    const cleanedRtfPath = tempRtfPath.replace('.rtf', '-STEP2-CLEANED.rtf');
+    const outputMdPath = `/tmp/${Date.now()}-converted.md`;
+    
+    console.log(`📄 Temp RTF path: ${tempRtfPath}`);
+    console.log(`📄 Cleaned RTF path: ${cleanedRtfPath}`);
+    console.log(`📄 Output MD path: ${outputMdPath}`);
+    
+    fs.writeFileSync(tempRtfPath, req.file.buffer);
+    console.log(`✅ Saved uploaded file to: ${tempRtfPath}`);
+    
+    // Step 1: Clean the RTF file
+    const { exec } = await import('child_process');
+    
+    console.log(`🔄 Running RTF cleaner...`);
+    exec(`node rtf-cleaner.js "${tempRtfPath}" "${cleanedRtfPath}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.error('❌ RTF cleaning error:', error);
+        return res.status(500).json({ error: 'Failed to clean RTF file: ' + error.message });
+      }
+      
+      console.log(`✅ RTF cleaning complete`);
+      console.log(`🔄 Running RTF to MD converter...`);
+      
+      // Step 2: Convert cleaned RTF to Markdown
+      exec(`node rtf-to-md.js "${cleanedRtfPath}" "${outputMdPath}"`, (error2, stdout2, stderr2) => {
+        if (error2) {
+          console.error('❌ RTF to MD conversion error:', error2);
+          return res.status(500).json({ error: 'Failed to convert RTF to Markdown: ' + error2.message });
+        }
+        
+        console.log(`✅ RTF to MD conversion complete`);
+        
+        // Read the converted markdown file
+        if (fs.existsSync(outputMdPath)) {
+          const markdownContent = fs.readFileSync(outputMdPath, 'utf8');
+          console.log(`✅ Read markdown content (${markdownContent.length} characters)`);
+          
+          // Clean up temporary files
+          try {
+            fs.unlinkSync(tempRtfPath);
+            if (fs.existsSync(cleanedRtfPath)) {
+              fs.unlinkSync(cleanedRtfPath);
+            }
+            fs.unlinkSync(outputMdPath);
+            console.log(`✅ Cleaned up temporary files`);
+          } catch (cleanupError) {
+            console.warn('⚠️ Warning: Could not clean up temporary files:', cleanupError.message);
+          }
+          
+          console.log(`✅ RTF processing complete: ${req.file.originalname}`);
+          res.json({ 
+            success: true, 
+            markdown: markdownContent,
+            originalName: req.file.originalname
+          });
+        } else {
+          console.error(`❌ Markdown output file not found: ${outputMdPath}`);
+          res.status(500).json({ error: 'Markdown output file not found' });
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('❌ RTF processing error:', error);
+    res.status(500).json({ error: 'Internal server error during RTF processing: ' + error.message });
   }
 });

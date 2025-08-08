@@ -31,7 +31,7 @@ export const useChatState = () => {
     access: [],
     currentQuery: "",
     currentFile: null,
-    selectedAI: "/api/personal-chat",
+    selectedAI: `${import.meta.env.VITE_API_BASE_URL || '/api'}/personal-chat`,
     timeline: "",
     timelineChunks: [],
     selectedEpoch: 0,
