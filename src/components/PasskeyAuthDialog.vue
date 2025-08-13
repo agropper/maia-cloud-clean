@@ -164,28 +164,47 @@
           </div>
         </div>
 
-        <!-- Error State -->
+        <!-- Error Step -->
         <div v-if="currentStep === 'error'" class="q-gutter-md">
-          <div class="text-center q-pa-md">
-            <q-icon name="error" size="3rem" color="negative" class="q-mb-md" />
-            <div class="text-h6">Authentication Failed</div>
-            <div class="text-body2 q-mt-sm">{{ errorMessage }}</div>
+          <div class="text-subtitle2 q-mb-md text-red-8">
+            ❌ Authentication Error
+          </div>
+          
+          <div class="bg-red-1 text-red-8 q-pa-md rounded-borders">
+            {{ errorMessage }}
           </div>
 
-          <q-btn
-            label="Try Again"
-            color="primary"
-            class="full-width"
-            @click="
-              () => {
-                currentStep = 'userId';
-                userId = '';
-                userIdError = false;
-                userIdErrorMessage = '';
-                errorMessage = '';
-              }
-            "
-          />
+          <div class="row q-gutter-sm q-mt-md">
+            <q-btn
+              label="Try Again"
+              color="primary"
+              @click="
+                () => {
+                  currentStep = 'choose';
+                  userId = '';
+                  userIdError = false;
+                  userIdErrorMessage = '';
+                  errorMessage = '';
+                  registrationUserData = null;
+                }
+              "
+            />
+            <q-btn
+              label="Cancel"
+              flat
+              @click="
+                () => {
+                  showDialog = false;
+                  currentStep = 'choose';
+                  userId = '';
+                  userIdError = false;
+                  userIdErrorMessage = '';
+                  errorMessage = '';
+                  registrationUserData = null;
+                }
+              "
+            />
+          </div>
         </div>
       </q-card-section>
     </q-card>
@@ -203,6 +222,7 @@ import {
   QIcon,
   QSpace,
 } from "quasar";
+import { startRegistration as startRegistrationWebAuthn, startAuthentication } from "@simplewebauthn/browser";
 import { API_BASE_URL } from "../utils/apiBase";
 
 export default defineComponent({
@@ -226,11 +246,9 @@ export default defineComponent({
   setup(props, { emit }) {
     const showDialog = computed({
       get: () => {
-        console.log("🔍 PasskeyAuthDialog showDialog get:", props.modelValue);
         return props.modelValue;
       },
       set: (value) => {
-        console.log("🔍 PasskeyAuthDialog showDialog set:", value);
         emit("update:modelValue", value);
       },
     });
@@ -239,10 +257,7 @@ export default defineComponent({
       "choose" | "userId" | "register" | "authenticate" | "success" | "error"
     >("choose");
 
-    // Debug current step changes
-    watch(currentStep, (newStep) => {
-      console.log("🔍 currentStep changed to:", newStep);
-    });
+    // Remove verbose step change logging
     const userId = ref("");
     const userIdError = ref(false);
     const userIdErrorMessage = ref("");
@@ -254,27 +269,24 @@ export default defineComponent({
     const registrationUserData = ref(null);
 
     const startSignIn = () => {
-      console.log("🔍 startSignIn called");
       isCreatingNewUser.value = false;
       currentStep.value = "userId";
-      console.log("🔍 isCreatingNewUser set to:", isCreatingNewUser.value);
     };
 
     const startRegistration = () => {
-      console.log("🔍 startRegistration called");
       isCreatingNewUser.value = true;
       currentStep.value = "userId";
-      console.log("🔍 isCreatingNewUser set to:", isCreatingNewUser.value);
     };
 
     const checkUserIdAvailability = async () => {
-      console.log("🔍 checkUserIdAvailability called");
-      console.log("🔍 currentStep:", currentStep.value);
-      console.log("🔍 isCreatingNewUser:", isCreatingNewUser.value);
-
       if (!userId.value || userId.value.length < 3) {
         userIdError.value = true;
         userIdErrorMessage.value = "User ID must be at least 3 characters";
+        return;
+      }
+
+      // Prevent multiple simultaneous checks
+      if (checkingUserId.value) {
         return;
       }
 
@@ -289,62 +301,41 @@ export default defineComponent({
         });
 
         const result = await response.json();
-        console.log("🔍 Availability check result:", result);
+        // Remove verbose logging - keep only essential info
 
         if (isCreatingNewUser.value) {
           // Creating new user - user ID should be available
           if (result.available) {
             userIdError.value = false;
             userIdErrorMessage.value = "";
-            console.log("🔍 Going to registration step");
             currentStep.value = "register";
           } else {
             userIdError.value = true;
             userIdErrorMessage.value =
               "User ID already exists. Please choose a different one.";
+            // Stay on the same step, don't close dialog
           }
         } else {
           // Signing in - user ID should exist
           if (!result.available) {
             userIdError.value = false;
             userIdErrorMessage.value = "";
-            console.log("🔍 Going to authentication step");
             currentStep.value = "authenticate";
           } else {
             userIdError.value = true;
             userIdErrorMessage.value =
               "User ID not found. Please create a new account or check your spelling.";
+            // Stay on the same step, don't close dialog
             // Don't clear the user ID field - let user edit it
           }
         }
       } catch (error) {
         userIdError.value = true;
         userIdErrorMessage.value = "Failed to check user ID availability";
+        // Stay on the same step, don't close dialog
       } finally {
         checkingUserId.value = false;
       }
-    };
-
-    // Auto-check availability when user ID changes
-    const onUserIdChange = async () => {
-      if (userId.value && userId.value.length >= 3) {
-        // Debounce the check
-        setTimeout(async () => {
-          if (userId.value && userId.value.length >= 3) {
-            await checkUserIdAvailabilityOnly();
-          }
-        }, 500);
-      }
-    };
-
-    // Update the flag when user starts typing
-    const onUserIdInput = () => {
-      // Don't change the flag when user starts typing
-      // The flag should only be set by the button clicks (startSignIn/startRegistration)
-      console.log(
-        "🔍 onUserIdInput - isCreatingNewUser remains:",
-        isCreatingNewUser.value
-      );
     };
 
     // Check availability without proceeding to next step
@@ -353,6 +344,11 @@ export default defineComponent({
         return;
       }
 
+      // Prevent multiple simultaneous checks
+      if (checkingUserId.value) {
+        return;
+      }
+
       checkingUserId.value = true;
       try {
         const response = await fetch(`${API_BASE_URL}/passkey/check-user`, {
@@ -364,23 +360,50 @@ export default defineComponent({
         });
 
         const result = await response.json();
-        console.log("🔍 checkUserIdAvailabilityOnly result:", result);
 
         // Don't show errors in this function - just check availability
         // Errors will be shown in the main checkUserIdAvailability function
       } catch (error) {
-        console.error("🔍 checkUserIdAvailabilityOnly error:", error);
+        // Silent error handling for availability check
+        // Remove verbose error logging
       } finally {
         checkingUserId.value = false;
       }
     };
 
+    // Auto-check availability when user ID changes
+    const onUserIdChange = async () => {
+      if (userId.value && userId.value.length >= 3) {
+        // Clear any existing errors when user starts typing
+        userIdError.value = false;
+        userIdErrorMessage.value = "";
+        
+        // Debounce the check
+        setTimeout(async () => {
+          if (userId.value && userId.value.length >= 3) {
+            await checkUserIdAvailabilityOnly();
+          }
+        }, 500);
+      } else {
+        // Clear errors if user ID is too short
+        userIdError.value = false;
+        userIdErrorMessage.value = "";
+      }
+    };
+
+    // Update the flag when user starts typing
+    const onUserIdInput = () => {
+      // Clear errors when user starts typing
+      if (userIdError.value) {
+        userIdError.value = false;
+        userIdErrorMessage.value = "";
+      }
+    };
+
     const registerPasskey = async () => {
-      console.log("🔍 registerPasskey called");
       isRegistering.value = true;
       try {
         // Step 1: Generate registration options
-        console.log("🔍 Step 1: Generating registration options");
         const optionsResponse = await fetch(
           `${API_BASE_URL}/passkey/register`,
           {
@@ -397,58 +420,15 @@ export default defineComponent({
         );
 
         if (!optionsResponse.ok) {
-          console.log(
-            "🔍 Registration options failed:",
-            optionsResponse.status
-          );
           throw new Error("Failed to generate registration options");
         }
 
         const options = await optionsResponse.json();
-        console.log("🔍 Registration options received:", options);
 
-        // Step 2: Create credentials using WebAuthn API
-        console.log("🔍 Step 2: Creating WebAuthn credentials");
-
-        // Convert challenge from base64url to ArrayBuffer
-        // First convert base64url to base64, then decode with proper padding
-        let base64Challenge = options.challenge
-          .replace(/-/g, "+")
-          .replace(/_/g, "/");
-        // Add padding if needed
-        while (base64Challenge.length % 4 !== 0) {
-          base64Challenge += "=";
-        }
-        const challengeArrayBuffer = Uint8Array.from(
-          atob(base64Challenge),
-          (c) => c.charCodeAt(0)
-        ).buffer;
-
-        const webAuthnOptions = {
-          ...options,
-          challenge: challengeArrayBuffer,
-          user: {
-            ...options.user,
-            id: (() => {
-              // Convert user ID string to ArrayBuffer
-              const encoder = new TextEncoder();
-              return encoder.encode(options.user.id).buffer;
-            })(),
-          },
-        };
-
-        console.log(
-          "🔍 WebAuthn options with converted buffers:",
-          webAuthnOptions
-        );
-
-        const credential = await navigator.credentials.create({
-          publicKey: webAuthnOptions,
-        });
-        console.log("🔍 WebAuthn credentials created:", credential);
+        // Step 2: Create credentials using SimpleWebAuthn v13
+        const credential = await startRegistrationWebAuthn({ optionsJSON: options });
 
         // Step 3: Verify registration
-        console.log("🔍 Step 3: Verifying registration");
         const verifyResponse = await fetch(
           `${API_BASE_URL}/passkey/register-verify`,
           {
@@ -464,20 +444,16 @@ export default defineComponent({
         );
 
         const result = await verifyResponse.json();
-        console.log("🔍 Verification result:", result);
 
         if (result.success) {
-          console.log("🔍 Registration successful, going to success step");
           // Store the user data for later use
           registrationUserData.value = result.user;
           currentStep.value = "success";
         } else {
-          console.log("🔍 Registration failed, going to error step");
           currentStep.value = "error";
           errorMessage.value = result.error || "Registration failed";
         }
       } catch (error) {
-        console.log("🔍 Registration error:", error);
         currentStep.value = "error";
         errorMessage.value = "Registration failed. Please try again.";
       } finally {
@@ -489,7 +465,6 @@ export default defineComponent({
       isAuthenticating.value = true;
       try {
         // Step 1: Generate authentication options
-        console.log("🔍 Step 1: Generating authentication options");
         const optionsResponse = await fetch(
           `${API_BASE_URL}/passkey/authenticate`,
           {
@@ -503,46 +478,17 @@ export default defineComponent({
 
         if (!optionsResponse.ok) {
           const errorText = await optionsResponse.text();
-          console.error(
-            "🔍 Authentication options failed:",
-            optionsResponse.status,
-            errorText
-          );
           throw new Error(
             `Failed to generate authentication options: ${optionsResponse.status}`
           );
         }
 
         const options = await optionsResponse.json();
-        console.log("🔍 Authentication options received:", options);
 
-        // Step 2: Convert base64 credential IDs and challenge to ArrayBuffer
-        const convertedOptions = {
-          ...options,
-          challenge: Uint8Array.from(
-            atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")),
-            (c: string) => c.charCodeAt(0)
-          ).buffer,
-          allowCredentials: options.allowCredentials.map((cred: any) => ({
-            ...cred,
-            id: Uint8Array.from(
-              atob(cred.id.replace(/-/g, "+").replace(/_/g, "/")),
-              (c: string) => c.charCodeAt(0)
-            ).buffer,
-          })),
-        };
-
-        console.log("🔍 Converted options:", convertedOptions);
-
-        // Step 3: Get credentials using WebAuthn API
-        console.log("🔍 Step 2: Getting WebAuthn credentials");
-        const credential = await navigator.credentials.get({
-          publicKey: convertedOptions,
-        });
-        console.log("🔍 WebAuthn credentials retrieved:", credential);
+        // Step 2: Use SimpleWebAuthn v13 for authentication
+        const credential = await startAuthentication({ optionsJSON: options });
 
         // Step 3: Verify authentication
-        console.log("🔍 Step 3: Verifying authentication");
         const verifyResponse = await fetch(
           `${API_BASE_URL}/passkey/authenticate-verify`,
           {
@@ -558,7 +504,6 @@ export default defineComponent({
         );
 
         const result = await verifyResponse.json();
-        console.log("🔍 Verification result:", result);
 
         if (result.success) {
           // Store the user data for later use
@@ -568,22 +513,28 @@ export default defineComponent({
           currentStep.value = "error";
           errorMessage.value = result.error || "Authentication failed";
         }
-      } catch (error) {
-        console.error("🔍 Authentication error:", error);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          // Check if it's a WebAuthn-specific error
+          if (error.name === 'NotAllowedError') {
+            errorMessage.value = "TouchID/FaceID not available. Please check your device settings or try a different authentication method.";
+          } else {
+            errorMessage.value = `Authentication failed: ${error.message}`;
+          }
+        } else {
+          errorMessage.value = `Authentication failed: ${String(error)}`;
+        }
+        
         currentStep.value = "error";
-        errorMessage.value = `Authentication failed: ${error instanceof Error ? error.message : String(error)}`;
       } finally {
         isAuthenticating.value = false;
       }
     };
 
     const onSuccess = () => {
-      console.log("🔍 onSuccess called with userId:", userId.value);
-
       // Use the stored user data if available, otherwise fall back to just userId
       const userData = registrationUserData.value || { userId: userId.value };
       emit("authenticated", userData);
-      console.log("🔍 authenticated event emitted with data:", userData);
 
       showDialog.value = false;
       // Reset for next use
@@ -615,6 +566,7 @@ export default defineComponent({
       authenticatePasskey,
       onSuccess,
       isCreatingNewUser,
+      registrationUserData,
     };
   },
 });

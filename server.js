@@ -89,6 +89,37 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
+// Session configuration for authentication
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'strict'
+  }
+}));
+
+// Authentication middleware
+const requireAuth = (req, res, next) => {
+  if (req.session.userId) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Authentication required' });
+  }
+};
+
+// Get current authenticated user
+const getCurrentUser = (req) => {
+  return req.session.userId ? {
+    userId: req.session.userId,
+    username: req.session.username,
+    displayName: req.session.displayName
+  } : null;
+};
+
 // Additional security headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -178,11 +209,41 @@ if (process.env.ENABLE_REQUEST_LOGGING === 'true') {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    environment: process.env.NODE_ENV,
-    singlePatientMode: process.env.SINGLE_PATIENT_MODE === 'true'
+  res.json({
+    status: 'healthy',
+    environment: process.env.NODE_ENV || 'development',
+    singlePatientMode: false
   });
+});
+
+// Get current authenticated user
+app.get('/api/current-user', (req, res) => {
+  const currentUser = getCurrentUser(req);
+  if (currentUser) {
+    res.json({ 
+      authenticated: true, 
+      user: currentUser 
+    });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
+// Sign out endpoint
+app.post('/api/sign-out', (req, res) => {
+  if (req.session) {
+    const userId = req.session.userId;
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('❌ Error destroying session:', err);
+        return res.status(500).json({ error: 'Failed to sign out' });
+      }
+      console.log(`✅ User ${userId} signed out successfully`);
+      res.json({ success: true, message: 'Signed out successfully' });
+    });
+  } else {
+    res.json({ success: true, message: 'No active session' });
+  }
 });
 
 // Configure multer for file uploads
@@ -1351,7 +1412,61 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
 app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
   try {
     const { agentId, kbId } = req.params;
-    console.log(`🔗 [DO API] Attaching KB ${kbId} to agent ${agentId}`);
+    const currentUser = getCurrentUser(req);
+    
+    console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
+
+    // Check protection status using Cloudant directly (source of truth for security)
+    let isProtected = false;
+    let kbOwner = null;
+    
+    try {
+      // Query Cloudant directly for KB ownership and protection status
+      const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+      
+      if (kbDoc) {
+        // Check if the knowledge base has owner information or is marked as protected
+        if (kbDoc.owner || kbDoc.isProtected) {
+          isProtected = true;
+          kbOwner = kbDoc.owner || 'unknown';
+          console.log(`🔒 [SECURITY] KB ${kbId} is PROTECTED - owner: ${kbOwner}, isProtected: ${kbDoc.isProtected}`);
+        } else {
+          console.log(`✅ [SECURITY] KB ${kbId} is UNPROTECTED - no owner restrictions`);
+        }
+      } else {
+        console.log(`❌ [SECURITY] KB ${kbId} not found in Cloudant - treating as protected for safety`);
+        isProtected = true;
+      }
+    } catch (cloudantError) {
+      console.log(`❌ [SECURITY] Failed to check Cloudant KB protection status:`, cloudantError.message);
+      // If we can't determine protection status, treat as protected for safety
+      isProtected = true;
+      console.log(`🔒 [SECURITY] Treating KB ${kbId} as PROTECTED due to Cloudant check error (fail-safe)`);
+    }
+
+    // If the KB is protected, require authentication and ownership verification
+    if (isProtected) {
+      if (!currentUser) {
+        console.log(`🚨 [SECURITY] Protected KB requires authentication - blocking unauthenticated access`);
+        return res.status(401).json({ 
+          error: 'Authentication required for protected knowledge base',
+          details: 'This knowledge base has owner restrictions'
+        });
+      }
+      
+      // Verify user has permission to access this protected knowledge base
+      if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
+        console.log(`🚨 [SECURITY VIOLATION] User ${currentUser.username} attempted to access KB owned by ${kbOwner}`);
+        return res.status(403).json({ 
+          error: 'Access denied: You do not have permission to access this knowledge base',
+          details: 'Knowledge base ownership verification failed'
+        });
+      }
+      
+      console.log(`✅ [SECURITY] User ${currentUser.username} verified as owner of protected KB ${kbId}`);
+    } else {
+      console.log(`✅ [SECURITY] Unprotected KB ${kbId} - no authentication required`);
+    }
 
     let attachSuccess = false;
     let attachResult = null;
@@ -1376,6 +1491,26 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
       if (isAttached) {
         console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
+        
+        // Update Cloudant with the successful attachment for security tracking
+        try {
+          const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+          if (kbDoc) {
+            // Update the KB document with attachment info
+            const updatedKbDoc = {
+              ...kbDoc,
+              attachedToAgent: agentId,
+              attachedAt: new Date().toISOString(),
+              attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+            };
+            await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+            console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+          }
+        } catch (cloudantUpdateError) {
+          console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+          // Don't fail the operation if Cloudant update fails
+        }
+        
         res.json({ 
           success: true, 
           message: 'Knowledge base attached successfully', 
@@ -1403,6 +1538,26 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
           const isActuallyAttached = detailedKBs.some(kb => kb.uuid === kbId);
           if (isActuallyAttached) {
             console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId} (verified via separate call)`);
+            
+            // Update Cloudant with the successful attachment for security tracking
+            try {
+              const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+              if (kbDoc) {
+                // Update the KB document with attachment info
+                const updatedKbDoc = {
+                  ...kbDoc,
+                  attachedToAgent: agentId,
+                  attachedAt: new Date().toISOString(),
+                  attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+                };
+                await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+                console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+              }
+            } catch (cloudantUpdateError) {
+              console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+              // Don't fail the operation if Cloudant update fails
+            }
+            
             res.json({ 
               success: true, 
               message: 'Knowledge base attached successfully', 
@@ -1455,15 +1610,36 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
     if (isAttached) {
       console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
+      
+      // Update Cloudant with the successful attachment for security tracking
+      try {
+        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+        if (kbDoc) {
+          // Update the KB document with attachment info
+          const updatedKbDoc = {
+            ...kbDoc,
+            attachedToAgent: agentId,
+            attachedAt: new Date().toISOString(),
+            attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+          };
+          await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+          console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+        }
+      } catch (cloudantUpdateError) {
+        console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+        // Don't fail the operation if Cloudant update fails
+      }
+      
       res.json({ 
         success: true, 
         message: 'Knowledge base attached successfully', 
-        result: { agent: agentData },
+        result: { agent: verificationResponse },
         verification: {
           attached: true,
           knowledgeBases: attachedKBs
         }
       });
+      return; // Exit early if successful
     } else {
       console.log(`❌ [VERIFICATION] KB ${kbId} was NOT attached to agent ${agentId}`);
       console.log(`❌ [VERIFICATION] Expected KB: ${kbId}`);
@@ -1521,7 +1697,11 @@ app.get('/api/agents/:agentId/knowledge-bases', async (req, res) => {
 app.delete('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
   try {
     const { agentId, kbId } = req.params;
+    
     console.log(`🔗 [DO API] Detaching KB ${kbId} from agent ${agentId}`);
+
+    // Note: Detachment is allowed without authentication as it's a safe operation
+    // that follows the principle of least privilege - removing access is secure
 
     // Use the correct DigitalOcean API endpoint for detach
     const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {

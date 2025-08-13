@@ -21,15 +21,8 @@ export const setCouchDBClient = (client) => {
 const convertStoredCredential = (storedCredential) => {
   if (!storedCredential) return null;
 
-  console.log(
-    "🔍 Converting stored credential:",
-    typeof storedCredential,
-    storedCredential
-  );
-
   // If it's already a string (base64), return as is
   if (typeof storedCredential === "string") {
-    console.log("🔍 Returning as string (base64)");
     return storedCredential;
   }
 
@@ -44,18 +37,18 @@ const convertStoredCredential = (storedCredential) => {
       buffer[i] = storedCredential[keys[i]];
     }
 
-    console.log("🔍 Converting object to ArrayBuffer, length:", buffer.length);
     return buffer.buffer;
   }
 
-  console.log("🔍 Returning as is");
   return storedCredential;
 };
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
 const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use exact domain for production
-const origin = process.env.ORIGIN || `http://localhost:5173`; // Use frontend origin for passkey auth
+const origin = process.env.ORIGIN || `http://localhost:3001`; // Use backend origin since frontend is served from backend
+
+
 
 // Check if user ID is available
 router.post("/check-user", async (req, res) => {
@@ -129,13 +122,14 @@ router.post("/register", async (req, res) => {
     }
 
     // Generate registration options
+    // Convert userId string to Buffer for SimpleWebAuthn v13 (like test-passkeys)
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
-      userID: userId,
+      userID: Buffer.from(userId, 'utf8'),
       userName: displayName,
       userDisplayName: displayName,
-      attestationType: "none",
+      attestation: "none",
       authenticatorSelection: {
         residentKey: "preferred",
         userVerification: "preferred",
@@ -156,7 +150,6 @@ router.post("/register", async (req, res) => {
 
     // Store user document with challenge for verification
     try {
-      console.log("🔍 Attempting to save user document for:", userId);
       await couchDBClient.saveDocument("maia_users", userDoc);
       console.log("✅ User document saved for registration:", userId);
     } catch (error) {
@@ -164,15 +157,12 @@ router.post("/register", async (req, res) => {
       // If database doesn't exist, create it first
       if (error.message.includes("error happened in your connection")) {
         try {
-          console.log("🔍 Creating maia_users database...");
           await couchDBClient.createDatabase("maia_users");
-          console.log("✅ Database created, now saving user document...");
           await couchDBClient.saveDocument("maia_users", userDoc);
           console.log("✅ Database created and user document saved:", userId);
         } catch (createError) {
           console.error("❌ Failed to create database:", createError);
           // For now, continue without database storage
-          console.log("🔍 Continuing without database storage for:", userId);
         }
       } else {
         console.error("❌ Database error:", error);
@@ -201,10 +191,7 @@ router.post("/register-verify", async (req, res) => {
     // Get the user document with the stored challenge
     let userDoc;
     try {
-      console.log("🔍 Getting user document for verification:", userId);
-      console.log("🔍 CouchDB client available:", !!couchDBClient);
       userDoc = await couchDBClient.getDocument("maia_users", userId);
-      console.log("🔍 User document retrieved:", !!userDoc);
     } catch (error) {
       console.error("❌ Error getting user document:", error);
       return res.status(404).json({
@@ -230,9 +217,9 @@ router.post("/register-verify", async (req, res) => {
       // Update user document with credential information
       const updatedUser = {
         ...userDoc,
-        credentialID: verification.registrationInfo.credentialID,
-        credentialPublicKey: verification.registrationInfo.credentialPublicKey,
-        counter: verification.registrationInfo.counter,
+        credentialID: verification.registrationInfo.credential.id,
+        credentialPublicKey: verification.registrationInfo.credential.publicKey,
+        counter: verification.registrationInfo.credential.counter,
         transports: response.response.transports || [],
         challenge: undefined, // Remove the challenge
         updatedAt: new Date().toISOString(),
@@ -294,49 +281,34 @@ router.post("/authenticate", async (req, res) => {
     // Generate authentication options
     const credentialID = convertStoredCredential(userDoc.credentialID);
 
-    console.log("🔍 Original credentialID:", userDoc.credentialID);
-    console.log("🔍 Converted credentialID:", credentialID);
-    console.log("🔍 credentialID type:", typeof credentialID);
-    console.log(
-      "🔍 credentialID instanceof ArrayBuffer:",
-      credentialID instanceof ArrayBuffer
-    );
-
     // Convert ArrayBuffer to base64 string for transmission
     let credentialIDBase64;
     if (credentialID instanceof ArrayBuffer) {
       credentialIDBase64 = isoBase64URL.fromBuffer(credentialID);
-      console.log("🔍 Converted ArrayBuffer to base64:", credentialIDBase64);
     } else if (typeof credentialID === "string") {
       credentialIDBase64 = credentialID;
-      console.log("🔍 Using string as base64:", credentialIDBase64);
     } else {
-      console.log("🔍 Invalid credential ID format:", credentialID);
       throw new Error("Invalid credential ID format");
     }
 
-    console.log("🔍 Final credentialIDBase64:", credentialIDBase64);
-
-    // Generate authentication options manually instead of using the library
-    // since it's not properly handling our credential ID
-    const challenge = crypto.randomBytes(32);
-    const challengeBase64 = isoBase64URL.fromBuffer(challenge);
-
+    // Create authentication options manually to avoid SimpleWebAuthn v13 issues
     const options = {
-      challenge: challengeBase64,
+      rpID,
+      challenge: crypto.randomUUID().replace(/-/g, '').slice(0, 32), // Generate a random challenge
       allowCredentials: [
         {
           id: credentialIDBase64,
           type: "public-key",
         },
       ],
-      timeout: 60000,
       userVerification: "preferred",
-      rpId: rpID,
-      authenticatorAttachment: "platform",
+      timeout: 60000,
+      authenticatorSelection: {
+        authenticatorAttachment: "platform", // Force platform authenticator (TouchID/FaceID)
+      },
     };
 
-    console.log("🔍 Generated options:", JSON.stringify(options, null, 2));
+
 
     // Store challenge in user document
     const updatedUser = {
@@ -379,11 +351,11 @@ router.post("/authenticate-verify", async (req, res) => {
       expectedChallenge: userDoc.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      authenticator: {
-        credentialPublicKey: convertStoredCredential(
+      credential: {
+        publicKey: convertStoredCredential(
           userDoc.credentialPublicKey
         ),
-        credentialID: convertStoredCredential(userDoc.credentialID),
+        id: convertStoredCredential(userDoc.credentialID),
         counter: userDoc.counter || 0,
       },
     });
@@ -398,6 +370,14 @@ router.post("/authenticate-verify", async (req, res) => {
       };
 
       await couchDBClient.saveDocument("maia_users", updatedUser);
+
+      // Set session for the authenticated user
+      if (req.session) {
+        req.session.userId = updatedUser.userId;
+        req.session.username = updatedUser.userId; // Use userId as username for now
+        req.session.displayName = updatedUser.displayName;
+        console.log(`✅ Session set for user: ${updatedUser.userId}`);
+      }
 
       res.json({
         success: true,

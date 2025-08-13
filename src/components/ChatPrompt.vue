@@ -156,34 +156,40 @@ export default defineComponent({
 
     const handleUserAuthenticated = (userData: any) => {
       currentUser.value = userData;
-      console.log("🔍 User authenticated in ChatPrompt:", userData);
+      // Show clean user authentication info
+      console.log(`✅ User authenticated: ${userData.displayName || userData.userId}`);
 
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
       setTimeout(() => {
-        console.log("🔍 Current user after timeout:", currentUser.value);
+        // Remove verbose timeout logging
       }, 100);
     };
 
     const handleSignIn = () => {
-      console.log("🔍 Sign-in requested");
       // Open a dedicated sign-in dialog instead of Agent Management
       showPasskeyAuthDialog.value = true;
     };
 
     const handleSignOut = () => {
-      console.log("🔍 Sign-out requested");
+      // Show clean sign-out info
+      if (currentUser.value) {
+        console.log(`👋 User signed out: ${currentUser.value.displayName || currentUser.value.userId}`);
+      }
       currentUser.value = null;
     };
 
     const handleSignInCancelled = () => {
-      console.log("🔍 Sign-in cancelled in ChatPrompt");
       showPasskeyAuthDialog.value = false;
     };
 
     // Debug currentUser changes
     watch(currentUser, (newUser) => {
-      console.log("🔍 ChatPrompt - currentUser changed:", newUser);
+      if (newUser) {
+        console.log(`👤 Current user: ${newUser.displayName || newUser.userId}`);
+      } else {
+        console.log('👤 No user signed in');
+      }
     });
 
     const editMessage = (idx: number) => {
@@ -207,17 +213,11 @@ export default defineComponent({
     };
 
     const triggerSaveToCouchDB = async () => {
-      console.log("🔍 triggerSaveToCouchDB called");
-      console.log("🔍 chatHistory length:", appState.chatHistory.length);
-      console.log("🔍 uploadedFiles length:", appState.uploadedFiles.length);
-
       try {
-        console.log("🔍 Calling saveChat...");
         const result = await saveChat(
           appState.chatHistory,
           appState.uploadedFiles
         );
-        console.log("🔍 saveChat result:", result);
         writeMessage(result.message, "success");
         logSystemEvent("Saved to CouchDB", { chatId: result.chatId }, appState);
       } catch (error) {
