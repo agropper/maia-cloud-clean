@@ -19,7 +19,7 @@ export const setCouchDBClient = (client) => {
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
-const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use exact domain for production
+const rpID = process.env.NODE_ENV === 'production' ? 'maia.adriang.xyz' : 'localhost'; // Use actual production domain
 const origin = process.env.ORIGIN || `http://localhost:3001`; // Use frontend origin for passkey auth
 
 // Log configuration for debugging
