@@ -34,8 +34,10 @@ export interface UploadedFile {
   id: string
   name: string
   size: number
-  type: 'transcript' | 'timeline' | 'pdf' | 'markdown' | 'text'
+  type: 'transcript' | 'timeline' | 'markdown' | 'text' | 'pdf' | 'rtf'
   content: string
+  originalFile?: File
+  fileUrl?: string
   uploadedAt: Date
 }
 
@@ -60,6 +62,7 @@ export interface AppState {
   access: AccessObject[]
   currentQuery: string
   currentFile: File | null
+  currentViewingFile: UploadedFile | null
   selectedAI: string
   timeline: string
   timelineChunks: TimelineChunk[]

@@ -483,12 +483,30 @@ const parseTranscriptFromMarkdown = (markdownContent: string): ChatHistoryItem[]
 }
 
 const extractTextFromPDF = async (file: File): Promise<string> => {
-  // For now, return a placeholder since PDF parsing requires additional libraries
-  // In a full implementation, you would use a library like pdf-parse or pdfjs-dist
-  return `PDF content from ${file.name} (PDF parsing not yet implemented)`
+  try {
+    const formData = new FormData();
+    formData.append('pdfFile', file);
+    
+    const response = await fetch('/api/parse-pdf', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to parse PDF');
+    }
+    
+    const result = await response.json();
+    return result.markdown || result.text;
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to parse PDF: ${errorMessage}`);
+  }
 }
 
-const detectFileType = (fileName: string, content: string): 'transcript' | 'timeline' | 'pdf' | 'markdown' | 'text' => {
+const detectFileType = (fileName: string, content: string): 'transcript' | 'timeline' | 'markdown' | 'text' | 'rtf' | 'pdf' => {
   const extension = fileName.toLowerCase().split('.').pop()
   
   if (content.includes('### Conversation') && content.includes('##### user:') && content.includes('##### assistant:')) {
@@ -507,8 +525,60 @@ const detectFileType = (fileName: string, content: string): 'transcript' | 'time
     return 'timeline'
   }
   
+  if (extension === 'rtf') {
+    return 'rtf'
+  }
+  
   return 'text'
 }
+
+// Process manually extracted Apple Health PDF text
+const processAppleHealthText = async (text: string, fileName: string): Promise<string> => {
+  try {
+    const response = await fetch('/api/process-apple-health-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, fileName })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to process Apple Health text');
+    }
+    
+    const result = await response.json();
+    return result.markdown || result.text;
+  } catch (error) {
+    console.error('Error processing Apple Health text:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to process Apple Health text: ${errorMessage}`);
+  }
+};
+
+// Process RTF files using the cleaner and converter
+const processRTFFile = async (file: File): Promise<string> => {
+  try {
+    const formData = new FormData();
+    formData.append('rtfFile', file);
+    
+    const response = await fetch('/api/process-rtf', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to process RTF file');
+    }
+    
+    const result = await response.json();
+    return result.markdown || result.text;
+  } catch (error) {
+    console.error('Error processing RTF file:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to process RTF file: ${errorMessage}`);
+  }
+};
 
 export {
   createEpochOptions,
@@ -529,5 +599,7 @@ export {
   PAUSE_THRESHOLD,
   parseTranscriptFromMarkdown,
   extractTextFromPDF,
-  detectFileType
+  detectFileType,
+  processAppleHealthText,
+  processRTFFile
 }

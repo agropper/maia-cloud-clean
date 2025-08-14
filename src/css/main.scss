@@ -1,10 +1,183 @@
 @import './base.scss';
 
+:root {
+  --os-size: 28px; /* OverlayScrollbars thickness */
+}
+
+/* FORCE WIDE SCROLLBARS - Version 2.0 */
+html ::-webkit-scrollbar,
+body ::-webkit-scrollbar,
+* ::-webkit-scrollbar,
+div ::-webkit-scrollbar,
+.q-page ::-webkit-scrollbar,
+.q-card ::-webkit-scrollbar,
+.q-dialog ::-webkit-scrollbar {
+  width: 50px !important;
+  height: 50px !important;
+}
+
+html ::-webkit-scrollbar-track,
+body ::-webkit-scrollbar-track,
+* ::-webkit-scrollbar-track,
+div ::-webkit-scrollbar-track,
+.q-page ::-webkit-scrollbar-track,
+.q-card ::-webkit-scrollbar-track,
+.q-dialog ::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+  border-radius: 25px !important;
+}
+
+html ::-webkit-scrollbar-thumb,
+body ::-webkit-scrollbar-thumb,
+* ::-webkit-scrollbar-thumb,
+div ::-webkit-scrollbar-thumb,
+.q-page ::-webkit-scrollbar-thumb,
+.q-card ::-webkit-scrollbar-thumb,
+.q-dialog ::-webkit-scrollbar-thumb {
+  background: #888 !important;
+  border-radius: 25px !important;
+  border: 5px solid #f1f1f1 !important;
+  min-height: 60px !important;
+}
+
+// Override any Quasar dialog CSS that prevents scrolling
+.q-dialog,
+.q-dialog__backdrop,
+.q-dialog__inner {
+  overflow: visible !important;
+}
+
+// Make scrollbars much wider and more usable
+::-webkit-scrollbar {
+  width: 50px !important; /* Extra wide scrollbars */
+  height: 50px !important; /* For horizontal scrollbars */
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 25px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 25px;
+  border: 5px solid #f1f1f1;
+  min-height: 60px !important; /* Ensure minimum thumb height */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+::-webkit-scrollbar-corner {
+  background: #f1f1f1;
+}
+
+// Firefox scrollbar styling
+* {
+  scrollbar-width: auto !important;
+  scrollbar-color: #888 #f1f1f1 !important;
+}
+
+// Force scrollbar width on all scrollable elements
+.q-card-section,
+.q-dialog,
+.popup-content,
+.chat-area,
+.file-content,
+.markdown-content,
+[style*="overflow-y: scroll"],
+[style*="overflow-y: auto"],
+* {
+  scrollbar-width: auto !important;
+  scrollbar-color: #888 #f1f1f1 !important;
+}
+
+// Extra aggressive scrollbar styling for all elements
+* ::-webkit-scrollbar {
+  width: 50px !important;
+  height: 50px !important;
+}
+
+* ::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+  border-radius: 25px !important;
+}
+
+* ::-webkit-scrollbar-thumb {
+  background: #888 !important;
+  border-radius: 25px !important;
+  border: 5px solid #f1f1f1 !important;
+  min-height: 60px !important;
+}
+
+* ::-webkit-scrollbar-thumb:hover {
+  background: #555 !important;
+}
+
+* ::-webkit-scrollbar-corner {
+  background: #f1f1f1 !important;
+}
+
+// Specific overrides for Quasar components
+.q-message,
+.q-card,
+.q-card-section,
+.q-card-actions,
+.q-btn,
+.q-input,
+.q-select,
+.q-file,
+.q-dialog,
+.q-popup-proxy {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
 .chat-area {
   padding: 1em 0 240px;
+  user-select: text !important; // Allow text selection in chat area
+  
   .q-message-text-content {
     textarea {
       width: 100%;
+    }
+    
+    // Make message content selectable
+    div {
+      user-select: text !important;
+      cursor: text !important;
+    }
+  }
+  
+  // Make all chat message content selectable
+  .q-message {
+    user-select: text !important;
+    
+    .q-message-text {
+      user-select: text !important;
+      cursor: text !important;
+    }
+  }
+  
+  // Make markdown content selectable
+  .vue-markdown {
+    user-select: text !important;
+    cursor: text !important;
+    
+    * {
+      user-select: text !important;
+    }
+  }
+  
+  // Override any Quasar button text selection restrictions
+  .q-btn {
+    user-select: text !important;
+    
+    * {
+      user-select: text !important;
     }
   }
 }
@@ -232,6 +405,7 @@
 
   strong {
     font-size: 1em;
+    font-weight: bold;
   }
 
   em {
