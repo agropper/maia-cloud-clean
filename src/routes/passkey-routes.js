@@ -29,6 +29,11 @@ console.log("  - rpID:", rpID);
 console.log("  - origin:", origin);
 console.log("  - ORIGIN env var:", process.env.ORIGIN);
 
+// Add a function to log config on each request for debugging
+const logPasskeyConfig = () => {
+  console.log("🔍 [REQUEST] Passkey Config - rpID:", rpID, "origin:", origin, "NODE_ENV:", process.env.NODE_ENV);
+};
+
 // Check if user ID is available
 router.post("/check-user", async (req, res) => {
   try {
@@ -75,6 +80,7 @@ router.post("/check-user", async (req, res) => {
 // Generate registration options
 router.post("/register", async (req, res) => {
   try {
+    logPasskeyConfig(); // Log config on each request
     console.log("🔍 Registration request received");
     const { userId, displayName } = req.body;
 
@@ -267,6 +273,7 @@ router.post("/register-verify", async (req, res) => {
 // Generate authentication options
 router.post("/authenticate", async (req, res) => {
   try {
+    logPasskeyConfig(); // Log config on each request
     console.log("🔍 Authentication request received");
     const { userId } = req.body;
     console.log("🔍 Authentication request data:", { userId });
