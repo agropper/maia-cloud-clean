@@ -17,38 +17,10 @@ export const setCouchDBClient = (client) => {
   couchDBClient = client;
 };
 
-// Helper function to convert stored credential format to WebAuthn format
-const convertStoredCredential = (storedCredential) => {
-  if (!storedCredential) return null;
-
-  // If it's already a string (base64), return as is
-  if (typeof storedCredential === "string") {
-    return storedCredential;
-  }
-
-  // If it's an object with numeric keys, convert to ArrayBuffer
-  if (typeof storedCredential === "object" && storedCredential !== null) {
-    const keys = Object.keys(storedCredential)
-      .filter((key) => !isNaN(parseInt(key)))
-      .sort((a, b) => parseInt(a) - parseInt(b));
-    const buffer = new Uint8Array(keys.length);
-
-    for (let i = 0; i < keys.length; i++) {
-      buffer[i] = storedCredential[keys[i]];
-    }
-
-    return buffer.buffer;
-  }
-
-  return storedCredential;
-};
-
 // Relying party configuration
 const rpName = "HIEofOne.org";
 const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use exact domain for production
-const origin = process.env.ORIGIN || `http://localhost:3001`; // Use backend origin since frontend is served from backend
-
-
+const origin = process.env.ORIGIN || `http://localhost:3001`; // Use frontend origin for passkey auth
 
 // Check if user ID is available
 router.post("/check-user", async (req, res) => {
@@ -96,13 +68,15 @@ router.post("/check-user", async (req, res) => {
 // Generate registration options
 router.post("/register", async (req, res) => {
   try {
-    const { userId, displayName, domain = "HIEofOne.org" } = req.body;
+    console.log("🔍 Registration request received");
+    const { userId, displayName } = req.body;
 
     if (!userId || !displayName) {
-      return res
-        .status(400)
-        .json({ error: "User ID and display name are required" });
+      console.log("❌ Missing userId or displayName in request");
+      return res.status(400).json({ error: "User ID and display name are required" });
     }
+
+    console.log("🔍 Checking if user exists:", userId);
 
     // Check if user already exists
     let existingUser;
@@ -118,11 +92,13 @@ router.post("/register", async (req, res) => {
     }
 
     if (existingUser) {
+      console.log("❌ User already exists:", userId);
       return res.status(400).json({ error: "User ID already exists" });
     }
 
+    console.log("🔍 Generating registration options for:", userId);
+
     // Generate registration options
-    // Convert userId string to Buffer for SimpleWebAuthn v13 (like test-passkeys)
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
@@ -133,8 +109,11 @@ router.post("/register", async (req, res) => {
       authenticatorSelection: {
         residentKey: "preferred",
         userVerification: "preferred",
+        authenticatorAttachment: "platform",
       },
     });
+
+    console.log("🔍 Registration options generated successfully");
 
     // Store challenge in session or temporary storage
     // For now, we'll store it in the user document
@@ -142,24 +121,27 @@ router.post("/register", async (req, res) => {
       _id: userId,
       userId,
       displayName,
-      domain,
+      domain: rpID,
       challenge: options.challenge,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    console.log("🔍 Attempting to save user document");
+
     // Store user document with challenge for verification
     try {
       await couchDBClient.saveDocument("maia_users", userDoc);
-      console.log("✅ User document saved for registration:", userId);
+      console.log("✅ User document saved successfully");
     } catch (error) {
       console.error("❌ Failed to save user document:", error.message);
       // If database doesn't exist, create it first
       if (error.message.includes("error happened in your connection")) {
         try {
+          console.log("🔍 Creating maia_users database...");
           await couchDBClient.createDatabase("maia_users");
           await couchDBClient.saveDocument("maia_users", userDoc);
-          console.log("✅ Database created and user document saved:", userId);
+          console.log("✅ Database created and user document saved");
         } catch (createError) {
           console.error("❌ Failed to create database:", createError);
           // For now, continue without database storage
@@ -170,6 +152,7 @@ router.post("/register", async (req, res) => {
       }
     }
 
+    console.log("✅ Registration options sent successfully");
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating registration options:", error);
@@ -180,18 +163,23 @@ router.post("/register", async (req, res) => {
 // Verify registration response
 router.post("/register-verify", async (req, res) => {
   try {
+    console.log("🔍 Registration verification request received");
     const { userId, response } = req.body;
 
     if (!userId || !response) {
+      console.log("❌ Missing userId or response in verification request");
       return res
         .status(400)
         .json({ error: "User ID and response are required" });
     }
 
+    console.log("🔍 Getting user document for verification:", userId);
+
     // Get the user document with the stored challenge
     let userDoc;
     try {
       userDoc = await couchDBClient.getDocument("maia_users", userId);
+      console.log("✅ User document retrieved successfully");
     } catch (error) {
       console.error("❌ Error getting user document:", error);
       return res.status(404).json({
@@ -200,10 +188,13 @@ router.post("/register-verify", async (req, res) => {
     }
 
     if (!userDoc || !userDoc.challenge) {
+      console.log("❌ No user document or challenge found");
       return res.status(400).json({
         error: "No registration challenge found. Please try registering again.",
       });
     }
+
+    console.log("🔍 Verifying registration response");
 
     // Verify the registration response
     const verification = await verifyRegistrationResponse({
@@ -213,12 +204,22 @@ router.post("/register-verify", async (req, res) => {
       expectedRPID: rpID,
     });
 
+    console.log("🔍 Registration verification result:", verification.verified);
+
     if (verification.verified) {
+      console.log("🔍 Updating user document with credential information");
+      console.log("🔍 Verification result structure:", Object.keys(verification.registrationInfo));
+      console.log("🔍 Credential object keys:", Object.keys(verification.registrationInfo.credential));
+      console.log("🔍 Credential ID:", verification.registrationInfo.credential.id);
+      console.log("🔍 Credential Public Key:", verification.registrationInfo.credential.publicKey);
+      console.log("🔍 Counter:", verification.registrationInfo.credential.counter);
+      
       // Update user document with credential information
+      // Convert Uint8Array to base64 string for storage
       const updatedUser = {
         ...userDoc,
         credentialID: verification.registrationInfo.credential.id,
-        credentialPublicKey: verification.registrationInfo.credential.publicKey,
+        credentialPublicKey: isoBase64URL.fromBuffer(verification.registrationInfo.credential.publicKey),
         counter: verification.registrationInfo.credential.counter,
         transports: response.response.transports || [],
         challenge: undefined, // Remove the challenge
@@ -251,17 +252,23 @@ router.post("/register-verify", async (req, res) => {
 // Generate authentication options
 router.post("/authenticate", async (req, res) => {
   try {
+    console.log("🔍 Authentication request received");
     const { userId } = req.body;
+    console.log("🔍 Authentication request data:", { userId });
 
     if (!userId) {
+      console.log("❌ Missing userId in authentication request");
       return res.status(400).json({ error: "User ID is required" });
     }
 
     // Get user document
     let userDoc;
     try {
+      console.log("🔍 Getting user document for authentication:", userId);
       userDoc = await couchDBClient.getDocument("maia_users", userId);
+      console.log("✅ User document retrieved successfully");
     } catch (error) {
+      console.error("❌ Error getting user document:", error.message);
       if (error.message.includes("error happened in your connection")) {
         return res
           .status(404)
@@ -271,44 +278,42 @@ router.post("/authenticate", async (req, res) => {
     }
 
     if (!userDoc) {
+      console.log("❌ User not found:", userId);
       return res.status(404).json({ error: "User not found" });
     }
 
     if (!userDoc.credentialID) {
+      console.log("❌ User has no registered passkey:", userId);
       return res.status(400).json({ error: "User has no registered passkey" });
     }
 
     // Generate authentication options
-    const credentialID = convertStoredCredential(userDoc.credentialID);
-
-    // Convert ArrayBuffer to base64 string for transmission
-    let credentialIDBase64;
-    if (credentialID instanceof ArrayBuffer) {
-      credentialIDBase64 = isoBase64URL.fromBuffer(credentialID);
-    } else if (typeof credentialID === "string") {
-      credentialIDBase64 = credentialID;
-    } else {
-      throw new Error("Invalid credential ID format");
+    // In v13, credentialID should be stored as a base64url string
+    if (typeof userDoc.credentialID !== "string") {
+      console.log("❌ Invalid credential ID format:", typeof userDoc.credentialID);
+      throw new Error("Invalid credential ID format - expected base64url string");
     }
 
-    // Create authentication options manually to avoid SimpleWebAuthn v13 issues
-    const options = {
+    console.log("🔍 Generating authentication options for user:", userId);
+    console.log("🔍 Credential ID:", userDoc.credentialID);
+
+    // Generate authentication options using SimpleWebAuthn v13
+    const options = await generateAuthenticationOptions({
       rpID,
-      challenge: crypto.randomUUID().replace(/-/g, '').slice(0, 32), // Generate a random challenge
       allowCredentials: [
         {
-          id: credentialIDBase64,
+          id: userDoc.credentialID,
           type: "public-key",
         },
       ],
       userVerification: "preferred",
       timeout: 60000,
       authenticatorSelection: {
-        authenticatorAttachment: "platform", // Force platform authenticator (TouchID/FaceID)
+        authenticatorAttachment: "platform",
       },
-    };
+    });
 
-
+    console.log("✅ Authentication options generated successfully");
 
     // Store challenge in user document
     const updatedUser = {
@@ -317,8 +322,11 @@ router.post("/authenticate", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    console.log("🔍 Saving authentication challenge to user document");
     await couchDBClient.saveDocument("maia_users", updatedUser);
+    console.log("✅ Authentication challenge saved successfully");
 
+    console.log("✅ Authentication options sent successfully");
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating authentication options:", error);
@@ -346,16 +354,15 @@ router.post("/authenticate-verify", async (req, res) => {
     }
 
     // Verify the authentication response
+    // Convert base64 string back to Uint8Array for verification
     const verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge: userDoc.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
       credential: {
-        publicKey: convertStoredCredential(
-          userDoc.credentialPublicKey
-        ),
-        id: convertStoredCredential(userDoc.credentialID),
+        publicKey: isoBase64URL.toBuffer(userDoc.credentialPublicKey),
+        id: userDoc.credentialID,
         counter: userDoc.counter || 0,
       },
     });
@@ -370,14 +377,6 @@ router.post("/authenticate-verify", async (req, res) => {
       };
 
       await couchDBClient.saveDocument("maia_users", updatedUser);
-
-      // Set session for the authenticated user
-      if (req.session) {
-        req.session.userId = updatedUser.userId;
-        req.session.username = updatedUser.userId; // Use userId as username for now
-        req.session.displayName = updatedUser.displayName;
-        console.log(`✅ Session set for user: ${updatedUser.userId}`);
-      }
 
       res.json({
         success: true,
