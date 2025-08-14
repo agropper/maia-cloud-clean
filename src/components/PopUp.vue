@@ -99,6 +99,7 @@ export default {
     async loadPDF() {
       const container = this.$refs.pdfContainer as HTMLDivElement | undefined
       if (!container || !this.currentFile) return
+      
       try {
         container.innerHTML = ''
         const loading = document.createElement('div')
@@ -122,10 +123,15 @@ export default {
           throw new Error('No PDF source available')
         }
 
-        container.removeChild(loading)
+        // Remove loading message
+        if (container.contains(loading)) {
+          container.removeChild(loading)
+        }
 
         const maxPages = 10
         const totalPages = Math.min(pdf.numPages, maxPages)
+        
+        // Render pages
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
           const page = await pdf.getPage(pageNum)
           const viewport = page.getViewport({ scale: 1.25 })
@@ -139,12 +145,19 @@ export default {
           await page.render({ canvasContext: ctx, viewport }).promise
           container.appendChild(canvas)
         }
+        
+        console.log(`✅ PDF loaded successfully: ${totalPages} pages rendered`)
       } catch (e) {
-        const msg = document.createElement('div')
-        msg.textContent = 'Failed to display PDF.'
-        msg.style.color = '#c00'
-        msg.style.padding = '8px'
-        container?.appendChild(msg)
+        console.error('PDF loading error:', e)
+        
+        // Only show error if container still exists and doesn't have content
+        if (container && container.children.length === 0) {
+          const msg = document.createElement('div')
+          msg.textContent = 'Failed to display PDF.'
+          msg.style.color = '#c00'
+          msg.style.padding = '8px'
+          container.appendChild(msg)
+        }
       }
     },
     saveMarkdown() {
