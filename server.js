@@ -12,11 +12,11 @@ process.on('unhandledRejection', (reason, promise) => {
   // Don't exit the process, just log the error
 });
 
-// Debug environment variables
-console.log('🔍 Environment Debug:');
-console.log('Current working directory:', process.cwd());
-console.log('DIGITALOCEAN_PERSONAL_API_KEY exists:', !!process.env.DIGITALOCEAN_PERSONAL_API_KEY);
-console.log('DIGITALOCEAN_PERSONAL_API_KEY length:', process.env.DIGITALOCEAN_PERSONAL_API_KEY?.length || 0);
+// Debug environment variables - commented out for cleaner logs
+// console.log('🔍 Environment Debug:');
+// console.log('Current working directory:', process.cwd());
+// console.log('DIGITALOCEAN_PERSONAL_API_KEY exists:', !!process.env.DIGITALOCEAN_PERSONAL_API_KEY);
+// console.log('DIGITALOCEAN_PERSONAL_API_KEY length:', process.env.DIGITALOCEAN_PERSONAL_API_KEY?.length || 0);
 
 import express from 'express';
 import cors from 'cors';
@@ -40,12 +40,12 @@ const couchDBClient = createCouchDBClient();
 
 const initializeDatabase = async () => {
   try {
-    // Debug: Log environment variables (masked for security)
-    console.log('🔍 Debug: Environment variables check:');
-    console.log('🔍 COUCHDB_URL:', process.env.COUCHDB_URL ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_USERNAME:', process.env.COUCHDB_USERNAME ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_PASSWORD:', process.env.COUCHDB_PASSWORD ? 'SET' : 'NOT SET');
-    console.log('🔍 COUCHDB_DATABASE:', process.env.COUCHDB_DATABASE ? 'SET' : 'NOT SET');
+    // Debug: Log environment variables (masked for security) - commented out for cleaner logs
+    // console.log('🔍 Debug: Environment variables check:');
+    // console.log('🔍 COUCHDB_URL:', process.env.COUCHDB_URL ? 'SET' : 'NOT SET');
+    // console.log('🔍 COUCHDB_USERNAME:', process.env.COUCHDB_USERNAME ? 'SET' : 'NOT SET');
+    // console.log('🔍 COUCHDB_PASSWORD:', process.env.COUCHDB_PASSWORD ? 'SET' : 'NOT SET');
+    // console.log('🔍 COUCHDB_DATABASE:', process.env.COUCHDB_DATABASE ? 'SET' : 'NOT SET');
     
     // Test the connection
     const connected = await couchDBClient.testConnection();
@@ -1010,7 +1010,7 @@ app.get('/api/current-agent', async (req, res) => {
 
     // Extract agent UUID from the endpoint URL
     const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
-    console.log(`🔍 Endpoint URL: ${endpointUrl}`);
+    // console.log(`🔍 Endpoint URL: ${endpointUrl}`);
     
     // Get all agents and find the one with matching deployment URL
     const agentsResponse = await doRequest('/v2/gen-ai/agents');
@@ -1027,13 +1027,13 @@ app.get('/api/current-agent', async (req, res) => {
     }
     
     const agentId = matchingAgent.uuid;
-    console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
+    // console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
     
     // Get agent details including associated knowledge bases
     const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
     const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
     
-    console.log(`📋 Agent details from API:`, JSON.stringify(agentData, null, 2));
+    // console.log(`📋 Agent details from API:`, JSON.stringify(agentData, null, 2));
     
     // Extract knowledge base information
     let connectedKnowledgeBases = [];
