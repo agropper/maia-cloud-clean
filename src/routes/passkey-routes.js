@@ -19,8 +19,8 @@ export const setCouchDBClient = (client) => {
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
-const rpID = process.env.NODE_ENV === 'production' ? 'backup-maia-app-4s5it.ondigitalocean.app' : 'localhost'; // Use actual production domain
-const origin = process.env.NODE_ENV === 'production' ? 'https://backup-maia-app-4s5it.ondigitalocean.app' : 'http://localhost:3001'; // Use actual production domain
+const rpID = process.env.NODE_ENV === 'production' ? 'maia-app-4s5it.ondigitalocean.app' : 'localhost'; // Use main production domain
+const origin = process.env.NODE_ENV === 'production' ? 'https://maia-app-4s5it.ondigitalocean.app' : 'http://localhost:3001'; // Use main production domain
 
 // Log configuration for debugging
 console.log("🔍 Passkey Configuration:");
