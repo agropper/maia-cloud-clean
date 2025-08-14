@@ -296,6 +296,37 @@ const uploadTimelineFile = async (
   }
 }
 
+const uploadRTFFile = async (
+  file: File,
+  appState: AppState,
+  writeMessage: (message: string, type: string) => void
+) => {
+  appState.isLoading = true
+  try {
+    const markdownContent = await processRTFFile(file)
+    const uploadedFile: UploadedFile = {
+      id: `file-${Date.now()}-${Math.random()}`,
+      name: file.name.replace('.rtf', '.md'),
+      size: file.size,
+      type: 'markdown',
+      content: markdownContent,
+      originalFile: file,
+      uploadedAt: new Date()
+    }
+    appState.uploadedFiles.push(uploadedFile)
+    writeMessage('RTF file processed and converted to Markdown successfully', 'success')
+  } catch (error) {
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    console.error('Error processing RTF file:', error)
+    writeMessage(`Error: ${errorMessage}`, 'error')
+  } finally {
+    appState.isLoading = false
+  }
+}
+
 const uploadTextFile = async (
   file: File,
   appState: AppState,
@@ -350,6 +381,9 @@ export const uploadFile = async (
       break
     case 'timeline':
       await uploadTimelineFile(file, appState, writeMessage)
+      break
+    case 'rtf':
+      await uploadRTFFile(file, appState, writeMessage)
       break
     case 'text':
       await uploadTextFile(file, appState, writeMessage)
