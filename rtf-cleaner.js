@@ -34,33 +34,62 @@ function cleanRTF(inputPath, outputPathStep2) {
     // Detect patient name and DOB near the top
     let patientName = '';
     let dobLineFull = '';
+    let isCombinedFormat = false;
+    
     for (let i = 0; i < lines.length; i++) {
         const norm = stripRtfFormatting(lines[i]);
+        // Check for combined format: "A X year old male/female"
+        if (/^A \d+ year old (male|female)/.test(norm)) {
+            patientName = norm;
+            dobLineFull = norm; // Use same line for both
+            isCombinedFormat = true;
+            break;
+        }
+        // Check for traditional format: "Date of Birth:"
         if (norm.startsWith('Date of Birth:')) {
             let p = i - 1;
             while (p >= 0 && stripRtfFormatting(lines[p]) === '') p--;
             if (p >= 0) patientName = stripRtfFormatting(lines[p]);
             dobLineFull = norm;
+            isCombinedFormat = false;
             break;
         }
     }
+    
     if (!patientName || !dobLineFull) throw new Error('Could not detect Constant Head (patient name and DOB)');
     console.log(`👤 Detected patient name: ${patientName}`);
     console.log(`📅 Detected DOB line: ${dobLineFull}`);
+    console.log(`📋 Format type: ${isCombinedFormat ? 'Combined' : 'Traditional'}`);
 
-    const isDOBLine = (line) => stripRtfFormatting(line).startsWith('Date of Birth:');
+    const isDOBLine = (line) => {
+        if (isCombinedFormat) {
+            return /^A \d+ year old (male|female)/.test(stripRtfFormatting(line));
+        }
+        return stripRtfFormatting(line).startsWith('Date of Birth:');
+    };
     const isNameLine = (line) => stripRtfFormatting(line) === patientName;
 
-    // Find page heads: name line followed by DOB line
+    // Find page heads: name line followed by DOB line (or combined line)
     const pageHeadIndices = [];
     for (let i = 0; i < lines.length; i++) {
         if (isNameLine(lines[i])) {
-            let j = i + 1;
-            while (j < lines.length && stripRtfFormatting(lines[j]) === '') j++;
-            if (j < lines.length && isDOBLine(lines[j])) pageHeadIndices.push(i);
+            if (isCombinedFormat) {
+                // For combined format (like "A 73 year old male"), this is both name and DOB
+                pageHeadIndices.push(i);
+            } else {
+                // For traditional format, look for following DOB line
+                let j = i + 1;
+                while (j < lines.length && stripRtfFormatting(lines[j]) === '') j++;
+                if (j < lines.length && isDOBLine(lines[j])) pageHeadIndices.push(i);
+            }
         }
     }
-    console.log(`✅ Detected page heads: ${pageHeadIndices.length}`);
+    
+    if (pageHeadIndices.length === 0) {
+        console.log(`⚠️ No page heads detected - continuing without page separation`);
+    } else {
+        console.log(`✅ Detected page heads: ${pageHeadIndices.length}`);
+    }
 
     const separatorPage = '<<< >>>';
     const pageHeadSet = new Set(pageHeadIndices);
@@ -68,33 +97,39 @@ function cleanRTF(inputPath, outputPathStep2) {
     let pageCounter = 0;
     const rawFmtOnlyRegex = /^\s*(\\[a-z]+\d*\s*)+\\?\s*$/;
 
-    for (let i = 0; i < lines.length; i++) {
-        if (pageHeadSet.has(i)) {
-            if (pageCounter > 0) {
-                while (rebuilt.length > 0) {
-                    const prev = rebuilt[rebuilt.length - 1];
-                    if (prev.trim() === '') { rebuilt.pop(); continue; }
-                    const stripped = stripRtfFormatting(prev);
-                    if (stripped === '' || stripped === 'Health' || rawFmtOnlyRegex.test(prev)) { rebuilt.pop(); continue; }
-                    break;
+    // Only process page separators if page heads were detected
+    if (pageHeadIndices.length > 0) {
+        for (let i = 0; i < lines.length; i++) {
+            if (pageHeadSet.has(i)) {
+                if (pageCounter > 0) {
+                    while (rebuilt.length > 0) {
+                        const prev = rebuilt[rebuilt.length - 1];
+                        if (prev.trim() === '') { rebuilt.pop(); continue; }
+                        const stripped = stripRtfFormatting(prev);
+                        if (stripped === '' || stripped === 'Health' || rawFmtOnlyRegex.test(prev)) { rebuilt.pop(); continue; }
+                        break;
+                    }
+                    pageCounter++;
+                    rebuilt.push(separatorPage);
+                    // skip name + following DOB for subsequent pages
+                    let j = i + 1; while (j < lines.length && stripRtfFormatting(lines[j]) === '') j++;
+                    if (j < lines.length && isDOBLine(lines[j])) { i = j; continue; }
+                    continue;
+                } else {
+                    pageCounter++;
+                    rebuilt.push(lines[i]);
+                    continue;
                 }
-                pageCounter++;
-                rebuilt.push(separatorPage);
-                // skip name + following DOB for subsequent pages
-                let j = i + 1; while (j < lines.length && stripRtfFormatting(lines[j]) === '') j++;
-                if (j < lines.length && isDOBLine(lines[j])) { i = j; continue; }
-                continue;
-            } else {
-                pageCounter++;
-                rebuilt.push(lines[i]);
-                continue;
             }
+            rebuilt.push(lines[i]);
         }
-        rebuilt.push(lines[i]);
+        content = rebuilt.join('\n');
+        console.log(`✅ Page separators inserted: ${Math.max(0, pageCounter - 1)}`);
+    } else {
+        // No page heads detected, use original content
+        content = lines.join('\n');
+        console.log(`ℹ️ No page separators inserted - using original content structure`);
     }
-
-    content = rebuilt.join('\n');
-    console.log(`✅ Page separators inserted: ${Math.max(0, pageCounter - 1)}`);
 
     // STEP 1C: Remove header/footer artifacts
     let cleanedLines = [];
@@ -114,8 +149,8 @@ function cleanRTF(inputPath, outputPathStep2) {
         if (isFooter) { removedCount++; continue; }
         cleanedLines.push(line);
     }
-    // isolate page separator lines
-    {
+    // isolate page separator lines (only if page heads were detected)
+    if (pageHeadIndices.length > 0) {
         const isolated = [];
         const lines2 = cleanedLines.slice();
         for (let idx = 0; idx < lines2.length; idx++) {
