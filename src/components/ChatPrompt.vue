@@ -347,6 +347,7 @@ export default defineComponent({
         appState.popupContent = "";
         appState.popupContentFunction = () => {};
       };
+      appState.currentViewingFile = file;
       showPopup();
       logSystemEvent("File viewed", { fileName: file.name }, appState);
     };
@@ -475,6 +476,7 @@ export default defineComponent({
     ref="popupRef"
     :appState="appState"
     :content="appState.popupContent"
+    :current-file="appState.currentViewingFile"
     button-text="Close"
     :on-close="() => appState.popupContentFunction()"
   />
