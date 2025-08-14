@@ -159,6 +159,7 @@ const uploadTranscriptFile = async (
       size: file.size,
       type: 'transcript',
       content: content,
+      originalFile: file,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
@@ -213,6 +214,7 @@ const uploadPDFFile = async (
       size: file.size,
       type: 'pdf',
       content: result.markdown,
+      originalFile: file,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
@@ -244,6 +246,7 @@ const uploadMarkdownFile = async (
       size: file.size,
       type: 'markdown',
       content: content,
+      originalFile: file,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
@@ -275,6 +278,7 @@ const uploadTimelineFile = async (
       size: file.size,
       type: 'timeline',
       content: content,
+      originalFile: file,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
@@ -306,6 +310,7 @@ const uploadTextFile = async (
       size: file.size,
       type: 'text',
       content: content,
+      originalFile: file,
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
