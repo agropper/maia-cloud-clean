@@ -22,6 +22,13 @@ const rpName = "HIEofOne.org";
 const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use exact domain for production
 const origin = process.env.ORIGIN || `http://localhost:3001`; // Use frontend origin for passkey auth
 
+// Log configuration for debugging
+console.log("🔍 Passkey Configuration:");
+console.log("  - NODE_ENV:", process.env.NODE_ENV);
+console.log("  - rpID:", rpID);
+console.log("  - origin:", origin);
+console.log("  - ORIGIN env var:", process.env.ORIGIN);
+
 // Check if user ID is available
 router.post("/check-user", async (req, res) => {
   try {
@@ -197,6 +204,11 @@ router.post("/register-verify", async (req, res) => {
     console.log("🔍 Verifying registration response");
 
     // Verify the registration response
+    console.log("🔍 Registration verification parameters:");
+    console.log("  - expectedOrigin:", origin);
+    console.log("  - expectedRPID:", rpID);
+    console.log("  - challenge present:", !!userDoc.challenge);
+    
     const verification = await verifyRegistrationResponse({
       response,
       expectedChallenge: userDoc.challenge,
@@ -205,6 +217,9 @@ router.post("/register-verify", async (req, res) => {
     });
 
     console.log("🔍 Registration verification result:", verification.verified);
+    console.log("🔍 Response origin:", response.response.clientExtensionResults?.appid);
+    console.log("🔍 Response type:", response.type);
+    console.log("🔍 Response ID:", response.id);
 
     if (verification.verified) {
       console.log("🔍 Updating user document with credential information");
