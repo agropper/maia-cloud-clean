@@ -376,55 +376,79 @@ app.post('/api/process-rtf', uploadRTF.single('rtfFile'), async (req, res) => {
     
     // Step 1: Clean the RTF file
     const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
     
     console.log(`🔄 Running RTF cleaner...`);
-    exec(`node rtf-cleaner.js "${tempRtfPath}" "${cleanedRtfPath}"`, (error, stdout, stderr) => {
-      if (error) {
-        console.error('❌ RTF cleaning error:', error);
-        return res.status(500).json({ error: 'Failed to clean RTF file: ' + error.message });
+    try {
+      const result = await execAsync(`node rtf-cleaner.js "${tempRtfPath}" "${cleanedRtfPath}"`);
+      console.log(`✅ RTF cleaning complete`);
+      console.log(`📄 Cleaner stdout:`, result.stdout);
+      if (result.stderr) console.log(`⚠️ Cleaner stderr:`, result.stderr);
+      
+      // Check if cleaned file exists and has content
+      if (fs.existsSync(cleanedRtfPath)) {
+        const cleanedContent = fs.readFileSync(cleanedRtfPath, 'utf8');
+        console.log(`📄 Cleaned RTF file size: ${cleanedContent.length} characters`);
+        console.log(`📄 Cleaned RTF first 200 chars: ${cleanedContent.substring(0, 200)}`);
+      } else {
+        console.error(`❌ Cleaned RTF file not found: ${cleanedRtfPath}`);
+        return res.status(500).json({ error: 'Cleaned RTF file not found after cleaning' });
+      }
+    } catch (error) {
+      console.error('❌ RTF cleaning error:', error);
+      return res.status(500).json({ error: 'Failed to clean RTF file: ' + error.message });
+    }
+    
+    // Step 2: Convert cleaned RTF to Markdown
+    console.log(`🔄 Running RTF to MD converter...`);
+    try {
+      const result = await execAsync(`node rtf-to-md.js "${cleanedRtfPath}" "${outputMdPath}"`);
+      console.log(`✅ RTF to MD conversion complete`);
+      console.log(`📄 Converter stdout:`, result.stdout);
+      if (result.stderr) console.log(`⚠️ Converter stderr:`, result.stderr);
+      
+      // Check if output file exists
+      if (!fs.existsSync(outputMdPath)) {
+        console.error(`❌ Markdown output file not found: ${outputMdPath}`);
+        console.error(`❌ Current working directory: ${process.cwd()}`);
+        console.error(`❌ Available files in /tmp:`);
+        try {
+          const tmpFiles = fs.readdirSync('/tmp');
+          console.error(`❌ /tmp contents:`, tmpFiles);
+        } catch (dirError) {
+          console.error(`❌ Could not read /tmp directory:`, dirError.message);
+        }
+        return res.status(500).json({ error: 'Markdown output file not found after conversion' });
       }
       
-      console.log(`✅ RTF cleaning complete`);
-      console.log(`🔄 Running RTF to MD converter...`);
+      const markdownContent = fs.readFileSync(outputMdPath, 'utf8');
+      console.log(`✅ Read markdown content (${markdownContent.length} characters)`);
       
-      // Step 2: Convert cleaned RTF to Markdown
-      exec(`node rtf-to-md.js "${cleanedRtfPath}" "${outputMdPath}"`, (error2, stdout2, stderr2) => {
-        if (error2) {
-          console.error('❌ RTF to MD conversion error:', error2);
-          return res.status(500).json({ error: 'Failed to convert RTF to Markdown: ' + error2.message });
+      // Clean up temporary files
+      try {
+        fs.unlinkSync(tempRtfPath);
+        if (fs.existsSync(cleanedRtfPath)) {
+          fs.unlinkSync(cleanedRtfPath);
         }
-        
-        console.log(`✅ RTF to MD conversion complete`);
-        
-        // Read the converted markdown file
-        if (fs.existsSync(outputMdPath)) {
-          const markdownContent = fs.readFileSync(outputMdPath, 'utf8');
-          console.log(`✅ Read markdown content (${markdownContent.length} characters)`);
-          
-          // Clean up temporary files
-          try {
-            fs.unlinkSync(tempRtfPath);
-            if (fs.existsSync(cleanedRtfPath)) {
-              fs.unlinkSync(cleanedRtfPath);
-            }
-            fs.unlinkSync(outputMdPath);
-            console.log(`✅ Cleaned up temporary files`);
-          } catch (cleanupError) {
-            console.warn('⚠️ Warning: Could not clean up temporary files:', cleanupError.message);
-          }
-          
-          console.log(`✅ RTF processing complete: ${req.file.originalname}`);
-          res.json({ 
-            success: true, 
-            markdown: markdownContent,
-            originalName: req.file.originalname
-          });
-        } else {
-          console.error(`❌ Markdown output file not found: ${outputMdPath}`);
-          res.status(500).json({ error: 'Markdown output file not found' });
-        }
+        fs.unlinkSync(outputMdPath);
+        console.log(`✅ Cleaned up temporary files`);
+      } catch (cleanupError) {
+        console.warn('⚠️ Warning: Could not clean up temporary files:', cleanupError.message);
+      }
+      
+      console.log(`✅ RTF processing complete: ${req.file.originalname}`);
+      res.json({ 
+        success: true, 
+        markdown: markdownContent,
+        originalName: req.file.originalname
       });
-    });
+    } catch (error) {
+      console.error('❌ RTF to MD conversion error:', error);
+      console.error('❌ Error stdout:', error.stdout);
+      console.error('❌ Error stderr:', error.stderr);
+      return res.status(500).json({ error: 'Failed to convert RTF to Markdown: ' + error.message });
+    }
   } catch (error) {
     console.error('❌ RTF processing error:', error);
     res.status(500).json({ error: `Failed to process RTF file: ${error.message}` });
