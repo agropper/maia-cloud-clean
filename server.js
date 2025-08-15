@@ -156,7 +156,7 @@ app.use('/api/parse-pdf', uploadLimiter);
 
 // CORS configuration for local development
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'],
+          origin: process.env.ALLOWED_ORIGINS?.split(',') || [process.env.ORIGIN || 'http://localhost:3001'],
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -2350,5 +2350,5 @@ app.listen(PORT, () => {
   console.log(`🚀 MAIA Secure Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
 }); 
