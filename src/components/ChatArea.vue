@@ -210,30 +210,22 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .badge-row {
-  display: flex;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: 70% 30%;
   gap: 16px;
   margin-bottom: 16px;
 }
 
-.badge-row .agent-status-indicator {
-  width: 70%;
-}
-
+.badge-row .agent-status-indicator,
 .badge-row .group-sharing-badge {
-  width: 30%;
+  height: 100%;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .badge-row {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 12px;
-  }
-  
-  .badge-row .agent-status-indicator,
-  .badge-row .group-sharing-badge {
-    width: 100%;
   }
 }
 </style>

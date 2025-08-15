@@ -23,8 +23,8 @@ export default defineComponent({
 
 <style scoped>
 .group-sharing-badge {
-  width: 30%;
   display: flex;
+  height: 100%;
 }
 
 .status-card {
