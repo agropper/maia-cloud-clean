@@ -2,7 +2,18 @@
   <div class="group-sharing-badge" ref="badgeRef">
     <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px' }">
       <q-card-section class="q-pa-sm">
-        <div class="badge-title text-body2">Group Sharing</div>
+        <div class="badge-header">
+          <div class="badge-title text-body2">Group Sharing</div>
+          <q-btn
+            flat
+            dense
+            size="sm"
+            color="primary"
+            :label="isEnabled ? 'PAUSE' : 'ENABLE'"
+            @click="toggleGroupSharing"
+            class="q-ml-sm"
+          />
+        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -21,6 +32,11 @@ export default defineComponent({
   setup() {
     const badgeRef = ref<HTMLElement>()
     const badgeHeight = ref(0)
+    const isEnabled = ref(false)
+
+    const toggleGroupSharing = () => {
+      isEnabled.value = !isEnabled.value
+    }
 
     const matchHeight = () => {
       nextTick(() => {
@@ -61,7 +77,9 @@ export default defineComponent({
 
     return {
       badgeRef,
-      badgeHeight
+      badgeHeight,
+      isEnabled,
+      toggleGroupSharing
     }
   }
 })
@@ -81,6 +99,13 @@ export default defineComponent({
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
+}
+
+.badge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
 .badge-title {
