@@ -230,7 +230,6 @@ export default defineComponent({
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
-  padding: 12px;
   box-sizing: border-box;
 }
 
@@ -239,7 +238,6 @@ export default defineComponent({
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 8px;
 }
 
 .badge-title {
@@ -248,14 +246,15 @@ export default defineComponent({
 
 .chat-status {
   margin: 0;
+  flex: 1;
 }
 
 .status-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 16px;
-  gap: 12px;
+  margin-top: 8px;
+  gap: 8px;
   width: 100%;
 }
 
