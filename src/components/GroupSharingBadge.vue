@@ -14,11 +14,12 @@
             class="q-ml-sm"
           />
         </div>
-                                <div class="chat-status text-caption text-grey">
-                          Chat Status: {{ chatStatus }}
-                        </div>
-                        <div class="post-section">
+                                <div class="status-row">
+                          <span class="chat-status text-caption text-grey">
+                            Chat Status: {{ chatStatus }}
+                          </span>
                           <q-btn
+                            v-if="chatStatus === 'Modified'"
                             flat
                             dense
                             size="sm"
@@ -215,10 +216,10 @@ export default defineComponent({
 }
 
 .chat-status {
-  margin-top: 8px;
+  margin: 0;
 }
 
-.post-section {
+.status-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -227,7 +228,7 @@ export default defineComponent({
 }
 
 .post-button {
-  flex: 1;
+  min-width: 60px;
 }
 
 .link-button {
