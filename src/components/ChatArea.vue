@@ -411,6 +411,8 @@ export default defineComponent({
                       this.initializeChatState()
                       // Refresh group count after clearing chat
                       this.loadGroupCount()
+                      // Navigate to home URL
+                      window.location.href = window.location.origin
                       console.log('🆕 Started new chat')
                     },
                     async handleNewChatWithSameGroup() {
@@ -421,6 +423,8 @@ export default defineComponent({
                       this.initializeChatState()
                       // Refresh group count after clearing chat
                       this.loadGroupCount()
+                      // Navigate to home URL
+                      window.location.href = window.location.origin
                       console.log('🆕 Started new chat with same group')
                     },
                     handleGroupDeleted() {
