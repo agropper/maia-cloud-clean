@@ -65,7 +65,7 @@
     />
 
     <!-- Group Sharing Options Modal -->
-    <q-dialog v-model="showGroupOptionsModal" persistent>
+    <q-dialog :model-value="showGroupOptionsModal" @update:model-value="showGroupOptionsModal = $event" persistent>
       <q-card style="min-width: 400px;">
         <q-card-section>
           <div class="text-h6">Group Chat Options</div>
@@ -87,7 +87,7 @@
 
 <script lang="ts">
                 import { defineComponent, ref, onMounted, nextTick } from 'vue'
-                import { QCard, QCardSection, QBtn } from 'quasar'
+                import { QCard, QCardSection, QBtn, QDialog, QCardActions } from 'quasar'
                 import GroupManagementModal from './GroupManagementModal.vue'
 
 export default defineComponent({
@@ -96,6 +96,8 @@ export default defineComponent({
                     QCard,
                     QCardSection,
                     QBtn,
+                    QDialog,
+                    QCardActions,
                     GroupManagementModal
                   },
                     props: {
@@ -128,7 +130,7 @@ export default defineComponent({
                     const deepLink = ref('')
                     const groupCount = ref(0)
                     const showGroupModal = ref(false)
-                    const showGroupOptionsModal = ref(false)
+                    const showGroupOptionsModal = ref(false) // Hidden by default
 
                         const toggleGroupSharing = () => {
                       isEnabled.value = !isEnabled.value
