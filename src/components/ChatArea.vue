@@ -234,6 +234,15 @@ export default defineComponent({
       try {
         console.log('📤 POST to Cloudant requested')
         
+        // Validate chat history
+        if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
+          console.error('❌ No chat history to save')
+          return
+        }
+        
+        console.log('📊 Chat history length:', this.appState.chatHistory.length)
+        console.log('📁 Uploaded files count:', this.appState.uploadedFiles.length)
+        
         // Get current user info
         const currentUser = this.currentUser || 'Unknown User'
         
