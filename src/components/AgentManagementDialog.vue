@@ -462,6 +462,16 @@
       @authenticated="handleUserAuthenticated"
       @cancelled="handleSignInCancelled"
     />
+
+    <!-- Ownership Transfer Modal -->
+    <KBOwnershipTransferModal
+      v-model="showOwnershipTransferModal"
+      :kb-id="ownershipTransferData.kbId"
+      :kb-name="ownershipTransferData.kbName"
+      :current-owner="ownershipTransferData.currentOwner"
+      :new-owner="ownershipTransferData.newOwner"
+      @ownership-transferred="handleOwnershipTransferred"
+    />
   </q-dialog>
 </template>
 
@@ -490,6 +500,7 @@ import {
 } from "quasar";
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
+import KBOwnershipTransferModal from "./KBOwnershipTransferModal.vue";
 import type { UploadedFile } from "../types";
 
 export interface DigitalOceanAgent {
@@ -533,6 +544,7 @@ export default defineComponent({
     QItemLabel,
     AgentCreationWizard,
     PasskeyAuthDialog,
+    KBOwnershipTransferModal,
     QCheckbox,
     QChip,
     QTooltip,
@@ -600,6 +612,15 @@ export default defineComponent({
     const confirmAction = ref<(() => Promise<void>) | null>(null);
     const confirmMessage = ref("");
     const confirmTitle = ref("");
+
+    // Ownership transfer state
+    const showOwnershipTransferModal = ref(false);
+    const ownershipTransferData = ref({
+      kbId: '',
+      kbName: '',
+      currentOwner: '',
+      newOwner: ''
+    });
 
     // Load current agent info
     const loadAgentInfo = async () => {
@@ -851,6 +872,52 @@ export default defineComponent({
     const handleSignInCancelled = () => {
       showPasskeyAuthDialog.value = false;
       console.log("🔍 Sign-in cancelled in AgentManagementDialog");
+    };
+
+    // Handle ownership transfer completion
+    const handleOwnershipTransferred = async (transferData: {
+      kbId: string;
+      newOwner: string;
+      displayName: string;
+    }) => {
+      console.log("✅ Ownership transfer completed:", transferData);
+      
+      // Close the modal
+      showOwnershipTransferModal.value = false;
+      
+      // Refresh the knowledge base list to show updated ownership
+      await refreshKnowledgeBases();
+      
+      // Try to connect the KB again now that ownership is transferred
+      try {
+        if (currentAgent.value) {
+          const response = await fetch(
+            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${transferData.kbId}`,
+            { method: "POST" }
+          );
+          
+          if (response.ok) {
+            $q.notify({
+              type: "positive",
+              message: `Knowledge base "${transferData.displayName}" connected successfully after ownership transfer!`,
+              timeout: 8000,
+            });
+            
+            // Refresh agent info to show the new KB connection
+            await loadAgentInfo();
+            emit("refresh-agent-data");
+          } else {
+            throw new Error(`Failed to connect KB after transfer: ${response.statusText}`);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed to connect KB after ownership transfer:", error);
+        $q.notify({
+          type: "negative",
+          message: `Ownership transferred but failed to connect KB: ${error.message}`,
+          timeout: 8000,
+        });
+      }
     };
 
     // Load agent info when dialog opens
@@ -1266,6 +1333,28 @@ export default defineComponent({
         const result = await response.json();
 
         if (!response.ok) {
+          // Check if this requires ownership transfer
+          if (result.requiresOwnershipTransfer) {
+            console.log("🔄 Ownership transfer required for KB:", result.kbInfo);
+            
+            // Show ownership transfer modal
+            showOwnershipTransferModal.value = true;
+            ownershipTransferData.value = {
+              kbId: result.kbInfo.id,
+              kbName: result.kbInfo.name,
+              currentOwner: result.kbInfo.currentOwner,
+              newOwner: currentUser.value?.username || 'unknown'
+            };
+            
+            $q.notify({
+              type: "warning",
+              message: `Ownership transfer required for "${result.kbInfo.name}". Please complete the admin transfer process.`,
+              timeout: 8000,
+              position: "top",
+            });
+            return; // Exit early, don't throw error
+          }
+          
           // Check if this is the DigitalOcean API limitation
           if (result.api_limitation) {
             console.error(

@@ -1895,10 +1895,24 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       
       // Verify user has permission to access this protected knowledge base
       if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
-        console.log(`🚨 [SECURITY VIOLATION] User ${currentUser.username} attempted to access KB owned by ${kbOwner}`);
+        console.log(`🔄 [OWNERSHIP TRANSFER] User ${currentUser.username} attempting to access KB owned by ${kbOwner}`);
+        
+        // Check if this KB is available for ownership transfer
+        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+        const kbName = kbDoc?.kbName || kbDoc?.name || kbId;
+        
         return res.status(403).json({ 
           error: 'Access denied: You do not have permission to access this knowledge base',
-          details: 'Knowledge base ownership verification failed'
+          details: 'Knowledge base ownership verification failed',
+          requiresOwnershipTransfer: true,
+          kbInfo: {
+            id: kbId,
+            name: kbName,
+            currentOwner: kbOwner,
+            requestedBy: currentUser.username
+          },
+          transferInstructions: 'This knowledge base requires ownership transfer. Please use the admin ownership transfer process.',
+          adminEndpoint: '/api/admin/transfer-kb-ownership'
         });
       }
       
