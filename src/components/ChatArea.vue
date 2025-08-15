@@ -189,7 +189,6 @@ export default defineComponent({
   ],
   data() {
     return {
-      groupSharingBadgeRef: null as any,
       lastChatState: {
         historyLength: 0,
         filesCount: 0,
@@ -231,9 +230,9 @@ export default defineComponent({
     },
     updateChatStatus(newStatus: string) {
       console.log('🔄 Updating chat status to:', newStatus)
-      if (this.groupSharingBadgeRef) {
+      if (this.$refs.groupSharingBadgeRef) {
         console.log('✅ Group sharing badge ref found, calling updateStatus')
-        this.groupSharingBadgeRef.updateStatus(newStatus)
+        this.$refs.groupSharingBadgeRef.updateStatus(newStatus)
       } else {
         console.log('❌ Group sharing badge ref not found')
       }
