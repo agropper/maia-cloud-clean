@@ -93,12 +93,13 @@
     <!-- Signature Buttons -->
     <div class="signature-buttons" v-if="appState.chatHistory.length">
       <q-btn size="sm" color="secondary" label="Save Locally" @click="saveToFile" />
-      <q-btn
+      <!-- Disabled old CouchDB functionality - now handled by Group Sharing Badge -->
+      <!-- <q-btn
         size="sm"
         color="secondary"
         label="Save to CouchDB"
         @click="triggerSaveToCouchDB"
-      />
+      /> -->
       <q-btn size="sm" color="warning" label="End without Saving" @click="closeNoSave" />
     </div>
   </div>
@@ -256,8 +257,9 @@ export default defineComponent({
           this.appState.uploadedFiles
         )
         
-        // Create deep link
-        const deepLink = `${window.location.origin}${window.location.pathname}?chat=${result.chatId}`
+        // Create deep link with proper encoding
+        const baseUrl = window.location.origin + window.location.pathname
+        const deepLink = `${baseUrl}?chat=${encodeURIComponent(result.chatId)}&shared=true`
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {

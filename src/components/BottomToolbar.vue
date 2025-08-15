@@ -89,15 +89,15 @@
             class="file-btn"
           />
           
-          <!-- Load Saved Chats Button -->
-          <q-btn
+          <!-- Load Saved Chats Button - Disabled for Group Chat functionality -->
+          <!-- <q-btn
             v-if="!appState.isAuthorized"
             color="primary"
             label="Load Saved Chats"
             @click="triggerLoadSavedChats"
             size="sm"
             class="load-btn"
-          />
+          /> -->
         </div>
       </div>
     </div>

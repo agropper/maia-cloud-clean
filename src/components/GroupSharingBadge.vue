@@ -110,10 +110,38 @@ export default defineComponent({
       try {
         await navigator.clipboard.writeText(deepLink.value)
         console.log('✅ Deep link copied to clipboard:', deepLink.value)
-        // Could add a toast notification here
+        showCopyNotification()
       } catch (err) {
         console.error('❌ Failed to copy deep link:', err)
       }
+    }
+
+    const showCopyNotification = () => {
+      // Create a simple toast notification
+      const notification = document.createElement('div')
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: #4CAF50;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        z-index: 10000;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+      `
+      notification.textContent = 'Link copied to clipboard!'
+      document.body.appendChild(notification)
+      
+      // Remove after 1 second
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 1000)
     }
 
     const setDeepLink = (link: string) => {
@@ -223,7 +251,8 @@ export default defineComponent({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
+  margin-top: 8px;
+  margin-bottom: 8px;
   gap: 8px;
 }
 
