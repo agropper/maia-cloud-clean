@@ -143,6 +143,30 @@
       </q-card-actions>
     </q-card>
   </q-dialog>
+
+  <!-- Group Chat Security Notice Modal -->
+  <q-dialog v-model="showSecurityNoticeModal" persistent>
+    <q-card style="min-width: 500px">
+      <q-card-section>
+        <div class="text-h6">⚠️ Security Notice</div>
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1">
+          <p><strong>Chat groups are now created as 'Anyone with the link...' by default.</strong></p>
+          <p>This is convenient for chat members but provides no security from unauthorized link sharing.</p>
+          <p class="text-caption text-grey">
+            <strong>Future versions will offer more secure group invitation mechanisms.</strong>
+          </p>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn flat label="Cancel" color="primary" @click="showSecurityNoticeModal = false" />
+        <q-btn flat label="Anyone with the link" color="primary" @click="confirmGroupChatCreation" />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script lang="ts">
@@ -253,7 +277,8 @@ export default defineComponent({
       },
       showDeleteModal: false,
       messageToDelete: null as any,
-      precedingUserMessage: null as any
+      precedingUserMessage: null as any,
+      showSecurityNoticeModal: false
     }
   },
   methods: {
@@ -377,15 +402,9 @@ export default defineComponent({
             connectedKB
           )
         } else {
-          // Create new group chat
-          result = await saveGroupChat(
-            this.appState.chatHistory,
-            this.appState.uploadedFiles,
-            currentUser,
-            connectedKB
-          )
-          // Store the new chat ID for future updates
-          this.appState.currentChatId = result.chatId
+          // Show security notice modal before creating new group chat
+          this.showSecurityNoticeModal = true
+          return
         }
         
         // Create complete deep link URL with domain
@@ -405,6 +424,50 @@ export default defineComponent({
         
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
+      }
+    },
+    async confirmGroupChatCreation() {
+      try {
+        // Close the modal
+        this.showSecurityNoticeModal = false
+        
+        // Get current user info
+        const currentUser = this.currentUser || 'Unknown User'
+        
+        // Get connected KB info
+        const connectedKB = this.appState.selectedAI || 'No KB connected'
+        
+        // Create new group chat
+        const { saveGroupChat } = useGroupChat()
+        const result = await saveGroupChat(
+          this.appState.chatHistory,
+          this.appState.uploadedFiles,
+          currentUser,
+          connectedKB
+        )
+        
+        // Store the new chat ID for future updates
+        this.appState.currentChatId = result.chatId
+        
+        // Create complete deep link URL with domain
+        const baseUrl = window.location.origin;
+        const deepLink = `${baseUrl}/shared/${result.shareId}`
+        
+        // Set the deep link in the GroupSharingBadge
+        if (this.$refs.groupSharingBadgeRef) {
+          this.$refs.groupSharingBadgeRef.setDeepLink(deepLink)
+        }
+        
+        // Reset status to Current
+        this.updateChatStatus('Current')
+        
+        // Refresh group count after creating group chat
+        this.loadGroupCount()
+        
+        console.log('✅ New group chat created with security notice acknowledged')
+        
+      } catch (error) {
+        console.error('❌ Error creating group chat after security notice:', error)
       }
     },
     updateChatStatus(newStatus: string) {
