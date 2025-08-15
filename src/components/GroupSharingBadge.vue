@@ -2,7 +2,7 @@
   <div class="group-sharing-badge">
     <div class="badge-content">
       <div class="badge-header">
-        <div class="badge-title">Group Sharing</div>
+        <div class="badge-title text-body2">Group Sharing</div>
         <div class="badge-status" :class="{ 'status-on': isEnabled, 'status-off': !isEnabled }">
           {{ isEnabled ? 'On' : 'Off' }}
         </div>
@@ -15,7 +15,7 @@
             size="24px"
           />
         </div>
-        <div class="status-text">
+        <div class="status-text text-caption text-grey">
           {{ isEnabled ? 'Group sharing is active' : 'Group sharing is disabled' }}
         </div>
       </div>
@@ -59,13 +59,12 @@ export default defineComponent({
 })
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .group-sharing-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 8px;
   padding: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   width: 200px; /* Fixed width */
   height: 200px; /* Fixed height - square badge */
   display: flex;
@@ -89,13 +88,13 @@ export default defineComponent({
 }
 
 .badge-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #424242;
 }
 
 .badge-status {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   padding: 4px 8px;
   border-radius: 12px;
@@ -133,8 +132,8 @@ export default defineComponent({
 }
 
 .status-text {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  color: #666;
   line-height: 1.4;
 }
 
@@ -160,11 +159,11 @@ export default defineComponent({
   }
   
   .badge-title {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
   
   .status-text {
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 </style>
