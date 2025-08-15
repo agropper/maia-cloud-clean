@@ -259,8 +259,9 @@ export default defineComponent({
           connectedKB
         )
         
-                                // Create deep link with proper encoding - use the new share ID format
-                        const deepLink = `/shared/${result.shareId}`
+                                // Create complete deep link URL with domain
+                        const baseUrl = window.location.origin;
+                        const deepLink = `${baseUrl}/shared/${result.shareId}`
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
