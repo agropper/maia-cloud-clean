@@ -18,6 +18,8 @@
                     :onStatusChange="handleStatusChange"
                     :onPost="handlePostToCloudant"
                     :currentUser="currentUser"
+                    :onNewChat="handleNewChat"
+                    :onNewChatWithSameGroup="handleNewChatWithSameGroup"
                   />
     </div>
     
@@ -266,6 +268,15 @@ export default defineComponent({
         // Get connected KB info
         const connectedKB = this.appState.selectedAI || 'No KB connected'
         
+        // Check if group sharing is enabled
+        const isGroupSharingEnabled = this.$refs.groupSharingBadgeRef ? 
+          (this.$refs.groupSharingBadgeRef as any).isEnabled : false
+        
+        if (isGroupSharingEnabled) {
+          console.log('🔄 Group sharing enabled - updating existing chat')
+          // For now, always create new group chat. Later we can implement updating existing ones
+        }
+        
         // Save group chat to Cloudant
         const { saveGroupChat } = useGroupChat()
         const result = await saveGroupChat(
@@ -378,6 +389,20 @@ export default defineComponent({
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
                       }
+                    },
+                    handleNewChat() {
+                      // Clear current chat and start fresh
+                      this.appState.chatHistory = []
+                      this.appState.uploadedFiles = []
+                      this.initializeChatState()
+                      console.log('🆕 Started new chat')
+                    },
+                    handleNewChatWithSameGroup() {
+                      // Keep group sharing ON but clear chat content
+                      this.appState.chatHistory = []
+                      this.appState.uploadedFiles = []
+                      this.initializeChatState()
+                      console.log('🆕 Started new chat with same group')
                     },
     getSystemMessageType,
     getModelLabel(

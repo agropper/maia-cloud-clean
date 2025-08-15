@@ -18,15 +18,15 @@
                 <div class="group-count">{{ groupCount }}</div>
               </q-btn>
               Group Sharing
-              <q-btn
-                flat
-                dense
-                size="sm"
-                color="primary"
-                :label="isEnabled ? 'PAUSE' : 'ENABLE'"
-                @click="toggleGroupSharing"
-                class="q-ml-sm"
-              />
+                                            <q-btn
+                                flat
+                                dense
+                                size="sm"
+                                color="primary"
+                                :label="isEnabled ? 'ON' : 'ENABLE'"
+                                @click="handleGroupSharingToggle"
+                                class="q-ml-sm"
+                              />
             </div>
             <div class="text-caption text-grey">
               Chat Status: {{ chatStatus }}
@@ -63,6 +63,25 @@
       v-model="showGroupModal"
       :currentUser="currentUser"
     />
+
+    <!-- Group Sharing Options Modal -->
+    <q-dialog v-model="showGroupOptionsModal" persistent>
+      <q-card style="min-width: 400px;">
+        <q-card-section>
+          <div class="text-h6">Group Chat Options</div>
+        </q-card-section>
+
+        <q-card-section>
+          <p>Group chats enable multiple participants to the same chat thread. Turn off this feature if you want to start a new thread in a separate group.</p>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn flat label="New Chat" color="primary" @click="startNewChat" v-close-popup />
+          <q-btn flat label="New Chat with Same Group Members" color="secondary" @click="startNewChatWithSameGroup" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -91,20 +110,55 @@ export default defineComponent({
                     currentUser: {
                       type: String,
                       default: ''
+                    },
+                    onNewChat: {
+                      type: Function as () => () => void,
+                      required: false
+                    },
+                    onNewChatWithSameGroup: {
+                      type: Function as () => () => void,
+                      required: false
                     }
                   },
   setup(props) {
                         const badgeRef = ref<HTMLElement>()
                     const badgeHeight = ref(0)
-                    const isEnabled = ref(false)
+                    const isEnabled = ref(true) // Default to ON for group chats
                     const chatStatus = ref('Current')
                     const deepLink = ref('')
                     const groupCount = ref(0)
                     const showGroupModal = ref(false)
+                    const showGroupOptionsModal = ref(false)
 
-    const toggleGroupSharing = () => {
-      isEnabled.value = !isEnabled.value
-    }
+                        const toggleGroupSharing = () => {
+                      isEnabled.value = !isEnabled.value
+                    }
+
+                    const handleGroupSharingToggle = () => {
+                      if (isEnabled.value) {
+                        // If currently ON, show options modal
+                        showGroupOptionsModal.value = true
+                      } else {
+                        // If currently ENABLE, just turn it on
+                        isEnabled.value = true
+                      }
+                    }
+
+                    const startNewChat = () => {
+                      isEnabled.value = false
+                      // Emit event to parent to start new chat
+                      if (props.onNewChat) {
+                        props.onNewChat()
+                      }
+                    }
+
+                    const startNewChatWithSameGroup = () => {
+                      isEnabled.value = true
+                      // Emit event to parent to start new chat with same group
+                      if (props.onNewChatWithSameGroup) {
+                        props.onNewChatWithSameGroup()
+                      }
+                    }
 
     const toggleChatStatus = () => {
       const statuses = ['Current', 'Modified', 'Saved']
@@ -251,8 +305,12 @@ export default defineComponent({
                       deepLink,
                       groupCount,
                       showGroupModal,
+                      showGroupOptionsModal,
                       openGroupModal,
-                      updateGroupCount
+                      updateGroupCount,
+                      handleGroupSharingToggle,
+                      startNewChat,
+                      startNewChatWithSameGroup
                     }
   }
 })
