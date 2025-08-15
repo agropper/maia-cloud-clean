@@ -131,26 +131,40 @@ export default defineComponent({
     AgentStatusIndicator,
     GroupSharingBadge
   },
-  watch: {
-    'appState.chatHistory': {
-      handler() {
-        this.checkForChanges()
-      },
-      deep: true
-    },
-    'appState.uploadedFiles': {
-      handler() {
-        this.checkForChanges()
-      },
-      deep: true
-    },
-    'appState.editBox': {
-      handler() {
-        this.checkForChanges()
-      },
-      deep: true
-    }
-  },
+                    watch: {
+                    'appState.chatHistory': {
+                      handler() {
+                        this.checkForChanges()
+                      },
+                      deep: true
+                    },
+                    'appState.uploadedFiles': {
+                      handler() {
+                        this.checkForChanges()
+                      },
+                      deep: true
+                    },
+                    'appState.editBox': {
+                      handler() {
+                        this.checkForChanges()
+                      },
+                      deep: true
+                    },
+                    currentUser: {
+                      handler(newUser) {
+                        if (newUser) {
+                          console.log('👤 User signed in, loading group count')
+                          this.loadGroupCount()
+                        } else {
+                          console.log('👤 User signed out, resetting group count')
+                          if (this.$refs.groupSharingBadgeRef) {
+                            (this.$refs.groupSharingBadgeRef as any).updateGroupCount(0)
+                          }
+                        }
+                      },
+                      immediate: true
+                    }
+                  },
                       mounted() {
                       console.log('🚀 ChatArea mounted, initializing chat state')
                       this.initializeChatState()
@@ -350,7 +364,7 @@ export default defineComponent({
                       try {
                         const { getAllGroupChats } = useGroupChat()
                         const groups = await getAllGroupChats()
-                        const currentUserName = this.currentUser?.username || this.currentUser?.displayName || this.currentUser
+                        const currentUserName = this.currentUser?.username || this.currentUser?.displayName || this.currentUser || 'Unknown User'
                         const userGroups = groups.filter(group => group.currentUser === currentUserName)
                         
                         console.log('📊 Found groups:', groups.length, 'User groups:', userGroups.length, 'Current user:', currentUserName)

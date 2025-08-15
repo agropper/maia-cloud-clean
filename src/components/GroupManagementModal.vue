@@ -182,7 +182,7 @@ export default defineComponent({
     }
 
     const isOwner = (group: GroupChat) => {
-      const currentUserName = props.currentUser?.username || props.currentUser?.displayName || props.currentUser
+      const currentUserName = props.currentUser?.username || props.currentUser?.displayName || props.currentUser || 'Unknown User'
       console.log('🔍 Checking ownership:', {
         groupUser: group.currentUser,
         currentUser: currentUserName,
