@@ -13,9 +13,7 @@
       />
       
       <!-- Group Sharing Badge -->
-      <GroupSharingBadge
-        @group-sharing-changed="handleGroupSharingChanged"
-      />
+      <GroupSharingBadge />
     </div>
     
     <!-- File Badges -->
@@ -188,10 +186,6 @@ export default defineComponent({
     closeNoSave() {
       this.$emit('close-no-save')
     },
-    handleGroupSharingChanged(enabled: boolean) {
-      console.log('Group sharing changed:', enabled)
-      // TODO: Implement group sharing logic
-    },
     getSystemMessageType,
     getModelLabel(
       x: { role: string; name?: string },
@@ -222,11 +216,20 @@ export default defineComponent({
   margin-bottom: 16px;
 }
 
+.badge-row .agent-status-indicator {
+  width: 70%;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .badge-row {
     flex-direction: column;
     gap: 12px;
+  }
+  
+  .badge-row .agent-status-indicator,
+  .badge-row .group-sharing-badge {
+    width: 100%;
   }
 }
 </style>
