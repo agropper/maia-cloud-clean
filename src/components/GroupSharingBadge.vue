@@ -14,9 +14,31 @@
             class="q-ml-sm"
           />
         </div>
-        <div class="chat-status text-caption text-grey" @click="toggleChatStatus" style="cursor: pointer;">
-          Chat Status: {{ chatStatus }}
-        </div>
+                                <div class="chat-status text-caption text-grey">
+                          Chat Status: {{ chatStatus }}
+                        </div>
+                        <div class="post-section">
+                          <q-btn
+                            flat
+                            dense
+                            size="sm"
+                            color="primary"
+                            label="POST"
+                            @click="handlePost"
+                            class="post-button"
+                          />
+                          <q-btn
+                            v-if="deepLink"
+                            flat
+                            dense
+                            size="sm"
+                            color="secondary"
+                            icon="link"
+                            @click="copyDeepLink"
+                            class="link-button"
+                            title="Copy deep link to clipboard"
+                          />
+                        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -37,6 +59,10 @@ export default defineComponent({
     onStatusChange: {
       type: Function as () => (status: string) => void,
       required: false
+    },
+    onPost: {
+      type: Function as () => void,
+      required: false
     }
   },
   setup(props) {
@@ -44,6 +70,7 @@ export default defineComponent({
     const badgeHeight = ref(0)
     const isEnabled = ref(false)
     const chatStatus = ref('Current')
+    const deepLink = ref('')
 
     const toggleGroupSharing = () => {
       isEnabled.value = !isEnabled.value
@@ -68,6 +95,29 @@ export default defineComponent({
       } else {
         console.log('❌ Invalid status:', newStatus)
       }
+    }
+
+    const handlePost = async () => {
+      console.log('📤 POST button clicked, triggering post event')
+      // Emit event to parent component to handle the actual posting
+      if (props.onPost) {
+        props.onPost()
+      }
+    }
+
+    const copyDeepLink = async () => {
+      try {
+        await navigator.clipboard.writeText(deepLink.value)
+        console.log('✅ Deep link copied to clipboard:', deepLink.value)
+        // Could add a toast notification here
+      } catch (err) {
+        console.error('❌ Failed to copy deep link:', err)
+      }
+    }
+
+    const setDeepLink = (link: string) => {
+      deepLink.value = link
+      console.log('🔗 Deep link set:', link)
     }
 
     const getStatusBackground = () => {
@@ -128,7 +178,11 @@ export default defineComponent({
       chatStatus,
       toggleChatStatus,
       getStatusBackground,
-      updateStatus
+      updateStatus,
+      handlePost,
+      copyDeepLink,
+      setDeepLink,
+      deepLink
     }
   }
 })
@@ -158,5 +212,25 @@ export default defineComponent({
 
 .badge-title {
   margin: 0;
+}
+
+.chat-status {
+  margin-top: 8px;
+}
+
+.post-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.post-button {
+  flex: 1;
+}
+
+.link-button {
+  min-width: 32px;
 }
 </style>

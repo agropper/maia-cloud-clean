@@ -16,6 +16,7 @@
       <GroupSharingBadge 
         ref="groupSharingBadgeRef"
         :onStatusChange="handleStatusChange"
+        :onPost="handlePostToCloudant"
       />
     </div>
     
@@ -109,6 +110,7 @@ import type { PropType } from 'vue'
 import { QBtn, QChatMessage, QCard, QCardSection, QCardActions } from 'quasar'
 import VueMarkdown from 'vue-markdown-render'
 import { getSystemMessageType } from '../utils'
+import { useCouchDB } from '../composables/useCouchDB'
 import type { AppState, UploadedFile } from '../types'
 import FileBadge from './FileBadge.vue'
 import AgentStatusIndicator from './AgentStatusIndicator.vue'
@@ -227,6 +229,39 @@ export default defineComponent({
     },
     handleStatusChange(newStatus: string) {
       console.log('Chat Status changed to:', newStatus)
+    },
+    async handlePostToCloudant() {
+      try {
+        console.log('📤 POST to Cloudant requested')
+        
+        // Get current user info
+        const currentUser = this.currentUser || 'Unknown User'
+        
+        // Get connected KB info
+        const connectedKB = this.appState.selectedAI || 'No KB connected'
+        
+        // Save chat to Cloudant
+        const { saveChat } = useCouchDB()
+        const result = await saveChat(
+          this.appState.chatHistory,
+          this.appState.uploadedFiles
+        )
+        
+        // Create deep link
+        const deepLink = `${window.location.origin}${window.location.pathname}?chat=${result.chatId}`
+        
+        // Set the deep link in the GroupSharingBadge
+        if (this.$refs.groupSharingBadgeRef) {
+          this.$refs.groupSharingBadgeRef.setDeepLink(deepLink)
+        }
+        
+        // Reset status to Current
+        this.updateChatStatus('Current')
+        
+        console.log('✅ Chat posted successfully with deep link:', deepLink)
+      } catch (error) {
+        console.error('❌ Error posting to Cloudant:', error)
+      }
     },
     updateChatStatus(newStatus: string) {
       console.log('🔄 Updating chat status to:', newStatus)
