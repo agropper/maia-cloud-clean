@@ -3,6 +3,7 @@ import type { ChatHistoryItem, UploadedFile } from '../types'
 
 export interface GroupChat {
   id: string
+  shareId: string
   currentUser: string
   connectedKB: string
   createdAt: string

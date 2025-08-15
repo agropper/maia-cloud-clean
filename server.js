@@ -961,8 +961,23 @@ app.get('/api/group-chats', async (req, res) => {
     const allChats = await couchDBClient.getAllChats();
     const groupChats = allChats.filter(chat => chat.type === 'group_chat');
     
-    console.log(`📋 Found ${groupChats.length} group chats`);
-    res.json(groupChats);
+    // Transform the response to match the frontend GroupChat interface
+    const transformedChats = groupChats.map(chat => ({
+      id: chat._id, // Map _id to id for frontend
+      shareId: chat.shareId,
+      currentUser: chat.currentUser,
+      connectedKB: chat.connectedKB,
+      chatHistory: chat.chatHistory,
+      uploadedFiles: chat.uploadedFiles || [],
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      participantCount: chat.participantCount,
+      messageCount: chat.messageCount,
+      isShared: chat.isShared
+    }));
+    
+    console.log(`📋 Found ${transformedChats.length} group chats`);
+    res.json(transformedChats);
   } catch (error) {
     console.error('❌ Get group chats error:', error);
     res.status(500).json({ message: `Failed to get group chats: ${error.message}` });
