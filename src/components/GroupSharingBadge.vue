@@ -61,8 +61,12 @@ export default defineComponent({
     }
 
     const updateStatus = (newStatus: string) => {
+      console.log('🎯 GroupSharingBadge updateStatus called with:', newStatus)
       if (['Current', 'Modified', 'Saved'].includes(newStatus)) {
+        console.log('✅ Status updated from', chatStatus.value, 'to', newStatus)
         chatStatus.value = newStatus
+      } else {
+        console.log('❌ Invalid status:', newStatus)
       }
     }
 
