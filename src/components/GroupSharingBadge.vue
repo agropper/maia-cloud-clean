@@ -148,6 +148,8 @@ export default defineComponent({
 
                     const startNewChat = () => {
                       isEnabled.value = false
+                      // Clear any existing deep link
+                      deepLink.value = ''
                       // Emit event to parent to start new chat
                       if (props.onNewChat) {
                         props.onNewChat()
@@ -156,6 +158,8 @@ export default defineComponent({
 
                     const startNewChatWithSameGroup = () => {
                       isEnabled.value = true
+                      // Clear any existing deep link
+                      deepLink.value = ''
                       // Emit event to parent to start new chat with same group
                       if (props.onNewChatWithSameGroup) {
                         props.onNewChatWithSameGroup()

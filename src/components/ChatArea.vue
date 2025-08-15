@@ -390,18 +390,22 @@ export default defineComponent({
                         console.error('❌ Failed to load group count:', error)
                       }
                     },
-                    handleNewChat() {
+                    async handleNewChat() {
                       // Clear current chat and start fresh
                       this.appState.chatHistory = []
                       this.appState.uploadedFiles = []
                       this.initializeChatState()
+                      // Refresh group count after clearing chat
+                      this.loadGroupCount()
                       console.log('🆕 Started new chat')
                     },
-                    handleNewChatWithSameGroup() {
+                    async handleNewChatWithSameGroup() {
                       // Keep group sharing ON but clear chat content
                       this.appState.chatHistory = []
                       this.appState.uploadedFiles = []
                       this.initializeChatState()
+                      // Refresh group count after clearing chat
+                      this.loadGroupCount()
                       console.log('🆕 Started new chat with same group')
                     },
     getSystemMessageType,
