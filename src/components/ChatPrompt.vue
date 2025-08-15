@@ -18,6 +18,7 @@ import { sendQuery } from "../composables/useQuery";
 import PopUp from "./PopUp.vue";
 import SavedChatsDialog from "./SavedChatsDialog.vue";
 import { useCouchDB, type SavedChat } from "../composables/useCouchDB";
+import { useGroupChat } from "../composables/useGroupChat";
 import { API_BASE_URL } from "../utils/apiBase";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
@@ -71,6 +72,7 @@ export default defineComponent({
       useChatLogger();
     const { generateTranscript } = useTranscript();
     const { saveChat } = useCouchDB();
+    const { loadGroupChat } = useGroupChat();
     const localStorageKey = "noshuri";
     const popupRef = ref<InstanceType<typeof PopUp> | null>(null);
     const showSavedChatsDialog = ref(false);
@@ -79,6 +81,30 @@ export default defineComponent({
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>(null);
+
+    // Handle deep link loading
+    const handleDeepLink = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const chatId = urlParams.get('chat');
+      const isShared = urlParams.get('shared');
+      
+      if (chatId && isShared === 'true') {
+        try {
+          console.log('🔗 Loading group chat from deep link:', chatId);
+          const groupChat = await loadGroupChat(chatId);
+          
+          // Load the group chat data
+          appState.chatHistory = groupChat.chatHistory;
+          appState.uploadedFiles = groupChat.uploadedFiles;
+          
+          writeMessage(`Loaded shared group chat from ${groupChat.currentUser}`, "success");
+          console.log('✅ Group chat loaded successfully from deep link');
+        } catch (error) {
+          console.error('❌ Failed to load group chat from deep link:', error);
+          writeMessage("Failed to load shared group chat", "error");
+        }
+      }
+    };
 
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
@@ -115,6 +141,9 @@ export default defineComponent({
 
     // Call fetchCurrentAgent when component mounts
     fetchCurrentAgent();
+    
+    // Handle deep link loading on component mount
+    handleDeepLink();
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {

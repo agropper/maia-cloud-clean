@@ -829,7 +829,82 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
   }
 });
 
-// CouchDB Chat Persistence Endpoints
+// Group Chat Persistence Endpoints
+
+// Save group chat to Cloudant
+app.post('/api/save-group-chat', async (req, res) => {
+  try {
+    const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
+    
+    if (!chatHistory || chatHistory.length === 0) {
+      return res.status(400).json({ message: 'No chat history to save' });
+    }
+
+    console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
+
+    const groupChatDoc = {
+      _id: `group_chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'group_chat',
+      currentUser: currentUser || 'Unknown User',
+      connectedKB: connectedKB || 'No KB connected',
+      chatHistory,
+      uploadedFiles: uploadedFiles || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      participantCount: chatHistory.filter(msg => msg.role === 'user').length,
+      messageCount: chatHistory.length,
+      isShared: true
+    };
+
+    // Use Cloudant client
+    const result = await couchDBClient.saveChat(groupChatDoc);
+    console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
+    
+    res.json({ 
+      success: true, 
+      chatId: result._id,
+      message: 'Group chat saved successfully' 
+    });
+  } catch (error) {
+    console.error('❌ Save group chat error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ message: `Failed to save group chat: ${error.message}` });
+  }
+});
+
+// Load group chat by ID
+app.get('/api/load-group-chat/:chatId', async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    
+    // Use Cloudant client
+    const chat = await couchDBClient.getChat(chatId);
+    
+    if (!chat || chat.type !== 'group_chat') {
+      return res.status(404).json({ message: 'Group chat not found' });
+    }
+    
+    console.log(`📄 Loaded group chat: ${chatId}`);
+    res.json({
+      id: chat._id,
+      currentUser: chat.currentUser,
+      connectedKB: chat.connectedKB,
+      chatHistory: chat.chatHistory,
+      uploadedFiles: chat.uploadedFiles || [],
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      isShared: chat.isShared
+    });
+  } catch (error) {
+    console.error('❌ Load group chat error:', error);
+    res.status(500).json({ message: `Failed to load group chat: ${error.message}` });
+  }
+});
+
+// Legacy CouchDB Chat Persistence Endpoints (disabled for Group Chat)
 
 // Save chat to CouchDB
 app.post('/api/save-chat', async (req, res) => {

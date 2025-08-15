@@ -111,7 +111,7 @@ import type { PropType } from 'vue'
 import { QBtn, QChatMessage, QCard, QCardSection, QCardActions } from 'quasar'
 import VueMarkdown from 'vue-markdown-render'
 import { getSystemMessageType } from '../utils'
-import { useCouchDB } from '../composables/useCouchDB'
+import { useGroupChat } from '../composables/useGroupChat'
 import type { AppState, UploadedFile } from '../types'
 import FileBadge from './FileBadge.vue'
 import AgentStatusIndicator from './AgentStatusIndicator.vue'
@@ -250,11 +250,13 @@ export default defineComponent({
         // Get connected KB info
         const connectedKB = this.appState.selectedAI || 'No KB connected'
         
-        // Save chat to Cloudant
-        const { saveChat } = useCouchDB()
-        const result = await saveChat(
+        // Save group chat to Cloudant
+        const { saveGroupChat } = useGroupChat()
+        const result = await saveGroupChat(
           this.appState.chatHistory,
-          this.appState.uploadedFiles
+          this.appState.uploadedFiles,
+          currentUser,
+          connectedKB
         )
         
         // Create deep link with proper encoding - use relative path to avoid SSL issues
