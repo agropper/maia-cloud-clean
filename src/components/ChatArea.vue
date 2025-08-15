@@ -190,15 +190,15 @@ export default defineComponent({
     'sign-in',
     'sign-out'
   ],
-  data() {
-    return {
-      lastChatState: {
-        historyLength: 0,
-        filesCount: 0,
-        hasEdits: false
-      }
-    }
-  },
+                    data() {
+                    return {
+                      lastChatState: {
+                        historyLength: 0,
+                        filesCount: 0,
+                        hasEdits: false
+                      }
+                    }
+                  },
   methods: {
     editMessage(idx: number) {
       this.$emit('edit-message', idx)
@@ -297,9 +297,18 @@ export default defineComponent({
                         last: this.lastChatState
                       })
                       
-                      // Skip the first check to avoid false positives on initial load
-                      if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
-                        console.log('🚀 Initial load detected, skipping change detection')
+                      // Skip change detection only for fresh starts, not for shared chat loads
+                      if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0 && 
+                          this.appState.chatHistory.length === 0 && this.appState.uploadedFiles.length === 0) {
+                        console.log('🚀 Fresh start detected, skipping change detection')
+                        this.lastChatState = currentState
+                        return
+                      }
+                      
+                      // Check if this is a shared chat load by URL
+                      if (window.location.pathname.includes('/shared/') && 
+                          this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
+                        console.log('🔄 Shared chat load detected, resetting state')
                         this.lastChatState = currentState
                         return
                       }
