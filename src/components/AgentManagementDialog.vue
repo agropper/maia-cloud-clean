@@ -465,6 +465,7 @@
 
     <!-- Ownership Transfer Modal -->
     <KBOwnershipTransferModal
+      v-if="showOwnershipTransferModal && ownershipTransferData.kbId"
       v-model="showOwnershipTransferModal"
       :kb-id="ownershipTransferData.kbId"
       :kb-name="ownershipTransferData.kbName"
@@ -1331,24 +1332,37 @@ export default defineComponent({
         );
 
         const result = await response.json();
+        console.log("🔍 KB connection response:", { status: response.status, result });
 
         if (!response.ok) {
           // Check if this requires ownership transfer
-          if (result.requiresOwnershipTransfer) {
+          if (result.requiresOwnershipTransfer && result.kbInfo) {
             console.log("🔄 Ownership transfer required for KB:", result.kbInfo);
             
-            // Show ownership transfer modal
-            showOwnershipTransferModal.value = true;
-            ownershipTransferData.value = {
-              kbId: result.kbInfo.id,
-              kbName: result.kbInfo.name,
-              currentOwner: result.kbInfo.currentOwner,
-              newOwner: currentUser.value?.username || 'unknown'
-            };
+            // Validate kbInfo data before showing modal
+            if (result.kbInfo && result.kbInfo.id) {
+              // Show ownership transfer modal
+              showOwnershipTransferModal.value = true;
+              ownershipTransferData.value = {
+                kbId: result.kbInfo.id,
+                kbName: result.kbInfo.name || 'Unknown KB',
+                currentOwner: result.kbInfo.currentOwner || 'Unknown',
+                newOwner: currentUser.value?.username || 'unknown'
+              };
+            } else {
+              console.error("❌ Invalid kbInfo data for ownership transfer:", result.kbInfo);
+              $q.notify({
+                type: "negative",
+                message: "Ownership transfer data is incomplete. Please try again.",
+                timeout: 5000,
+                position: "top",
+              });
+              return;
+            }
             
             $q.notify({
               type: "warning",
-              message: `Ownership transfer required for "${result.kbInfo.name}". Please complete the admin transfer process.`,
+              message: `Ownership transfer required for "${result.kbInfo.name || 'this knowledge base'}". Please complete the admin transfer process.`,
               timeout: 8000,
               position: "top",
             });
