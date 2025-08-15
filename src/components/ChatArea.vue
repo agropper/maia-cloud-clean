@@ -223,12 +223,7 @@ export default defineComponent({
   width: 30%;
 }
 
-/* Force both badges to have the same height */
-.badge-row .agent-status-indicator .status-card,
-.badge-row .group-sharing-badge .status-card {
-  height: 100%;
-  min-height: 120px; /* Set a minimum height to ensure consistency */
-}
+/* Remove height constraints - now handled dynamically by JavaScript */
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
