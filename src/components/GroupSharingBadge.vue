@@ -230,6 +230,8 @@ export default defineComponent({
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .badge-header {
@@ -237,6 +239,7 @@ export default defineComponent({
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  margin-bottom: 8px;
 }
 
 .badge-title {
@@ -251,9 +254,9 @@ export default defineComponent({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 8px;
-  margin-bottom: 8px;
-  gap: 8px;
+  margin-top: 16px;
+  gap: 12px;
+  width: 100%;
 }
 
 .post-button {

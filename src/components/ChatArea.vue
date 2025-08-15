@@ -257,9 +257,8 @@ export default defineComponent({
           this.appState.uploadedFiles
         )
         
-        // Create deep link with proper encoding
-        const baseUrl = window.location.origin + window.location.pathname
-        const deepLink = `${baseUrl}?chat=${encodeURIComponent(result.chatId)}&shared=true`
+        // Create deep link with proper encoding - use relative path to avoid SSL issues
+        const deepLink = `?chat=${encodeURIComponent(result.chatId)}&shared=true`
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
