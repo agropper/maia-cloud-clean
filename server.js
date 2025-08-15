@@ -92,7 +92,7 @@ app.use(helmet({
 }));
 
 // Session configuration for authentication
-app.use(session({
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this',
   resave: false,
   saveUninitialized: false,
@@ -102,7 +102,35 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'strict'
   }
-}));
+};
+
+// Use enhanced session store for production
+if (process.env.NODE_ENV === 'production') {
+  // For now, use a more robust memory store with cleanup
+  const MemoryStore = session.MemoryStore;
+  const store = new MemoryStore();
+  
+  // Clean up expired sessions every hour
+  setInterval(() => {
+    store.all((err, sessions) => {
+      if (err) return;
+      const now = Date.now();
+      Object.keys(sessions).forEach(sessionId => {
+        const session = sessions[sessionId];
+        if (session.cookie && session.cookie.expires && session.cookie.expires < now) {
+          store.destroy(sessionId);
+        }
+      });
+    });
+  }, 60 * 60 * 1000); // 1 hour
+  
+  sessionConfig.store = store;
+  console.log('🔧 Using enhanced MemoryStore for production (temporary solution)');
+} else {
+  console.log('🔧 Using default MemoryStore for development');
+}
+
+app.use(session(sessionConfig));
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {

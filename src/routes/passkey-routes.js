@@ -407,6 +407,22 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.authenticatedAt = new Date().toISOString();
 
       console.log(`✅ Session created for user: ${updatedUser.userId}`);
+      console.log(`🔍 [DEBUG] Session data set:`, {
+        userId: req.session.userId,
+        username: req.session.username,
+        displayName: req.session.displayName,
+        authenticatedAt: req.session.authenticatedAt,
+        sessionId: req.sessionID
+      });
+
+      // Force session save and verify
+      req.session.save((err) => {
+        if (err) {
+          console.error(`❌ Session save error for user ${updatedUser.userId}:`, err);
+        } else {
+          console.log(`✅ Session saved successfully for user ${updatedUser.userId}`);
+        }
+      });
 
       res.json({
         success: true,
