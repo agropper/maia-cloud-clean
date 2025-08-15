@@ -977,6 +977,11 @@ app.get('/api/group-chats', async (req, res) => {
     }));
     
     console.log(`📋 Found ${transformedChats.length} group chats`);
+    console.log(`📋 Sample transformed chat:`, transformedChats[0] ? {
+      id: transformedChats[0].id,
+      shareId: transformedChats[0].shareId,
+      currentUser: transformedChats[0].currentUser
+    } : 'No chats found');
     res.json(transformedChats);
   } catch (error) {
     console.error('❌ Get group chats error:', error);
