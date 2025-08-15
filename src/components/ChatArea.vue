@@ -13,7 +13,10 @@
       />
       
       <!-- Group Sharing Badge -->
-      <GroupSharingBadge />
+      <GroupSharingBadge 
+        ref="groupSharingBadgeRef"
+        :onStatusChange="handleStatusChange"
+      />
     </div>
     
     <!-- File Badges -->
@@ -124,6 +127,29 @@ export default defineComponent({
     AgentStatusIndicator,
     GroupSharingBadge
   },
+  watch: {
+    'appState.chatHistory': {
+      handler() {
+        this.checkForChanges()
+      },
+      deep: true
+    },
+    'appState.uploadedFiles': {
+      handler() {
+        this.checkForChanges()
+      },
+      deep: true
+    },
+    'appState.editBox': {
+      handler() {
+        this.checkForChanges()
+      },
+      deep: true
+    }
+  },
+  mounted() {
+    this.initializeChatState()
+  },
   props: {
     appState: {
       type: Object as PropType<AppState>,
@@ -159,12 +185,24 @@ export default defineComponent({
     'sign-in',
     'sign-out'
   ],
+  data() {
+    return {
+      groupSharingBadgeRef: null as any,
+      lastChatState: {
+        historyLength: 0,
+        filesCount: 0,
+        hasEdits: false
+      }
+    }
+  },
   methods: {
     editMessage(idx: number) {
       this.$emit('edit-message', idx)
+      this.updateChatStatus('Modified')
     },
     saveMessage(idx: number, content: string) {
       this.$emit('save-message', idx, content)
+      this.updateChatStatus('Modified')
     },
     viewSystemMessage(content: string) {
       if (typeof content === 'string') {
@@ -185,6 +223,41 @@ export default defineComponent({
     },
     closeNoSave() {
       this.$emit('close-no-save')
+    },
+    handleStatusChange(newStatus: string) {
+      console.log('Chat Status changed to:', newStatus)
+    },
+    updateChatStatus(newStatus: string) {
+      if (this.groupSharingBadgeRef) {
+        this.groupSharingBadgeRef.updateStatus(newStatus)
+      }
+    },
+    checkForChanges() {
+      const currentState = {
+        historyLength: this.appState.chatHistory.length,
+        filesCount: this.appState.uploadedFiles.length,
+        hasEdits: this.appState.editBox.length > 0
+      }
+      
+      // Check if files were added
+      if (currentState.filesCount > this.lastChatState.filesCount) {
+        this.updateChatStatus('Modified')
+      }
+      
+      // Check if chat history changed
+      if (currentState.historyLength > this.lastChatState.historyLength) {
+        this.updateChatStatus('Modified')
+      }
+      
+      // Update last state
+      this.lastChatState = currentState
+    },
+    initializeChatState() {
+      this.lastChatState = {
+        historyLength: this.appState.chatHistory.length,
+        filesCount: this.appState.uploadedFiles.length,
+        hasEdits: this.appState.editBox.length > 0
+      }
     },
     getSystemMessageType,
     getModelLabel(

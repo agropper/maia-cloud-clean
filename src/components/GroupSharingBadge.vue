@@ -33,7 +33,13 @@ export default defineComponent({
     QCardSection,
     QBtn
   },
-  setup() {
+  props: {
+    onStatusChange: {
+      type: Function as () => (status: string) => void,
+      required: false
+    }
+  },
+  setup(props) {
     const badgeRef = ref<HTMLElement>()
     const badgeHeight = ref(0)
     const isEnabled = ref(false)
@@ -48,6 +54,16 @@ export default defineComponent({
       const currentIndex = statuses.indexOf(chatStatus.value)
       const nextIndex = (currentIndex + 1) % statuses.length
       chatStatus.value = statuses[nextIndex]
+      // Notify parent component of status change
+      if (props.onStatusChange) {
+        props.onStatusChange(chatStatus.value)
+      }
+    }
+
+    const updateStatus = (newStatus: string) => {
+      if (['Current', 'Modified', 'Saved'].includes(newStatus)) {
+        chatStatus.value = newStatus
+      }
     }
 
     const getStatusBackground = () => {
@@ -107,7 +123,8 @@ export default defineComponent({
       toggleGroupSharing,
       chatStatus,
       toggleChatStatus,
-      getStatusBackground
+      getStatusBackground,
+      updateStatus
     }
   }
 })
