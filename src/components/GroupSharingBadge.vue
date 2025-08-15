@@ -14,6 +14,9 @@
             class="q-ml-sm"
           />
         </div>
+        <div class="chat-status text-caption text-grey" @click="toggleChatStatus" style="cursor: pointer;">
+          Chat Status: {{ chatStatus }}
+        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -34,9 +37,17 @@ export default defineComponent({
     const badgeRef = ref<HTMLElement>()
     const badgeHeight = ref(0)
     const isEnabled = ref(false)
+    const chatStatus = ref('Current')
 
     const toggleGroupSharing = () => {
       isEnabled.value = !isEnabled.value
+    }
+
+    const toggleChatStatus = () => {
+      const statuses = ['Current', 'Modified', 'Saved']
+      const currentIndex = statuses.indexOf(chatStatus.value)
+      const nextIndex = (currentIndex + 1) % statuses.length
+      chatStatus.value = statuses[nextIndex]
     }
 
     const matchHeight = () => {
@@ -80,7 +91,9 @@ export default defineComponent({
       badgeRef,
       badgeHeight,
       isEnabled,
-      toggleGroupSharing
+      toggleGroupSharing,
+      chatStatus,
+      toggleChatStatus
     }
   }
 })
