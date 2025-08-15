@@ -168,12 +168,10 @@ export default defineComponent({
                       immediate: true
                     }
                   },
-                      mounted() {
-                      console.log('🚀 ChatArea mounted, initializing chat state')
-                      this.initializeChatState()
-                      this.loadGroupCount()
-                      console.log('✅ Chat state initialized:', this.lastChatState)
-                    },
+                                        mounted() {
+                    this.initializeChatState()
+                    this.loadGroupCount()
+                  },
   props: {
     appState: {
       type: Object as PropType<AppState>,
@@ -252,16 +250,11 @@ export default defineComponent({
     },
     async handlePostToCloudant() {
       try {
-        console.log('📤 POST to Cloudant requested')
-        
         // Validate chat history
         if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
           console.error('❌ No chat history to save')
           return
         }
-        
-        console.log('📊 Chat history length:', this.appState.chatHistory.length)
-        console.log('📁 Uploaded files count:', this.appState.uploadedFiles.length)
         
         // Get current user info
         const currentUser = this.currentUser || 'Unknown User'
@@ -278,7 +271,6 @@ export default defineComponent({
         
         if (isGroupSharingEnabled && this.appState.currentChatId) {
           // Update existing group chat
-          console.log('🔄 Group sharing enabled - updating existing chat:', this.appState.currentChatId)
           result = await updateGroupChat(
             this.appState.currentChatId,
             this.appState.chatHistory,
@@ -288,7 +280,6 @@ export default defineComponent({
           )
         } else {
           // Create new group chat
-          console.log('🆕 Creating new group chat')
           result = await saveGroupChat(
             this.appState.chatHistory,
             this.appState.uploadedFiles,
@@ -299,9 +290,9 @@ export default defineComponent({
           this.appState.currentChatId = result.chatId
         }
         
-                                // Create complete deep link URL with domain
-                        const baseUrl = window.location.origin;
-                        const deepLink = `${baseUrl}/shared/${result.shareId}`
+        // Create complete deep link URL with domain
+        const baseUrl = window.location.origin;
+        const deepLink = `${baseUrl}/shared/${result.shareId}`
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
@@ -311,18 +302,13 @@ export default defineComponent({
         // Reset status to Current
         this.updateChatStatus('Current')
         
-        console.log('✅ Chat posted successfully with deep link:', deepLink)
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
       }
     },
     updateChatStatus(newStatus: string) {
-      console.log('🔄 Updating chat status to:', newStatus)
       if (this.$refs.groupSharingBadgeRef) {
-        console.log('✅ Group sharing badge ref found, calling updateStatus')
         this.$refs.groupSharingBadgeRef.updateStatus(newStatus)
-      } else {
-        console.log('❌ Group sharing badge ref not found')
       }
     },
                         checkForChanges() {
@@ -332,15 +318,9 @@ export default defineComponent({
                         hasEdits: this.appState.editBox.length > 0
                       }
                       
-                      console.log('🔍 Checking for changes:', {
-                        current: currentState,
-                        last: this.lastChatState
-                      })
-                      
                       // Skip change detection only for fresh starts, not for shared chat loads
                       if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0 && 
                           this.appState.chatHistory.length === 0 && this.appState.uploadedFiles.length === 0) {
-                        console.log('🚀 Fresh start detected, skipping change detection')
                         this.lastChatState = currentState
                         return
                       }
@@ -348,20 +328,17 @@ export default defineComponent({
                       // Check if this is a shared chat load by URL
                       if (window.location.pathname.includes('/shared/') && 
                           this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
-                        console.log('🔄 Shared chat load detected, resetting state')
                         this.lastChatState = currentState
                         return
                       }
                       
                       // Check if files were added
                       if (currentState.filesCount > this.lastChatState.filesCount) {
-                        console.log('📁 Files added, updating status to Modified')
                         this.updateChatStatus('Modified')
                       }
                       
                       // Check if chat history changed
                       if (currentState.historyLength > this.lastChatState.historyLength) {
-                        console.log('💬 Chat history changed, updating status to Modified')
                         this.updateChatStatus('Modified')
                       }
                       
@@ -369,17 +346,11 @@ export default defineComponent({
                       this.lastChatState = currentState
                     },
                         initializeChatState() {
-                      console.log('🔧 Initializing chat state with appState:', {
-                        historyLength: this.appState.chatHistory.length,
-                        filesCount: this.appState.uploadedFiles.length,
-                        hasEdits: this.appState.editBox.length > 0
-                      })
                       this.lastChatState = {
                         historyLength: this.appState.chatHistory.length,
                         filesCount: this.appState.uploadedFiles.length,
                         hasEdits: this.appState.editBox.length > 0
                       }
-                      console.log('✅ Last chat state set to:', this.lastChatState)
                       
                       // Reset chat status to "Current" for fresh loads
                       this.updateChatStatus('Current')
@@ -391,13 +362,8 @@ export default defineComponent({
                         const currentUserName = this.currentUser?.username || this.currentUser?.displayName || this.currentUser || 'Unknown User'
                         const userGroups = groups.filter(group => group.currentUser === currentUserName)
                         
-                        console.log('📊 Found groups:', groups.length, 'User groups:', userGroups.length, 'Current user:', currentUserName)
-                        
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(userGroups.length)
-                          console.log('✅ Group count updated in badge')
-                        } else {
-                          console.log('❌ Group sharing badge ref not found')
                         }
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
@@ -413,7 +379,7 @@ export default defineComponent({
                       this.loadGroupCount()
                       // Navigate to home URL
                       window.location.href = window.location.origin
-                      console.log('🆕 Started new chat')
+
                     },
                     async handleNewChatWithSameGroup() {
                       // Keep group sharing ON but clear chat content
@@ -425,10 +391,9 @@ export default defineComponent({
                       this.loadGroupCount()
                       // Navigate to home URL
                       window.location.href = window.location.origin
-                      console.log('🆕 Started new chat with same group')
+
                     },
                     handleGroupDeleted() {
-                      console.log('🔄 Group deleted, refreshing count in ChatArea')
                       this.loadGroupCount()
                     },
     getSystemMessageType,

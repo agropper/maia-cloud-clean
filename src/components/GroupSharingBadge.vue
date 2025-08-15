@@ -183,17 +183,12 @@ export default defineComponent({
     }
 
     const updateStatus = (newStatus: string) => {
-      console.log('🎯 GroupSharingBadge updateStatus called with:', newStatus)
       if (['Current', 'Modified', 'Saved'].includes(newStatus)) {
-        console.log('✅ Status updated from', chatStatus.value, 'to', newStatus)
         chatStatus.value = newStatus
-      } else {
-        console.log('❌ Invalid status:', newStatus)
       }
     }
 
     const handlePost = async () => {
-      console.log('📤 POST button clicked, triggering post event')
       // Emit event to parent component to handle the actual posting
       if (props.onPost) {
         props.onPost()
@@ -203,7 +198,6 @@ export default defineComponent({
     const copyDeepLink = async () => {
       try {
         await navigator.clipboard.writeText(deepLink.value)
-        console.log('✅ Deep link copied to clipboard:', deepLink.value)
         showCopyNotification()
       } catch (err) {
         console.error('❌ Failed to copy deep link:', err)
@@ -238,10 +232,9 @@ export default defineComponent({
       }, 1000)
     }
 
-                        const setDeepLink = (link: string) => {
-                      deepLink.value = link
-                      console.log('🔗 Deep link set:', link)
-                    }
+                            const setDeepLink = (link: string) => {
+      deepLink.value = link
+    }
 
                     const openGroupModal = () => {
                       showGroupModal.value = true
@@ -252,7 +245,6 @@ export default defineComponent({
     }
 
     const handleGroupDeleted = () => {
-      console.log('🔄 Group deleted, refreshing count')
       // Emit event to parent to refresh group count
       if (props.onGroupDeleted) {
         props.onGroupDeleted()

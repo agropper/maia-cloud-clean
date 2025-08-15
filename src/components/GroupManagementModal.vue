@@ -172,13 +172,6 @@ export default defineComponent({
       try {
         groups.value = await getAllGroupChats()
         console.log('📋 Loaded groups:', groups.value.length)
-        console.log('📋 Groups data:', groups.value.map(g => ({
-          id: g.id,
-          currentUser: g.currentUser,
-          shareId: g.shareId,
-          createdAt: g.createdAt
-        })))
-        console.log('📋 Raw groups data (first 2):', groups.value.slice(0, 2))
       } catch (error) {
         console.error('❌ Failed to load groups:', error)
       } finally {
@@ -195,11 +188,6 @@ export default defineComponent({
         currentUserName = props.currentUser || 'Unknown User'
       }
       
-      console.log('🔍 Checking ownership:', {
-        groupUser: group.currentUser,
-        currentUser: currentUserName,
-        isOwner: group.currentUser === currentUserName
-      })
       return group.currentUser === currentUserName
     }
 
@@ -268,7 +256,7 @@ export default defineComponent({
         })
         
         await deleteGroupChat(groupToDelete.value.id)
-        console.log('✅ Group deleted successfully')
+        console.log('🗑️ Group deleted successfully')
         
         // Remove from local list
         groups.value = groups.value.filter(g => g.id !== groupToDelete.value!.id)
