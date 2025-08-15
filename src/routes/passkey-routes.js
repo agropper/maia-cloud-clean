@@ -400,6 +400,14 @@ router.post("/authenticate-verify", async (req, res) => {
 
       await couchDBClient.saveDocument("maia_users", updatedUser);
 
+      // Set session data for authenticated user
+      req.session.userId = updatedUser.userId;
+      req.session.username = updatedUser.userId;
+      req.session.displayName = updatedUser.displayName;
+      req.session.authenticatedAt = new Date().toISOString();
+
+      console.log(`✅ Session created for user: ${updatedUser.userId}`);
+
       res.json({
         success: true,
         message: "Authentication successful",
@@ -438,6 +446,28 @@ router.get("/user/:userId", async (req, res) => {
   } catch (error) {
     console.error("❌ Error getting user info:", error);
     res.status(500).json({ error: "Failed to get user info" });
+  }
+});
+
+// Logout route to clear session
+router.post("/logout", async (req, res) => {
+  try {
+    if (req.session) {
+      const userId = req.session.userId;
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("❌ Error destroying session:", err);
+          return res.status(500).json({ error: "Failed to logout" });
+        }
+        console.log(`✅ Session destroyed for user: ${userId}`);
+        res.json({ success: true, message: "Logged out successfully" });
+      });
+    } else {
+      res.json({ success: true, message: "No active session" });
+    }
+  } catch (error) {
+    console.error("❌ Error during logout:", error);
+    res.status(500).json({ error: "Failed to logout" });
   }
 });
 
