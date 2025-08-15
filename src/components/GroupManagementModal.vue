@@ -174,6 +174,7 @@ export default defineComponent({
           shareId: g.shareId,
           createdAt: g.createdAt
         })))
+        console.log('📋 Raw groups data (first 2):', groups.value.slice(0, 2))
       } catch (error) {
         console.error('❌ Failed to load groups:', error)
       } finally {
@@ -256,6 +257,12 @@ export default defineComponent({
       
       deleting.value = true
       try {
+        console.log('🗑️ Attempting to delete group:', {
+          groupToDelete: groupToDelete.value,
+          groupId: groupToDelete.value.id,
+          groupIdType: typeof groupToDelete.value.id
+        })
+        
         await deleteGroupChat(groupToDelete.value.id)
         console.log('✅ Group deleted successfully')
         
