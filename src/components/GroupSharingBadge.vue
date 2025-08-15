@@ -1,45 +1,48 @@
 <template>
   <div class="group-sharing-badge" ref="badgeRef">
-    <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px', background: getStatusBackground() }">
+        <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px', background: getStatusBackground() }">
       <q-card-section class="q-pa-sm">
-        <div class="badge-header">
-          <div class="badge-title text-body2">Group Sharing</div>
+        <div class="row items-center">
+          <div class="status-text">
+            <div class="text-body2">
+              Group Sharing
+              <q-btn
+                flat
+                dense
+                size="sm"
+                color="primary"
+                :label="isEnabled ? 'PAUSE' : 'ENABLE'"
+                @click="toggleGroupSharing"
+                class="q-ml-sm"
+              />
+            </div>
+            <div class="text-caption text-grey">
+              Chat Status: {{ chatStatus }}
+              <q-btn
+                v-if="chatStatus === 'Modified'"
+                flat
+                dense
+                size="sm"
+                color="primary"
+                label="POST"
+                @click="handlePost"
+                class="q-ml-sm"
+              />
+            </div>
+          </div>
           <q-btn
+            v-if="deepLink"
             flat
+            round
             dense
+            icon="link"
+            color="secondary"
+            @click="copyDeepLink"
             size="sm"
-            color="primary"
-            :label="isEnabled ? 'PAUSE' : 'ENABLE'"
-            @click="toggleGroupSharing"
             class="q-ml-sm"
+            title="Copy deep link to clipboard"
           />
         </div>
-                                <div class="status-row">
-                          <span class="chat-status text-caption text-grey">
-                            Chat Status: {{ chatStatus }}
-                          </span>
-                          <q-btn
-                            v-if="chatStatus === 'Modified'"
-                            flat
-                            dense
-                            size="sm"
-                            color="primary"
-                            label="POST"
-                            @click="handlePost"
-                            class="post-button"
-                          />
-                          <q-btn
-                            v-if="deepLink"
-                            flat
-                            dense
-                            size="sm"
-                            color="secondary"
-                            icon="link"
-                            @click="copyDeepLink"
-                            class="link-button"
-                            title="Copy deep link to clipboard"
-                          />
-                        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -233,36 +236,7 @@ export default defineComponent({
   box-sizing: border-box;
 }
 
-.badge-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.badge-title {
-  margin: 0;
-}
-
-.chat-status {
-  margin: 0;
+.status-text {
   flex: 1;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-  gap: 8px;
-  width: 100%;
-}
-
-.post-button {
-  min-width: 60px;
-}
-
-.link-button {
-  min-width: 32px;
 }
 </style>
