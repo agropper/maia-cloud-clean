@@ -1,6 +1,6 @@
 <template>
   <div class="group-sharing-badge" ref="badgeRef">
-    <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px' }">
+    <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px', background: getStatusBackground() }">
       <q-card-section class="q-pa-sm">
         <div class="badge-header">
           <div class="badge-title text-body2">Group Sharing</div>
@@ -50,6 +50,19 @@ export default defineComponent({
       chatStatus.value = statuses[nextIndex]
     }
 
+    const getStatusBackground = () => {
+      switch (chatStatus.value) {
+        case 'Current':
+          return 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' // Original blue-gray
+        case 'Modified':
+          return 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)' // Yellow/warning
+        case 'Saved':
+          return 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)' // Green/success
+        default:
+          return 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' // Fallback
+      }
+    }
+
     const matchHeight = () => {
       nextTick(() => {
         // Find the agent badge in the same row
@@ -93,7 +106,8 @@ export default defineComponent({
       isEnabled,
       toggleGroupSharing,
       chatStatus,
-      toggleChatStatus
+      toggleChatStatus,
+      getStatusBackground
     }
   }
 })
@@ -106,7 +120,6 @@ export default defineComponent({
 }
 
 .status-card {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 8px;
   flex: 1;
   display: flex;
