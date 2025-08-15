@@ -1,10 +1,22 @@
 <template>
   <div class="group-sharing-badge" ref="badgeRef">
-        <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px', background: getStatusBackground() }">
+    <q-card flat bordered class="status-card" :style="{ height: badgeHeight + 'px', background: getStatusBackground() }">
       <q-card-section class="q-pa-sm">
         <div class="row items-center">
           <div class="status-text">
             <div class="text-body2">
+              <q-btn
+                flat
+                round
+                dense
+                size="sm"
+                color="primary"
+                class="group-count-btn q-mr-sm"
+                @click="openGroupModal"
+                title="View shared groups"
+              >
+                <div class="group-count">{{ groupCount }}</div>
+              </q-btn>
               Group Sharing
               <q-btn
                 flat
@@ -45,36 +57,50 @@
         </div>
       </q-card-section>
     </q-card>
+    
+    <!-- Group Management Modal -->
+    <GroupManagementModal
+      v-model="showGroupModal"
+      :currentUser="currentUser"
+    />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, nextTick } from 'vue'
-import { QCard, QCardSection, QBtn } from 'quasar'
+                import { defineComponent, ref, onMounted, nextTick } from 'vue'
+                import { QCard, QCardSection, QBtn } from 'quasar'
+                import GroupManagementModal from './GroupManagementModal.vue'
 
 export default defineComponent({
   name: 'GroupSharingBadge',
-  components: {
-    QCard,
-    QCardSection,
-    QBtn
-  },
-  props: {
-    onStatusChange: {
-      type: Function as () => (status: string) => void,
-      required: false
-    },
-    onPost: {
-      type: Function as () => void,
-      required: false
-    }
-  },
+                    components: {
+                    QCard,
+                    QCardSection,
+                    QBtn,
+                    GroupManagementModal
+                  },
+                    props: {
+                    onStatusChange: {
+                      type: Function as () => (status: string) => void,
+                      required: false
+                    },
+                    onPost: {
+                      type: Function as () => void,
+                      required: false
+                    },
+                    currentUser: {
+                      type: String,
+                      default: ''
+                    }
+                  },
   setup(props) {
-    const badgeRef = ref<HTMLElement>()
-    const badgeHeight = ref(0)
-    const isEnabled = ref(false)
-    const chatStatus = ref('Current')
-    const deepLink = ref('')
+                        const badgeRef = ref<HTMLElement>()
+                    const badgeHeight = ref(0)
+                    const isEnabled = ref(false)
+                    const chatStatus = ref('Current')
+                    const deepLink = ref('')
+                    const groupCount = ref(0)
+                    const showGroupModal = ref(false)
 
     const toggleGroupSharing = () => {
       isEnabled.value = !isEnabled.value
@@ -147,10 +173,18 @@ export default defineComponent({
       }, 1000)
     }
 
-    const setDeepLink = (link: string) => {
-      deepLink.value = link
-      console.log('🔗 Deep link set:', link)
-    }
+                        const setDeepLink = (link: string) => {
+                      deepLink.value = link
+                      console.log('🔗 Deep link set:', link)
+                    }
+
+                    const openGroupModal = () => {
+                      showGroupModal.value = true
+                    }
+
+                    const updateGroupCount = (count: number) => {
+                      groupCount.value = count
+                    }
 
     const getStatusBackground = () => {
       switch (chatStatus.value) {
@@ -202,20 +236,24 @@ export default defineComponent({
       }
     })
 
-    return {
-      badgeRef,
-      badgeHeight,
-      isEnabled,
-      toggleGroupSharing,
-      chatStatus,
-      toggleChatStatus,
-      getStatusBackground,
-      updateStatus,
-      handlePost,
-      copyDeepLink,
-      setDeepLink,
-      deepLink
-    }
+                        return {
+                      badgeRef,
+                      badgeHeight,
+                      isEnabled,
+                      toggleGroupSharing,
+                      chatStatus,
+                      toggleChatStatus,
+                      getStatusBackground,
+                      updateStatus,
+                      handlePost,
+                      copyDeepLink,
+                      setDeepLink,
+                      deepLink,
+                      groupCount,
+                      showGroupModal,
+                      openGroupModal,
+                      updateGroupCount
+                    }
   }
 })
 </script>
@@ -236,7 +274,27 @@ export default defineComponent({
   box-sizing: border-box;
 }
 
-.status-text {
-  flex: 1;
-}
+                .status-text {
+                  flex: 1;
+                }
+
+                .group-count-btn {
+                  min-width: 24px;
+                  height: 24px;
+                  padding: 0;
+                }
+
+                .group-count {
+                  font-size: 12px;
+                  font-weight: bold;
+                  color: white;
+                  background-color: #1976d2;
+                  border-radius: 50%;
+                  width: 20px;
+                  height: 20px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  line-height: 1;
+                }
 </style>

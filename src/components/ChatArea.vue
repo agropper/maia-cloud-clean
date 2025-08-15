@@ -13,11 +13,12 @@
       />
       
       <!-- Group Sharing Badge -->
-      <GroupSharingBadge 
-        ref="groupSharingBadgeRef"
-        :onStatusChange="handleStatusChange"
-        :onPost="handlePostToCloudant"
-      />
+                        <GroupSharingBadge 
+                    ref="groupSharingBadgeRef"
+                    :onStatusChange="handleStatusChange"
+                    :onPost="handlePostToCloudant"
+                    :currentUser="currentUser"
+                  />
     </div>
     
     <!-- File Badges -->
@@ -150,11 +151,12 @@ export default defineComponent({
       deep: true
     }
   },
-  mounted() {
-    console.log('🚀 ChatArea mounted, initializing chat state')
-    this.initializeChatState()
-    console.log('✅ Chat state initialized:', this.lastChatState)
-  },
+                      mounted() {
+                      console.log('🚀 ChatArea mounted, initializing chat state')
+                      this.initializeChatState()
+                      this.loadGroupCount()
+                      console.log('✅ Chat state initialized:', this.lastChatState)
+                    },
   props: {
     appState: {
       type: Object as PropType<AppState>,
@@ -343,6 +345,21 @@ export default defineComponent({
                       
                       // Reset chat status to "Current" for fresh loads
                       this.updateChatStatus('Current')
+                    },
+                    async loadGroupCount() {
+                      try {
+                        const { getAllGroupChats } = useGroupChat()
+                        const groups = await getAllGroupChats()
+                        const userGroups = groups.filter(group => group.currentUser === this.currentUser)
+                        
+                        if (this.$refs.groupSharingBadgeRef) {
+                          (this.$refs.groupSharingBadgeRef as any).updateGroupCount(userGroups.length)
+                        }
+                        
+                        console.log('📊 Group count updated:', userGroups.length)
+                      } catch (error) {
+                        console.error('❌ Failed to load group count:', error)
+                      }
                     },
     getSystemMessageType,
     getModelLabel(

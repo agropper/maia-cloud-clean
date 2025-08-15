@@ -954,6 +954,44 @@ app.get('/api/shared/:shareId', async (req, res) => {
   }
 });
 
+// Get all group chats for the current user
+app.get('/api/group-chats', async (req, res) => {
+  try {
+    // For now, return all group chats. Later we'll filter by user
+    const allChats = await couchDBClient.getAllChats();
+    const groupChats = allChats.filter(chat => chat.type === 'group_chat');
+    
+    console.log(`📋 Found ${groupChats.length} group chats`);
+    res.json(groupChats);
+  } catch (error) {
+    console.error('❌ Get group chats error:', error);
+    res.status(500).json({ message: `Failed to get group chats: ${error.message}` });
+  }
+});
+
+// Delete a group chat
+app.delete('/api/group-chats/:chatId', async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    
+    // Get the chat to verify ownership
+    const chat = await couchDBClient.getChat(chatId);
+    
+    if (!chat || chat.type !== 'group_chat') {
+      return res.status(404).json({ message: 'Group chat not found' });
+    }
+    
+    // For now, allow deletion. Later we'll add ownership verification
+    await couchDBClient.deleteChat(chatId);
+    
+    console.log(`🗑️ Deleted group chat: ${chatId}`);
+    res.json({ success: true, message: 'Group chat deleted successfully' });
+  } catch (error) {
+    console.error('❌ Delete group chat error:', error);
+    res.status(500).json({ message: `Failed to delete group chat: ${error.message}` });
+  }
+});
+
 // Legacy CouchDB Chat Persistence Endpoints (disabled for Group Chat)
 
 // Save chat to CouchDB

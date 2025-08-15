@@ -83,9 +83,41 @@ export const useGroupChat = () => {
     }
   }
 
+  const getAllGroupChats = async (): Promise<GroupChat[]> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/group-chats`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error('Failed to load all group chats:', error)
+      throw error
+    }
+  }
+
+  const deleteGroupChat = async (chatId: string): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/group-chats/${chatId}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+    } catch (error) {
+      console.error('Failed to delete group chat:', error)
+      throw error
+    }
+  }
+
   return {
     saveGroupChat,
     loadGroupChat,
-    loadSharedChat
+    loadSharedChat,
+    getAllGroupChats,
+    deleteGroupChat
   }
 }
