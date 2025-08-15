@@ -421,6 +421,11 @@ router.post("/authenticate-verify", async (req, res) => {
           console.error(`❌ Session save error for user ${updatedUser.userId}:`, err);
         } else {
           console.log(`✅ Session saved successfully for user ${updatedUser.userId}`);
+          console.log(`🔍 [COOKIE DEBUG] Session cookie should be: connect.sid=${req.sessionID}`);
+          console.log(`🔍 [COOKIE DEBUG] Response headers:`, {
+            'Set-Cookie': req.res?.getHeader('Set-Cookie'),
+            'Content-Type': req.res?.getHeader('Content-Type')
+          });
         }
       });
 

@@ -96,11 +96,13 @@ const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this',
   resave: false,
   saveUninitialized: false,
+  name: 'maia.sid', // Custom session name
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    path: '/'
   }
 };
 
@@ -151,7 +153,10 @@ const getCurrentUser = (req) => {
     userId: req.session?.userId,
     username: req.session?.username,
     displayName: req.session?.displayName,
-    cookies: req.headers.cookie ? req.headers.cookie.substring(0, 100) + '...' : 'no cookies'
+    cookies: req.headers.cookie ? req.headers.cookie.substring(0, 100) + '...' : 'no cookies',
+    userAgent: req.headers['user-agent']?.substring(0, 50) + '...',
+    origin: req.headers.origin,
+    referer: req.headers.referer
   });
   
   return req.session.userId ? {
@@ -254,6 +259,27 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     environment: process.env.NODE_ENV || 'development',
     singlePatientMode: false
+  });
+});
+
+// Session test endpoint
+app.get('/api/session-test', (req, res) => {
+  console.log(`🔍 [SESSION TEST] Request:`, {
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+    cookies: req.headers.cookie || 'no cookies',
+    userAgent: req.headers['user-agent']?.substring(0, 50)
+  });
+  
+  // Set a test session value
+  req.session.testValue = 'session-working-' + Date.now();
+  
+  res.json({
+    message: 'Session test',
+    sessionId: req.sessionID,
+    testValue: req.session.testValue,
+    cookies: req.headers.cookie || 'no cookies'
   });
 });
 
