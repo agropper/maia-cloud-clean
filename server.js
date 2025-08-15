@@ -670,10 +670,13 @@ app.post('/api/anthropic-chat', async (req, res) => {
     }
 
     // Clean chat history to remove any 'name' fields that Anthropic doesn't support
-    const cleanChatHistory = chatHistory.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
+    // AND filter out messages with empty content that cause API errors
+    const cleanChatHistory = chatHistory
+      .filter(msg => msg.content && msg.content.trim() !== '') // Remove empty content messages
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
 
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
@@ -812,9 +815,12 @@ app.post('/api/gemini-chat', async (req, res) => {
     const contextSize = aiContext ? Math.round(aiContext.length / 1024 * 100) / 100 : 0;
     console.log(`🤖 Gemini: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
 
+    // Clean chat history to remove empty content messages that cause API errors
+    const cleanChatHistory = chatHistory.filter(msg => msg.content && msg.content.trim() !== '');
+    
     // Start a chat session
     const chat = model.startChat({
-      history: chatHistory.map(msg => ({
+      history: cleanChatHistory.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }))
@@ -872,10 +878,13 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     const contextSize = aiContext ? Math.round(aiContext.length / 1024 * 100) / 100 : 0;
     console.log(`🤖 DeepSeek: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
 
+    // Clean chat history to remove empty content messages that cause API errors
+    const cleanChatHistory = chatHistory.filter(msg => msg.content && msg.content.trim() !== '');
+    
     const response = await deepseek.chat.completions.create({
       model: 'deepseek-chat',
       messages: [
-        ...chatHistory,
+        ...cleanChatHistory,
         { role: 'user', content: aiUserMessage }
       ]
     });
