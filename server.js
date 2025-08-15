@@ -776,7 +776,7 @@ app.post('/api/gemini-chat', async (req, res) => {
         content: chatHistory[0].content,
         hasName: 'name' in chatHistory[0],
         name: chatHistory[0].name,
-        allKeys: Object.keys(msg)
+        allKeys: Object.keys(chatHistory[0])
       } : 'No messages'
     });
 
