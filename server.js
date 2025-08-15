@@ -658,6 +658,17 @@ app.post('/api/anthropic-chat', async (req, res) => {
       } : 'No messages'
     });
 
+    // Debug: Check for empty content messages
+    const emptyContentMessages = chatHistory.filter(msg => !msg.content || msg.content.trim() === '');
+    if (emptyContentMessages.length > 0) {
+      console.log('⚠️ WARNING: Found messages with empty content:', emptyContentMessages.map((msg, index) => ({
+        index,
+        role: msg.role,
+        content: msg.content,
+        allKeys: Object.keys(msg)
+      })));
+    }
+
     // Clean chat history to remove any 'name' fields that Anthropic doesn't support
     const cleanChatHistory = chatHistory.map(msg => ({
       role: msg.role,
@@ -694,6 +705,16 @@ app.post('/api/anthropic-chat', async (req, res) => {
       } : 'No messages',
       aiUserMessage: aiUserMessage.substring(0, 100) + '...'
     });
+
+    // Debug: Check cleaned messages for empty content
+    const emptyCleanedMessages = cleanChatHistory.filter(msg => !msg.content || msg.content.trim() === '');
+    if (emptyCleanedMessages.length > 0) {
+      console.log('⚠️ WARNING: Cleaned messages with empty content:', emptyCleanedMessages.map((msg, index) => ({
+        index,
+        role: msg.role,
+        content: msg.content
+      })));
+    }
 
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
@@ -752,9 +773,20 @@ app.post('/api/gemini-chat', async (req, res) => {
         content: chatHistory[0].content,
         hasName: 'name' in chatHistory[0],
         name: chatHistory[0].name,
-        allKeys: Object.keys(chatHistory[0])
+        allKeys: Object.keys(msg)
       } : 'No messages'
     });
+
+    // Debug: Check for empty content messages
+    const emptyContentMessages = chatHistory.filter(msg => !msg.content || msg.content.trim() === '');
+    if (emptyContentMessages.length > 0) {
+      console.log('⚠️ WARNING: Found messages with empty content:', emptyContentMessages.map((msg, index) => ({
+        index,
+        role: msg.role,
+        content: msg.content,
+        allKeys: Object.keys(msg)
+      })));
+    }
 
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
