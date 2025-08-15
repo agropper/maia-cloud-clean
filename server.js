@@ -91,6 +91,12 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
+// Trust proxy for production (needed for session cookies behind load balancer)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+  console.log('🔧 Trust proxy enabled for production');
+}
+
 // Session configuration for authentication
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this',
