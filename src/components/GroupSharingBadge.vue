@@ -1,27 +1,34 @@
 <template>
   <div class="group-sharing-badge">
-    <div class="badge-title text-body2">Group Sharing</div>
+    <q-card flat bordered class="status-card">
+      <q-card-section class="q-pa-sm">
+        <div class="badge-title text-body2">Group Sharing</div>
+      </q-card-section>
+    </q-card>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent } from 'vue'
+import { QCard, QCardSection } from 'quasar'
 
 export default defineComponent({
-  name: 'GroupSharingBadge'
+  name: 'GroupSharingBadge',
+  components: {
+    QCard,
+    QCardSection
+  }
 })
 </script>
 
 <style scoped>
 .group-sharing-badge {
+  width: 30%;
+}
+
+.status-card {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  width: 30%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .badge-title {
