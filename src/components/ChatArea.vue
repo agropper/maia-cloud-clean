@@ -162,8 +162,8 @@
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-btn flat label="Cancel" color="primary" @click="showSecurityNoticeModal = false" />
-        <q-btn flat label="Anyone with the link" color="primary" @click="confirmGroupChatCreation" />
+        <q-btn flat label="Cancel" color="grey" @click="showSecurityNoticeModal = false" />
+        <q-btn unelevated label="Anyone with the link" color="primary" @click="confirmGroupChatCreation" />
       </q-card-actions>
     </q-card>
   </q-dialog>
