@@ -211,13 +211,17 @@ export default defineComponent({
 <style lang="scss" scoped>
 .badge-row {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 16px;
   margin-bottom: 16px;
 }
 
 .badge-row .agent-status-indicator {
   width: 70%;
+}
+
+.badge-row .group-sharing-badge {
+  width: 30%;
 }
 
 /* Responsive adjustments */

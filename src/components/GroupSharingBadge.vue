@@ -24,15 +24,18 @@ export default defineComponent({
 <style scoped>
 .group-sharing-badge {
   width: 30%;
+  display: flex;
 }
 
 .status-card {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .badge-title {
-  color: #424242;
   margin: 0;
 }
 </style>
