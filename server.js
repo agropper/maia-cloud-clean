@@ -646,6 +646,18 @@ app.post('/api/anthropic-chat', async (req, res) => {
     let { chatHistory, newValue, uploadedFiles } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
+    // Debug: Log the incoming chat history structure
+    console.log('🔍 Anthropic - Incoming chat history structure:', {
+      length: chatHistory.length,
+      sampleMessage: chatHistory[0] ? {
+        role: chatHistory[0].role,
+        content: chatHistory[0].content,
+        hasName: 'name' in chatHistory[0],
+        name: chatHistory[0].name,
+        allKeys: Object.keys(chatHistory[0])
+      } : 'No messages'
+    });
+
     // Clean chat history to remove any 'name' fields that Anthropic doesn't support
     const cleanChatHistory = chatHistory.map(msg => ({
       role: msg.role,
@@ -671,6 +683,17 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const totalTokens = estimateTokenCount(aiUserMessage);
     const contextSize = aiContext ? Math.round(aiContext.length / 1024 * 100) / 100 : 0;
     console.log(`🤖 Anthropic: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
+
+    // Debug: Log what's being sent to Anthropic
+    console.log('🔍 Anthropic - Sending to API:', {
+      cleanChatHistoryLength: cleanChatHistory.length,
+      cleanChatHistorySample: cleanChatHistory[0] ? {
+        role: cleanChatHistory[0].role,
+        content: cleanChatHistory[0].content,
+        allKeys: Object.keys(cleanChatHistory[0])
+      } : 'No messages',
+      aiUserMessage: aiUserMessage.substring(0, 100) + '...'
+    });
 
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
@@ -720,6 +743,18 @@ app.post('/api/gemini-chat', async (req, res) => {
     // Use actual Gemini API
     let { chatHistory, newValue, uploadedFiles } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
+
+    // Debug: Log the incoming chat history structure
+    console.log('🔍 Gemini - Incoming chat history structure:', {
+      length: chatHistory.length,
+      sampleMessage: chatHistory[0] ? {
+        role: chatHistory[0].role,
+        content: chatHistory[0].content,
+        hasName: 'name' in chatHistory[0],
+        name: chatHistory[0].name,
+        allKeys: Object.keys(chatHistory[0])
+      } : 'No messages'
+    });
 
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
