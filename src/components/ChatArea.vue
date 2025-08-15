@@ -285,46 +285,56 @@ export default defineComponent({
         console.log('❌ Group sharing badge ref not found')
       }
     },
-    checkForChanges() {
-      const currentState = {
-        historyLength: this.appState.chatHistory.length,
-        filesCount: this.appState.uploadedFiles.length,
-        hasEdits: this.appState.editBox.length > 0
-      }
-      
-      console.log('🔍 Checking for changes:', {
-        current: currentState,
-        last: this.lastChatState
-      })
-      
-      // Check if files were added
-      if (currentState.filesCount > this.lastChatState.filesCount) {
-        console.log('📁 Files added, updating status to Modified')
-        this.updateChatStatus('Modified')
-      }
-      
-      // Check if chat history changed
-      if (currentState.historyLength > this.lastChatState.historyLength) {
-        console.log('💬 Chat history changed, updating status to Modified')
-        this.updateChatStatus('Modified')
-      }
-      
-      // Update last state
-      this.lastChatState = currentState
-    },
-    initializeChatState() {
-      console.log('🔧 Initializing chat state with appState:', {
-        historyLength: this.appState.chatHistory.length,
-        filesCount: this.appState.uploadedFiles.length,
-        hasEdits: this.appState.editBox.length > 0
-      })
-      this.lastChatState = {
-        historyLength: this.appState.chatHistory.length,
-        filesCount: this.appState.uploadedFiles.length,
-        hasEdits: this.appState.editBox.length > 0
-      }
-      console.log('✅ Last chat state set to:', this.lastChatState)
-    },
+                        checkForChanges() {
+                      const currentState = {
+                        historyLength: this.appState.chatHistory.length,
+                        filesCount: this.appState.uploadedFiles.length,
+                        hasEdits: this.appState.editBox.length > 0
+                      }
+                      
+                      console.log('🔍 Checking for changes:', {
+                        current: currentState,
+                        last: this.lastChatState
+                      })
+                      
+                      // Skip the first check to avoid false positives on initial load
+                      if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
+                        console.log('🚀 Initial load detected, skipping change detection')
+                        this.lastChatState = currentState
+                        return
+                      }
+                      
+                      // Check if files were added
+                      if (currentState.filesCount > this.lastChatState.filesCount) {
+                        console.log('📁 Files added, updating status to Modified')
+                        this.updateChatStatus('Modified')
+                      }
+                      
+                      // Check if chat history changed
+                      if (currentState.historyLength > this.lastChatState.historyLength) {
+                        console.log('💬 Chat history changed, updating status to Modified')
+                        this.updateChatStatus('Modified')
+                      }
+                      
+                      // Update last state
+                      this.lastChatState = currentState
+                    },
+                        initializeChatState() {
+                      console.log('🔧 Initializing chat state with appState:', {
+                        historyLength: this.appState.chatHistory.length,
+                        filesCount: this.appState.uploadedFiles.length,
+                        hasEdits: this.appState.editBox.length > 0
+                      })
+                      this.lastChatState = {
+                        historyLength: this.appState.chatHistory.length,
+                        filesCount: this.appState.uploadedFiles.length,
+                        hasEdits: this.appState.editBox.length > 0
+                      }
+                      console.log('✅ Last chat state set to:', this.lastChatState)
+                      
+                      // Reset chat status to "Current" for fresh loads
+                      this.updateChatStatus('Current')
+                    },
     getSystemMessageType,
     getModelLabel(
       x: { role: string; name?: string },
