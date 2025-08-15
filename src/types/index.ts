@@ -69,6 +69,7 @@ export interface AppState {
   selectedEpoch: number
   hasChunkedTimeline: boolean
   uploadedFiles: UploadedFile[]
+  currentChatId?: string | null
 }
 export interface LogEntry {
   timestamp: number

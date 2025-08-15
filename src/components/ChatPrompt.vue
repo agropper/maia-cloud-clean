@@ -98,6 +98,9 @@ export default defineComponent({
           appState.chatHistory = groupChat.chatHistory;
           appState.uploadedFiles = groupChat.uploadedFiles;
           
+          // Store the chat ID for future updates
+          appState.currentChatId = groupChat.id;
+          
           writeMessage(`Loaded shared group chat from ${groupChat.currentUser}`, "success");
           console.log('✅ Shared chat loaded successfully from deep link');
         } catch (error) {

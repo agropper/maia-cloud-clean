@@ -98,6 +98,38 @@ export const useGroupChat = () => {
     }
   }
 
+  const updateGroupChat = async (
+    chatId: string,
+    chatHistory: ChatHistoryItem[],
+    uploadedFiles: UploadedFile[],
+    currentUser: string,
+    connectedKB: string
+  ): Promise<SaveGroupChatResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/group-chats/${chatId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chatHistory,
+          uploadedFiles,
+          currentUser,
+          connectedKB
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error('Failed to update group chat:', error)
+      throw error
+    }
+  }
+
   const deleteGroupChat = async (chatId: string): Promise<void> => {
     try {
       const response = await fetch(`${API_BASE_URL}/group-chats/${chatId}`, {
@@ -118,6 +150,7 @@ export const useGroupChat = () => {
     loadGroupChat,
     loadSharedChat,
     getAllGroupChats,
+    updateGroupChat,
     deleteGroupChat
   }
 }

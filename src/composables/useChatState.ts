@@ -37,6 +37,7 @@ export const useChatState = () => {
     selectedEpoch: 0,
     hasChunkedTimeline: false,
     uploadedFiles: [],
+    currentChatId: null,
   });
 
   const setChatHistory = (history: ChatHistory) => {

@@ -969,6 +969,51 @@ app.get('/api/group-chats', async (req, res) => {
   }
 });
 
+// Update existing group chat
+app.put('/api/group-chats/:chatId', async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
+    
+    if (!chatHistory || chatHistory.length === 0) {
+      return res.status(400).json({ message: 'No chat history to update' });
+    }
+
+    console.log(`🔄 Attempting to update group chat: ${chatId}`);
+
+    // Get the existing chat
+    const existingChat = await couchDBClient.getChat(chatId);
+    
+    if (!existingChat || existingChat.type !== 'group_chat') {
+      return res.status(404).json({ message: 'Group chat not found' });
+    }
+
+    // Update the chat document
+    const updatedChatDoc = {
+      ...existingChat,
+      chatHistory,
+      uploadedFiles: uploadedFiles || [],
+      updatedAt: new Date().toISOString(),
+      participantCount: chatHistory.filter(msg => msg.role === 'user').length,
+      messageCount: chatHistory.length
+    };
+
+    // Save the updated chat
+    const result = await couchDBClient.saveChat(updatedChatDoc);
+    console.log(`🔄 Group chat updated: ${chatId}`);
+    
+    res.json({ 
+      success: true, 
+      chatId: result._id,
+      shareId: existingChat.shareId,
+      message: 'Group chat updated successfully' 
+    });
+  } catch (error) {
+    console.error('❌ Update group chat error:', error);
+    res.status(500).json({ message: `Failed to update group chat: ${error.message}` });
+  }
+});
+
 // Delete a group chat
 app.delete('/api/group-chats/:chatId', async (req, res) => {
   try {

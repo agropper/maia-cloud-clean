@@ -272,19 +272,31 @@ export default defineComponent({
         const isGroupSharingEnabled = this.$refs.groupSharingBadgeRef ? 
           (this.$refs.groupSharingBadgeRef as any).isEnabled : false
         
-        if (isGroupSharingEnabled) {
-          console.log('🔄 Group sharing enabled - updating existing chat')
-          // For now, always create new group chat. Later we can implement updating existing ones
-        }
+        let result
+        const { saveGroupChat, updateGroupChat } = useGroupChat()
         
-        // Save group chat to Cloudant
-        const { saveGroupChat } = useGroupChat()
-        const result = await saveGroupChat(
-          this.appState.chatHistory,
-          this.appState.uploadedFiles,
-          currentUser,
-          connectedKB
-        )
+        if (isGroupSharingEnabled && this.appState.currentChatId) {
+          // Update existing group chat
+          console.log('🔄 Group sharing enabled - updating existing chat:', this.appState.currentChatId)
+          result = await updateGroupChat(
+            this.appState.currentChatId,
+            this.appState.chatHistory,
+            this.appState.uploadedFiles,
+            currentUser,
+            connectedKB
+          )
+        } else {
+          // Create new group chat
+          console.log('🆕 Creating new group chat')
+          result = await saveGroupChat(
+            this.appState.chatHistory,
+            this.appState.uploadedFiles,
+            currentUser,
+            connectedKB
+          )
+          // Store the new chat ID for future updates
+          this.appState.currentChatId = result.chatId
+        }
         
                                 // Create complete deep link URL with domain
                         const baseUrl = window.location.origin;
@@ -394,6 +406,7 @@ export default defineComponent({
                       // Clear current chat and start fresh
                       this.appState.chatHistory = []
                       this.appState.uploadedFiles = []
+                      this.appState.currentChatId = null // Clear the current chat ID
                       this.initializeChatState()
                       // Refresh group count after clearing chat
                       this.loadGroupCount()
@@ -403,6 +416,7 @@ export default defineComponent({
                       // Keep group sharing ON but clear chat content
                       this.appState.chatHistory = []
                       this.appState.uploadedFiles = []
+                      this.appState.currentChatId = null // Clear the current chat ID
                       this.initializeChatState()
                       // Refresh group count after clearing chat
                       this.loadGroupCount()
