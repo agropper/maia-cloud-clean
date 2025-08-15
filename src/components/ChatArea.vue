@@ -66,13 +66,22 @@
         <div>
           <textarea v-model="x.content" rows="10" v-if="typeof x.content === 'string'" />
           <div v-else>[Non-string content]</div>
-          <q-btn
-            size="sm"
-            icon="save"
-            color="primary"
-            label="Save"
-            @click="saveMessage(idx, typeof x.content === 'string' ? x.content : '')"
-          />
+          <div class="edit-buttons">
+            <q-btn
+              size="sm"
+              icon="save"
+              color="primary"
+              label="Save"
+              @click="saveMessage(idx, typeof x.content === 'string' ? x.content : '')"
+            />
+            <q-btn
+              size="sm"
+              icon="delete"
+              color="negative"
+              label="Delete this message"
+              @click="confirmDeleteMessage(idx)"
+            />
+          </div>
         </div>
       </q-chat-message>
 
@@ -107,12 +116,39 @@
       <q-btn size="sm" color="warning" label="End without Saving" @click="closeNoSave" />
     </div>
   </div>
+
+  <!-- Delete Message Confirmation Modal -->
+  <q-dialog v-model="showDeleteModal" persistent>
+    <q-card style="min-width: 350px">
+      <q-card-section>
+        <div class="text-h6">Delete Message</div>
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1">
+          <p>You are about to delete the following message:</p>
+          <div class="message-preview">
+            <strong>{{ messageToDelete?.role === 'user' ? 'User' : 'Assistant' }}:</strong>
+            <div class="message-content">{{ messageToDelete?.content?.substring(0, 100) }}{{ messageToDelete?.content?.length > 100 ? '...' : '' }}</div>
+          </div>
+          <p v-if="precedingUserMessage" class="text-caption">
+            <strong>Note:</strong> This will also delete the preceding user question that triggered this response.
+          </p>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn flat label="Cancel" color="primary" @click="showDeleteModal = false" />
+        <q-btn flat label="Delete" color="negative" @click="deleteMessageConfirmed" />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
-import { QBtn, QChatMessage, QCard, QCardSection, QCardActions } from 'quasar'
+import { QBtn, QChatMessage, QCard, QCardSection, QCardActions, QDialog } from 'quasar'
 import VueMarkdown from 'vue-markdown-render'
 import { getSystemMessageType } from '../utils'
 import { useGroupChat } from '../composables/useGroupChat'
@@ -129,6 +165,7 @@ export default defineComponent({
     QCard,
     QCardSection,
     QCardActions,
+    QDialog,
     VueMarkdown,
     FileBadge,
     AgentStatusIndicator,
@@ -207,15 +244,18 @@ export default defineComponent({
     'sign-in',
     'sign-out'
   ],
-                    data() {
-                    return {
-                      lastChatState: {
-                        historyLength: 0,
-                        filesCount: 0,
-                        hasEdits: false
-                      }
-                    }
-                  },
+                      data() {
+    return {
+      lastChatState: {
+        historyLength: 0,
+        filesCount: 0,
+        hasEdits: false
+      },
+      showDeleteModal: false,
+      messageToDelete: null as any,
+      precedingUserMessage: null as any
+    }
+  },
   methods: {
     editMessage(idx: number) {
       this.$emit('edit-message', idx)
@@ -224,6 +264,64 @@ export default defineComponent({
     saveMessage(idx: number, content: string) {
       this.$emit('save-message', idx, content)
       this.updateChatStatus('Modified')
+    },
+    confirmDeleteMessage(idx: number) {
+      const message = this.appState.chatHistory[idx]
+      this.messageToDelete = message
+      
+      // Check if there's a preceding user message to also delete
+      if (idx > 0 && this.appState.chatHistory[idx - 1].role === 'user') {
+        this.precedingUserMessage = this.appState.chatHistory[idx - 1]
+      } else {
+        this.precedingUserMessage = null
+      }
+      
+      this.showDeleteModal = true
+    },
+    deleteMessageConfirmed() {
+      if (!this.messageToDelete) return
+      
+      const idx = this.appState.chatHistory.findIndex(msg => msg === this.messageToDelete)
+      if (idx === -1) return
+      
+      // Log the deletion for debugging
+      console.log('🗑️ Deleting message:', {
+        index: idx,
+        role: this.messageToDelete.role,
+        content: this.messageToDelete.content?.substring(0, 100) + '...',
+        hasPrecedingUser: !!this.precedingUserMessage
+      })
+      
+      // Remove the message
+      this.appState.chatHistory.splice(idx, 1)
+      
+      // If there was a preceding user message, remove it too
+      if (this.precedingUserMessage && idx > 0) {
+        const userIdx = idx - 1
+        if (this.appState.chatHistory[userIdx]?.role === 'user') {
+          console.log('🗑️ Also deleting preceding user message:', {
+            index: userIdx,
+            content: this.precedingUserMessage.content?.substring(0, 100) + '...'
+          })
+          this.appState.chatHistory.splice(userIdx, 1)
+        }
+      }
+      
+      // Remove from edit box if it was being edited
+      const editIndex = this.appState.editBox.indexOf(idx)
+      if (editIndex > -1) {
+        this.appState.editBox.splice(editIndex, 1)
+      }
+      
+      // Update chat status
+      this.updateChatStatus('Modified')
+      
+      // Close modal and reset
+      this.showDeleteModal = false
+      this.messageToDelete = null
+      this.precedingUserMessage = null
+      
+      console.log('✅ Message deletion completed. New chat history length:', this.appState.chatHistory.length)
     },
     viewSystemMessage(content: string) {
       if (typeof content === 'string') {
@@ -446,5 +544,26 @@ export default defineComponent({
   .badge-row .group-sharing-badge {
     width: 100%;
   }
+}
+
+.edit-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.message-preview {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.message-content {
+  margin-top: 5px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
