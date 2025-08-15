@@ -84,23 +84,24 @@ export default defineComponent({
 
     // Handle deep link loading
     const handleDeepLink = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const chatId = urlParams.get('chat');
-      const isShared = urlParams.get('shared');
+      const path = window.location.pathname;
+      const shareIdMatch = path.match(/^\/shared\/([a-zA-Z0-9]{12})$/);
       
-      if (chatId && isShared === 'true') {
+      if (shareIdMatch) {
+        const shareId = shareIdMatch[1];
         try {
-          console.log('🔗 Loading group chat from deep link:', chatId);
-          const groupChat = await loadGroupChat(chatId);
+          console.log('🔗 Loading shared chat from deep link:', shareId);
+          const { loadSharedChat } = useGroupChat();
+          const groupChat = await loadSharedChat(shareId);
           
           // Load the group chat data
           appState.chatHistory = groupChat.chatHistory;
           appState.uploadedFiles = groupChat.uploadedFiles;
           
           writeMessage(`Loaded shared group chat from ${groupChat.currentUser}`, "success");
-          console.log('✅ Group chat loaded successfully from deep link');
+          console.log('✅ Shared chat loaded successfully from deep link');
         } catch (error) {
-          console.error('❌ Failed to load group chat from deep link:', error);
+          console.error('❌ Failed to load shared chat from deep link:', error);
           writeMessage("Failed to load shared group chat", "error");
         }
       }

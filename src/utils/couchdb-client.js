@@ -184,6 +184,62 @@ export class CouchDBClient {
     }
   }
 
+  async getChatByShareId(shareId) {
+    try {
+      // Create a view to find chats by shareId
+      const result = await this.database.view('chats', 'by_share_id', {
+        key: shareId,
+        include_docs: true
+      })
+      
+      if (result.rows.length > 0) {
+        return result.rows[0].doc
+      }
+      return null
+    } catch (error) {
+      // If view doesn't exist, fall back to scanning all documents
+      console.log('📄 Share ID view not found, scanning all documents...')
+      try {
+        const allChats = await this.getAllChats()
+        return allChats.find(chat => chat.shareId === shareId) || null
+      } catch (scanError) {
+        console.error('❌ Failed to get chat by share ID:', scanError)
+        throw scanError
+      }
+    }
+  }
+
+  async createShareIdView() {
+    try {
+      const designDoc = {
+        _id: '_design/chats',
+        views: {
+          by_share_id: {
+            map: function(doc) {
+              if (doc.shareId) {
+                emit(doc.shareId, doc._id)
+              }
+            }.toString()
+          }
+        }
+      }
+      
+      // Try to create or update the design document
+      try {
+        const existing = await this.database.get('_design/chats')
+        designDoc._rev = existing._rev
+      } catch (error) {
+        // Design document doesn't exist, create new
+      }
+      
+      await this.database.insert(designDoc)
+      console.log('✅ Share ID view created successfully')
+    } catch (error) {
+      console.error('❌ Failed to create share ID view:', error)
+      // Don't throw error, fallback scanning will work
+    }
+  }
+
   // File operations
   async saveFile(fileData) {
     try {

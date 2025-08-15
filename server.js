@@ -52,6 +52,7 @@ const initializeDatabase = async () => {
     if (connected) {
       // Initialize database
       await couchDBClient.initializeDatabase();
+      await couchDBClient.createShareIdView(); // Create the share ID view
       
       // Get service info
       const serviceInfo = couchDBClient.getServiceInfo();
@@ -842,9 +843,22 @@ app.post('/api/save-group-chat', async (req, res) => {
 
     console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
 
+    // Generate a secure, random share ID
+    const generateShareId = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let result = '';
+      for (let i = 0; i < 12; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    };
+
+    const shareId = generateShareId();
+    
     const groupChatDoc = {
       _id: `group_chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'group_chat',
+      shareId: shareId,
       currentUser: currentUser || 'Unknown User',
       connectedKB: connectedKB || 'No KB connected',
       chatHistory,
@@ -863,6 +877,7 @@ app.post('/api/save-group-chat', async (req, res) => {
     res.json({ 
       success: true, 
       chatId: result._id,
+      shareId: shareId,
       message: 'Group chat saved successfully' 
     });
   } catch (error) {
@@ -901,6 +916,41 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
   } catch (error) {
     console.error('❌ Load group chat error:', error);
     res.status(500).json({ message: `Failed to load group chat: ${error.message}` });
+  }
+});
+
+// Public shared chat route - anyone with the link can access
+app.get('/shared/:shareId', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// API endpoint to load shared chat by share ID
+app.get('/api/shared/:shareId', async (req, res) => {
+  try {
+    const { shareId } = req.params;
+    
+    // Use Cloudant client to find chat by share ID
+    const chat = await couchDBClient.getChatByShareId(shareId);
+    
+    if (!chat || chat.type !== 'group_chat') {
+      return res.status(404).json({ message: 'Shared chat not found' });
+    }
+    
+    console.log(`📄 Loaded shared chat: ${shareId}`);
+    res.json({
+      id: chat._id,
+      shareId: chat.shareId,
+      currentUser: chat.currentUser,
+      connectedKB: chat.connectedKB,
+      chatHistory: chat.chatHistory,
+      uploadedFiles: chat.uploadedFiles || [],
+      createdAt: chat.createdAt,
+      updatedAt: chat.updatedAt,
+      isShared: chat.isShared
+    });
+  } catch (error) {
+    console.error('❌ Load shared chat error:', error);
+    res.status(500).json({ message: `Failed to load shared chat: ${error.message}` });
   }
 });
 

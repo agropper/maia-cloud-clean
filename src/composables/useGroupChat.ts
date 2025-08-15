@@ -17,6 +17,7 @@ export interface GroupChat {
 export interface SaveGroupChatResponse {
   success: boolean
   chatId: string
+  shareId: string
   message: string
 }
 
@@ -67,8 +68,24 @@ export const useGroupChat = () => {
     }
   }
 
+  const loadSharedChat = async (shareId: string): Promise<GroupChat> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/shared/${shareId}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error('Failed to load shared chat:', error)
+      throw error
+    }
+  }
+
   return {
     saveGroupChat,
-    loadGroupChat
+    loadGroupChat,
+    loadSharedChat
   }
 }

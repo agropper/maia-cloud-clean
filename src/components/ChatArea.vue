@@ -259,8 +259,8 @@ export default defineComponent({
           connectedKB
         )
         
-        // Create deep link with proper encoding - use relative path to avoid SSL issues
-        const deepLink = `?chat=${encodeURIComponent(result.chatId)}&shared=true`
+                                // Create deep link with proper encoding - use the new share ID format
+                        const deepLink = `/shared/${result.shareId}`
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
