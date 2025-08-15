@@ -1,14 +1,22 @@
 <template>
   <div class="chat-area">
-    <!-- Agent Status Indicator -->
-    <AgentStatusIndicator
-      :agent="currentAgent"
-      :warning="warning"
-      :currentUser="currentUser"
-      @manage="$emit('manage-agent')"
-      @sign-in="$emit('sign-in')"
-      @sign-out="$emit('sign-out')"
-    />
+    <!-- Badge Row: Agent Status and Group Sharing -->
+    <div class="badge-row">
+      <!-- Agent Status Indicator -->
+      <AgentStatusIndicator
+        :agent="currentAgent"
+        :warning="warning"
+        :currentUser="currentUser"
+        @manage="$emit('manage-agent')"
+        @sign-in="$emit('sign-in')"
+        @sign-out="$emit('sign-out')"
+      />
+      
+      <!-- Group Sharing Badge -->
+      <GroupSharingBadge
+        @group-sharing-changed="handleGroupSharingChanged"
+      />
+    </div>
     
     <!-- File Badges -->
     <div v-if="appState.uploadedFiles.length > 0" class="file-badges">
@@ -103,6 +111,7 @@ import { getSystemMessageType } from '../utils'
 import type { AppState, UploadedFile } from '../types'
 import FileBadge from './FileBadge.vue'
 import AgentStatusIndicator from './AgentStatusIndicator.vue'
+import GroupSharingBadge from './GroupSharingBadge.vue'
 
 export default defineComponent({
   name: 'ChatArea',
@@ -114,7 +123,8 @@ export default defineComponent({
     QCardActions,
     VueMarkdown,
     FileBadge,
-    AgentStatusIndicator
+    AgentStatusIndicator,
+    GroupSharingBadge
   },
   props: {
     appState: {
@@ -178,6 +188,10 @@ export default defineComponent({
     closeNoSave() {
       this.$emit('close-no-save')
     },
+    handleGroupSharingChanged(enabled: boolean) {
+      console.log('Group sharing changed:', enabled)
+      // TODO: Implement group sharing logic
+    },
     getSystemMessageType,
     getModelLabel(
       x: { role: string; name?: string },
@@ -199,3 +213,20 @@ export default defineComponent({
   }
 })
 </script>
+
+<style lang="scss" scoped>
+.badge-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .badge-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+</style>
