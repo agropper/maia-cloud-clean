@@ -481,7 +481,7 @@ export default defineComponent({
     @save-to-file="saveToFile"
     @trigger-save-to-couchdb="triggerSaveToCouchDB"
     @close-no-save="closeNoSave"
-    @get-system-message-type="getSystemMessageType"
+
     :currentAgent="currentAgent"
     :warning="agentWarning"
     :currentUser="currentUser"
