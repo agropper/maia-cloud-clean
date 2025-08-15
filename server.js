@@ -100,7 +100,7 @@ const sessionConfig = {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'strict'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
   }
 };
 
@@ -143,6 +143,17 @@ const requireAuth = (req, res, next) => {
 
 // Get current authenticated user
 const getCurrentUser = (req) => {
+  // Debug session information
+  console.log(`🔍 [getCurrentUser] Session debug:`, {
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+    userId: req.session?.userId,
+    username: req.session?.username,
+    displayName: req.session?.displayName,
+    cookies: req.headers.cookie ? req.headers.cookie.substring(0, 100) + '...' : 'no cookies'
+  });
+  
   return req.session.userId ? {
     userId: req.session.userId,
     username: req.session.username,
