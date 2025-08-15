@@ -350,13 +350,17 @@ export default defineComponent({
                       try {
                         const { getAllGroupChats } = useGroupChat()
                         const groups = await getAllGroupChats()
-                        const userGroups = groups.filter(group => group.currentUser === this.currentUser)
+                        const currentUserName = this.currentUser?.username || this.currentUser?.displayName || this.currentUser
+                        const userGroups = groups.filter(group => group.currentUser === currentUserName)
+                        
+                        console.log('📊 Found groups:', groups.length, 'User groups:', userGroups.length, 'Current user:', currentUserName)
                         
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(userGroups.length)
+                          console.log('✅ Group count updated in badge')
+                        } else {
+                          console.log('❌ Group sharing badge ref not found')
                         }
-                        
-                        console.log('📊 Group count updated:', userGroups.length)
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
                       }

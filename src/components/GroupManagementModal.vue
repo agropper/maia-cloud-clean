@@ -168,6 +168,12 @@ export default defineComponent({
       try {
         groups.value = await getAllGroupChats()
         console.log('📋 Loaded groups:', groups.value.length)
+        console.log('📋 Groups data:', groups.value.map(g => ({
+          id: g.id,
+          currentUser: g.currentUser,
+          shareId: g.shareId,
+          createdAt: g.createdAt
+        })))
       } catch (error) {
         console.error('❌ Failed to load groups:', error)
       } finally {
@@ -176,7 +182,13 @@ export default defineComponent({
     }
 
     const isOwner = (group: GroupChat) => {
-      return group.currentUser === props.currentUser
+      const currentUserName = props.currentUser?.username || props.currentUser?.displayName || props.currentUser
+      console.log('🔍 Checking ownership:', {
+        groupUser: group.currentUser,
+        currentUser: currentUserName,
+        isOwner: group.currentUser === currentUserName
+      })
+      return group.currentUser === currentUserName
     }
 
     const formatDate = (dateString: string) => {
