@@ -400,6 +400,9 @@ export default defineComponent({
         // Reset status to Current
         this.updateChatStatus('Current')
         
+        // Refresh group count after creating/updating group chat
+        this.loadGroupCount()
+        
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
       }
