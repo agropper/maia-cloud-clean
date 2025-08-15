@@ -1854,6 +1854,14 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     const currentUser = getCurrentUser(req);
     
     console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
+    console.log(`🔍 [DEBUG] Session data:`, {
+      sessionId: req.sessionID,
+      userId: req.session.userId,
+      username: req.session.username,
+      displayName: req.session.displayName,
+      authenticatedAt: req.session.authenticatedAt
+    });
+    console.log(`🔍 [DEBUG] Current user:`, currentUser);
 
     // Check protection status using Cloudant directly (source of truth for security)
     let isProtected = false;
@@ -1894,6 +1902,12 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       }
       
       // Verify user has permission to access this protected knowledge base
+      console.log(`🔍 [DEBUG] Ownership check:`, {
+        kbOwner: kbOwner,
+        currentUserUsername: currentUser?.username,
+        isMatch: kbOwner === currentUser?.username
+      });
+      
       if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
         console.log(`🔄 [OWNERSHIP TRANSFER] User ${currentUser.username} attempting to access KB owned by ${kbOwner}`);
         
