@@ -210,22 +210,36 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .badge-row {
-  display: grid;
-  grid-template-columns: 70% 30%;
+  display: flex;
   gap: 16px;
   margin-bottom: 16px;
 }
 
-.badge-row .agent-status-indicator,
+.badge-row .agent-status-indicator {
+  width: 70%;
+}
+
 .badge-row .group-sharing-badge {
+  width: 30%;
+}
+
+/* Force both badges to have the same height */
+.badge-row .agent-status-indicator .status-card,
+.badge-row .group-sharing-badge .status-card {
   height: 100%;
+  min-height: 120px; /* Set a minimum height to ensure consistency */
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .badge-row {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 12px;
+  }
+  
+  .badge-row .agent-status-indicator,
+  .badge-row .group-sharing-badge {
+    width: 100%;
   }
 }
 </style>
