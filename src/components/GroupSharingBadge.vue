@@ -21,13 +21,14 @@
 
 <script lang="ts">
 import { defineComponent, ref, onMounted, nextTick } from 'vue'
-import { QCard, QCardSection } from 'quasar'
+import { QCard, QCardSection, QBtn } from 'quasar'
 
 export default defineComponent({
   name: 'GroupSharingBadge',
   components: {
     QCard,
-    QCardSection
+    QCardSection,
+    QBtn
   },
   setup() {
     const badgeRef = ref<HTMLElement>()
