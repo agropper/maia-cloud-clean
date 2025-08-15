@@ -2329,11 +2329,18 @@ app.use('/api/connect-kb/:kbId', async (req, res, next) => {
 // Import KB protection routes
 import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection-routes.js';
 
+// Import admin routes
+import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
+
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
+setAdminCouchDBClient(couchDBClient);
 
 // Mount KB protection routes
 app.use('/api/kb-protection', kbProtectionRoutes);
+
+// Mount admin routes
+app.use('/api/admin', adminRoutes);
 
 // =============================================================================
 // CATCH-ALL ROUTE FOR SPA

@@ -38,11 +38,21 @@ router.get('/knowledge-bases', async (req, res) => {
 // Set KB protection
 router.post('/protect-kb', async (req, res) => {
   try {
-    const { kbId, kbName, owner, description } = req.body;
+    const { kbId, kbName, owner, description, isOwnershipTransfer } = req.body;
     
     if (!kbId || !kbName || !owner) {
       return res.status(400).json({ 
         error: 'kbId, kbName, and owner are required' 
+      });
+    }
+
+    // Check if this is an ownership transfer request
+    if (isOwnershipTransfer) {
+      return res.status(403).json({
+        error: 'Ownership transfer requires admin authentication',
+        requiresAdminAuth: true,
+        redirectTo: '/api/admin/transfer-kb-ownership',
+        message: 'Please use the admin ownership transfer endpoint with admin password'
       });
     }
 
