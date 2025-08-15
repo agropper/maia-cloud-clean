@@ -58,11 +58,12 @@
       </q-card-section>
     </q-card>
     
-    <!-- Group Management Modal -->
-    <GroupManagementModal
-      v-model="showGroupModal"
-      :currentUser="currentUser"
-    />
+                        <!-- Group Management Modal -->
+                    <GroupManagementModal
+                      v-model="showGroupModal"
+                      :currentUser="currentUser"
+                      :onGroupDeleted="handleGroupDeleted"
+                    />
 
     <!-- Group Sharing Options Modal -->
     <q-dialog :model-value="showGroupOptionsModal" @update:model-value="showGroupOptionsModal = $event" persistent>
@@ -118,6 +119,10 @@ export default defineComponent({
                       required: false
                     },
                     onNewChatWithSameGroup: {
+                      type: Function as () => () => void,
+                      required: false
+                    },
+                    onGroupDeleted: {
                       type: Function as () => () => void,
                       required: false
                     }
@@ -242,9 +247,17 @@ export default defineComponent({
                       showGroupModal.value = true
                     }
 
-                    const updateGroupCount = (count: number) => {
-                      groupCount.value = count
-                    }
+                        const updateGroupCount = (count: number) => {
+      groupCount.value = count
+    }
+
+    const handleGroupDeleted = () => {
+      console.log('🔄 Group deleted, refreshing count')
+      // Emit event to parent to refresh group count
+      if (props.onGroupDeleted) {
+        props.onGroupDeleted()
+      }
+    }
 
     const getStatusBackground = () => {
       switch (chatStatus.value) {
@@ -316,7 +329,8 @@ export default defineComponent({
                       updateGroupCount,
                       handleGroupSharingToggle,
                       startNewChat,
-                      startNewChatWithSameGroup
+                      startNewChatWithSameGroup,
+                      handleGroupDeleted
                     }
   }
 })

@@ -20,6 +20,7 @@
                     :currentUser="currentUser"
                     :onNewChat="handleNewChat"
                     :onNewChatWithSameGroup="handleNewChatWithSameGroup"
+                    :onGroupDeleted="handleGroupDeleted"
                   />
     </div>
     
@@ -421,6 +422,10 @@ export default defineComponent({
                       // Refresh group count after clearing chat
                       this.loadGroupCount()
                       console.log('🆕 Started new chat with same group')
+                    },
+                    handleGroupDeleted() {
+                      console.log('🔄 Group deleted, refreshing count in ChatArea')
+                      this.loadGroupCount()
                     },
     getSystemMessageType,
     getModelLabel(

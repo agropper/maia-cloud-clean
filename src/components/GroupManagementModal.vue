@@ -138,6 +138,10 @@ export default defineComponent({
     currentUser: {
       type: String,
       default: ''
+    },
+    onGroupDeleted: {
+      type: Function as () => () => void,
+      required: false
     }
   },
   emits: ['update:modelValue'],
@@ -268,6 +272,11 @@ export default defineComponent({
         
         // Remove from local list
         groups.value = groups.value.filter(g => g.id !== groupToDelete.value!.id)
+        
+        // Notify parent to refresh group count
+        if (props.onGroupDeleted) {
+          props.onGroupDeleted()
+        }
         
         showDeleteDialog.value = false
         groupToDelete.value = null
