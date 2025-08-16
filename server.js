@@ -1491,6 +1491,301 @@ app.get('/api/current-agent', async (req, res) => {
   }
 });
 
+// Associate knowledge base with agent
+app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
+  console.log(`🎯 [ROUTE HIT] KB connection endpoint reached!`);
+  console.log(`🎯 [ROUTE HIT] Params: agentId=${req.params.agentId}, kbId=${req.params.kbId}`);
+  console.log(`🎯 [ROUTE HIT] Method: ${req.method}, URL: ${req.url}`);
+  
+  try {
+    const { agentId, kbId } = req.params;
+    const currentUser = getCurrentUser(req);
+    
+    console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
+    console.log(`🔍 [DEBUG] Session data:`, {
+      sessionId: req.sessionID,
+      userId: req.session.userId,
+      username: req.session.username,
+      displayName: req.session.displayName,
+      authenticatedAt: req.session.authenticatedAt
+    });
+    console.log(`🔍 [DEBUG] Current user:`, currentUser);
+    console.log(`🔍 [DEBUG] Full request object:`, {
+      hasSession: !!req.session,
+      sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+      cookies: req.headers.cookie || 'no cookies',
+      userAgent: req.headers['user-agent']?.substring(0, 50)
+    });
+
+    // Check protection status using Cloudant directly (source of truth for security)
+    let isProtected = false;
+    let kbOwner = null;
+    
+    try {
+      // Query Cloudant directly for KB ownership and protection status
+      const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+      
+      if (kbDoc) {
+        // Check if the knowledge base has owner information or is marked as protected
+        if (kbDoc.owner || kbDoc.isProtected) {
+          isProtected = true;
+          kbOwner = kbDoc.owner || 'unknown';
+          console.log(`🔒 [SECURITY] KB ${kbId} is PROTECTED - owner: ${kbOwner}, isProtected: ${kbDoc.isProtected}`);
+        } else {
+          console.log(`✅ [SECURITY] KB ${kbId} is UNPROTECTED - no owner restrictions`);
+        }
+      } else {
+        console.log(`❌ [SECURITY] KB ${kbId} not found in Cloudant - treating as protected for safety`);
+        isProtected = true;
+      }
+    } catch (cloudantError) {
+      console.log(`❌ [SECURITY] Failed to check Cloudant KB protection status:`, cloudantError.message);
+      // If we can't determine protection status, treat as protected for safety
+      isProtected = true;
+      console.log(`🔒 [SECURITY] Treating KB ${kbId} as PROTECTED due to Cloudant check error (fail-safe)`);
+    }
+
+    // If the KB is protected, require authentication and ownership verification
+    if (isProtected) {
+      if (!currentUser) {
+        console.log(`🚨 [SECURITY] Protected KB requires authentication - blocking unauthenticated access`);
+        return res.status(401).json({ 
+          error: 'Authentication required for protected knowledge base',
+          details: 'This knowledge base has owner restrictions'
+        });
+      }
+      
+      // Verify user has permission to access this protected knowledge base
+      console.log(`🔍 [DEBUG] Ownership check:`, {
+        kbOwner: kbOwner,
+        currentUserUsername: currentUser?.username,
+        isMatch: kbOwner === currentUser?.username
+      });
+      
+      if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
+        console.log(`🔄 [OWNERSHIP TRANSFER] User ${currentUser.username} attempting to access KB owned by ${kbOwner}`);
+        
+        // Check if this KB is available for ownership transfer
+        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+        const kbName = kbDoc?.kbName || kbDoc?.name || kbId;
+        
+        return res.status(403).json({ 
+          error: 'Access denied: You do not have permission to access this knowledge base',
+          details: 'Knowledge base ownership verification failed',
+          requiresOwnershipTransfer: true,
+          kbInfo: {
+            id: kbId,
+            name: kbName,
+            currentOwner: kbOwner,
+            requestedBy: currentUser.username
+          },
+          transferInstructions: 'This knowledge base requires ownership transfer. Please use the admin ownership transfer process.',
+          adminEndpoint: '/api/admin/transfer-kb-ownership'
+        });
+      }
+      
+      console.log(`✅ [SECURITY] User ${currentUser.username} verified as owner of protected KB ${kbId}`);
+    } else {
+      console.log(`✅ [SECURITY] Unprotected KB ${kbId} - no authentication required`);
+    }
+
+    let attachSuccess = false;
+    let attachResult = null;
+
+    // First, try the standard attach endpoint
+    try {
+      console.log(`🔄 [DO API] Attempt 1: Standard attach endpoint`);
+      const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
+        method: 'POST'
+        // No body needed - KB UUID is in the URL path
+      });
+
+      console.log(`✅ [DO API] Standard attach response:`, JSON.stringify(result, null, 2));
+      attachResult = result;
+      
+      // Check if the first attempt worked by looking at the response
+      const agentData = result.agent || result.data?.agent || result.data || result;
+      const attachedKBs = agentData.knowledge_bases || [];
+      
+      console.log(`📚 [VERIFICATION] First attempt - Agent has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid));
+      
+      const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
+      if (isAttached) {
+        console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
+        
+        // Update Cloudant with the successful attachment for security tracking
+        try {
+          const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+          if (kbDoc) {
+            // Update the KB document with attachment info
+            const updatedKbDoc = {
+              ...kbDoc,
+              attachedToAgent: agentId,
+              attachedAt: new Date().toISOString(),
+              attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+            };
+            await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+            console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+          }
+        } catch (cloudantUpdateError) {
+          console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+          // Don't fail the operation if Cloudant update fails
+        }
+        
+        res.json({ 
+          success: true, 
+          message: 'Knowledge base attached successfully', 
+          result: { agent: agentData },
+          verification: {
+            attached: true,
+            knowledgeBases: attachedKBs
+          }
+        });
+        return; // Exit early if successful
+      } else {
+        console.log(`❌ [VERIFICATION] First attempt failed - KB ${kbId} not found in response`);
+        
+        // Try to get the agent details separately to verify
+        try {
+          console.log(`🔍 [VERIFICATION] Making separate API call to get agent details`);
+          const agentDetails = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+          console.log(`📚 [VERIFICATION] Agent details response:`, JSON.stringify(agentDetails, null, 2));
+          
+          const detailedAgentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
+          const detailedKBs = detailedAgentData.knowledge_bases || [];
+          
+          console.log(`📚 [VERIFICATION] Separate call - Agent has ${detailedKBs.length} KBs:`, detailedKBs.map(kb => kb.uuid));
+          
+          const isActuallyAttached = detailedKBs.some(kb => kb.uuid === kbId);
+          if (isActuallyAttached) {
+            console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId} (verified via separate call)`);
+            
+            // Update Cloudant with the successful attachment for security tracking
+            try {
+              const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+              if (kbDoc) {
+                // Update the KB document with attachment info
+                const updatedKbDoc = {
+                  ...kbDoc,
+                  attachedToAgent: agentId,
+                  attachedAt: new Date().toISOString(),
+                  attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+                };
+                await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+                console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+              }
+            } catch (cloudantUpdateError) {
+              console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+              // Don't fail the operation if Cloudant update fails
+            }
+            
+            res.json({ 
+              success: true, 
+              message: 'Knowledge base attached successfully', 
+              result: { agent: detailedAgentData },
+              verification: {
+                attached: true,
+                knowledgeBases: detailedKBs
+              }
+            });
+            return; // Exit early if successful
+          } else {
+            console.log(`❌ [VERIFICATION] KB ${kbId} still not attached after separate verification`);
+          }
+        } catch (verificationError) {
+          console.log(`❌ [VERIFICATION] Failed to get agent details:`, verificationError.message);
+        }
+      }
+    } catch (attachError) {
+      console.log(`❌ [DO API] Standard attach failed:`, attachError.message);
+    }
+    
+    // Always try the alternative approach as well
+    try {
+      console.log(`🔄 [DO API] Attempt 2: Agent update endpoint`);
+      const updateResult = await doRequest(`/v2/gen-ai/agents/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          knowledge_base_uuids: [kbId]
+        })
+      });
+      
+      console.log(`✅ [DO API] Agent update response:`, JSON.stringify(updateResult, null, 2));
+      attachResult = updateResult;
+    } catch (updateError) {
+      console.log(`❌ [DO API] Agent update failed:`, updateError.message);
+    }
+    
+    // Add a small delay to allow the API to process the attachment
+    console.log(`⏳ [VERIFICATION] Waiting 2 seconds for API to process attachment...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Verify the attachment by fetching the agent's current knowledge bases
+    console.log(`🔍 [VERIFICATION] Verifying attachment for agent ${agentId}`);
+    const verificationResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentData = verificationResponse.data || verificationResponse;
+    const attachedKBs = agentData.knowledge_bases || [];
+    
+    console.log(`📚 [VERIFICATION] Agent has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid));
+    
+    const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
+    if (isAttached) {
+      console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
+      
+      // Update Cloudant with the successful attachment for security tracking
+      try {
+        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+        if (kbDoc) {
+          // Update the KB document with attachment info
+          const updatedKbDoc = {
+            ...kbDoc,
+            attachedToAgent: agentId,
+            attachedAt: new Date().toISOString(),
+            attachedBy: currentUser ? currentUser.username : 'unauthenticated'
+          };
+          await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+          console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
+        }
+      } catch (cloudantUpdateError) {
+        console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
+        // Don't fail the operation if Cloudant update fails
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'Knowledge base attached successfully', 
+        result: { agent: verificationResponse },
+        verification: {
+          attached: true,
+          knowledgeBases: attachedKBs
+        }
+      });
+      return; // Exit early if successful
+    } else {
+      console.log(`❌ [VERIFICATION] KB ${kbId} was NOT attached to agent ${agentId}`);
+      console.log(`❌ [VERIFICATION] Expected KB: ${kbId}`);
+      console.log(`❌ [VERIFICATION] Found KBs: ${attachedKBs.map(kb => kb.uuid).join(', ')}`);
+      
+      // Provide a clear error message about the DigitalOcean API limitation
+      const errorMessage = `DigitalOcean API limitation detected: Knowledge base attachment operations return success but do not actually attach KBs to agents. This appears to be a bug in the DigitalOcean API. Please contact DigitalOcean support or use the DigitalOcean dashboard to manually attach knowledge bases.`;
+      
+      res.status(500).json({ 
+        success: false,
+        message: errorMessage,
+        result: { agent: agentData },
+        verification: {
+          attached: false,
+          knowledgeBases: attachedKBs
+        },
+        api_limitation: true
+      });
+    }
+  } catch (error) {
+    console.error('❌ Attach KB error:', error);
+    res.status(500).json({ message: `Failed to attach knowledge base: ${error.message}` });
+  }
+});
+
 // Create agent
 app.post('/api/agents', async (req, res) => {
   try {
@@ -1919,299 +2214,7 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
 });
 
 // Associate knowledge base with agent
-app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
-  console.log(`🎯 [ROUTE HIT] KB connection endpoint reached!`);
-  console.log(`🎯 [ROUTE HIT] Params: agentId=${req.params.agentId}, kbId=${req.params.kbId}`);
-  console.log(`🎯 [ROUTE HIT] Method: ${req.method}, URL: ${req.url}`);
-  
-  try {
-    const { agentId, kbId } = req.params;
-    const currentUser = getCurrentUser(req);
-    
-    console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
-    console.log(`🔍 [DEBUG] Session data:`, {
-      sessionId: req.sessionID,
-      userId: req.session.userId,
-      username: req.session.username,
-      displayName: req.session.displayName,
-      authenticatedAt: req.session.authenticatedAt
-    });
-    console.log(`🔍 [DEBUG] Current user:`, currentUser);
-    console.log(`🔍 [DEBUG] Full request object:`, {
-      hasSession: !!req.session,
-      sessionKeys: req.session ? Object.keys(req.session) : 'no session',
-      cookies: req.headers.cookie || 'no cookies',
-      userAgent: req.headers['user-agent']?.substring(0, 50)
-    });
 
-    // Check protection status using Cloudant directly (source of truth for security)
-    let isProtected = false;
-    let kbOwner = null;
-    
-    try {
-      // Query Cloudant directly for KB ownership and protection status
-      const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
-      
-      if (kbDoc) {
-        // Check if the knowledge base has owner information or is marked as protected
-        if (kbDoc.owner || kbDoc.isProtected) {
-          isProtected = true;
-          kbOwner = kbDoc.owner || 'unknown';
-          console.log(`🔒 [SECURITY] KB ${kbId} is PROTECTED - owner: ${kbOwner}, isProtected: ${kbDoc.isProtected}`);
-        } else {
-          console.log(`✅ [SECURITY] KB ${kbId} is UNPROTECTED - no owner restrictions`);
-        }
-      } else {
-        console.log(`❌ [SECURITY] KB ${kbId} not found in Cloudant - treating as protected for safety`);
-        isProtected = true;
-      }
-    } catch (cloudantError) {
-      console.log(`❌ [SECURITY] Failed to check Cloudant KB protection status:`, cloudantError.message);
-      // If we can't determine protection status, treat as protected for safety
-      isProtected = true;
-      console.log(`🔒 [SECURITY] Treating KB ${kbId} as PROTECTED due to Cloudant check error (fail-safe)`);
-    }
-
-    // If the KB is protected, require authentication and ownership verification
-    if (isProtected) {
-      if (!currentUser) {
-        console.log(`🚨 [SECURITY] Protected KB requires authentication - blocking unauthenticated access`);
-        return res.status(401).json({ 
-          error: 'Authentication required for protected knowledge base',
-          details: 'This knowledge base has owner restrictions'
-        });
-      }
-      
-      // Verify user has permission to access this protected knowledge base
-      console.log(`🔍 [DEBUG] Ownership check:`, {
-        kbOwner: kbOwner,
-        currentUserUsername: currentUser?.username,
-        isMatch: kbOwner === currentUser?.username
-      });
-      
-      if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
-        console.log(`🔄 [OWNERSHIP TRANSFER] User ${currentUser.username} attempting to access KB owned by ${kbOwner}`);
-        
-        // Check if this KB is available for ownership transfer
-        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
-        const kbName = kbDoc?.kbName || kbDoc?.name || kbId;
-        
-        return res.status(403).json({ 
-          error: 'Access denied: You do not have permission to access this knowledge base',
-          details: 'Knowledge base ownership verification failed',
-          requiresOwnershipTransfer: true,
-          kbInfo: {
-            id: kbId,
-            name: kbName,
-            currentOwner: kbOwner,
-            requestedBy: currentUser.username
-          },
-          transferInstructions: 'This knowledge base requires ownership transfer. Please use the admin ownership transfer process.',
-          adminEndpoint: '/api/admin/transfer-kb-ownership'
-        });
-      }
-      
-      console.log(`✅ [SECURITY] User ${currentUser.username} verified as owner of protected KB ${kbId}`);
-    } else {
-      console.log(`✅ [SECURITY] Unprotected KB ${kbId} - no authentication required`);
-    }
-
-    let attachSuccess = false;
-    let attachResult = null;
-
-    // First, try the standard attach endpoint
-    try {
-      console.log(`🔄 [DO API] Attempt 1: Standard attach endpoint`);
-      const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
-        method: 'POST'
-        // No body needed - KB UUID is in the URL path
-      });
-
-      console.log(`✅ [DO API] Standard attach response:`, JSON.stringify(result, null, 2));
-      attachResult = result;
-      
-      // Check if the first attempt worked by looking at the response
-      const agentData = result.agent || result.data?.agent || result.data || result;
-      const attachedKBs = agentData.knowledge_bases || [];
-      
-      console.log(`📚 [VERIFICATION] First attempt - Agent has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid));
-      
-      const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
-      if (isAttached) {
-        console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
-        
-        // Update Cloudant with the successful attachment for security tracking
-        try {
-          const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
-          if (kbDoc) {
-            // Update the KB document with attachment info
-            const updatedKbDoc = {
-              ...kbDoc,
-              attachedToAgent: agentId,
-              attachedAt: new Date().toISOString(),
-              attachedBy: currentUser ? currentUser.username : 'unauthenticated'
-            };
-            await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
-            console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
-          }
-        } catch (cloudantUpdateError) {
-          console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
-          // Don't fail the operation if Cloudant update fails
-        }
-        
-        res.json({ 
-          success: true, 
-          message: 'Knowledge base attached successfully', 
-          result: { agent: agentData },
-          verification: {
-            attached: true,
-            knowledgeBases: attachedKBs
-          }
-        });
-        return; // Exit early if successful
-      } else {
-        console.log(`❌ [VERIFICATION] First attempt failed - KB ${kbId} not found in response`);
-        
-        // Try to get the agent details separately to verify
-        try {
-          console.log(`🔍 [VERIFICATION] Making separate API call to get agent details`);
-          const agentDetails = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-          console.log(`📚 [VERIFICATION] Agent details response:`, JSON.stringify(agentDetails, null, 2));
-          
-          const detailedAgentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
-          const detailedKBs = detailedAgentData.knowledge_bases || [];
-          
-          console.log(`📚 [VERIFICATION] Separate call - Agent has ${detailedKBs.length} KBs:`, detailedKBs.map(kb => kb.uuid));
-          
-          const isActuallyAttached = detailedKBs.some(kb => kb.uuid === kbId);
-          if (isActuallyAttached) {
-            console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId} (verified via separate call)`);
-            
-            // Update Cloudant with the successful attachment for security tracking
-            try {
-              const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
-              if (kbDoc) {
-                // Update the KB document with attachment info
-                const updatedKbDoc = {
-                  ...kbDoc,
-                  attachedToAgent: agentId,
-                  attachedAt: new Date().toISOString(),
-                  attachedBy: currentUser ? currentUser.username : 'unauthenticated'
-                };
-                await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
-                console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
-              }
-            } catch (cloudantUpdateError) {
-              console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
-              // Don't fail the operation if Cloudant update fails
-            }
-            
-            res.json({ 
-              success: true, 
-              message: 'Knowledge base attached successfully', 
-              result: { agent: detailedAgentData },
-              verification: {
-                attached: true,
-                knowledgeBases: detailedKBs
-              }
-            });
-            return; // Exit early if successful
-          } else {
-            console.log(`❌ [VERIFICATION] KB ${kbId} still not attached after separate verification`);
-          }
-        } catch (verificationError) {
-          console.log(`❌ [VERIFICATION] Failed to get agent details:`, verificationError.message);
-        }
-      }
-    } catch (attachError) {
-      console.log(`❌ [DO API] Standard attach failed:`, attachError.message);
-    }
-    
-    // Always try the alternative approach as well
-    try {
-      console.log(`🔄 [DO API] Attempt 2: Agent update endpoint`);
-      const updateResult = await doRequest(`/v2/gen-ai/agents/${agentId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          knowledge_base_uuids: [kbId]
-        })
-      });
-      
-      console.log(`✅ [DO API] Agent update response:`, JSON.stringify(updateResult, null, 2));
-      attachResult = updateResult;
-    } catch (updateError) {
-      console.log(`❌ [DO API] Agent update failed:`, updateError.message);
-    }
-    
-    // Add a small delay to allow the API to process the attachment
-    console.log(`⏳ [VERIFICATION] Waiting 2 seconds for API to process attachment...`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Verify the attachment by fetching the agent's current knowledge bases
-    console.log(`🔍 [VERIFICATION] Verifying attachment for agent ${agentId}`);
-    const verificationResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-    const agentData = verificationResponse.data || verificationResponse;
-    const attachedKBs = agentData.knowledge_bases || [];
-    
-    console.log(`📚 [VERIFICATION] Agent has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid));
-    
-    const isAttached = attachedKBs.some(kb => kb.uuid === kbId);
-    if (isAttached) {
-      console.log(`✅ [VERIFICATION] KB ${kbId} successfully attached to agent ${agentId}`);
-      
-      // Update Cloudant with the successful attachment for security tracking
-      try {
-        const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
-        if (kbDoc) {
-          // Update the KB document with attachment info
-          const updatedKbDoc = {
-            ...kbDoc,
-            attachedToAgent: agentId,
-            attachedAt: new Date().toISOString(),
-            attachedBy: currentUser ? currentUser.username : 'unauthenticated'
-          };
-          await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
-          console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
-        }
-      } catch (cloudantUpdateError) {
-        console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
-        // Don't fail the operation if Cloudant update fails
-      }
-      
-      res.json({ 
-        success: true, 
-        message: 'Knowledge base attached successfully', 
-        result: { agent: verificationResponse },
-        verification: {
-          attached: true,
-          knowledgeBases: attachedKBs
-        }
-      });
-      return; // Exit early if successful
-    } else {
-      console.log(`❌ [VERIFICATION] KB ${kbId} was NOT attached to agent ${agentId}`);
-      console.log(`❌ [VERIFICATION] Expected KB: ${kbId}`);
-      console.log(`❌ [VERIFICATION] Found KBs: ${attachedKBs.map(kb => kb.uuid).join(', ')}`);
-      
-      // Provide a clear error message about the DigitalOcean API limitation
-      const errorMessage = `DigitalOcean API limitation detected: Knowledge base attachment operations return success but do not actually attach KBs to agents. This appears to be a bug in the DigitalOcean API. Please contact DigitalOcean support or use the DigitalOcean dashboard to manually attach knowledge bases.`;
-      
-      res.status(500).json({ 
-        success: false,
-        message: errorMessage,
-        result: { agent: agentData },
-        verification: {
-          attached: false,
-          knowledgeBases: attachedKBs
-        },
-        api_limitation: true
-      });
-    }
-  } catch (error) {
-    console.error('❌ Attach KB error:', error);
-    res.status(500).json({ message: `Failed to attach knowledge base: ${error.message}` });
-  }
-});
 
 // In-memory storage for agent-KB associations (since DigitalOcean API doesn't provide this)
 const agentKnowledgeBaseAssociations = new Map();
