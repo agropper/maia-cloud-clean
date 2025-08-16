@@ -479,7 +479,7 @@
       <strong>Debug: Ownership Transfer Modal</strong><br>
       showOwnershipTransferModal: {{ showOwnershipTransferModal }}<br>
       ownershipTransferData: {{ JSON.stringify(ownershipTransferData) }}<br>
-      currentUser: {{ JSON.stringify(props.currentUser) }}
+      props.currentUser: {{ JSON.stringify(props.currentUser) }}
     </div>
   </q-dialog>
 </template>
