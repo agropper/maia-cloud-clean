@@ -1126,7 +1126,7 @@ export default defineComponent({
         // User is already authenticated, show KB creation dialog
         console.log(
           "🔍 Showing KB creation dialog - user already signed in as:",
-          props.currentUser.username
+          props.currentUser?.username || 'unknown'
         );
         showCreateKbDialog.value = true;
       }
