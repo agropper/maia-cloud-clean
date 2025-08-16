@@ -182,7 +182,7 @@
                           <!-- Protection Toggle (only for KB owner) -->
                           <q-btn
                             v-if="
-                              currentUser && kb.owner === currentUser.username
+                              props.currentUser && kb.owner === props.currentUser.username
                             "
                             :icon="kb.isProtected ? 'lock_open' : 'lock'"
                             :color="kb.isProtected ? 'warning' : 'grey'"
@@ -1544,7 +1544,6 @@ export default defineComponent({
       confirmMessage,
       confirmTitle,
       executeConfirmAction,
-      currentUser,
       toggleKBProtection,
       showPasskeyAuthDialog,
       handleUserAuthenticated,
