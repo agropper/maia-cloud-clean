@@ -568,7 +568,7 @@ export default defineComponent({
       default: () => [],
     },
     currentUser: {
-      type: Object,
+      type: Object as PropType<any>,
       default: null,
     },
   },
