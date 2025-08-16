@@ -274,21 +274,16 @@ router.post("/register-verify", async (req, res) => {
 router.post("/authenticate", async (req, res) => {
   try {
     logPasskeyConfig(); // Log config on each request
-    console.log("🔍 Authentication request received");
     const { userId } = req.body;
-    console.log("🔍 Authentication request data:", { userId });
 
     if (!userId) {
-      console.log("❌ Missing userId in authentication request");
       return res.status(400).json({ error: "User ID is required" });
     }
 
     // Get user document
     let userDoc;
     try {
-      console.log("🔍 Getting user document for authentication:", userId);
       userDoc = await couchDBClient.getDocument("maia_users", userId);
-      console.log("✅ User document retrieved successfully");
     } catch (error) {
       console.error("❌ Error getting user document:", error.message);
       if (error.message.includes("error happened in your connection")) {
@@ -316,9 +311,6 @@ router.post("/authenticate", async (req, res) => {
       throw new Error("Invalid credential ID format - expected base64url string");
     }
 
-    console.log("🔍 Generating authentication options for user:", userId);
-    console.log("🔍 Credential ID:", userDoc.credentialID);
-
     // Generate authentication options using SimpleWebAuthn v13
     const options = await generateAuthenticationOptions({
       rpID,
@@ -335,8 +327,6 @@ router.post("/authenticate", async (req, res) => {
       },
     });
 
-    console.log("✅ Authentication options generated successfully");
-
     // Store challenge in user document
     const updatedUser = {
       ...userDoc,
@@ -344,11 +334,7 @@ router.post("/authenticate", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    console.log("🔍 Saving authentication challenge to user document");
     await couchDBClient.saveDocument("maia_users", updatedUser);
-    console.log("✅ Authentication challenge saved successfully");
-
-    console.log("✅ Authentication options sent successfully");
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating authentication options:", error);
@@ -416,14 +402,11 @@ router.post("/authenticate-verify", async (req, res) => {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
         path: '/'
       });
-      console.log(`🔧 Session cookie set: maia.sid=${req.sessionID}`);
       
       // Force session save
       req.session.save((err) => {
         if (err) {
           console.error(`❌ Session save error for user ${updatedUser.userId}:`, err);
-        } else {
-          console.log(`✅ Session saved successfully for user ${updatedUser.userId}`);
         }
       });
 
@@ -465,6 +448,34 @@ router.get("/user/:userId", async (req, res) => {
   } catch (error) {
     console.error("❌ Error getting user info:", error);
     res.status(500).json({ error: "Failed to get user info" });
+  }
+});
+
+// Check authentication status
+router.get("/auth-status", async (req, res) => {
+  try {
+    if (req.session && req.session.userId) {
+      // User is authenticated, get current user info
+      const userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+      if (userDoc) {
+        res.json({
+          authenticated: true,
+          user: {
+            userId: userDoc.userId,
+            displayName: userDoc.displayName,
+          },
+        });
+      } else {
+        // Session exists but user document not found, clear session
+        req.session.destroy();
+        res.json({ authenticated: false, message: "User not found" });
+      }
+    } else {
+      res.json({ authenticated: false, message: "No active session" });
+    }
+  } catch (error) {
+    console.error("❌ Error checking auth status:", error);
+    res.status(500).json({ error: "Failed to check authentication status" });
   }
 });
 
