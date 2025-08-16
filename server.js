@@ -286,8 +286,16 @@ app.get('/health', (req, res) => {
 
 // Session status endpoint
 app.get('/api/session-status', (req, res) => {
+  console.log(`🔍 [SESSION STATUS] Request:`, {
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+    userId: req.session?.userId,
+    cookies: req.headers.cookie || 'no cookies'
+  });
+  
   if (req.session && req.session.userId) {
-    const timeUntilExpiry = req.session.cookie.maxAge - (Date.now() - req.session.lastActivity);
+    const timeUntilExpiry = req.session.cookie.maxAge - (Date.now() - (req.session.lastActivity || Date.now()));
     res.json({
       authenticated: true,
       userId: req.session.userId,
@@ -300,7 +308,9 @@ app.get('/api/session-status', (req, res) => {
   } else {
     res.json({
       authenticated: false,
-      message: 'No active session'
+      message: 'No active session',
+      sessionId: req.sessionID,
+      cookies: req.headers.cookie || 'no cookies'
     });
   }
 });

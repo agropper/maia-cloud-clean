@@ -421,13 +421,18 @@ router.post("/authenticate-verify", async (req, res) => {
           console.error(`❌ Session save error for user ${updatedUser.userId}:`, err);
         } else {
           console.log(`✅ Session saved successfully for user ${updatedUser.userId}`);
-          console.log(`🔍 [COOKIE DEBUG] Session cookie should be: maia.sid=${req.sessionID}`);
-          console.log(`🔍 [COOKIE DEBUG] Response headers:`, {
-            'Set-Cookie': req.res?.getHeader('Set-Cookie'),
-            'Content-Type': req.res?.getHeader('Content-Type')
-          });
           
-
+          // Ensure the session cookie is set in the response
+          if (res.cookie) {
+            res.cookie('maia.sid', req.sessionID, {
+              maxAge: 24 * 60 * 60 * 1000, // 24 hours
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+              path: '/'
+            });
+            console.log(`🔧 Session cookie explicitly set: maia.sid=${req.sessionID}`);
+          }
         }
       });
 
