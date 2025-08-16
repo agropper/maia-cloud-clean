@@ -473,6 +473,14 @@
       :new-owner="ownershipTransferData.newOwner"
       @ownership-transferred="handleOwnershipTransferred"
     />
+    
+    <!-- Debug info for ownership transfer -->
+    <div v-if="showOwnershipTransferModal" style="position: fixed; top: 10px; right: 10px; background: white; border: 1px solid black; padding: 10px; z-index: 9999;">
+      <strong>Debug: Ownership Transfer Modal</strong><br>
+      showOwnershipTransferModal: {{ showOwnershipTransferModal }}<br>
+      ownershipTransferData: {{ JSON.stringify(ownershipTransferData) }}<br>
+      currentUser: {{ JSON.stringify(props.currentUser) }}
+    </div>
   </q-dialog>
 </template>
 
@@ -605,7 +613,6 @@ export default defineComponent({
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
-    const currentUser = ref<any>(null);
     const isAuthenticated = ref(false);
 
     // Dialog state for confirmations
@@ -851,7 +858,7 @@ export default defineComponent({
         username: userData.username,
         displayName: userData.displayName,
       };
-      currentUser.value = userInfo;
+              // currentUser is now passed via props
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
 
@@ -1212,7 +1219,7 @@ export default defineComponent({
             name: newKbName.value,
             description: newKbDescription.value,
             document_uuids: selectedDocuments.value,
-            owner: currentUser.value?.username, // Add owner information
+            owner: props.currentUser?.username, // Add owner information
           }),
         });
 
@@ -1338,6 +1345,7 @@ export default defineComponent({
           // Check if this requires ownership transfer
           if (result.requiresOwnershipTransfer && result.kbInfo) {
             console.log("🔄 Ownership transfer required for KB:", result.kbInfo);
+            console.log("🔍 Current user from props:", props.currentUser);
             
             // Validate kbInfo data before showing modal
             if (result.kbInfo && result.kbInfo.id) {
@@ -1347,8 +1355,13 @@ export default defineComponent({
                 kbId: result.kbInfo.id,
                 kbName: result.kbInfo.name || 'Unknown KB',
                 currentOwner: result.kbInfo.currentOwner || 'Unknown',
-                newOwner: currentUser.value?.username || 'unknown'
+                newOwner: props.currentUser?.username || 'unknown'
               };
+              
+              console.log("🔍 Modal state set:", {
+                showOwnershipTransferModal: showOwnershipTransferModal.value,
+                ownershipTransferData: ownershipTransferData.value
+              });
             } else {
               console.error("❌ Invalid kbInfo data for ownership transfer:", result.kbInfo);
               $q.notify({
@@ -1431,7 +1444,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: currentUser.value?.username,
+                owner: props.currentUser?.username,
               }),
             }
           );
@@ -1457,8 +1470,8 @@ export default defineComponent({
               body: JSON.stringify({
                 kbId: kb.uuid,
                 kbName: kb.name,
-                owner: currentUser.value?.username,
-                description: `Protected by ${currentUser.value?.displayName || currentUser.value?.username}`,
+                owner: props.currentUser?.username,
+                description: `Protected by ${props.currentUser?.displayName || props.currentUser?.username}`,
               }),
             }
           );
