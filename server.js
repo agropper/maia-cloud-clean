@@ -1920,6 +1920,10 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
 
 // Associate knowledge base with agent
 app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
+  console.log(`🎯 [ROUTE HIT] KB connection endpoint reached!`);
+  console.log(`🎯 [ROUTE HIT] Params: agentId=${req.params.agentId}, kbId=${req.params.kbId}`);
+  console.log(`🎯 [ROUTE HIT] Method: ${req.method}, URL: ${req.url}`);
+  
   try {
     const { agentId, kbId } = req.params;
     const currentUser = getCurrentUser(req);
@@ -1933,6 +1937,12 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       authenticatedAt: req.session.authenticatedAt
     });
     console.log(`🔍 [DEBUG] Current user:`, currentUser);
+    console.log(`🔍 [DEBUG] Full request object:`, {
+      hasSession: !!req.session,
+      sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+      cookies: req.headers.cookie || 'no cookies',
+      userAgent: req.headers['user-agent']?.substring(0, 50)
+    });
 
     // Check protection status using Cloudant directly (source of truth for security)
     let isProtected = false;
