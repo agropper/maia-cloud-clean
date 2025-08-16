@@ -427,19 +427,7 @@ router.post("/authenticate-verify", async (req, res) => {
             'Content-Type': req.res?.getHeader('Content-Type')
           });
           
-          // Force cookie setting by regenerating session
-          req.session.regenerate((err) => {
-            if (err) {
-              console.error(`❌ Session regeneration error:`, err);
-            } else {
-              console.log(`✅ Session regenerated with ID: ${req.sessionID}`);
-              // Set user data again after regeneration
-              req.session.userId = updatedUser.userId;
-              req.session.username = updatedUser.userId;
-              req.session.displayName = updatedUser.displayName;
-              req.session.authenticatedAt = new Date().toISOString();
-            }
-          });
+
         }
       });
 
