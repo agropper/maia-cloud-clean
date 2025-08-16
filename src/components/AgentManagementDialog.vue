@@ -182,7 +182,7 @@
                           <!-- Protection Toggle (only for KB owner) -->
                           <q-btn
                             v-if="
-                              props.currentUser && kb.owner === props.currentUser.username
+                              props.currentUser?.username && kb.owner === props.currentUser.username
                             "
                             :icon="kb.isProtected ? 'lock_open' : 'lock'"
                             :color="kb.isProtected ? 'warning' : 'grey'"
