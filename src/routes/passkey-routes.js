@@ -407,32 +407,23 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.authenticatedAt = new Date().toISOString();
 
       console.log(`✅ Session created for user: ${updatedUser.userId}`);
-      console.log(`🔍 [DEBUG] Session data set:`, {
-        userId: req.session.userId,
-        username: req.session.username,
-        displayName: req.session.displayName,
-        authenticatedAt: req.session.authenticatedAt,
-        sessionId: req.sessionID
+      
+      // Set the session cookie BEFORE sending response
+      res.cookie('maia.sid', req.sessionID, {
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        path: '/'
       });
-
-      // Force session save and verify
+      console.log(`🔧 Session cookie set: maia.sid=${req.sessionID}`);
+      
+      // Force session save
       req.session.save((err) => {
         if (err) {
           console.error(`❌ Session save error for user ${updatedUser.userId}:`, err);
         } else {
           console.log(`✅ Session saved successfully for user ${updatedUser.userId}`);
-          
-          // Ensure the session cookie is set in the response
-          if (res.cookie) {
-            res.cookie('maia.sid', req.sessionID, {
-              maxAge: 24 * 60 * 60 * 1000, // 24 hours
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-              path: '/'
-            });
-            console.log(`🔧 Session cookie explicitly set: maia.sid=${req.sessionID}`);
-          }
         }
       });
 
