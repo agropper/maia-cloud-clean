@@ -153,7 +153,14 @@ app.use(session(sessionConfig));
 
 // Session activity tracking middleware
 app.use((req, res, next) => {
+  console.log(`🔍 [SESSION MIDDLEWARE] Request: ${req.method} ${req.url}`);
+  console.log(`🔍 [SESSION MIDDLEWARE] Session ID: ${req.sessionID}`);
+  console.log(`🔍 [SESSION MIDDLEWARE] Has session: ${!!req.session}`);
+  console.log(`🔍 [SESSION MIDDLEWARE] Session keys: ${req.session ? Object.keys(req.session) : 'none'}`);
+  console.log(`🔍 [SESSION MIDDLEWARE] Cookies: ${req.headers.cookie || 'no cookies'}`);
+  
   if (req.session && req.session.userId) {
+    console.log(`🔍 [SESSION MIDDLEWARE] User authenticated: ${req.session.userId}`);
     // Update last activity timestamp for authenticated users
     req.session.lastActivity = Date.now();
     
@@ -166,6 +173,8 @@ app.use((req, res, next) => {
         console.log(`⚠️ Session save error: ${err.message}`);
       }
     });
+  } else {
+    console.log(`🔍 [SESSION MIDDLEWARE] No authenticated session`);
   }
   next();
 });
