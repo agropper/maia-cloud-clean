@@ -100,13 +100,13 @@ if (process.env.NODE_ENV === 'production') {
 // Session configuration for authentication
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this',
-  resave: false,
+  resave: true, // Enable resave for activity tracking
   saveUninitialized: false,
   name: 'maia.sid', // Custom session name
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours base timeout
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
     path: '/'
   }
@@ -118,27 +118,57 @@ if (process.env.NODE_ENV === 'production') {
   const MemoryStore = session.MemoryStore;
   const store = new MemoryStore();
   
-  // Clean up expired sessions every hour
+  // Clean up expired sessions and check activity every 5 minutes
   setInterval(() => {
     store.all((err, sessions) => {
       if (err) return;
       const now = Date.now();
+      const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes
+      
       Object.keys(sessions).forEach(sessionId => {
         const session = sessions[sessionId];
+        
+        // Check for expired cookies
         if (session.cookie && session.cookie.expires && session.cookie.expires < now) {
           store.destroy(sessionId);
+          console.log(`🔒 Session ${sessionId} expired and destroyed`);
+        }
+        
+        // Check for 5-minute inactivity timeout
+        if (session.lastActivity && session.lastActivity < fiveMinutesAgo) {
+          store.destroy(sessionId);
+          console.log(`🔒 Session ${sessionId} timed out due to inactivity (5 minutes)`);
         }
       });
     });
-  }, 60 * 60 * 1000); // 1 hour
+  }, 5 * 60 * 1000); // Check every 5 minutes
   
   sessionConfig.store = store;
-  console.log('🔧 Using enhanced MemoryStore for production (temporary solution)');
+  console.log('🔧 Using enhanced MemoryStore for production with 5-minute activity timeout');
 } else {
   console.log('🔧 Using default MemoryStore for development');
 }
 
 app.use(session(sessionConfig));
+
+// Session activity tracking middleware
+app.use((req, res, next) => {
+  if (req.session && req.session.userId) {
+    // Update last activity timestamp for authenticated users
+    req.session.lastActivity = Date.now();
+    
+    // Extend session timeout on activity (rolling window)
+    req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 24 hours from now
+    
+    // Save session to persist changes
+    req.session.save((err) => {
+      if (err) {
+        console.log(`⚠️ Session save error: ${err.message}`);
+      }
+    });
+  }
+  next();
+});
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
@@ -151,20 +181,6 @@ const requireAuth = (req, res, next) => {
 
 // Get current authenticated user
 const getCurrentUser = (req) => {
-  // Debug session information
-  console.log(`🔍 [getCurrentUser] Session debug:`, {
-    sessionId: req.sessionID,
-    hasSession: !!req.session,
-    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
-    userId: req.session?.userId,
-    username: req.session?.username,
-    displayName: req.session?.displayName,
-    cookies: req.headers.cookie ? req.headers.cookie.substring(0, 100) + '...' : 'no cookies',
-    userAgent: req.headers['user-agent']?.substring(0, 50) + '...',
-    origin: req.headers.origin,
-    referer: req.headers.referer
-  });
-  
   return req.session.userId ? {
     userId: req.session.userId,
     username: req.session.username,
@@ -268,6 +284,27 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Session status endpoint
+app.get('/api/session-status', (req, res) => {
+  if (req.session && req.session.userId) {
+    const timeUntilExpiry = req.session.cookie.maxAge - (Date.now() - req.session.lastActivity);
+    res.json({
+      authenticated: true,
+      userId: req.session.userId,
+      username: req.session.username,
+      displayName: req.session.displayName,
+      lastActivity: req.session.lastActivity,
+      timeUntilExpiry: Math.max(0, timeUntilExpiry),
+      sessionId: req.sessionID
+    });
+  } else {
+    res.json({
+      authenticated: false,
+      message: 'No active session'
+    });
+  }
+});
+
 // Session test endpoint
 app.get('/api/session-test', (req, res) => {
   console.log(`🔍 [SESSION TEST] Request:`, {
@@ -277,10 +314,10 @@ app.get('/api/session-test', (req, res) => {
     cookies: req.headers.cookie || 'no cookies',
     userAgent: req.headers['user-agent']?.substring(0, 50)
   });
-  
+
   // Set a test session value
   req.session.testValue = 'session-working-' + Date.now();
-  
+
   res.json({
     message: 'Session test',
     sessionId: req.sessionID,
@@ -1493,29 +1530,11 @@ app.get('/api/current-agent', async (req, res) => {
 
 // Associate knowledge base with agent
 app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
-  console.log(`🎯 [ROUTE HIT] KB connection endpoint reached!`);
-  console.log(`🎯 [ROUTE HIT] Params: agentId=${req.params.agentId}, kbId=${req.params.kbId}`);
-  console.log(`🎯 [ROUTE HIT] Method: ${req.method}, URL: ${req.url}`);
-  
   try {
     const { agentId, kbId } = req.params;
     const currentUser = getCurrentUser(req);
     
     console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
-    console.log(`🔍 [DEBUG] Session data:`, {
-      sessionId: req.sessionID,
-      userId: req.session.userId,
-      username: req.session.username,
-      displayName: req.session.displayName,
-      authenticatedAt: req.session.authenticatedAt
-    });
-    console.log(`🔍 [DEBUG] Current user:`, currentUser);
-    console.log(`🔍 [DEBUG] Full request object:`, {
-      hasSession: !!req.session,
-      sessionKeys: req.session ? Object.keys(req.session) : 'no session',
-      cookies: req.headers.cookie || 'no cookies',
-      userAgent: req.headers['user-agent']?.substring(0, 50)
-    });
 
     // Check protection status using Cloudant directly (source of truth for security)
     let isProtected = false;
