@@ -113,6 +113,7 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch } from 'vue'
+import type { PropType } from 'vue'
 import { QDialog, QCard, QCardSection, QCardActions, QBtn, QSpace, QSpinner, QIcon, QChip } from 'quasar'
 import { useGroupChat } from '../composables/useGroupChat'
 import type { GroupChat } from '../composables/useGroupChat'
@@ -136,11 +137,11 @@ export default defineComponent({
       required: true
     },
     currentUser: {
-      type: String,
+      type: [String, Object] as PropType<string | { userId: string; displayName: string }>,
       default: ''
     },
     onGroupDeleted: {
-      type: Function as () => () => void,
+      type: Function as () => () => void | Promise<void>,
       required: false
     }
   },
@@ -170,8 +171,18 @@ export default defineComponent({
     const loadGroups = async () => {
       loading.value = true
       try {
-        groups.value = await getAllGroupChats()
-        console.log('📋 Loaded groups:', groups.value.length)
+        const allGroups = await getAllGroupChats()
+        
+        // Filter groups by current user (including "Unknown User")
+        let currentUserName: string
+        if (typeof props.currentUser === 'object' && props.currentUser !== null) {
+          currentUserName = props.currentUser.userId || props.currentUser.displayName || 'Unknown User'
+        } else {
+          currentUserName = props.currentUser || 'Unknown User'
+        }
+        
+        groups.value = allGroups.filter(group => group.currentUser === currentUserName)
+
       } catch (error) {
         console.error('❌ Failed to load groups:', error)
       } finally {

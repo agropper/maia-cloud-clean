@@ -605,7 +605,7 @@ export default defineComponent({
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
-    const currentUser = ref<any>(null);
+    const localCurrentUser = ref<any>(null);
     const isAuthenticated = ref(false);
 
     // Dialog state for confirmations
@@ -696,9 +696,7 @@ export default defineComponent({
             });
 
             availableKnowledgeBases.value = allKBs;
-            console.log(
-              `📚 Loaded ${allKBs.length} knowledge bases (${connectedKBs.length} connected)`
-            );
+
           }
         } catch (kbError) {
           console.warn("Failed to load knowledge bases:", kbError);
@@ -1457,8 +1455,8 @@ export default defineComponent({
               body: JSON.stringify({
                 kbId: kb.uuid,
                 kbName: kb.name,
-                owner: currentUser.value?.username,
-                description: `Protected by ${currentUser.value?.displayName || currentUser.value?.username}`,
+                owner: localCurrentUser.value?.username,
+                description: `Protected by ${localCurrentUser.value?.displayName || localCurrentUser.value?.username}`,
               }),
             }
           );
@@ -1531,11 +1529,13 @@ export default defineComponent({
       confirmMessage,
       confirmTitle,
       executeConfirmAction,
-      currentUser,
+      localCurrentUser,
       toggleKBProtection,
       showPasskeyAuthDialog,
       handleUserAuthenticated,
       handleSignInCancelled,
+      showOwnershipTransferModal,
+      ownershipTransferData,
     };
   },
 });

@@ -394,6 +394,16 @@ router.post("/authenticate-verify", async (req, res) => {
 
       console.log(`✅ Session created for user: ${updatedUser.userId}`);
       
+      // GroupFilter: Log user sign in and group chat count
+      try {
+        const allChats = await couchDBClient.getAllChats();
+        const groupChats = allChats.filter(chat => chat.type === 'group_chat');
+        const userGroupChats = groupChats.filter(chat => chat.currentUser === updatedUser.userId);
+        console.log(`GroupFilter: SIGN_IN - User: ${updatedUser.userId} - Group chats visible: ${userGroupChats.length}`);
+      } catch (error) {
+        console.error("GroupFilter: Error getting group chats:", error);
+      }
+      
       // Set the session cookie BEFORE sending response
       res.cookie('maia.sid', req.sessionID, {
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
@@ -458,6 +468,9 @@ router.get("/auth-status", async (req, res) => {
       // User is authenticated, get current user info
       const userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
       if (userDoc) {
+        // Echo current user to backend console
+        console.log(`Current user: ${userDoc.userId}`);
+        
         res.json({
           authenticated: true,
           user: {
@@ -482,17 +495,38 @@ router.get("/auth-status", async (req, res) => {
 // Logout route to clear session
 router.post("/logout", async (req, res) => {
   try {
+    console.log(`🚨 BACKEND LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
+    
     if (req.session) {
       const userId = req.session.userId;
+      console.log(`👋 User signed out: ${userId}`);
+      
+      // GroupFilter: Log user sign out and group chat count before destroying session
+      try {
+        const allChats = await couchDBClient.getAllChats();
+        const groupChats = allChats.filter(chat => chat.type === 'group_chat');
+        const userGroupChats = groupChats.filter(chat => chat.currentUser === userId);
+        console.log(`GroupFilter: SIGN_OUT - User: ${userId} - Group chats visible: ${userGroupChats.length}`);
+      } catch (error) {
+        console.error("GroupFilter: Error getting group chats:", error);
+      }
+      
       req.session.destroy((err) => {
         if (err) {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
-        res.json({ success: true, message: "Logged out successfully" });
+        
+        // Send a message to the browser console after session destruction
+        res.json({ 
+          success: true, 
+          message: "Logged out successfully",
+          consoleMessage: `🔍 Backend Logout: Session destroyed for ${userId} | Now: No session`
+        });
       });
     } else {
+      console.log(`ℹ️ No active session to destroy`);
       res.json({ success: true, message: "No active session" });
     }
   } catch (error) {

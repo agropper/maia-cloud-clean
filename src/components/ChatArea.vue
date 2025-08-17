@@ -181,6 +181,14 @@ import FileBadge from './FileBadge.vue'
 import AgentStatusIndicator from './AgentStatusIndicator.vue'
 import GroupSharingBadge from './GroupSharingBadge.vue'
 
+// Type for GroupSharingBadge ref methods
+interface GroupSharingBadgeRef {
+  setDeepLink: (link: string) => void
+  updateStatus: (status: string) => void
+  updateGroupCount: (count: number) => void
+  isEnabled: boolean
+}
+
 export default defineComponent({
   name: 'ChatArea',
   components: {
@@ -217,22 +225,16 @@ export default defineComponent({
                     currentUser: {
                       handler(newUser) {
                         if (newUser) {
-                          console.log('👤 User signed in, loading group count')
                           this.loadGroupCount()
-                        } else {
-                          console.log('👤 User signed out, resetting group count')
-                          if (this.$refs.groupSharingBadgeRef) {
-                            (this.$refs.groupSharingBadgeRef as any).updateGroupCount(0)
-                          }
                         }
                       },
                       immediate: true
                     }
                   },
-                                        mounted() {
-                    this.initializeChatState()
-                    this.loadGroupCount()
-                  },
+                                                            mounted() {
+                      this.initializeChatState()
+                      this.loadGroupCount()
+                    },
   props: {
     appState: {
       type: Object as PropType<AppState>,
@@ -255,6 +257,19 @@ export default defineComponent({
       default: null
     }
   },
+  data() {
+    return {
+      lastChatState: {
+        historyLength: 0,
+        filesCount: 0,
+        hasEdits: false
+      },
+      showDeleteModal: false,
+      messageToDelete: null as any,
+      precedingUserMessage: null as any,
+      showSecurityNoticeModal: false
+    }
+  },
   emits: [
     'triggerSaveToCouchDB', 
     'manage-agent',
@@ -268,19 +283,6 @@ export default defineComponent({
     'sign-in',
     'sign-out'
   ],
-                      data() {
-    return {
-      lastChatState: {
-        historyLength: 0,
-        filesCount: 0,
-        hasEdits: false
-      },
-      showDeleteModal: false,
-      messageToDelete: null as any,
-      precedingUserMessage: null as any,
-      showSecurityNoticeModal: false
-    }
-  },
   methods: {
     editMessage(idx: number) {
       this.$emit('edit-message', idx)
@@ -413,7 +415,7 @@ export default defineComponent({
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
-          this.$refs.groupSharingBadgeRef.setDeepLink(deepLink)
+          (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).setDeepLink(deepLink)
         }
         
         // Reset status to Current
@@ -455,7 +457,7 @@ export default defineComponent({
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
-          this.$refs.groupSharingBadgeRef.setDeepLink(deepLink)
+          (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).setDeepLink(deepLink)
         }
         
         // Reset status to Current
@@ -472,7 +474,7 @@ export default defineComponent({
     },
     updateChatStatus(newStatus: string) {
       if (this.$refs.groupSharingBadgeRef) {
-        this.$refs.groupSharingBadgeRef.updateStatus(newStatus)
+        (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).updateStatus(newStatus)
       }
     },
                         checkForChanges() {
@@ -521,10 +523,14 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
-                        const { getAllGroupChats } = useGroupChat()
-                        const groups = await getAllGroupChats()
-                        const currentUserName = this.currentUser?.username || this.currentUser?.displayName || this.currentUser || 'Unknown User'
-                        const userGroups = groups.filter(group => group.currentUser === currentUserName)
+                        // Use the same data source as the backend: /api/group-chats
+                        const response = await fetch('/api/group-chats')
+                        const allGroups = await response.json()
+                        
+                        const currentUserName = this.currentUser?.userId || this.currentUser?.displayName || this.currentUser || 'Unknown User'
+                        
+                        // Use the same filtering logic as the backend
+                        const userGroups = allGroups.filter((group: any) => group.currentUser === currentUserName)
                         
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(userGroups.length)

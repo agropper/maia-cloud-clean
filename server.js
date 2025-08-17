@@ -1,6 +1,8 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
+console.log('🚨 SERVER.JS IS LOADING - LINE 3');
+
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
@@ -68,6 +70,8 @@ const initializeDatabase = async () => {
 
 // Initialize database
 initializeDatabase();
+
+
 
 // Security middleware
 app.use(helmet({
@@ -1141,6 +1145,12 @@ app.get('/api/shared/:shareId', async (req, res) => {
 // Get all group chats for the current user
 app.get('/api/group-chats', async (req, res) => {
   try {
+    // Get current user from session if available
+    const currentUser = req.session?.userId || 'unauthenticated';
+    
+    // Log current user
+
+    
     // For now, return all group chats. Later we'll filter by user
     const allChats = await couchDBClient.getAllChats();
     const groupChats = allChats.filter(chat => chat.type === 'group_chat');
@@ -1160,12 +1170,7 @@ app.get('/api/group-chats', async (req, res) => {
       isShared: chat.isShared
     }));
     
-    console.log(`📋 Found ${transformedChats.length} group chats`);
-    console.log(`📋 Sample transformed chat:`, transformedChats[0] ? {
-      id: transformedChats[0].id,
-      shareId: transformedChats[0].shareId,
-      currentUser: transformedChats[0].currentUser
-    } : 'No chats found');
+
     res.json(transformedChats);
   } catch (error) {
     console.error('❌ Get group chats error:', error);
@@ -1438,7 +1443,28 @@ app.get('/api/test', (req, res) => {
 
 // Get current agent
 app.get('/api/current-agent', async (req, res) => {
+  
   try {
+    // Get current user from session if available
+    const currentUser = req.session?.userId || 'Unknown User';
+    
+
+    
+    // Get group chat count for current user
+    let groupChatCount = 0;
+    try {
+      const allChats = await couchDBClient.getAllChats();
+      const groupChats = allChats.filter(chat => chat.type === 'group_chat');
+      
+      // Filter chats by current user (including "Unknown User")
+      const userGroupChats = groupChats.filter(chat => chat.currentUser === currentUser);
+      groupChatCount = userGroupChats.length;
+      
+
+    } catch (error) {
+      console.error('Error getting group chat count:', error);
+    }
+    
     if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
       console.log('🤖 No agent endpoint configured');
       return res.json({ agent: null });
@@ -1479,14 +1505,9 @@ app.get('/api/current-agent', async (req, res) => {
       if (agentData.knowledge_bases.length > 1) {
         // Multiple KBs detected - this is a safety issue
         warning = `⚠️ WARNING: Agent has ${agentData.knowledge_bases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
-        console.log(`🚨 Multiple KBs detected: ${agentData.knowledge_bases.length} KBs attached to agent`);
       }
       
       connectedKnowledgeBases = agentData.knowledge_bases; // Return ALL connected KBs
-      console.log(`📚 Found ${connectedKnowledgeBases.length} associated KBs:`);
-      connectedKnowledgeBases.forEach((kb, index) => {
-        console.log(`  ${index + 1}. ${kb.name} (${kb.uuid})`);
-      });
     } else {
       console.log(`📚 No knowledge bases associated with agent`);
     }
@@ -1502,15 +1523,15 @@ app.get('/api/current-agent', async (req, res) => {
       uuid: agentData.uuid,
       deployment: agentData.deployment,
       knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
-      knowledgeBases: connectedKnowledgeBases // Add all connected KBs
+      knowledgeBases: connectedKnowledgeBases, // Add all connected KBs
+      consoleMessage: `🔍 Backend Session: ${req.session ? 'Active' : 'None'} | User: ${currentUser} | Chats: ${groupChatCount}`
     };
 
     const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
     
-    console.log(`🤖 Current agent: ${transformedAgent.name} (${transformedAgent.id})`);
-    if (connectedKnowledgeBases.length > 0) {
-      console.log(`📚 Current KB: ${connectedKnowledgeBases[0].name} (${connectedKnowledgeBases[0].uuid})`);
-    }
+
+    
+
 
     const response = { 
       agent: transformedAgent,

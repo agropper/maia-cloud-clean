@@ -14,7 +14,7 @@
               {{ agentName }}
               <!-- Sign-in/Sign-out buttons -->
               <q-btn
-                v-if="!currentUser"
+                v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
                 flat
                 dense
                 size="sm"
@@ -62,6 +62,8 @@
 <script lang="ts">
 import { defineComponent, computed, watch } from 'vue'
 import { QIcon, QBtn, QCard, QCardSection, QSpace } from 'quasar'
+
+
 
 export interface DigitalOceanAgent {
   id: string
@@ -121,7 +123,7 @@ export default defineComponent({
       }
       
       // Get current user from props or use default
-      const userName = props.currentUser?.username || props.currentUser?.displayName || 'Unknown User'
+      const userName = props.currentUser?.userId || props.currentUser?.displayName || 'Unknown User'
       
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
@@ -184,9 +186,19 @@ export default defineComponent({
       }
     })
 
-    // Debug currentUser prop changes
+    // Watch for agent prop changes to display backend console message
+    watch(() => props.agent, (newAgent) => {
+      // If we have an agent, log the backend console message
+      if (newAgent && newAgent.consoleMessage) {
+        console.log(newAgent.consoleMessage);
+      }
+    }, { immediate: true });
+
+    // Watch for currentUser changes to trigger agent refresh
     watch(() => props.currentUser, (newUser) => {
-      // Remove verbose logging - keep only essential info
+      // When user changes, we need to refresh the agent data to get updated console message
+      // This will trigger the parent component to re-fetch agent data
+      
     }, { immediate: true });
 
     return {

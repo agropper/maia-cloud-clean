@@ -190,7 +190,7 @@ export default defineComponent({
     const handleUserAuthenticated = (userData: any) => {
       currentUser.value = userData;
       // Show clean user authentication info
-      console.log(`✅ User authenticated: ${userData.displayName || userData.userId}`);
+      
 
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
@@ -204,25 +204,31 @@ export default defineComponent({
       showPasskeyAuthDialog.value = true;
     };
 
-    const handleSignOut = () => {
-      // Show clean sign-out info
-      if (currentUser.value) {
-        console.log(`👋 User signed out: ${currentUser.value.displayName || currentUser.value.userId}`);
+    const handleSignOut = async () => {
+      // Call backend logout endpoint to destroy session
+      try {
+        const response = await fetch(`${API_BASE_URL}/passkey/logout`, { method: "POST" });
+        const data = await response.json();
+        
+        // Display backend console message if provided
+        if (data.consoleMessage) {
+          console.log(data.consoleMessage);
+        }
+      } catch (error) {
+        console.error('❌ Backend logout failed:', error);
       }
-      currentUser.value = null;
+      
+      // Set to Unknown User instead of null (there should never be "no user")
+      currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
     };
 
     const handleSignInCancelled = () => {
       showPasskeyAuthDialog.value = false;
     };
 
-    // Debug currentUser changes
-    watch(currentUser, (newUser) => {
-      if (newUser) {
-        console.log(`👤 Current user: ${newUser.displayName || newUser.userId}`);
-      } else {
-        console.log('👤 No user signed in');
-      }
+    // Refresh agent data when user changes
+    watch(currentUser, async () => {
+      await fetchCurrentAgent();
     });
 
     const editMessage = (idx: number) => {

@@ -88,6 +88,7 @@
 
 <script lang="ts">
                 import { defineComponent, ref, onMounted, nextTick } from 'vue'
+                import type { PropType } from 'vue'
                 import { QCard, QCardSection, QBtn, QDialog, QCardActions } from 'quasar'
                 import GroupManagementModal from './GroupManagementModal.vue'
 
@@ -103,27 +104,27 @@ export default defineComponent({
                   },
                     props: {
                     onStatusChange: {
-                      type: Function as () => (status: string) => void,
+                      type: Function as (status: string) => void,
                       required: false
                     },
                     onPost: {
-                      type: Function as () => void,
+                      type: Function as () => void | Promise<void>,
                       required: false
                     },
                     currentUser: {
-                      type: String,
+                      type: [String, Object] as PropType<string | { userId: string; displayName: string }>,
                       default: ''
                     },
                     onNewChat: {
-                      type: Function as () => () => void,
+                      type: Function as () => () => void | Promise<void>,
                       required: false
                     },
                     onNewChatWithSameGroup: {
-                      type: Function as () => () => void,
+                      type: Function as () => () => void | Promise<void>,
                       required: false
                     },
                     onGroupDeleted: {
-                      type: Function as () => () => void,
+                      type: Function as () => () => void | Promise<void>,
                       required: false
                     }
                   },
