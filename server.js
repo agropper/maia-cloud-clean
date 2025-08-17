@@ -699,9 +699,12 @@ app.post('/api/personal-chat', async (req, res) => {
     // Combine context with user message for AI, but keep original for chat history
     const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
 
+    // Get current user from session or default to 'Unknown User'
+    const currentUser = req.session?.userId || 'Unknown User';
+    
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage }
+      { role: 'user', content: cleanUserMessage, name: currentUser }
     ];
 
     const params = {
@@ -739,7 +742,7 @@ app.post('/api/personal-chat', async (req, res) => {
     const mockResponse = mockAIResponses['personal-chat'](newValue);
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: newValue },
+      { role: 'user', content: newValue, name: currentUser },
       { role: 'assistant', content: mockResponse, name: 'Personal AI (Fallback)' }
     ];
     
@@ -843,9 +846,12 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Anthropic response: ${responseTime}ms`);
 
+    // Get current user from session or default to 'Unknown User'
+    const currentUser = req.session?.userId || 'Unknown User';
+    
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage },
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.content[0].text, name: 'Anthropic' }
     ];
 
@@ -869,7 +875,7 @@ app.post('/api/gemini-chat', async (req, res) => {
       const mockResponse = mockAIResponses['gemini-chat'](newValue);
       const newChatHistory = [
         ...chatHistory,
-        { role: 'user', content: newValue },
+        { role: 'user', content: newValue, name: 'Unknown User' },
         { role: 'assistant', content: mockResponse, name: 'Gemini' }
       ];
       
@@ -946,9 +952,12 @@ app.post('/api/gemini-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Gemini response: ${responseTime}ms`);
 
+    // Get current user from session or default to 'Unknown User'
+    const currentUser = req.session?.userId || 'Unknown User';
+    
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage },
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: text, name: 'Gemini' }
     ];
 
@@ -1004,9 +1013,12 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ DeepSeek response: ${responseTime}ms`);
 
+    // Get current user from session or default to 'Unknown User'
+    const currentUser = req.session?.userId || 'Unknown User';
+    
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage },
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.choices[0].message.content, name: 'DeepSeek' }
     ];
 

@@ -22,8 +22,9 @@ export const useChatState = () => {
     popupContent: "",
     popupContentFunction: () => {},
     activeQuestion: {
-      role: "user",
+      role: "user" as const,
       content: "",
+      name: "",
     },
     uri: "",
     writeuri: "",
@@ -59,6 +60,10 @@ export const useChatState = () => {
 
   const setCurrentQuery = (query: string) => {
     appState.currentQuery = query;
+  };
+
+  const setActiveQuestionName = (name: string) => {
+    appState.activeQuestion.name = name;
   };
 
   const setSelectedAI = (ai: string) => {
@@ -105,6 +110,7 @@ export const useChatState = () => {
     clearChat,
     setLoading,
     setCurrentQuery,
+    setActiveQuestionName,
     setSelectedAI,
     setTimeline,
     setUploadedFiles,

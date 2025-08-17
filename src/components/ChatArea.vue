@@ -99,7 +99,7 @@
     </div>
 
     <!-- Active Question -->
-    <q-chat-message name="user" v-if="appState.activeQuestion.content !== ''" size="8" sent>
+    <q-chat-message :name="appState.activeQuestion.name || getCurrentUserName()" v-if="appState.activeQuestion.content !== ''" size="8" sent>
       <vue-markdown :source="appState.activeQuestion.content" />
     </q-chat-message>
 
@@ -128,7 +128,7 @@
         <div class="text-body1">
           <p>You are about to delete the following message:</p>
           <div class="message-preview">
-            <strong>{{ messageToDelete?.role === 'user' ? 'User' : 'Assistant' }}:</strong>
+            <strong>{{ messageToDelete?.role === 'user' ? getCurrentUserName() : 'Assistant' }}:</strong>
             <div class="message-content">{{ messageToDelete?.content?.substring(0, 100) }}{{ messageToDelete?.content?.length > 100 ? '...' : '' }}</div>
           </div>
           <p v-if="precedingUserMessage" class="text-caption">
@@ -566,13 +566,38 @@ export default defineComponent({
                     handleGroupDeleted() {
                       this.loadGroupCount()
                     },
+                    getCurrentUserName(): string {
+                      // Return the current user name for new messages
+                      const currentUser = this.currentUser
+                      if (currentUser) {
+                        if (typeof currentUser === 'object') {
+                          return currentUser.displayName || currentUser.userId || 'Unknown User'
+                        }
+                        return currentUser
+                      }
+                      return 'Unknown User'
+                    },
     getSystemMessageType,
     getModelLabel(
       x: { role: string; name?: string },
       appState: AppState,
       AIoptions?: { label: string; value: string }[]
     ): string {
-      if (x.role === 'user') return 'User'
+      if (x.role === 'user') {
+        // First, check if the message has a stored name field (preserves user name at time of creation)
+        if (x.name && typeof x.name === 'string') {
+          return x.name
+        }
+        // Fallback to current user if no stored name
+        const currentUser = this.currentUser
+        if (currentUser) {
+          if (typeof currentUser === 'object') {
+            return currentUser.displayName || currentUser.userId || 'Unknown User'
+          }
+          return currentUser
+        }
+        return 'Unknown User'
+      }
       if (x.role === 'assistant') {
         // First, check if the message has a name field from the backend
         if (x.name && typeof x.name === 'string') {

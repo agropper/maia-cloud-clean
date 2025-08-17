@@ -67,7 +67,7 @@ export default defineComponent({
     },
   },
   setup() {
-    const { appState, writeMessage, clearLocalStorageKeys } = useChatState();
+    const { appState, writeMessage, clearLocalStorageKeys, setActiveQuestionName } = useChatState();
     const { logMessage, logContextSwitch, logSystemEvent, setTimelineChunks } =
       useChatLogger();
     const { generateTranscript } = useTranscript();
@@ -432,6 +432,7 @@ export default defineComponent({
       handleSignIn,
       handleSignOut,
       handleSignInCancelled,
+      setActiveQuestionName,
       showPasskeyAuthDialog,
     };
   },
@@ -508,6 +509,8 @@ export default defineComponent({
     :clearLocalStorageKeys="clearLocalStorageKeys"
     :AIoptions="AIoptions"
     :triggerAgentManagement="triggerAgentManagement"
+    :setActiveQuestionName="setActiveQuestionName"
+    :currentUser="currentUser"
   />
 
   <!-- Popup for displaying system messages -->
