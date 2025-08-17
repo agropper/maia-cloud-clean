@@ -17,7 +17,7 @@ A secure, multi-user medical AI assistant with passkey authentication, knowledge
 
 - **🔐 Passkey Authentication**: Secure user authentication using WebAuthn
 - **🧠 Knowledge Base Management**: Create and manage medical knowledge bases
-- **🤖 Multi-AI Integration**: Support for Anthropic Claude, Google Gemini, DeepSeek, and DigitalOcean AI
+- **🤖 Multi-AI Integration**: Support for Anthropic Claude, Google Gemini, ChatGPT, DeepSeek, and DigitalOcean AI
 - **👥 Multi-User Support**: Each user has their own secure workspace
 - **📁 File Upload & Processing**: Support for PDF and medical document uploads with AI analysis
 - **💬 Advanced Chat Management**: Edit, delete, and manage chat messages with intelligent cleanup
@@ -67,6 +67,21 @@ A secure, multi-user medical AI assistant with passkey authentication, knowledge
 
 See `.env` file for all required configuration variables.
 
+### 🔐 Passkey Configuration
+
+The passkey system now supports flexible domain configuration through environment variables. See [DOMAIN_CONFIGURATION.md](./DOMAIN_CONFIGURATION.md) for detailed configuration options.
+
+**Quick Setup:**
+```bash
+# For production deployment
+PASSKEY_RPID=your-domain.com
+PASSKEY_ORIGIN=https://your-domain.com
+
+# Or use general domain variables
+DOMAIN=your-domain.com
+HTTPS=true
+```
+
 ## API Endpoints
 
 ### Core Services
@@ -82,6 +97,7 @@ See `.env` file for all required configuration variables.
 ### AI Chat Services
 - `POST /api/anthropic-chat` - Anthropic Claude integration
 - `POST /api/gemini-chat` - Google Gemini integration
+- `POST /api/chatgpt-chat` - OpenAI ChatGPT integration
 - `POST /api/deepseek-r1-chat` - DeepSeek integration
 - `POST /api/personal-chat` - DigitalOcean Personal AI
 
