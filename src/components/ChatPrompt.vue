@@ -101,6 +101,13 @@ export default defineComponent({
           // Store the chat ID for future updates
           appState.currentChatId = groupChat.id;
           
+          // Set current user to "Linked User" when accessing via deep link
+          currentUser.value = { userId: 'Linked User', displayName: 'Linked User' };
+          
+          // Clear any existing query and set active question name for new questions
+          appState.currentQuery = '';
+          setActiveQuestionName('Linked User');
+          
           writeMessage(`Loaded shared group chat from ${groupChat.currentUser}`, "success");
           console.log('✅ Shared chat loaded successfully from deep link');
         } catch (error) {
