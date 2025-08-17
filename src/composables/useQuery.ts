@@ -94,6 +94,7 @@ export const sendQuery = async (
     const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
                       uri.includes('anthropic-chat') ? 'Anthropic' :
                       uri.includes('gemini-chat') ? 'Gemini' :
+                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     console.log(`🤖 ${aiProvider}: ${totalTokens} tokens, ${contextKB}KB context, ${appState.uploadedFiles?.length || 0} files`)
@@ -105,6 +106,7 @@ export const sendQuery = async (
     const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
                       uri.includes('anthropic-chat') ? 'Anthropic' :
                       uri.includes('gemini-chat') ? 'Gemini' :
+                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     console.error(`❌ ${aiProvider} error (${responseTime}ms):`, error)

@@ -573,7 +573,7 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Initialize clients only if API keys are available
-let personalChatClient, anthropic, openai, deepseek;
+let personalChatClient, anthropic, openai, deepseek, chatgpt;
 
 // DigitalOcean GenAI setup (Personal Chat) - KEEP IN CLOUD
 if (process.env.DIGITALOCEAN_PERSONAL_API_KEY) {
@@ -600,6 +600,14 @@ if (process.env.OPENAI_API_KEY) {
     apiKey: process.env.OPENAI_API_KEY
   });
   console.log('✅ OpenAI connected');
+}
+
+// ChatGPT setup (fallback)
+if (process.env.CHATGPT_API_KEY) {
+  chatgpt = new OpenAI({
+    apiKey: process.env.CHATGPT_API_KEY
+  });
+  console.log('✅ ChatGPT connected');
 }
 
 // DeepSeek setup (fallback)
@@ -664,6 +672,7 @@ const mockAIResponses = {
   'personal-chat': (message) => `[Personal AI] I understand you're asking about: "${message}". This is a mock response for local testing. In production, this would connect to your personal AI agent.`,
   'anthropic-chat': (message) => `[Anthropic Claude] Here's my response to: "${message}". This is a mock response for local testing.`,
   'gemini-chat': (message) => `[Google Gemini] I can help with: "${message}". This is a mock response for local testing.`,
+  'chatgpt-chat': (message) => `[ChatGPT] Here's my response to: "${message}". This is a mock response for local testing.`,
   'deepseek-r1-chat': (message) => `[DeepSeek R1] My analysis of: "${message}". This is a mock response for local testing.`
 };
 
@@ -1026,6 +1035,74 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ DeepSeek error (${responseTime}ms):`, error.message);
+    res.status(500).json({ message: `Server error: ${error.message}` });
+  }
+});
+
+app.post('/api/chatgpt-chat', async (req, res) => {
+  const startTime = Date.now();
+  try {
+    if (!chatgpt) {
+      return res.status(500).json({ message: 'ChatGPT API key not configured' });
+    }
+
+    let { chatHistory, newValue, uploadedFiles } = req.body;
+    chatHistory = chatHistory.filter(msg => msg.role !== 'system');
+
+    // Keep the original user message clean for chat history
+    const cleanUserMessage = newValue;
+    
+    // Prepare context for the AI
+    let aiContext = '';
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      const filesContext = uploadedFiles.map(file => 
+        `File: ${file.name} (${file.type})\nContent:\n${file.content}`
+      ).join('\n\n');
+      aiContext = `Uploaded files context:\n${filesContext}\n\n`;
+    }
+    
+    // Combine context with user message for AI
+    const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+
+    // Log token usage and context info
+    const totalTokens = estimateTokenCount(aiUserMessage);
+    const contextSize = aiContext ? Math.round(aiContext.length / 1024 * 100) / 100 : 0;
+    console.log(`🤖 ChatGPT: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
+
+    // Clean chat history to remove empty content messages that cause API errors
+    const cleanChatHistory = chatHistory.filter(msg => msg.content && msg.content.trim() !== '');
+    
+    // Format messages for ChatGPT API (remove name fields that cause validation errors)
+    const formattedMessages = cleanChatHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content
+      // Remove name field to avoid ChatGPT API validation errors
+    }));
+    
+    const response = await chatgpt.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        ...formattedMessages,
+        { role: 'user', content: aiUserMessage }
+      ]
+    });
+
+    const responseTime = Date.now() - startTime;
+    console.log(`✅ ChatGPT response: ${responseTime}ms`);
+
+    // Get current user from request body (frontend) or fall back to session
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
+    
+    const newChatHistory = [
+      ...chatHistory,
+      { role: 'user', content: cleanUserMessage, name: currentUser },
+      { role: 'assistant', content: response.choices[0].message.content, name: 'ChatGPT' }
+    ];
+
+    res.json(newChatHistory);
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    console.error(`❌ ChatGPT error (${responseTime}ms):`, error.message);
     res.status(500).json({ message: `Server error: ${error.message}` });
   }
 });
