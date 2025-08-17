@@ -27,7 +27,7 @@
             :class="{ 'owner-group': isOwner(group) }"
           >
             <div class="row items-center justify-between">
-              <div class="col">
+              <div class="col clickable" @click="loadChat(group)">
                 <div class="row items-center q-mb-xs">
                   <div class="text-weight-medium text-body1">
                     {{ formatDate(group.updatedAt || group.createdAt) }}
@@ -62,7 +62,7 @@
                   dense
                   icon="delete"
                   color="negative"
-                  @click="confirmDelete(group)"
+                  @click.stop="confirmDelete(group)"
                   title="Delete group"
                 />
                 <q-btn
@@ -71,7 +71,7 @@
                   dense
                   icon="link"
                   color="primary"
-                  @click="copyGroupLink(group)"
+                  @click.stop="copyGroupLink(group)"
                   title="Copy group link"
                 />
               </div>
@@ -145,7 +145,7 @@ export default defineComponent({
       required: false
     }
   },
-  emits: ['update:modelValue'],
+  emits: ['update:modelValue', 'chatLoaded'],
   setup(props, { emit }) {
     const isVisible = computed({
       get: () => props.modelValue,
@@ -158,7 +158,7 @@ export default defineComponent({
     const deleting = ref(false)
     const groupToDelete = ref<GroupChat | null>(null)
 
-    const { getAllGroupChats, deleteGroupChat } = useGroupChat()
+    const { getAllGroupChats, deleteGroupChat, loadGroupChat } = useGroupChat()
 
     const sortedGroups = computed(() => {
       return [...groups.value].sort((a, b) => {
@@ -286,6 +286,49 @@ export default defineComponent({
       }
     }
 
+    const loadChat = async (group: GroupChat) => {
+      try {
+        console.log('📂 Loading group chat:', group.id)
+        
+        // Load the chat data
+        const loadedChat = await loadGroupChat(group.id)
+        console.log('✅ Chat loaded successfully:', loadedChat)
+        
+        // Emit the loaded chat to parent component
+        emit('chatLoaded', loadedChat)
+        
+        // Close the modal
+        isVisible.value = false
+        
+      } catch (error) {
+        console.error('❌ Failed to load group chat:', error)
+        // Show error notification
+        const notification = document.createElement('div')
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background-color: #f44336;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 4px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+          z-index: 10000;
+          font-family: Arial, sans-serif;
+          font-size: 14px;
+          font-weight: 500;
+        `
+        notification.textContent = 'Failed to load chat. Please try again.'
+        document.body.appendChild(notification)
+        
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification)
+          }
+        }, 3000)
+      }
+    }
+
     // Load groups when modal opens
     watch(isVisible, (newValue) => {
       if (newValue) {
@@ -305,7 +348,8 @@ export default defineComponent({
       formatParticipants,
       copyGroupLink,
       confirmDelete,
-      deleteGroup
+      deleteGroup,
+      loadChat
     }
   }
 })
@@ -326,6 +370,10 @@ export default defineComponent({
 .group-item:hover {
   border-color: #1976d2;
   background-color: #f5f5f5;
+}
+
+.clickable {
+  cursor: pointer;
 }
 
 .owner-group {

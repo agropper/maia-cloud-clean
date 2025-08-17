@@ -63,6 +63,7 @@
                       v-model="showGroupModal"
                       :currentUser="currentUser"
                       :onGroupDeleted="handleGroupDeleted"
+                      @chatLoaded="handleChatLoaded"
                     />
 
     <!-- Group Sharing Options Modal -->
@@ -125,6 +126,10 @@ export default defineComponent({
                     },
                     onGroupDeleted: {
                       type: Function as () => () => void | Promise<void>,
+                      required: false
+                    },
+                    onChatLoaded: {
+                      type: Function as (chat: any) => void | Promise<void>,
                       required: false
                     }
                   },
@@ -302,6 +307,15 @@ export default defineComponent({
       }
     })
 
+    const handleChatLoaded = (groupChat: any) => {
+      console.log('📂 Group chat loaded in badge:', groupChat)
+      
+      // Emit the loaded chat to the parent component using the dedicated prop
+      if (props.onChatLoaded) {
+        props.onChatLoaded(groupChat)
+      }
+    }
+
                         return {
                       badgeRef,
                       badgeHeight,
@@ -323,7 +337,8 @@ export default defineComponent({
                       handleGroupSharingToggle,
                       startNewChat,
                       startNewChatWithSameGroup,
-                      handleGroupDeleted
+                      handleGroupDeleted,
+                      handleChatLoaded
                     }
   }
 })

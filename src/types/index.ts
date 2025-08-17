@@ -55,7 +55,7 @@ export interface AppState {
   isSaving: boolean
   popupContent: string
   popupContentFunction: Function
-  activeQuestion: OpenAI.Chat.ChatCompletionMessageParam
+  activeQuestion: OpenAI.Chat.ChatCompletionMessageParam & { name?: string }
   uri: string
   writeuri: string
   localStorageKey: string

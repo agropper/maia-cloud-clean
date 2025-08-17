@@ -699,8 +699,8 @@ app.post('/api/personal-chat', async (req, res) => {
     // Combine context with user message for AI, but keep original for chat history
     const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
 
-    // Get current user from session or default to 'Unknown User'
-    const currentUser = req.session?.userId || 'Unknown User';
+    // Get current user from request body (frontend) or fall back to session
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
     const newChatHistory = [
       ...chatHistory,
@@ -846,8 +846,8 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Anthropic response: ${responseTime}ms`);
 
-    // Get current user from session or default to 'Unknown User'
-    const currentUser = req.session?.userId || 'Unknown User';
+    // Get current user from request body (frontend) or fall back to session
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
     const newChatHistory = [
       ...chatHistory,
@@ -952,8 +952,8 @@ app.post('/api/gemini-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Gemini response: ${responseTime}ms`);
 
-    // Get current user from session or default to 'Unknown User'
-    const currentUser = req.session?.userId || 'Unknown User';
+    // Get current user from request body (frontend) or fall back to session
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
     const newChatHistory = [
       ...chatHistory,
@@ -1013,8 +1013,8 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ DeepSeek response: ${responseTime}ms`);
 
-    // Get current user from session or default to 'Unknown User'
-    const currentUser = req.session?.userId || 'Unknown User';
+    // Get current user from request body (frontend) or fall back to session
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
     const newChatHistory = [
       ...chatHistory,
@@ -1370,6 +1370,75 @@ app.delete('/api/delete-chat/:chatId', async (req, res) => {
   } catch (error) {
     console.error('❌ Delete chat error:', error);
     res.status(500).json({ message: `Failed to delete chat: ${error.message}` });
+  }
+});
+
+// Clean up chats with missing name properties (for data format upgrades)
+app.delete('/api/cleanup-invalid-chats', async (req, res) => {
+  try {
+    console.log('🧹 Starting cleanup of chats with missing name properties...');
+    
+    // Get all chats
+    const allChats = await couchDBClient.getAllChats();
+    console.log(`📊 Found ${allChats.length} total chats to analyze`);
+    
+    // Analyze chats for missing name properties
+    const invalidChats = [];
+    const validChats = [];
+    
+    for (const chat of allChats) {
+      if (!chat.chatHistory || !Array.isArray(chat.chatHistory)) {
+        console.log(`⚠️  Chat ${chat._id} has invalid chatHistory structure`);
+        invalidChats.push(chat);
+        continue;
+      }
+      
+      // Check if any user messages are missing the name property
+      const hasInvalidMessages = chat.chatHistory.some(msg => 
+        msg.role === 'user' && (!msg.name || typeof msg.name !== 'string')
+      );
+      
+      if (hasInvalidMessages) {
+        console.log(`❌ Chat ${chat._id} has user messages missing name property`);
+        invalidChats.push(chat);
+      } else {
+        validChats.push(chat);
+      }
+    }
+    
+    console.log(`📋 Analysis complete:`);
+    console.log(`   ✅ Valid chats: ${validChats.length}`);
+    console.log(`   ❌ Invalid chats: ${invalidChats.length}`);
+    
+    // Delete only the invalid chats
+    let deletedCount = 0;
+    for (const chat of invalidChats) {
+      try {
+        await couchDBClient.deleteChat(chat._id);
+        deletedCount++;
+        console.log(`🗑️  Deleted invalid chat: ${chat._id}`);
+      } catch (error) {
+        console.error(`❌ Failed to delete invalid chat ${chat._id}:`, error.message);
+      }
+    }
+    
+    console.log(`✅ Cleanup completed successfully`);
+    res.json({ 
+      success: true, 
+      message: `Cleanup completed: ${deletedCount} invalid chats removed`,
+      deletedCount,
+      totalInvalid: invalidChats.length,
+      totalValid: validChats.length,
+      totalAnalyzed: allChats.length,
+      details: {
+        validChats: validChats.length,
+        invalidChats: invalidChats.length,
+        deletedChats: deletedCount
+      }
+    });
+  } catch (error) {
+    console.error('❌ Cleanup invalid chats error:', error);
+    res.status(500).json({ message: `Failed to cleanup invalid chats: ${error.message}` });
   }
 });
 
@@ -2505,6 +2574,114 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
+
+// =============================================================================
+// DEEP LINK USER MANAGEMENT
+// =============================================================================
+
+// Save deep link user information
+app.post('/api/deep-link-users', async (req, res) => {
+  try {
+    const { name, email, shareId, accessTime, userAgent, ipAddress, isDeepLinkUser } = req.body;
+    
+    if (!name || !email || !shareId) {
+      return res.status(400).json({ 
+        error: 'Name, email, and shareId are required' 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        error: 'Invalid email format' 
+      });
+    }
+
+    // Create unique user ID for deep link users
+    const userId = `deep_link_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create user document
+    const userDoc = {
+      _id: userId,
+      userId,
+      displayName: name,
+      email,
+      shareId,
+      accessTime,
+      userAgent: userAgent || req.get('User-Agent'),
+      ipAddress: ipAddress || req.ip || 'unknown',
+      isDeepLinkUser: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      source: 'deep_link',
+      environment: process.env.NODE_ENV || 'development'
+    };
+
+    // Save to maia_users database
+    await couchDBClient.saveDocument('maia_users', userDoc);
+    
+    console.log(`✅ Deep link user saved: ${name} (${email}) for share ${shareId}`);
+    
+    res.json({
+      success: true,
+      message: 'User information saved successfully',
+      userId,
+      user: {
+        name,
+        email,
+        shareId
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error saving deep link user:', error);
+    res.status(500).json({ 
+      error: 'Failed to save user information',
+      details: error.message 
+    });
+  }
+});
+
+// Get deep link user by share ID
+app.get('/api/deep-link-users/:shareId', async (req, res) => {
+  try {
+    const { shareId } = req.params;
+    
+    // Get all users and filter by share ID
+    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const deepLinkUsers = allUsers.filter(user => 
+      user.isDeepLinkUser && user.shareId === shareId
+    );
+    
+    if (deepLinkUsers.length === 0) {
+      return res.status(404).json({ 
+        error: 'No deep link users found for this share ID' 
+      });
+    }
+    
+    // Return user info without sensitive data
+    const userInfo = deepLinkUsers.map(user => ({
+      userId: user.userId,
+      name: user.displayName,
+      email: user.email,
+      accessTime: user.accessTime,
+      createdAt: user.createdAt
+    }));
+    
+    res.json({
+      success: true,
+      users: userInfo
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching deep link users:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch user information',
+      details: error.message 
+    });
+  }
+});
 
 // =============================================================================
 // CATCH-ALL ROUTE FOR SPA

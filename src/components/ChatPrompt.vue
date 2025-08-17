@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, ref, watch } from "vue";
+import { defineComponent, ref, watch, nextTick } from "vue";
 import { QFile, QIcon, QBtnToggle } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
@@ -22,6 +22,7 @@ import { useGroupChat } from "../composables/useGroupChat";
 import { API_BASE_URL } from "../utils/apiBase";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
+import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 
 const AIoptions = [
   { label: "Personal Chat", value: `${API_BASE_URL}/personal-chat` },
@@ -42,6 +43,7 @@ export default defineComponent({
     SavedChatsDialog,
     AgentManagementDialog,
     PasskeyAuthDialog,
+    DeepLinkUserModal,
   },
   computed: {
     placeholderText() {
@@ -78,42 +80,32 @@ export default defineComponent({
     const showSavedChatsDialog = ref(false);
     const showAgentManagementDialog = ref(false);
     const showPasskeyAuthDialog = ref(false);
+    const showDeepLinkUserModal = ref(false);
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>(null);
+    const pendingShareId = ref<string | null>(null);
 
-    // Handle deep link loading
+    // Handle deep link loading - only for actual deep link URLs
     const handleDeepLink = async () => {
       const path = window.location.pathname;
-      const shareIdMatch = path.match(/^\/shared\/([a-zA-Z0-9]{12})$/);
       
-      if (shareIdMatch) {
-        const shareId = shareIdMatch[1];
-        try {
-          console.log('🔗 Loading shared chat from deep link:', shareId);
-          const { loadSharedChat } = useGroupChat();
-          const groupChat = await loadSharedChat(shareId);
+      // Only process if this is a deep link path (not root, not other paths)
+      if (path.startsWith('/shared/')) {
+        const shareIdMatch = path.match(/^\/shared\/([a-zA-Z0-9]{12})$/);
+        
+        if (shareIdMatch) {
+          const shareId = shareIdMatch[1];
+          console.log('🔗 Deep link detected:', shareId);
           
-          // Load the group chat data
-          appState.chatHistory = groupChat.chatHistory;
-          appState.uploadedFiles = groupChat.uploadedFiles;
-          
-          // Store the chat ID for future updates
-          appState.currentChatId = groupChat.id;
-          
-          // Set current user to "Linked User" when accessing via deep link
-          currentUser.value = { userId: 'Linked User', displayName: 'Linked User' };
-          
-          // Clear any existing query and set active question name for new questions
-          appState.currentQuery = '';
-          setActiveQuestionName('Linked User');
-          
-          writeMessage(`Loaded shared group chat from ${groupChat.currentUser}`, "success");
-          console.log('✅ Shared chat loaded successfully from deep link');
-        } catch (error) {
-          console.error('❌ Failed to load shared chat from deep link:', error);
-          writeMessage("Failed to load shared group chat", "error");
+          // Store the share ID and show the user identification modal
+          pendingShareId.value = shareId;
+          showDeepLinkUserModal.value = true;
+        } else {
+          console.log('🔗 Invalid deep link format:', path);
         }
+      } else {
+        console.log('🔗 No deep link detected - normal server access');
       }
     };
 
@@ -169,6 +161,59 @@ export default defineComponent({
 
     const triggerAgentManagement = () => {
       showAgentManagementDialog.value = true;
+    };
+
+    // Handle deep link user identification
+    const handleDeepLinkUserIdentified = async (userData: {
+      name: string;
+      email: string;
+      userId: string;
+      shareId: string;
+    }) => {
+      try {
+        console.log('🔗 User identified for deep link:', userData);
+        
+        // Load the shared chat
+        const { loadSharedChat } = useGroupChat();
+        const groupChat = await loadSharedChat(userData.shareId);
+        
+        // Load the group chat data WITHOUT modifying existing user names
+        // This preserves the original user labels in the chat history
+        appState.chatHistory = groupChat.chatHistory;
+        appState.uploadedFiles = groupChat.uploadedFiles;
+        
+        // Store the chat ID for future updates
+        appState.currentChatId = groupChat.id;
+        
+        // Set current user to the identified user (this will update the Agent badge)
+        currentUser.value = { 
+          userId: userData.userId, 
+          displayName: userData.name,
+          email: userData.email,
+          isDeepLinkUser: true
+        };
+        
+        // Clear any existing query and active question (don't set active question name - it should use current user)
+        appState.currentQuery = '';
+        appState.activeQuestion.content = '';
+        
+        // Force a reactive update to ensure the Agent badge updates
+        await nextTick();
+        
+        // Trigger agent refresh to ensure the Agent badge updates with new user
+        await fetchCurrentAgent();
+        
+        writeMessage(`Welcome ${userData.name}! Loaded shared group chat from ${groupChat.currentUser}`, "success");
+        console.log('✅ Shared chat loaded successfully for identified user:', userData.name);
+        console.log('🔍 Current user set to:', currentUser.value);
+        
+        // Clear pending share ID
+        pendingShareId.value = null;
+        
+      } catch (error) {
+        console.error('❌ Failed to load shared chat after user identification:', error);
+        writeMessage("Failed to load shared group chat", "error");
+      }
     };
 
     const handleAgentUpdated = (agentInfo: any) => {
@@ -319,7 +364,8 @@ export default defineComponent({
         const newChatHistory = await sendQuery(
           appState.selectedAI,
           appState.chatHistory,
-          appState
+          appState,
+          currentUser.value // Pass the current user identity
         );
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
@@ -439,8 +485,10 @@ export default defineComponent({
       handleSignIn,
       handleSignOut,
       handleSignInCancelled,
-      setActiveQuestionName,
       showPasskeyAuthDialog,
+      showDeepLinkUserModal,
+      pendingShareId,
+      handleDeepLinkUserIdentified,
     };
   },
 });
@@ -516,7 +564,6 @@ export default defineComponent({
     :clearLocalStorageKeys="clearLocalStorageKeys"
     :AIoptions="AIoptions"
     :triggerAgentManagement="triggerAgentManagement"
-    :setActiveQuestionName="setActiveQuestionName"
     :currentUser="currentUser"
   />
 
@@ -553,5 +600,12 @@ export default defineComponent({
     v-model="showPasskeyAuthDialog"
     @authenticated="handleUserAuthenticated"
     @cancelled="handleSignInCancelled"
+  />
+
+  <!-- Deep Link User Identification Modal -->
+  <DeepLinkUserModal
+    v-model="showDeepLinkUserModal"
+    :share-id="pendingShareId || ''"
+    @user-identified="handleDeepLinkUserIdentified"
   />
 </template>

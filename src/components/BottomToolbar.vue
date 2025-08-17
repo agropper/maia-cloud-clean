@@ -182,10 +182,7 @@ export default defineComponent({
       type: Array as PropType<{ label: string; value: string }[]>,
       required: true
     },
-    setActiveQuestionName: {
-      type: Function as PropType<(name: string) => void>,
-      required: true
-    },
+
     currentUser: {
       type: Object as PropType<any>,
       default: null
@@ -257,17 +254,7 @@ export default defineComponent({
 
     isSpeechSupported.value = recognition.value !== null
 
-    // Watch for changes in currentQuery to update active question name
-    watch(() => props.appState.currentQuery, (newQuery) => {
-      if (newQuery && newQuery.trim() !== '') {
-        // Get current user name from props or default to 'Unknown User'
-        const currentUser = props.currentUser || 'Unknown User'
-        const userName = typeof currentUser === 'object' ? 
-          (currentUser.displayName || currentUser.userId || 'Unknown User') : 
-          currentUser
-        props.setActiveQuestionName(userName)
-      }
-    })
+
 
     const toggleSpeechRecognition = () => {
       if (!recognition.value) return

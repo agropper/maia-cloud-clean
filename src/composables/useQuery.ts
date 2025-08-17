@@ -31,7 +31,8 @@ export const postData = async (uri: string, data: any): Promise<any> => {
 export const sendQuery = async (
   uri: string,
   chatHistory: ChatHistoryItem[],
-  appState: AppState
+  appState: AppState,
+  currentUser?: any
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
   
@@ -82,7 +83,8 @@ export const sendQuery = async (
         name: file.name,
         type: file.type,
         content: file.content
-      }))
+      })),
+      currentUser: currentUser // Pass the current user identity to the backend
     });
 
     const responseTime = Date.now() - startTime

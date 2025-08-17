@@ -21,6 +21,7 @@
                     :onNewChat="handleNewChat"
                     :onNewChatWithSameGroup="handleNewChatWithSameGroup"
                     :onGroupDeleted="handleGroupDeleted"
+                    :onChatLoaded="handleChatLoaded"
                   />
     </div>
     
@@ -98,9 +99,10 @@
       </q-chat-message>
     </div>
 
-    <!-- Active Question -->
-    <q-chat-message :name="appState.activeQuestion.name || getCurrentUserName()" v-if="appState.activeQuestion.content !== ''" size="8" sent>
-      <vue-markdown :source="appState.activeQuestion.content" />
+    <!-- Active Question - Only show when there's a current query being typed -->
+    <q-chat-message :name="getCurrentUserName()" v-if="appState.currentQuery && appState.currentQuery.trim() !== ''" size="8" sent>
+      <vue-markdown :source="appState.currentQuery" />
+
     </q-chat-message>
 
     <!-- Signature Buttons -->
@@ -113,6 +115,13 @@
         label="Save to CouchDB"
         @click="triggerSaveToCouchDB"
       /> -->
+      <q-btn 
+        v-if="getGroupBadgeStatus() === 'Modified'"
+        size="sm" 
+        color="primary" 
+        label="Post to Group" 
+        @click="saveToGroup" 
+      />
       <q-btn size="sm" color="warning" label="End without Saving" @click="closeNoSave" />
     </div>
   </div>
@@ -539,17 +548,25 @@ export default defineComponent({
                         console.error('❌ Failed to load group count:', error)
                       }
                     },
-                    async handleNewChat() {
-                      // Clear current chat and start fresh
-                      this.appState.chatHistory = []
-                      this.appState.uploadedFiles = []
-                      this.appState.currentChatId = null // Clear the current chat ID
-                      this.initializeChatState()
-                      // Refresh group count after clearing chat
-                      this.loadGroupCount()
-                      // Navigate to home URL
-                      window.location.href = window.location.origin
-
+                    async handleNewChat(loadedChat?: any) {
+                      if (loadedChat) {
+                        // Load the specific chat data
+                        console.log('📂 Loading chat data into ChatArea:', loadedChat)
+                        this.appState.chatHistory = loadedChat.chatHistory || []
+                        this.appState.uploadedFiles = loadedChat.uploadedFiles || []
+                        this.appState.currentChatId = loadedChat.id
+                        console.log('✅ Chat loaded successfully in ChatArea')
+                      } else {
+                        // Clear current chat and start fresh
+                        this.appState.chatHistory = []
+                        this.appState.uploadedFiles = []
+                        this.appState.currentChatId = null // Clear the current chat ID
+                        this.initializeChatState()
+                        // Refresh group count after clearing chat
+                        this.loadGroupCount()
+                        // Navigate to home URL
+                        window.location.href = window.location.origin
+                      }
                     },
                     async handleNewChatWithSameGroup() {
                       // Keep group sharing ON but clear chat content
@@ -565,6 +582,29 @@ export default defineComponent({
                     },
                     handleGroupDeleted() {
                       this.loadGroupCount()
+                    },
+                    handleChatLoaded(loadedChat: any) {
+                      console.log('📂 Chat loaded in ChatArea:', loadedChat)
+                      
+                      // Load the chat data into the main chat state
+                      this.appState.chatHistory = loadedChat.chatHistory || []
+                      this.appState.uploadedFiles = loadedChat.uploadedFiles || []
+                      this.appState.currentChatId = loadedChat.id
+                      
+                      console.log('✅ Chat loaded successfully in ChatArea')
+                    },
+                    getGroupBadgeStatus(): string {
+                      // Get the current status from the Group Sharing Badge
+                      if (this.$refs.groupSharingBadgeRef) {
+                        return (this.$refs.groupSharingBadgeRef as any).chatStatus || 'Current'
+                      }
+                      return 'Current'
+                    },
+                    saveToGroup() {
+                      // Trigger the same action as clicking POST on the Group Badge
+                      if (this.$refs.groupSharingBadgeRef) {
+                        (this.$refs.groupSharingBadgeRef as any).handlePost()
+                      }
                     },
                     getCurrentUserName(): string {
                       // Return the current user name for new messages
