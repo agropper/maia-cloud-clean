@@ -1,5 +1,8 @@
 # Domain Configuration Guide
 
+## Overview
+This guide covers domain configuration for both local development and production deployment, including the new flexible passkey authentication system that automatically handles domain configuration and prevents common WebAuthn verification errors.
+
 ## Current Issue
 The `.env.backup` file has domain references scattered throughout different sections, making it difficult to configure for different environments.
 
@@ -92,3 +95,82 @@ ALLOWED_ORIGINS=https://yourdomain.com
 3. Remove the scattered domain references from other sections
 4. Update the comments to reflect the new organization
 5. Test the configuration in both local and production environments
+
+## Passkey Authentication Configuration
+
+### Overview
+The passkey system now supports flexible configuration through multiple environment variable options, with automatic fallback logic.
+
+### Environment Variable Priority
+The system checks for passkey configuration in this order (highest to lowest priority):
+
+1. **Explicit Passkey Variables** (highest priority)
+   - `PASSKEY_RPID` - Specific domain for passkey authentication
+   - `PASSKEY_ORIGIN` - Specific origin URL for passkey authentication
+
+2. **General Domain Variables**
+   - `DOMAIN` - General domain setting (used for both passkey and other services)
+   - `HTTPS` - Protocol setting (true/false, defaults to http if not set)
+
+3. **Production Fallback**
+   - `NODE_ENV=production` - Uses hardcoded production domain
+
+4. **Development Fallback** (lowest priority)
+   - Defaults to `localhost` for local development
+
+### Configuration Examples
+
+#### Option 1: Explicit Passkey Configuration (Recommended)
+```bash
+# Most flexible and explicit
+PASSKEY_RPID=your-domain.com
+PASSKEY_ORIGIN=https://your-domain.com
+```
+
+#### Option 2: General Domain Configuration
+```bash
+# Good for consistent domain usage across all services
+DOMAIN=your-domain.com
+HTTPS=true
+```
+
+#### Option 3: Production Mode
+```bash
+# Simple but less flexible
+NODE_ENV=production
+```
+
+### Important Notes
+
+#### Trailing Slash Handling
+- The system automatically removes trailing slashes from origins
+- This prevents WebAuthn verification errors due to origin mismatch
+- Example: `https://domain.com/` becomes `https://domain.com`
+
+#### Protocol Detection
+- If `HTTPS=true`, the system automatically uses `https://`
+- If `HTTPS` is not set or false, the system uses `http://`
+- Port numbers are automatically appended if `PORT` environment variable is set
+
+### Troubleshooting
+
+#### Common Issues
+1. **"Failed to verify registration"** - Usually indicates domain/origin mismatch
+2. **"Unexpected registration response origin"** - Check for trailing slash differences
+3. **Passkey creation fails in cloud** - Verify environment variables are set correctly
+
+#### Debug Information
+The system logs detailed passkey configuration information on startup:
+```
+🔍 Passkey Configuration:
+  - NODE_ENV: production
+  - rpID: your-domain.com
+  - origin: https://your-domain.com
+  - ORIGIN env var: https://your-domain.com
+```
+
+### Migration from Old Configuration
+If you were previously using hardcoded domain values:
+1. Set the appropriate environment variables for your deployment
+2. The system will automatically use the new flexible configuration
+3. No code changes required - just environment variable updates
