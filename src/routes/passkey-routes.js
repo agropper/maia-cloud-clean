@@ -19,8 +19,8 @@ export const setCouchDBClient = (client) => {
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
-const rpID = process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost'; // Use actual production domain
-const origin = process.env.NODE_ENV === 'production' ? 'https://maia-cloud-clean-kjho4.ondigitalocean.app' : 'http://localhost:3001'; // Use actual production domain
+const rpID = process.env.PASSKEY_RPID || process.env.DOMAIN || (process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost');
+const origin = process.env.PASSKEY_ORIGIN || (process.env.HTTPS === 'true' ? 'https://' : 'http://') + (process.env.DOMAIN || (process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost')) + (process.env.PORT ? ':' + process.env.PORT : '');
 
 // Log configuration for debugging
 console.log("🔍 Passkey Configuration:");
