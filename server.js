@@ -1714,13 +1714,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     const currentUser = getCurrentUser(req);
     
     console.log(`🔗 [DO API] Attempting to attach KB ${kbId} to agent ${agentId}`);
-    console.log(`🔍 [DEBUG] Current user status:`, {
-      hasSession: !!req.session,
-      sessionUserId: req.session?.userId,
-      sessionUsername: req.session?.username,
-      currentUser: currentUser,
-      isAuthenticated: !!currentUser
-    });
+
 
     // Check protection status using Cloudant directly (source of truth for security)
     let isProtected = false;
@@ -1731,14 +1725,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       // Query Cloudant directly for KB ownership and protection status
       kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
       
-      console.log(`🔍 [DEBUG] KB document structure:`, {
-        kbId: kbId,
-        hasOwner: !!kbDoc?.owner,
-        hasIsProtected: !!kbDoc?.isProtected,
-        owner: kbDoc?.owner,
-        isProtected: kbDoc?.isProtected,
-        documentKeys: kbDoc ? Object.keys(kbDoc) : 'no document'
-      });
+
       
       if (kbDoc) {
         // Check if the knowledge base has owner information or is marked as protected
