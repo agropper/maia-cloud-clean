@@ -1741,28 +1741,38 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
         console.log(`📝 [SYNC] KB ${kbId} not found in Cloudant - creating with default unprotected status`);
         
         try {
-          // Get KB info from DigitalOcean to create the document
-          const doKbInfo = await doRequest(`/v2/gen-ai/knowledge-bases/${kbId}`);
-          const kbName = doKbInfo.name || doKbInfo.kb_name || kbId;
+          // Get KB info from DigitalOcean using the same approach as the working endpoint
+          const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+          const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
+          const doKbInfo = doKBs.find(kb => kb.uuid === kbId || kb.id === kbId);
           
-          // Create new KB document in Cloudant with default unprotected status
-          const newKbDoc = {
-            _id: kbId,
-            kbName: kbName,
-            uuid: kbId,
-            created_at: new Date().toISOString(),
-            isProtected: false, // Default to unprotected
-            owner: null, // No owner by default
-            source: 'digitalocean_sync'
-          };
-          
-          await couchDBClient.saveDocument("maia_knowledge_bases", newKbDoc);
-          console.log(`✅ [SYNC] Created KB document in Cloudant: ${kbName}`);
-          
-          // Update our local reference
-          kbDoc = newKbDoc;
-          isProtected = false;
-          kbOwner = null;
+          if (doKbInfo) {
+            const kbName = doKbInfo.name || doKbInfo.kb_name || kbId;
+            
+            // Create new KB document in Cloudant with default unprotected status
+            const newKbDoc = {
+              _id: kbId,
+              kbName: kbName,
+              uuid: kbId,
+              created_at: new Date().toISOString(),
+              isProtected: false, // Default to unprotected
+              owner: null, // No owner by default
+              source: 'digitalocean_sync'
+            };
+            
+            await couchDBClient.saveDocument("maia_knowledge_bases", newKbDoc);
+            console.log(`✅ [SYNC] Created KB document in Cloudant: ${kbName}`);
+            
+            // Update our local reference
+            kbDoc = newKbDoc;
+            isProtected = false;
+            kbOwner = null;
+          } else {
+            console.log(`⚠️ [SYNC] KB ${kbId} not found in DigitalOcean response`);
+            // Fall back to treating as protected for safety
+            isProtected = true;
+            console.log(`🔒 [SECURITY] Treating KB ${kbId} as PROTECTED due to not found in DO (fail-safe)`);
+          }
           
         } catch (createError) {
           console.log(`⚠️ [SYNC] Failed to create KB document in Cloudant:`, createError.message);
