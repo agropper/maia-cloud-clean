@@ -1725,10 +1725,11 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     // Check protection status using Cloudant directly (source of truth for security)
     let isProtected = false;
     let kbOwner = null;
+    let kbDoc = null;
     
     try {
       // Query Cloudant directly for KB ownership and protection status
-      const kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
+      kbDoc = await couchDBClient.getDocument("maia_knowledge_bases", kbId);
       
       console.log(`🔍 [DEBUG] KB document structure:`, {
         kbId: kbId,
@@ -1749,8 +1750,39 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
           console.log(`✅ [SECURITY] KB ${kbId} is UNPROTECTED - no owner restrictions`);
         }
       } else {
-        console.log(`❌ [SECURITY] KB ${kbId} not found in Cloudant - treating as protected for safety`);
-        isProtected = true;
+        // KB doesn't exist in Cloudant - create it with default unprotected status
+        console.log(`📝 [SYNC] KB ${kbId} not found in Cloudant - creating with default unprotected status`);
+        
+        try {
+          // Get KB info from DigitalOcean to create the document
+          const doKbInfo = await doRequest(`/v2/gen-ai/knowledge-bases/${kbId}`);
+          const kbName = doKbInfo.name || doKbInfo.kb_name || kbId;
+          
+          // Create new KB document in Cloudant with default unprotected status
+          const newKbDoc = {
+            _id: kbId,
+            kbName: kbName,
+            uuid: kbId,
+            created_at: new Date().toISOString(),
+            isProtected: false, // Default to unprotected
+            owner: null, // No owner by default
+            source: 'digitalocean_sync'
+          };
+          
+          await couchDBClient.saveDocument("maia_knowledge_bases", newKbDoc);
+          console.log(`✅ [SYNC] Created KB document in Cloudant: ${kbName}`);
+          
+          // Update our local reference
+          kbDoc = newKbDoc;
+          isProtected = false;
+          kbOwner = null;
+          
+        } catch (createError) {
+          console.log(`⚠️ [SYNC] Failed to create KB document in Cloudant:`, createError.message);
+          // Fall back to treating as protected for safety
+          isProtected = true;
+          console.log(`🔒 [SECURITY] Treating KB ${kbId} as PROTECTED due to sync failure (fail-safe)`);
+        }
       }
     } catch (cloudantError) {
       console.log(`❌ [SECURITY] Failed to check Cloudant KB protection status:`, cloudantError.message);
