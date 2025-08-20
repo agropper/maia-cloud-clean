@@ -234,6 +234,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 
+// Set up EJS template engine for dynamic HTML
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'dist'));
+
 // Cache-busting headers for development
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -252,6 +256,18 @@ app.use(express.static(path.join(__dirname, 'dist'), {
     res.setHeader('Expires', '0');
   }
 }));
+
+// Custom route for index.html with environment variables
+app.get('/', (req, res) => {
+  const appTitle = process.env.APP_TITLE || 'MAIA';
+  const environment = process.env.NODE_ENV || 'development';
+  
+  res.render('index.ejs', {
+    APP_TITLE: appTitle,
+    ENVIRONMENT: environment,
+    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+  });
+});
 
 // Input validation middleware
 app.use((req, res, next) => {
