@@ -19,15 +19,47 @@ export const setCouchDBClient = (client) => {
 
 // Relying party configuration
 const rpName = "HIEofOne.org";
-const rpID = process.env.PASSKEY_RPID || process.env.DOMAIN || (process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost');
-const origin = (process.env.PASSKEY_ORIGIN || (process.env.HTTPS === 'true' ? 'https://' : 'http://') + (process.env.DOMAIN || (process.env.NODE_ENV === 'production' ? 'maia-cloud-clean-kjho4.ondigitalocean.app' : 'localhost')) + (process.env.PORT ? ':' + process.env.PORT : '')).replace(/\/$/, '');
+
+// Auto-detect environment and configure passkey settings
+const isLocalhost = process.env.NODE_ENV !== 'production' && (!process.env.DOMAIN && !process.env.PASSKEY_RPID);
+const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NODE_ENV === 'production';
+
+// Automatic rpID configuration
+const rpID = (() => {
+  if (process.env.PASSKEY_RPID) return process.env.PASSKEY_RPID;
+  if (process.env.DOMAIN) return process.env.DOMAIN;
+  if (isCloud) return 'maia-cloud-clean-kjho4.ondigitalocean.app';
+  return 'localhost'; // Local development
+})();
+
+// Automatic origin configuration
+const origin = (() => {
+  if (process.env.PASSKEY_ORIGIN) return process.env.PASSKEY_ORIGIN.replace(/\/$/, '');
+  
+  if (isCloud) {
+    const protocol = process.env.HTTPS === 'true' ? 'https://' : 'https://'; // Cloud defaults to HTTPS
+    const domain = process.env.DOMAIN || 'maia-cloud-clean-kjho4.ondigitalocean.app';
+    return `${protocol}${domain}`;
+  }
+  
+  // Local development - automatically include port
+  const port = process.env.PORT || '3001';
+  return `http://localhost:${port}`;
+})();
 
 // Log configuration for debugging
 console.log("🔍 Passkey Configuration:");
 console.log("  - NODE_ENV:", process.env.NODE_ENV);
+console.log("  - Environment Detection:");
+console.log("    - isLocalhost:", isLocalhost);
+console.log("    - isCloud:", isCloud);
 console.log("  - rpID:", rpID);
 console.log("  - origin:", origin);
-console.log("  - ORIGIN env var:", process.env.ORIGIN);
+console.log("  - Auto-detected from:");
+console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
+console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
+console.log("    - PORT:", process.env.PORT || '3001 (default)');
+console.log("    - HTTPS:", process.env.HTTPS || 'not set');
 
 // Add a function to log config on each request for debugging
 const logPasskeyConfig = () => {

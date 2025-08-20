@@ -143,6 +143,30 @@ export default defineComponent({
       }
     };
 
+    // Check for existing session on component mount
+    const checkExistingSession = async () => {
+      try {
+        console.log('🔍 [FRONTEND] Checking for existing session...');
+        const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+        const data = await response.json();
+        
+        if (data.authenticated && data.user) {
+          console.log('🔍 [FRONTEND] Found existing session for user:', data.user);
+          currentUser.value = data.user;
+        } else {
+          console.log('🔍 [FRONTEND] No existing session found, setting to Unknown User');
+          currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+        }
+      } catch (error) {
+        console.error('❌ Failed to check existing session:', error);
+        // Fall back to Unknown User on error
+        currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+      }
+    };
+    
+    // Call checkExistingSession when component mounts
+    checkExistingSession();
+    
     // Call fetchCurrentAgent when component mounts
     fetchCurrentAgent();
     

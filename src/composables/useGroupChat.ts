@@ -23,6 +23,35 @@ export interface SaveGroupChatResponse {
 }
 
 export const useGroupChat = () => {
+  // Helper function to convert File objects to base64 for storage
+  const processFilesForStorage = async (files: UploadedFile[]): Promise<any[]> => {
+    return Promise.all(files.map(async (file) => {
+      if (file.type === 'pdf' && file.originalFile instanceof File) {
+        try {
+          // Convert File object to base64
+          const arrayBuffer = await file.originalFile.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          
+          return {
+            ...file,
+            originalFile: {
+              name: file.originalFile.name,
+              size: file.originalFile.size,
+              type: file.originalFile.type,
+              base64: base64
+            }
+          };
+        } catch (error) {
+          console.warn(`⚠️ Failed to convert PDF to base64: ${file.name}`, error);
+          return { ...file, originalFile: null };
+        }
+      }
+      
+      // For non-PDF files, remove originalFile to avoid serialization issues
+      return { ...file, originalFile: null };
+    }));
+  };
+
   const saveGroupChat = async (
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
@@ -30,6 +59,9 @@ export const useGroupChat = () => {
     connectedKB: string
   ): Promise<SaveGroupChatResponse> => {
     try {
+      // Process files before sending to server
+      const processedFiles = await processFilesForStorage(uploadedFiles);
+      
       const response = await fetch(`${API_BASE_URL}/save-group-chat`, {
         method: 'POST',
         headers: {
@@ -37,7 +69,7 @@ export const useGroupChat = () => {
         },
         body: JSON.stringify({
           chatHistory,
-          uploadedFiles,
+          uploadedFiles: processedFiles,
           currentUser,
           connectedKB
         }),
@@ -107,6 +139,9 @@ export const useGroupChat = () => {
     connectedKB: string
   ): Promise<SaveGroupChatResponse> => {
     try {
+      // Process files before sending to server
+      const processedFiles = await processFilesForStorage(uploadedFiles);
+      
       const response = await fetch(`${API_BASE_URL}/group-chats/${chatId}`, {
         method: 'PUT',
         headers: {
@@ -114,7 +149,7 @@ export const useGroupChat = () => {
         },
         body: JSON.stringify({
           chatHistory,
-          uploadedFiles,
+          uploadedFiles: processedFiles,
           currentUser,
           connectedKB
         }),

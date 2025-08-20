@@ -176,6 +176,34 @@
       </q-card-actions>
     </q-card>
   </q-dialog>
+
+  <!-- No Message Error Modal -->
+  <q-dialog v-model="showNoMessageErrorModal" persistent>
+    <q-card style="min-width: 500px">
+      <q-card-section>
+        <div class="text-h6">❌ Cannot Save Chat</div>
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1">
+          <p><strong>You need to add a message to establish context for the recipient.</strong></p>
+          <p>Even if you've uploaded a PDF file, please add a brief message explaining:</p>
+          <ul>
+            <li>What the document is about</li>
+            <li>What you'd like the recipient to do with it</li>
+            <li>Any specific questions or context</li>
+          </ul>
+          <p class="text-caption text-grey">
+            <strong>This helps ensure the chat is meaningful and actionable for others.</strong>
+          </p>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn unelevated label="Got it" color="primary" @click="showNoMessageErrorModal = false" />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script lang="ts">
@@ -232,10 +260,10 @@ export default defineComponent({
                       deep: true
                     },
                     currentUser: {
-                      handler(newUser) {
-                        if (newUser) {
-                          this.loadGroupCount()
-                        }
+                      handler(newUser, oldUser) {
+                        console.log(`🔍 [CHATAREA] currentUser changed:`, { old: oldUser, new: newUser })
+                        // Always refresh group count when user changes
+                        this.loadGroupCount()
                       },
                       immediate: true
                     }
@@ -276,7 +304,8 @@ export default defineComponent({
       showDeleteModal: false,
       messageToDelete: null as any,
       precedingUserMessage: null as any,
-      showSecurityNoticeModal: false
+      showSecurityNoticeModal: false,
+      showNoMessageErrorModal: false
     }
   },
   emits: [
@@ -384,9 +413,18 @@ export default defineComponent({
     },
     async handlePostToCloudant() {
       try {
-        // Validate chat history
+        // Validate chat history has user messages (not just system messages)
         if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
           console.error('❌ No chat history to save')
+          this.showNoMessageErrorModal = true
+          return
+        }
+        
+        // Check if there are any user messages (not just system messages)
+        const hasUserMessages = this.appState.chatHistory.some(msg => msg.role === 'user')
+        if (!hasUserMessages) {
+          console.error('❌ No user messages in chat history')
+          this.showNoMessageErrorModal = true
           return
         }
         
@@ -441,6 +479,21 @@ export default defineComponent({
       try {
         // Close the modal
         this.showSecurityNoticeModal = false
+        
+        // Validate chat history has user messages (not just system messages)
+        if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
+          console.error('❌ No chat history to save')
+          this.showNoMessageErrorModal = true
+          return
+        }
+        
+        // Check if there are any user messages (not just system messages)
+        const hasUserMessages = this.appState.chatHistory.some(msg => msg.role === 'user')
+        if (!hasUserMessages) {
+          console.error('❌ No user messages in chat history')
+          this.showNoMessageErrorModal = true
+          return
+        }
         
         // Get current user info
         const currentUser = this.currentUser || 'Unknown User'
@@ -532,17 +585,25 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
-                        // Use the same data source as the backend: /api/group-chats
-                        const response = await fetch('/api/group-chats')
-                        const allGroups = await response.json()
+                        // Use the same data source and filtering logic as the Saved Chat Dialog
+                        const { getAllGroupChats } = useGroupChat()
+                        const allGroups = await getAllGroupChats()
                         
-                        const currentUserName = this.currentUser?.userId || this.currentUser?.displayName || this.currentUser || 'Unknown User'
+                        // Filter groups by current user (same logic as GroupManagementModal)
+                        let currentUserName: string
+                        if (this.currentUser && typeof this.currentUser === 'object') {
+                          currentUserName = this.currentUser.userId || this.currentUser.displayName || 'Unknown User'
+                        } else {
+                          currentUserName = this.currentUser || 'Unknown User'
+                        }
                         
-                        // Use the same filtering logic as the backend
-                        const userGroups = allGroups.filter((group: any) => group.currentUser === currentUserName)
+                        const userGroups = allGroups.filter(group => group.currentUser === currentUserName)
+                        const groupCount = userGroups.length
+                        
+                        console.log(`🔍 [FRONTEND] Loaded group count: ${groupCount} for user: ${currentUserName} (total: ${allGroups.length})`)
                         
                         if (this.$refs.groupSharingBadgeRef) {
-                          (this.$refs.groupSharingBadgeRef as any).updateGroupCount(userGroups.length)
+                          (this.$refs.groupSharingBadgeRef as any).updateGroupCount(groupCount)
                         }
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)

@@ -1136,6 +1136,15 @@ app.post('/api/save-group-chat', async (req, res) => {
 
     console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
 
+    // Files are already processed by frontend (base64 conversion done there)
+    // Just ensure they're properly formatted for storage
+    const processedUploadedFiles = (uploadedFiles || []).map(file => {
+      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
+        console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
+      }
+      return file;
+    });
+
     // Generate a secure, random share ID
     const generateShareId = () => {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -1155,7 +1164,7 @@ app.post('/api/save-group-chat', async (req, res) => {
       currentUser: currentUser || 'Unknown User',
       connectedKB: connectedKB || 'No KB connected',
       chatHistory,
-      uploadedFiles: uploadedFiles || [],
+      uploadedFiles: processedUploadedFiles,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       participantCount: chatHistory.filter(msg => msg.role === 'user').length,
@@ -1254,14 +1263,23 @@ app.get('/api/group-chats', async (req, res) => {
     const currentUser = req.session?.userId || 'unauthenticated';
     
     // Log current user
-
+    console.log(`🔍 [GROUP-CHATS] Request from user: ${currentUser}`);
     
-    // For now, return all group chats. Later we'll filter by user
+    // Get all group chats
     const allChats = await couchDBClient.getAllChats();
     const groupChats = allChats.filter(chat => chat.type === 'group_chat');
     
+    // Filter by current user if authenticated, otherwise show all (for "Unknown User" access)
+    let filteredChats = groupChats;
+    if (currentUser !== 'unauthenticated' && currentUser !== 'Unknown User') {
+      filteredChats = groupChats.filter(chat => chat.currentUser === currentUser);
+      console.log(`🔍 [GROUP-CHATS] Filtered for user ${currentUser}: ${filteredChats.length}/${groupChats.length} chats`);
+    } else {
+      console.log(`🔍 [GROUP-CHATS] Showing all chats for ${currentUser}: ${groupChats.length} chats`);
+    }
+    
     // Transform the response to match the frontend GroupChat interface
-    const transformedChats = groupChats.map(chat => ({
+    const transformedChats = filteredChats.map(chat => ({
       id: chat._id, // Map _id to id for frontend
       shareId: chat.shareId,
       currentUser: chat.currentUser,
@@ -1275,7 +1293,6 @@ app.get('/api/group-chats', async (req, res) => {
       isShared: chat.isShared
     }));
     
-
     res.json(transformedChats);
   } catch (error) {
     console.error('❌ Get group chats error:', error);
@@ -1283,7 +1300,7 @@ app.get('/api/group-chats', async (req, res) => {
   }
 });
 
-// Update existing group chat
+    // Update existing group chat
 app.put('/api/group-chats/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -1302,11 +1319,20 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
       return res.status(404).json({ message: 'Group chat not found' });
     }
 
+    // Files are already processed by frontend (base64 conversion done there)
+    // Just ensure they're properly formatted for storage
+    const processedUploadedFiles = (uploadedFiles || []).map(file => {
+      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
+        console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
+      }
+      return file;
+    });
+
     // Update the chat document
     const updatedChatDoc = {
       ...existingChat,
       chatHistory,
-      uploadedFiles: uploadedFiles || [],
+      uploadedFiles: processedUploadedFiles,
       updatedAt: new Date().toISOString(),
       participantCount: chatHistory.filter(msg => msg.role === 'user').length,
       messageCount: chatHistory.length

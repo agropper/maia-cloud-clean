@@ -60,11 +60,15 @@ export default {
   },
   data() {
     return {
-      isVisible: false as boolean
+      isVisible: false as boolean,
+      displayMode: 'auto' as 'auto' | 'pdf' | 'text' // Track how to display the file
     }
   },
   computed: {
     isPDF(): boolean {
+      // Use displayMode if set, otherwise auto-detect
+      if (this.displayMode === 'pdf') return true
+      if (this.displayMode === 'text') return false
       return !!(this.currentFile && this.currentFile.type === 'pdf')
     }
   },
@@ -81,6 +85,8 @@ export default {
     },
     currentFile: {
       handler() {
+        // Reset display mode when file changes
+        this.displayMode = 'auto'
         if (this.isVisible && this.isPDF) {
           this.$nextTick(() => this.loadPDF())
         }
@@ -107,20 +113,34 @@ export default {
         loading.style.padding = '8px'
         container.appendChild(loading)
 
-        // Prefer rendering from the original File to avoid URL/CSP issues
-        const hasFile = !!this.currentFile.originalFile
+        // Handle both fresh File objects and database-loaded objects
         let pdf
-        if (hasFile) {
-          const buf = await (this.currentFile!.originalFile as File).arrayBuffer()
+        
+        if (this.currentFile.originalFile instanceof File) {
+          // Fresh File object - use arrayBuffer()
+          const buf = await this.currentFile.originalFile.arrayBuffer()
           // @ts-ignore
           const task = pdfjsLib.getDocument({ data: buf })
+          pdf = await task.promise
+        } else if (this.currentFile.originalFile && this.currentFile.originalFile.base64) {
+          // Database-loaded file with base64 data - reconstruct the PDF
+          const base64 = this.currentFile.originalFile.base64
+          const binaryString = atob(base64)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          // @ts-ignore
+          const task = pdfjsLib.getDocument({ data: bytes })
           pdf = await task.promise
         } else if (this.currentFile.fileUrl) {
           // @ts-ignore
           const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
           pdf = await task.promise
         } else {
-          throw new Error('No PDF source available')
+          // For database-loaded files without base64 data (old format)
+          // Fall back to showing extracted text content
+          throw new Error('PDF binary not available - showing extracted text instead')
         }
 
         // Remove loading message
@@ -150,13 +170,28 @@ export default {
       } catch (e) {
         console.error('PDF loading error:', e)
         
+        // Check if this is a database-loaded file that should show text instead
+        if (e.message && e.message.includes('PDF binary not available')) {
+          // Switch to text view for database files
+          this.displayMode = 'text'
+          return
+        }
+        
         // Only show error if container still exists and doesn't have content
         if (container && container.children.length === 0) {
           const msg = document.createElement('div')
-          msg.textContent = 'Failed to display PDF.'
+          msg.textContent = 'Failed to display PDF. Showing extracted text instead.'
           msg.style.color = '#c00'
           msg.style.padding = '8px'
           container.appendChild(msg)
+          
+          // Also show the extracted text content
+          const textContent = document.createElement('div')
+          textContent.style.padding = '16px'
+          textContent.style.borderTop = '1px solid #ddd'
+          textContent.style.marginTop = '16px'
+          textContent.innerHTML = `<h4>Extracted Text Content:</h4><pre style="white-space: pre-wrap; font-size: 12px;">${this.currentFile.content || 'No content available'}</pre>`
+          container.appendChild(textContent)
         }
       }
     },

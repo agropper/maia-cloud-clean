@@ -52,6 +52,14 @@
                   <q-icon name="people" size="xs" />
                   {{ formatParticipants(group) }}
                 </div>
+                
+                <!-- File attachments -->
+                <div v-if="group.uploadedFiles && group.uploadedFiles.length > 0" class="text-caption text-grey q-mt-xs">
+                  <q-icon name="attach_file" size="xs" />
+                  <span class="file-list">
+                    {{ formatFileList(group.uploadedFiles) }}
+                  </span>
+                </div>
               </div>
               
               <div class="row items-center">
@@ -213,6 +221,20 @@ export default defineComponent({
       return participants.join(', ')
     }
 
+    const formatFileList = (files: any[]) => {
+      if (!files || files.length === 0) return ''
+      
+      // Show up to 3 file names, then "and X more" if there are more
+      const maxFiles = 3
+      if (files.length <= maxFiles) {
+        return files.map(file => file.name || 'Unknown file').join(', ')
+      } else {
+        const shownFiles = files.slice(0, maxFiles).map(file => file.name || 'Unknown file')
+        const remainingCount = files.length - maxFiles
+        return `${shownFiles.join(', ')} and ${remainingCount} more`
+      }
+    }
+
     const copyGroupLink = async (group: GroupChat) => {
       try {
         const baseUrl = window.location.origin
@@ -346,6 +368,7 @@ export default defineComponent({
       isOwner,
       formatDate,
       formatParticipants,
+      formatFileList,
       copyGroupLink,
       confirmDelete,
       deleteGroup,
@@ -379,5 +402,10 @@ export default defineComponent({
 .owner-group {
   border-color: #1976d2;
   background-color: #f0f8ff;
+}
+
+.file-list {
+  font-style: italic;
+  color: #666;
 }
 </style>
