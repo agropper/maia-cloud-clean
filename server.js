@@ -246,18 +246,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files with cache busting
-app.use(express.static(path.join(__dirname, 'dist'), {
-  etag: false,
-  lastModified: false,
-  setHeaders: (res, path) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-}));
-
-// Custom route for index.html with environment variables
+// Custom route for index.html with environment variables (must come before static files)
 app.get('/', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
@@ -268,6 +257,17 @@ app.get('/', (req, res) => {
     APP_VERSION: process.env.APP_VERSION || '1.0.0'
   });
 });
+
+// Serve static files with cache busting
+app.use(express.static(path.join(__dirname, 'dist'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, path) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
 
 // Input validation middleware
 app.use((req, res, next) => {
