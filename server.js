@@ -1172,13 +1172,26 @@ app.post('/api/save-group-chat', async (req, res) => {
       isShared: true
     };
 
+    // Debug: Log what's being sent to the database
+    console.log(`🔍 [SAVE] Document being saved:`, {
+      _id: groupChatDoc._id,
+      type: groupChatDoc.type,
+      uploadedFilesCount: groupChatDoc.uploadedFiles.length,
+      firstFileStructure: groupChatDoc.uploadedFiles[0] ? {
+        name: groupChatDoc.uploadedFiles[0].name,
+        type: groupChatDoc.uploadedFiles[0].type,
+        hasOriginalFile: !!groupChatDoc.uploadedFiles[0].originalFile,
+        originalFileKeys: groupChatDoc.uploadedFiles[0].originalFile ? Object.keys(groupChatDoc.uploadedFiles[0].originalFile) : 'none'
+      } : 'no files'
+    });
+    
     // Use Cloudant client
     const result = await couchDBClient.saveChat(groupChatDoc);
     console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
     
     res.json({ 
       success: true, 
-      chatId: result._id,
+      chatId: result.id,
       shareId: shareId,
       message: 'Group chat saved successfully' 
     });
@@ -1200,11 +1213,29 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
     // Use Cloudant client
     const chat = await couchDBClient.getChat(chatId);
     
-    if (!chat || chat.type !== 'group_chat') {
-      return res.status(404).json({ message: 'Group chat not found' });
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
     }
     
-    console.log(`📄 Loaded group chat: ${chatId}`);
+    console.log(`📄 Loaded chat: ${chatId}`);
+    
+    // Debug: Log the uploadedFiles structure
+    if (chat.uploadedFiles && chat.uploadedFiles.length > 0) {
+      chat.uploadedFiles.forEach((file, index) => {
+        console.log(`🔍 [DB-LOAD] File ${index}: ${file.name} (${file.type})`);
+        if (file.originalFile) {
+          console.log(`🔍 [DB-LOAD] OriginalFile keys: ${Object.keys(file.originalFile)}`);
+          if (file.originalFile.base64) {
+            console.log(`🔍 [DB-LOAD] Base64 length: ${file.originalFile.base64.length} chars`);
+          } else {
+            console.log(`🔍 [DB-LOAD] No base64 property found`);
+          }
+        } else {
+          console.log(`🔍 [DB-LOAD] No originalFile property`);
+        }
+      });
+    }
+    
     res.json({
       id: chat._id,
       currentUser: chat.currentUser,
@@ -1223,7 +1254,7 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
 
 // Public shared chat route - anyone with the link can access
 app.get('/shared/:shareId', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.render('index');
 });
 
 // API endpoint to load shared chat by share ID
@@ -1234,7 +1265,7 @@ app.get('/api/shared/:shareId', async (req, res) => {
     // Use Cloudant client to find chat by share ID
     const chat = await couchDBClient.getChatByShareId(shareId);
     
-    if (!chat || chat.type !== 'group_chat') {
+    if (!chat) {
       return res.status(404).json({ message: 'Shared chat not found' });
     }
     
@@ -1256,30 +1287,14 @@ app.get('/api/shared/:shareId', async (req, res) => {
   }
 });
 
-// Get all group chats for the current user
+// Get all chats (frontend handles filtering)
 app.get('/api/group-chats', async (req, res) => {
   try {
-    // Get current user from session if available
-    const currentUser = req.session?.userId || 'unauthenticated';
-    
-    // Log current user
-    console.log(`🔍 [GROUP-CHATS] Request from user: ${currentUser}`);
-    
-    // Get all group chats
+    // Get all chats - frontend will handle filtering based on authentication
     const allChats = await couchDBClient.getAllChats();
-    const groupChats = allChats.filter(chat => chat.type === 'group_chat');
-    
-    // Filter by current user if authenticated, otherwise show all (for "Unknown User" access)
-    let filteredChats = groupChats;
-    if (currentUser !== 'unauthenticated' && currentUser !== 'Unknown User') {
-      filteredChats = groupChats.filter(chat => chat.currentUser === currentUser);
-      console.log(`🔍 [GROUP-CHATS] Filtered for user ${currentUser}: ${filteredChats.length}/${groupChats.length} chats`);
-    } else {
-      console.log(`🔍 [GROUP-CHATS] Showing all chats for ${currentUser}: ${groupChats.length} chats`);
-    }
     
     // Transform the response to match the frontend GroupChat interface
-    const transformedChats = filteredChats.map(chat => ({
+    const transformedChats = allChats.map(chat => ({
       id: chat._id, // Map _id to id for frontend
       shareId: chat.shareId,
       currentUser: chat.currentUser,
@@ -1293,10 +1308,11 @@ app.get('/api/group-chats', async (req, res) => {
       isShared: chat.isShared
     }));
     
+    console.log(`📋 Returning ${transformedChats.length} total chats to frontend`);
     res.json(transformedChats);
   } catch (error) {
-    console.error('❌ Get group chats error:', error);
-    res.status(500).json({ message: `Failed to get group chats: ${error.message}` });
+    console.error('❌ Get chats error:', error);
+    res.status(500).json({ message: `Failed to get chats: ${error.message}` });
   }
 });
 
@@ -1315,8 +1331,8 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     // Get the existing chat
     const existingChat = await couchDBClient.getChat(chatId);
     
-    if (!existingChat || existingChat.type !== 'group_chat') {
-      return res.status(404).json({ message: 'Group chat not found' });
+    if (!existingChat) {
+      return res.status(404).json({ message: 'Chat not found' });
     }
 
     // Files are already processed by frontend (base64 conversion done there)
@@ -1344,13 +1360,58 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     
     res.json({ 
       success: true, 
-      chatId: result._id,
+      chatId: result.id,
       shareId: existingChat.shareId,
       message: 'Group chat updated successfully' 
     });
   } catch (error) {
     console.error('❌ Update group chat error:', error);
     res.status(500).json({ message: `Failed to update group chat: ${error.message}` });
+  }
+});
+
+// Cleanup endpoint - delete all chats except "Unknown User" (for debugging)
+app.post('/api/cleanup-chats', async (req, res) => {
+  try {
+    console.log('🧹 Starting chat cleanup via API...');
+    
+    // Get all chats
+    const allChats = await couchDBClient.getAllChats();
+    console.log(`📊 Found ${allChats.length} total chats`);
+    
+    // Filter to keep only "Unknown User" chats
+    const chatsToKeep = allChats.filter(chat => 
+      chat.currentUser === 'Unknown User' || 
+      (typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Unknown User')
+    );
+    
+    const chatsToDelete = allChats.filter(chat => 
+      chat.currentUser !== 'Unknown User' && 
+      !(typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Unknown User')
+    );
+    
+    console.log(`✅ Keeping ${chatsToKeep.length} chats for "Unknown User"`);
+    console.log(`🗑️  Deleting ${chatsToDelete.length} other chats`);
+    
+    // Delete the other chats
+    for (const chat of chatsToDelete) {
+      console.log(`🗑️  Deleting chat: ${chat._id} (user: ${JSON.stringify(chat.currentUser)})`);
+      await couchDBClient.deleteChat(chat._id);
+    }
+    
+    console.log('✅ Chat cleanup completed successfully!');
+    console.log(`📊 Final state: ${chatsToKeep.length} chats for "Unknown User"`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Chat cleanup completed',
+      kept: chatsToKeep.length,
+      deleted: chatsToDelete.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Chat cleanup failed:', error);
+    res.status(500).json({ message: `Chat cleanup failed: ${error.message}` });
   }
 });
 
@@ -1362,14 +1423,14 @@ app.delete('/api/group-chats/:chatId', async (req, res) => {
     // Get the chat to verify ownership
     const chat = await couchDBClient.getChat(chatId);
     
-    if (!chat || chat.type !== 'group_chat') {
-      return res.status(404).json({ message: 'Group chat not found' });
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
     }
     
     // For now, allow deletion. Later we'll add ownership verification
     await couchDBClient.deleteChat(chatId);
     
-    console.log(`🗑️ Deleted group chat: ${chatId}`);
+    console.log(`🗑️ Deleted chat: ${chatId}`);
     res.json({ success: true, message: 'Group chat deleted successfully' });
   } catch (error) {
     console.error('❌ Delete group chat error:', error);
@@ -1407,7 +1468,7 @@ app.post('/api/save-chat', async (req, res) => {
     
     res.json({ 
       success: true, 
-      chatId: result._id,
+      chatId: result.id,
       message: 'Chat saved successfully' 
     });
   } catch (error) {
@@ -1654,11 +1715,16 @@ app.get('/api/current-agent', async (req, res) => {
     let groupChatCount = 0;
     try {
       const allChats = await couchDBClient.getAllChats();
-      const groupChats = allChats.filter(chat => chat.type === 'group_chat');
-      
-      // Filter chats by current user (including "Unknown User")
-      const userGroupChats = groupChats.filter(chat => chat.currentUser === currentUser);
-      groupChatCount = userGroupChats.length;
+      // Get all chats for the current user
+      const userChats = allChats.filter(chat => {
+        if (typeof chat.currentUser === 'string') {
+          return chat.currentUser === currentUser;
+        } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
+          return chat.currentUser.userId === currentUser || chat.currentUser.displayName === currentUser;
+        }
+        return false;
+      });
+      groupChatCount = userChats.length;
       
 
     } catch (error) {
@@ -2853,7 +2919,7 @@ app.get('/api/deep-link-users/:shareId', async (req, res) => {
 
 // Catch-all route for SPA
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.render('index');
 });
 
 const PORT = process.env.PORT || 3001;

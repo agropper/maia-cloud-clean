@@ -183,13 +183,33 @@ export default defineComponent({
         
         // Filter groups by current user (including "Unknown User")
         let currentUserName: string
+        let isDeepLinkUser = false
+        let deepLinkShareId = null
+        
         if (typeof props.currentUser === 'object' && props.currentUser !== null) {
           currentUserName = props.currentUser.userId || props.currentUser.displayName || 'Unknown User'
+          isDeepLinkUser = props.currentUser.isDeepLinkUser || false
+          deepLinkShareId = props.currentUser.shareId || null
         } else {
           currentUserName = props.currentUser || 'Unknown User'
         }
         
-        groups.value = allGroups.filter(group => group.currentUser === currentUserName)
+        let filteredGroups: any[]
+        
+        if (isDeepLinkUser && deepLinkShareId) {
+          // Deep link users see chats that match their shareId
+          filteredGroups = allGroups.filter(group => group.shareId === deepLinkShareId)
+          console.log(`🔍 [MODAL] Deep link user filtering: shareId === '${deepLinkShareId}'`)
+        } else {
+          // Regular users see chats that match their currentUser
+          filteredGroups = allGroups.filter(group => group.currentUser === currentUserName)
+          console.log(`🔍 [MODAL] Regular user filtering: group.currentUser === '${currentUserName}'`)
+        }
+        
+        groups.value = filteredGroups
+        
+        console.log(`🔍 [MODAL] Filtered groups for user '${currentUserName}': ${filteredGroups.length}/${allGroups.length}`)
+        console.log(`🔍 [MODAL] Filtering logic: ${isDeepLinkUser ? 'shareId === ' + deepLinkShareId : 'group.currentUser === ' + currentUserName}`)
 
       } catch (error) {
         console.error('❌ Failed to load groups:', error)
@@ -201,13 +221,24 @@ export default defineComponent({
     const isOwner = (group: GroupChat) => {
       // Handle both string and object currentUser
       let currentUserName: string
+      let isDeepLinkUser = false
+      let deepLinkShareId = null
+      
       if (typeof props.currentUser === 'object' && props.currentUser !== null) {
         currentUserName = props.currentUser.username || props.currentUser.displayName || 'Unknown User'
+        isDeepLinkUser = props.currentUser.isDeepLinkUser || false
+        deepLinkShareId = props.currentUser.shareId || null
       } else {
         currentUserName = props.currentUser || 'Unknown User'
       }
       
-      return group.currentUser === currentUserName
+      if (isDeepLinkUser && deepLinkShareId) {
+        // Deep link users are not owners - they can only view and contribute
+        return false
+      } else {
+        // Regular users are owners if they match the group's currentUser
+        return group.currentUser === currentUserName
+      }
     }
 
     const formatDate = (dateString: string) => {

@@ -84,7 +84,7 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
-    const currentUser = ref<any>(null);
+    const currentUser = ref<any>({ userId: 'Unknown User', displayName: 'Unknown User' });
     const pendingShareId = ref<string | null>(null);
 
     // Handle deep link loading - only for actual deep link URLs
@@ -154,13 +154,13 @@ export default defineComponent({
           console.log('🔍 [FRONTEND] Found existing session for user:', data.user);
           currentUser.value = data.user;
         } else {
-          console.log('🔍 [FRONTEND] No existing session found, setting to Unknown User');
-          currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+          console.log('🔍 [FRONTEND] No existing session found, keeping Unknown User');
+          // currentUser.value is already set to Unknown User by default
         }
       } catch (error) {
         console.error('❌ Failed to check existing session:', error);
-        // Fall back to Unknown User on error
-        currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+        // currentUser.value is already set to Unknown User by default
+        // No need to change it - it's already valid
       }
     };
     
@@ -215,7 +215,8 @@ export default defineComponent({
           userId: userData.userId, 
           displayName: userData.name,
           email: userData.email,
-          isDeepLinkUser: true
+          isDeepLinkUser: true,
+          shareId: userData.shareId
         };
         
         // Clear any existing query and active question (don't set active question name - it should use current user)

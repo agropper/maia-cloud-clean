@@ -262,16 +262,32 @@ export default defineComponent({
                     currentUser: {
                       handler(newUser, oldUser) {
                         console.log(`🔍 [CHATAREA] currentUser changed:`, { old: oldUser, new: newUser })
-                        // Always refresh group count when user changes
-                        this.loadGroupCount()
+                        
+                        // Always refresh group count when user changes (for sign-in/sign-out)
+                        if (this.isUserReady) {
+                          console.log(`🔍 [CHATAREA] User changed, refreshing group count...`)
+                          this.loadGroupCount()
+                        }
+                      }
+                    },
+                    isUserReady: {
+                      handler(isReady: boolean, wasReady: boolean) {
+                        console.log(`🔍 [CHATAREA] isUserReady changed:`, { wasReady, isReady })
+                        
+                        // Only load data when user becomes ready (not when becoming unready)
+                        if (isReady && !wasReady) {
+                          console.log(`🔍 [CHATAREA] User is now ready, loading initial data...`)
+                          this.loadInitialData()
+                        }
                       },
                       immediate: true
                     }
                   },
-                                                            mounted() {
-                      this.initializeChatState()
-                      this.loadGroupCount()
-                    },
+                                                                              mounted() {
+                    this.initializeChatState()
+                    // Don't call loadGroupCount here - the isUserReady watcher will handle it
+                    // after the user is properly determined
+                  },
   props: {
     appState: {
       type: Object as PropType<AppState>,
@@ -291,7 +307,8 @@ export default defineComponent({
     },
     currentUser: {
       type: Object as PropType<any>,
-      default: null
+      required: true,
+      default: () => ({ userId: 'Unknown User', displayName: 'Unknown User' })
     }
   },
   data() {
@@ -438,47 +455,105 @@ export default defineComponent({
         const isGroupSharingEnabled = this.$refs.groupSharingBadgeRef ? 
           (this.$refs.groupSharingBadgeRef as any).isEnabled : false
         
+        if (!isGroupSharingEnabled) {
+          console.error('❌ Group sharing is not enabled')
+          return
+        }
+        
         let result
         const { saveGroupChat, updateGroupChat } = useGroupChat()
         
-        if (isGroupSharingEnabled && this.appState.currentChatId) {
+        // Check if this is a deep link user
+        const isDeepLinkUser = typeof currentUser === 'object' && currentUser.isDeepLinkUser
+        
+        if (isDeepLinkUser && !this.appState.currentChatId) {
+          // Deep link users must have an existing chat to update
+          console.error('❌ Deep link user cannot create new chats - no existing chat ID found')
+          console.error('❌ Deep link users can only contribute to existing conversations')
+          return
+        }
+        
+        if (this.appState.currentChatId) {
           // Update existing group chat
+          // Extract user ID string for consistent filtering
+          const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+          console.log('🔄 Updating existing group chat:', this.appState.currentChatId)
           result = await updateGroupChat(
             this.appState.currentChatId,
             this.appState.chatHistory,
             this.appState.uploadedFiles,
-            currentUser,
+            userId,
             connectedKB
           )
         } else {
-          // Show security notice modal before creating new group chat
-          this.showSecurityNoticeModal = true
-          return
+          // Create new group chat for signed-in user (not deep link users)
+          // Extract user ID string for consistent filtering
+          const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+          console.log('🆕 Creating new group chat for user:', userId)
+          console.log('🔍 [SAVE] currentUser object:', currentUser, '-> userId string:', userId)
+          result = await saveGroupChat(
+            this.appState.chatHistory,
+            this.appState.uploadedFiles,
+            userId,
+            connectedKB
+          )
+          
+          // Store the new chat ID for future updates
+          this.appState.currentChatId = result.chatId
         }
         
         // Create complete deep link URL with domain
         const baseUrl = window.location.origin;
         const deepLink = `${baseUrl}/shared/${result.shareId}`
         
+        console.log('🔗 Generated deep link:', deepLink)
+        console.log('📊 Result from saveGroupChat:', result)
+        
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
-          (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).setDeepLink(deepLink)
+          console.log('🎯 Setting deep link in GroupSharingBadge')
+          const badgeRef = this.$refs.groupSharingBadgeRef as any
+          if (badgeRef.setDeepLink) {
+            badgeRef.setDeepLink(deepLink)
+          } else {
+            console.error('❌ setDeepLink method not found on GroupSharingBadge')
+          }
+        } else {
+          console.error('❌ GroupSharingBadge ref not found')
         }
         
         // Reset status to Current
         this.updateChatStatus('Current')
+        console.log('✅ Chat status updated to Current')
         
         // Refresh group count after creating/updating group chat
         this.loadGroupCount()
         
+        console.log('✅ Group chat saved successfully:', result)
+        
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
+        console.error('❌ Error details:', error)
       }
     },
     async confirmGroupChatCreation() {
       try {
         // Close the modal
         this.showSecurityNoticeModal = false
+        
+        // Check if this is a deep link user
+        const isDeepLinkUser = typeof this.currentUser === 'object' && this.currentUser.isDeepLinkUser
+        
+        if (isDeepLinkUser) {
+          // Deep link users cannot create new chats
+          console.error('❌ Deep link users cannot create new chats')
+          console.error('❌ Deep link users can only contribute to existing conversations')
+          return
+        }
+        
+        // This function is now a fallback for edge cases
+        // Most group chat creation now happens directly in handlePostToCloudant
+        console.log('🔄 Fallback group chat creation triggered')
         
         // Validate chat history has user messages (not just system messages)
         if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
@@ -498,6 +573,9 @@ export default defineComponent({
         // Get current user info
         const currentUser = this.currentUser || 'Unknown User'
         
+        // Extract user ID string for consistent filtering
+        const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+        
         // Get connected KB info
         const connectedKB = this.appState.selectedAI || 'No KB connected'
         
@@ -506,7 +584,7 @@ export default defineComponent({
         const result = await saveGroupChat(
           this.appState.chatHistory,
           this.appState.uploadedFiles,
-          currentUser,
+          userId,
           connectedKB
         )
         
@@ -528,10 +606,10 @@ export default defineComponent({
         // Refresh group count after creating group chat
         this.loadGroupCount()
         
-        console.log('✅ New group chat created with security notice acknowledged')
+        console.log('✅ Fallback group chat created successfully')
         
       } catch (error) {
-        console.error('❌ Error creating group chat after security notice:', error)
+        console.error('❌ Error creating fallback group chat:', error)
       }
     },
     updateChatStatus(newStatus: string) {
@@ -585,22 +663,48 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
-                        // Use the same data source and filtering logic as the Saved Chat Dialog
+                        // Only proceed if user is ready
+                        if (!this.isUserReady) {
+                          console.log(`🔍 [FRONTEND] User not ready, skipping group count load`)
+                          return
+                        }
+                        
+                        // Get all chats from backend
                         const { getAllGroupChats } = useGroupChat()
                         const allGroups = await getAllGroupChats()
                         
-                        // Filter groups by current user (same logic as GroupManagementModal)
+                        // Apply the same filtering logic as GroupManagementModal
+                        // Filter groups by current user (including "Unknown User")
                         let currentUserName: string
+                        let isDeepLinkUser = false
+                        let deepLinkShareId = null
+                        
                         if (this.currentUser && typeof this.currentUser === 'object') {
                           currentUserName = this.currentUser.userId || this.currentUser.displayName || 'Unknown User'
+                          isDeepLinkUser = this.currentUser.isDeepLinkUser || false
+                          deepLinkShareId = this.currentUser.shareId || null
                         } else {
                           currentUserName = this.currentUser || 'Unknown User'
                         }
                         
-                        const userGroups = allGroups.filter(group => group.currentUser === currentUserName)
-                        const groupCount = userGroups.length
+                        // Filter to show only chats the current user should see
+                        let filteredGroups: any[]
                         
-                        console.log(`🔍 [FRONTEND] Loaded group count: ${groupCount} for user: ${currentUserName} (total: ${allGroups.length})`)
+                        if (isDeepLinkUser && deepLinkShareId) {
+                          // Deep link users see chats that match their shareId
+                          filteredGroups = allGroups.filter(group => group.shareId === deepLinkShareId)
+                          console.log(`🔍 [FRONTEND] Deep link user filtering: shareId === '${deepLinkShareId}'`)
+                        } else {
+                          // Regular users see chats that match their currentUser
+                          filteredGroups = allGroups.filter(group => group.currentUser === currentUserName)
+                          console.log(`🔍 [FRONTEND] Regular user filtering: group.currentUser === '${currentUserName}'`)
+                        }
+                        
+                        const groupCount = filteredGroups.length
+                        
+                        console.log(`🔍 [FRONTEND] Loaded group count: ${groupCount} for current user (filtered from ${allGroups.length} total)`)
+                        console.log(`🔍 [FRONTEND] Current user: ${currentUserName}, Filtering logic: group.currentUser === '${currentUserName}'`)
+                        console.log(`🔍 [FRONTEND] Badge count updated to: ${groupCount}`)
                         
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(groupCount)
@@ -623,8 +727,10 @@ export default defineComponent({
                         this.appState.uploadedFiles = []
                         this.appState.currentChatId = null // Clear the current chat ID
                         this.initializeChatState()
-                        // Refresh group count after clearing chat
-                        this.loadGroupCount()
+                        // Refresh group count after clearing chat (only if user is valid)
+                        if (this.isUserReady) {
+                          this.loadGroupCount()
+                        }
                         // Navigate to home URL
                         window.location.href = window.location.origin
                       }
@@ -635,14 +741,29 @@ export default defineComponent({
                       this.appState.uploadedFiles = []
                       this.appState.currentChatId = null // Clear the current chat ID
                       this.initializeChatState()
-                      // Refresh group count after clearing chat
-                      this.loadGroupCount()
-                      // Navigate to home URL
-                      window.location.href = window.location.origin
+                                                                      // Refresh group count after clearing chat (only if user is valid)
+                        if (this.isUserReady) {
+                          this.loadGroupCount()
+                        }
+                        // Navigate to home URL
+                        window.location.href = window.location.origin
 
                     },
                     handleGroupDeleted() {
-                      this.loadGroupCount()
+                      // Only refresh group count if user is valid
+                      if (this.isUserReady) {
+                        this.loadGroupCount()
+                      }
+                    },
+                    // Method to manually trigger data loading when user becomes ready
+                    async loadInitialData() {
+                      if (this.isUserReady) {
+                        console.log(`🔍 [CHATAREA] Loading initial data for ready user...`)
+                        await this.loadGroupCount()
+                        // Note: loadCurrentAgent and loadCurrentKB are handled by the parent ChatPrompt component
+                      } else {
+                        console.log(`🔍 [CHATAREA] User not ready, skipping initial data load`)
+                      }
                     },
                     handleChatLoaded(loadedChat: any) {
                       console.log('📂 Chat loaded in ChatArea:', loadedChat)
@@ -667,17 +788,23 @@ export default defineComponent({
                         (this.$refs.groupSharingBadgeRef as any).handlePost()
                       }
                     },
-                    getCurrentUserName(): string {
-                      // Return the current user name for new messages
-                      const currentUser = this.currentUser
-                      if (currentUser) {
-                        if (typeof currentUser === 'object') {
-                          return currentUser.displayName || currentUser.userId || 'Unknown User'
-                        }
-                        return currentUser
-                      }
-                      return 'Unknown User'
+                    isUserReady(): boolean {
+                      // Check if currentUser is properly initialized and valid
+                      return this.currentUser && (
+                        typeof this.currentUser === 'string' || 
+                        (typeof this.currentUser === 'object' && this.currentUser.userId)
+                      )
                     },
+                    getCurrentUserName(): string {
+      // Return the current user name for new messages
+      const currentUser = this.currentUser
+      if (currentUser && typeof currentUser === 'object') {
+        return currentUser.displayName || currentUser.userId || 'Unknown User'
+      } else if (currentUser) {
+        return currentUser
+      }
+      return 'Unknown User'
+    },
     getSystemMessageType,
     getModelLabel(
       x: { role: string; name?: string },

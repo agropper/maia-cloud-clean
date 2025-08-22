@@ -4,7 +4,7 @@ import type { ChatHistoryItem, UploadedFile } from '../types'
 export interface GroupChat {
   id: string
   shareId: string
-  currentUser: string
+  currentUser: string | { userId: string; displayName: string }
   connectedKB: string
   createdAt: string
   updatedAt: string
@@ -22,27 +22,52 @@ export interface SaveGroupChatResponse {
   message: string
 }
 
+// Helper function to safely convert ArrayBuffer to base64
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const uint8Array = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return btoa(binary);
+};
+
 export const useGroupChat = () => {
   // Helper function to convert File objects to base64 for storage
   const processFilesForStorage = async (files: UploadedFile[]): Promise<any[]> => {
     return Promise.all(files.map(async (file) => {
-      if (file.type === 'pdf' && file.originalFile instanceof File) {
-        try {
-          // Convert File object to base64
-          const arrayBuffer = await file.originalFile.arrayBuffer();
-          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-          
-          return {
-            ...file,
-            originalFile: {
-              name: file.originalFile.name,
-              size: file.originalFile.size,
-              type: file.originalFile.type,
-              base64: base64
-            }
-          };
-        } catch (error) {
-          console.warn(`⚠️ Failed to convert PDF to base64: ${file.name}`, error);
+      if (file.type === 'pdf') {
+        if (file.originalFile instanceof File) {
+          try {
+            // Fresh PDF file - convert File object to base64 using a proper binary-safe method
+            const arrayBuffer = await file.originalFile.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Convert to base64 using a binary-safe approach
+            const base64 = arrayBufferToBase64(arrayBuffer);
+            
+            console.log(`🔍 [PDF] Converted ${file.name} to base64: ${base64.length} chars`);
+            
+            return {
+              ...file,
+              originalFile: {
+                name: file.originalFile.name,
+                size: file.originalFile.size,
+                type: file.originalFile.type,
+                base64: base64
+              }
+            };
+          } catch (error) {
+            console.warn(`⚠️ Failed to convert PDF to base64: ${file.name}`, error);
+            return { ...file, originalFile: null };
+          }
+        } else if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
+          // Database-loaded PDF file with existing base64 data - preserve it
+          console.log(`🔍 [PDF] Preserving existing base64 data for ${file.name}: ${file.originalFile.base64.length} chars`);
+          return file; // Return as-is, already has the correct structure
+        } else {
+          // PDF file without base64 data - this shouldn't happen, but handle gracefully
+          console.warn(`⚠️ PDF file ${file.name} has no base64 data available`);
           return { ...file, originalFile: null };
         }
       }

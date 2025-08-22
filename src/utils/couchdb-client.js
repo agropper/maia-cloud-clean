@@ -127,6 +127,19 @@ export class CouchDBClient {
   // Chat operations
   async saveChat(chatData) {
     try {
+      // Debug: Log what's being saved
+      console.log(`🔍 [COUCHDB] Saving chat document:`, {
+        _id: chatData._id,
+        type: chatData.type,
+        uploadedFilesCount: chatData.uploadedFiles?.length || 0,
+        firstFileStructure: chatData.uploadedFiles?.[0] ? {
+          name: chatData.uploadedFiles[0].name,
+          type: chatData.uploadedFiles[0].type,
+          hasOriginalFile: !!chatData.uploadedFiles[0].originalFile,
+          originalFileKeys: chatData.uploadedFiles[0].originalFile ? Object.keys(chatData.uploadedFiles[0].originalFile) : 'none'
+        } : 'no files'
+      });
+      
       // If chatData has an _id, try to update existing document
       if (chatData._id) {
         try {
@@ -139,6 +152,7 @@ export class CouchDBClient {
       }
 
       const result = await this.database.insert(chatData)
+      console.log(`🔍 [COUCHDB] Chat saved successfully: ${result.id}`);
       return {
         id: result.id,
         rev: result.rev,

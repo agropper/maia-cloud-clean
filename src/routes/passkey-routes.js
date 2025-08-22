@@ -429,9 +429,15 @@ router.post("/authenticate-verify", async (req, res) => {
       // GroupFilter: Log user sign in and group chat count
       try {
         const allChats = await couchDBClient.getAllChats();
-        const groupChats = allChats.filter(chat => chat.type === 'group_chat');
-        const userGroupChats = groupChats.filter(chat => chat.currentUser === updatedUser.userId);
-        console.log(`GroupFilter: SIGN_IN - User: ${updatedUser.userId} - Group chats visible: ${userGroupChats.length}`);
+        const userChats = allChats.filter(chat => {
+          if (typeof chat.currentUser === 'string') {
+            return chat.currentUser === updatedUser.userId;
+          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
+            return chat.currentUser.userId === updatedUser.userId || chat.currentUser.displayName === updatedUser.userId;
+          }
+          return false;
+        });
+        console.log(`GroupFilter: SIGN_IN - User: ${updatedUser.userId} - Chats visible: ${userChats.length}`);
       } catch (error) {
         console.error("GroupFilter: Error getting group chats:", error);
       }
@@ -536,9 +542,15 @@ router.post("/logout", async (req, res) => {
       // GroupFilter: Log user sign out and group chat count before destroying session
       try {
         const allChats = await couchDBClient.getAllChats();
-        const groupChats = allChats.filter(chat => chat.type === 'group_chat');
-        const userGroupChats = groupChats.filter(chat => chat.currentUser === userId);
-        console.log(`GroupFilter: SIGN_OUT - User: ${userId} - Group chats visible: ${userGroupChats.length}`);
+        const userChats = allChats.filter(chat => {
+          if (typeof chat.currentUser === 'string') {
+            return chat.currentUser === userId;
+          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
+            return chat.currentUser.userId === userId || chat.currentUser.displayName === userId;
+          }
+          return false;
+        });
+        console.log(`GroupFilter: SIGN_OUT - User: ${userId} - Chats visible: ${userChats.length}`);
       } catch (error) {
         console.error("GroupFilter: Error getting group chats:", error);
       }
