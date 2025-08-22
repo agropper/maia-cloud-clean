@@ -21,14 +21,36 @@ export const setCouchDBClient = (client) => {
 const rpName = "HIEofOne.org";
 
 // Auto-detect environment and configure passkey settings
+// 
+// CONFIGURATION PRIORITY (highest to lowest):
+// 1. PASSKEY_RPID - Explicit passkey domain override
+// 2. DOMAIN - General domain setting
+// 3. NODE_ENV=production - Triggers cloud mode but requires DOMAIN to be set
+// 
+// NO HARDCODED FALLBACKS - If cloud environment is detected but no domain is set,
+// the system will warn and fall back to localhost (which will cause passkey failures)
+//
 const isLocalhost = process.env.NODE_ENV !== 'production' && (!process.env.DOMAIN && !process.env.PASSKEY_RPID);
 const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NODE_ENV === 'production';
+
+// Log environment detection for debugging
+console.log('🔍 Environment Detection Logic:');
+console.log('  - NODE_ENV:', process.env.NODE_ENV);
+console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
+console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
+console.log('  - isLocalhost:', isLocalhost);
+console.log('  - isCloud:', isCloud);
 
 // Automatic rpID configuration
 const rpID = (() => {
   if (process.env.PASSKEY_RPID) return process.env.PASSKEY_RPID;
   if (process.env.DOMAIN) return process.env.DOMAIN;
-  if (isCloud) return 'maia-cloud-clean-kjho4.ondigitalocean.app';
+  if (isCloud) {
+    console.warn('⚠️ WARNING: Cloud environment detected but no DOMAIN or PASSKEY_RPID set!');
+    console.warn('⚠️ Please set DOMAIN=your-domain.com or PASSKEY_RPID=your-domain.com in your environment variables.');
+    console.warn('⚠️ Falling back to localhost (this will cause passkey registration to fail!)');
+    return 'localhost';
+  }
   return 'localhost'; // Local development
 })();
 
@@ -38,7 +60,13 @@ const origin = (() => {
   
   if (isCloud) {
     const protocol = process.env.HTTPS === 'true' ? 'https://' : 'https://'; // Cloud defaults to HTTPS
-    const domain = process.env.DOMAIN || 'maia-cloud-clean-kjho4.ondigitalocean.app';
+    const domain = process.env.DOMAIN;
+    if (!domain) {
+      console.warn('⚠️ WARNING: Cloud environment detected but no DOMAIN or PASSKEY_ORIGIN set!');
+      console.warn('⚠️ Please set DOMAIN=your-domain.com or PASSKEY_ORIGIN=https://your-domain.com in your environment variables.');
+      console.warn('⚠️ Falling back to localhost (this will cause passkey registration to fail!)');
+      return `http://localhost:${process.env.PORT || '3001'}`;
+    }
     return `${protocol}${domain}`;
   }
   
@@ -60,6 +88,22 @@ console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
 console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
 console.log("    - PORT:", process.env.PORT || '3001 (default)');
 console.log("    - HTTPS:", process.env.HTTPS || 'not set');
+
+// Configuration summary and recommendations
+console.log("📋 Configuration Summary:");
+if (isCloud && rpID === 'localhost') {
+  console.log("❌ PROBLEM: Cloud environment detected but using localhost rpID!");
+  console.log("❌ This will cause passkey registration to fail!");
+  console.log("💡 SOLUTION: Set DOMAIN=your-domain.com or PASSKEY_RPID=your-domain.com");
+} else if (isCloud) {
+  console.log("✅ Cloud environment configured correctly");
+  console.log("✅ rpID:", rpID);
+  console.log("✅ origin:", origin);
+} else {
+  console.log("✅ Local development environment");
+  console.log("✅ rpID:", rpID);
+  console.log("✅ origin:", origin);
+}
 
 // Add a function to log config on each request for debugging
 const logPasskeyConfig = () => {
