@@ -3,8 +3,38 @@
 ## Overview
 This guide covers domain configuration for both local development and production deployment, including the new flexible passkey authentication system that automatically handles domain configuration and prevents common WebAuthn verification errors.
 
+## 🎯 MILESTONE: Safari Compatibility & CSP Security (August 2025)
+**Status: ✅ COMPLETED**
+
+### What Was Accomplished:
+1. **Fixed Safari Content Security Policy (CSP) Issues**
+   - Resolved `frame-ancestors` directive errors
+   - Added Safari-compatible CSP directives
+   - Implemented proper `workerSrc` and `childSrc` for PDF.js
+
+2. **Enhanced Security Configuration**
+   - Comprehensive CSP with Safari compatibility
+   - Added Safari-specific security headers
+   - Implemented proper asset caching for production
+
+3. **Resolved Environment Variable Conflicts**
+   - Fixed `RP_ID` vs `PASSKEY_RPID` naming inconsistencies
+   - Updated `.env.backup` to use correct variable names
+   - Standardized local and cloud environment configurations
+
+4. **Improved Browser Compatibility**
+   - Safari now loads pages completely (was showing partial "My MAIA Summarize")
+   - Chrome continues to work as expected
+   - PDF functionality works across all browsers
+
+### Technical Changes Made:
+- **CSP Configuration**: Added Safari-compatible directives including `frame-ancestors`, `workerSrc`, `childSrc`
+- **Security Headers**: Added Safari-specific headers for better compatibility
+- **Asset Caching**: Implemented proper caching for production assets
+- **Environment Variables**: Standardized on `PASSKEY_RPID` and `PASSKEY_ORIGIN` naming
+
 ## Current Issue
-The `.env.backup` file has domain references scattered throughout different sections, making it difficult to configure for different environments.
+The `.env.backup` file had domain references scattered throughout different sections, making it difficult to configure for different environments. This has been resolved with the standardization work above.
 
 ## Recommended Reorganization
 
@@ -174,3 +204,58 @@ If you were previously using hardcoded domain values:
 1. Set the appropriate environment variables for your deployment
 2. The system will automatically use the new flexible configuration
 3. No code changes required - just environment variable updates
+
+## Content Security Policy (CSP) Configuration
+
+### Overview
+The application now includes a comprehensive Content Security Policy that ensures security while maintaining compatibility across all browsers, especially Safari.
+
+### CSP Directives Implemented
+```javascript
+contentSecurityPolicy: {
+  directives: {
+    defaultSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'"], // Safari compatibility
+    connectSrc: ["'self'", "https:", "wss:"],
+    imgSrc: ["'self'", "data:", "https:"],
+    fontSrc: ["'self'", "data:", "https:"],
+    objectSrc: ["'none'"], // Prevent object/embed attacks
+    mediaSrc: ["'self'"],
+    frameSrc: ["'self'"], // Allow frames from same origin
+    frameAncestors: ["'self'"], // Allow embedding in same origin
+    workerSrc: ["'self'", "blob:", "data:"], // Safari + PDF.js compatibility
+    childSrc: ["'self'", "blob:", "data:"], // Safari + blob URLs
+    baseUri: ["'self'"], // Safari compatibility
+    formAction: ["'self'"], // Safari compatibility
+    manifestSrc: ["'self'"] // Safari compatibility
+  },
+  upgradeInsecureRequests: process.env.NODE_ENV === 'production'
+}
+```
+
+### Safari-Specific Headers
+```javascript
+// Safari-specific headers for better compatibility
+res.setHeader('X-Content-Type-Options', 'nosniff');
+res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+res.setHeader('X-XSS-Protection', '1; mode=block');
+
+// Allow Safari to cache resources properly
+if (req.path.startsWith('/assets/')) {
+  res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year for assets
+}
+```
+
+### Why This Configuration Works
+1. **`frame-ancestors: 'self'`** - Fixes Safari frame loading issues
+2. **`workerSrc: ['self', 'blob:', 'data:']`** - Enables PDF.js Web Workers in Safari
+3. **`childSrc: ['self', 'blob:', 'data:']`** - Allows blob URLs for PDF rendering
+4. **Safari-specific headers** - Improves compatibility and security
+5. **Asset caching** - Better performance for production deployments
+
+### Browser Compatibility
+- **Chrome**: Full functionality with enhanced security
+- **Safari**: Now fully compatible with proper page loading
+- **Firefox**: Benefits from improved CSP configuration
+- **Edge**: Enhanced security and compatibility
