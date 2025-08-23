@@ -79,9 +79,17 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-eval'"], // Add unsafe-eval for Vue
       connectSrc: ["'self'", "https:", "wss:"],
       imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "data:", "https:"],
+      objectSrc: ["'none'"], // Prevent object/embed attacks
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"], // Allow frames from same origin
+      frameAncestors: ["'self'"], // Allow embedding in same origin
+      workerSrc: ["'self'", "blob:"], // Allow PDF.js worker
+      childSrc: ["'self'", "blob:"], // Allow blob URLs for PDFs
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production'
     },
   },
   hsts: {
