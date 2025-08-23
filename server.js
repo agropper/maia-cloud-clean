@@ -88,9 +88,9 @@ app.use(helmet({
       frameSrc: ["'self'"], // Allow frames from same origin
       frameAncestors: ["'self'"], // Allow embedding in same origin
       workerSrc: ["'self'", "blob:"], // Allow PDF.js worker
-      childSrc: ["'self'", "blob:"], // Allow blob URLs for PDFs
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production'
+      childSrc: ["'self'", "blob:"] // Allow blob URLs for PDFs
     },
+    upgradeInsecureRequests: process.env.NODE_ENV === 'production'
   },
   hsts: {
     maxAge: 31536000,
