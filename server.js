@@ -73,13 +73,13 @@ initializeDatabase();
 
 
 
-// Security middleware
+// Security middleware - Safari-compatible configuration
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'", "'unsafe-eval'"], // Add unsafe-eval for Vue
+      scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'"], // Safari compatibility
       connectSrc: ["'self'", "https:", "wss:"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "data:", "https:"],
@@ -87,8 +87,11 @@ app.use(helmet({
       mediaSrc: ["'self'"],
       frameSrc: ["'self'"], // Allow frames from same origin
       frameAncestors: ["'self'"], // Allow embedding in same origin
-      workerSrc: ["'self'", "blob:"], // Allow PDF.js worker
-      childSrc: ["'self'", "blob:"] // Allow blob URLs for PDFs
+      workerSrc: ["'self'", "blob:", "data:"], // Safari + PDF.js compatibility
+      childSrc: ["'self'", "blob:", "data:"], // Safari + blob URLs
+      baseUri: ["'self'"], // Safari compatibility
+      formAction: ["'self'"], // Safari compatibility
+      manifestSrc: ["'self'"] // Safari compatibility
     },
     upgradeInsecureRequests: process.env.NODE_ENV === 'production'
   },
@@ -102,6 +105,21 @@ app.use(helmet({
   frameguard: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
+
+// Add Safari-specific headers for better compatibility
+app.use((req, res, next) => {
+  // Safari-specific headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Allow Safari to cache resources properly
+  if (req.path.startsWith('/assets/')) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year for assets
+  }
+  
+  next();
+});
 
 // Trust proxy for production (needed for session cookies behind load balancer)
 if (process.env.NODE_ENV === 'production') {
