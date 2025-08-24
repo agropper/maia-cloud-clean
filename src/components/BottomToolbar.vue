@@ -89,6 +89,52 @@
             class="file-btn"
           />
           
+          <!-- Status Line - Centered on same line as paper clip button -->
+          <div class="status-line">
+            <!-- SIGN IN/SIGN OUT Toggle -->
+            <q-btn
+              v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
+              flat
+              dense
+              size="sm"
+              color="primary"
+              label="SIGN IN"
+              @click="$emit('sign-in')"
+              class="q-mr-sm"
+            />
+            <q-btn
+              v-else
+              flat
+              dense
+              size="sm"
+              color="grey"
+              label="SIGN OUT"
+              @click="$emit('sign-out')"
+              class="q-mr-sm"
+            />
+            
+            <!-- User Display -->
+            <span class="status-text">User</span>
+            <span class="user-name">{{ getCurrentUserName() }}</span>
+            <span class="status-text">has</span>
+            
+            <!-- Shared Chats Button -->
+            <q-btn
+              flat
+              round
+              dense
+              size="sm"
+              color="primary"
+              class="group-count-btn q-mr-sm"
+              @click="openGroupModal"
+              title="View shared groups"
+            >
+              <div class="group-count">{{ groupCount }}</div>
+            </q-btn>
+            
+            <span class="status-text">saved chats</span>
+          </div>
+          
           <!-- Load Saved Chats Button - Disabled for Group Chat functionality -->
           <!-- <q-btn
             v-if="!appState.isAuthorized"
@@ -106,7 +152,16 @@
       <p v-if="appState.isMessage">{{ appState.message }}</p>
     </div>
 
-    <div :class="'loading-pane ' + appState.isLoading">
+    <!-- Group Management Modal -->
+    <GroupManagementModal
+      v-model="showGroupModal"
+      :currentUser="currentUser"
+      :onGroupDeleted="handleGroupDeleted"
+      @chatLoaded="handleChatLoaded"
+    />
+
+    <!-- Loading Pane - Only show when actually loading, not when user is unknown -->
+    <div v-if="appState.isLoading && !isUserUnknown" :class="'loading-pane ' + appState.isLoading">
       <q-circular-progress indeterminate rounded size="30px" color="primary" class="q-ma-md" />
     </div>
   </div>
@@ -118,6 +173,7 @@ import type { PropType } from 'vue'
 import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
+import GroupManagementModal from './GroupManagementModal.vue'
 import {
   createEpochOptions,
   getChunkDates,
@@ -128,6 +184,8 @@ import {
 
 export default defineComponent({
   name: 'BottomToolbar',
+  
+  emits: ['sign-in', 'sign-out', 'chat-loaded'],
 
   components: {
     QBtn,
@@ -137,7 +195,8 @@ export default defineComponent({
     QItem,
     QItemSection,
     QItemLabel,
-    GNAP
+    GNAP,
+    GroupManagementModal
   },
 
   props: {
@@ -186,16 +245,22 @@ export default defineComponent({
     currentUser: {
       type: Object as PropType<any>,
       default: null
+    },
+    groupCount: {
+      type: Number,
+      default: 0
     }
   },
 
-  setup(props) {
+  setup(props, { emit }) {
     const isListening = ref(false)
     const recognition = ref<SpeechRecognition | null>(null)
     const isSpeechSupported = ref(false)
     const pauseTimer = ref<number | null>(null)
     const finalTranscript = ref('')
     const interimTranscript = ref('')
+
+    const showGroupModal = ref(false)
 
     const selectedModel = computed({
       get: () => {
@@ -273,6 +338,33 @@ export default defineComponent({
       }
     }
 
+    const getCurrentUserName = () => {
+      if (!props.currentUser) return 'Unknown User'
+      if (typeof props.currentUser === 'string') return props.currentUser
+      return props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
+    }
+
+    const isUserUnknown = computed(() => {
+      if (!props.currentUser) return true
+      if (typeof props.currentUser === 'string') return props.currentUser === 'Unknown User'
+      return props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
+    })
+
+    const openGroupModal = () => {
+      showGroupModal.value = true
+    }
+
+    const handleGroupDeleted = () => {
+      // This function will be called when a group is deleted
+      // We can add logic here if needed
+    }
+
+    const handleChatLoaded = (groupChat: any) => {
+      // Emit the loaded chat to the parent component
+      console.log('📂 Group chat loaded in status line:', groupChat)
+      emit('chat-loaded', groupChat)
+    }
+
     return {
       isListening,
       isSpeechSupported,
@@ -281,8 +373,146 @@ export default defineComponent({
       getChunkDates: (epoch: number) => getChunkDates(epoch, props.appState.timelineChunks),
       getChunkTokenCount: (epoch: number) =>
         getChunkTokenCount(epoch, props.appState.timelineChunks),
-      selectedModel
+      selectedModel,
+      getCurrentUserName,
+      openGroupModal,
+      showGroupModal,
+      handleGroupDeleted,
+      handleChatLoaded,
+      isUserUnknown
     }
   }
 })
 </script>
+
+<style scoped>
+.bottom-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  z-index: 1000;
+}
+
+.status-line {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.status-text {
+  font-weight: 500;
+  color: #666;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #333;
+  margin: 0 8px;
+}
+
+.group-count-btn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.group-count {
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  background-color: #1976d2;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.prompt {
+  padding: 16px;
+}
+
+.inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.input-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ai-select {
+  min-width: 150px;
+}
+
+.text-input {
+  flex: 1;
+}
+
+.send-btn {
+  min-width: 80px;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.epoch-select {
+  min-width: 200px;
+}
+
+.file-btn {
+  min-width: 40px;
+}
+
+.message {
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.message.info {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.message.success {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+}
+
+.message.warning {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.message.error {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.loading-pane {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.loading-pane.true {
+  background: rgba(255, 255, 255, 0.95);
+}
+</style>

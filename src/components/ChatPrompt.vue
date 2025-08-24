@@ -86,6 +86,22 @@ export default defineComponent({
     const agentWarning = ref<string>("");
     const currentUser = ref<any>({ userId: 'Unknown User', displayName: 'Unknown User' });
     const pendingShareId = ref<string | null>(null);
+    const groupCount = ref<number>(0);
+    const chatAreaRef = ref<any>(null);
+
+    // Update group count when it changes in ChatArea
+    const updateGroupCount = (count: number) => {
+      groupCount.value = count;
+    };
+
+    // Handle chat loaded from status line
+    const handleChatLoaded = (groupChat: any) => {
+      console.log('📂 Chat loaded from status line in ChatPrompt:', groupChat)
+      // Pass the loaded chat to ChatArea
+      if (chatAreaRef.value) {
+        (chatAreaRef.value as any).handleChatLoaded(groupChat)
+      }
+    };
 
     // Handle deep link loading - only for actual deep link URLs
     const handleDeepLink = async () => {
@@ -505,6 +521,8 @@ export default defineComponent({
       currentAgent,
       agentWarning,
       currentUser,
+      groupCount,
+      updateGroupCount,
       handleManageAgent,
       handleUserAuthenticated,
       refreshAgentData,
@@ -515,6 +533,8 @@ export default defineComponent({
       showDeepLinkUserModal,
       pendingShareId,
       handleDeepLinkUserIdentified,
+      handleChatLoaded,
+      chatAreaRef,
     };
   },
 });
@@ -555,6 +575,7 @@ export default defineComponent({
 
   <!-- Chat Area Component -->
   <ChatArea
+    ref="chatAreaRef"
     :appState="appState"
     :AIoptions="AIoptions"
     @edit-message="editMessage"
@@ -576,6 +597,7 @@ export default defineComponent({
     @manage-agent="handleManageAgent"
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
+    @group-count-updated="updateGroupCount"
   />
 
   <!-- Bottom Toolbar -->
@@ -586,11 +608,15 @@ export default defineComponent({
     :triggerAuth="triggerAuth"
     :triggerJWT="triggerJWT"
     :triggerLoadSavedChats="triggerLoadSavedChats"
+    :triggerAgentManagement="triggerAgentManagement"
     :placeholderText="placeholderText"
     :clearLocalStorageKeys="clearLocalStorageKeys"
     :AIoptions="AIoptions"
-    :triggerAgentManagement="triggerAgentManagement"
     :currentUser="currentUser"
+    :groupCount="groupCount"
+    @sign-in="handleSignIn"
+    @sign-out="handleSignOut"
+    @chat-loaded="handleChatLoaded"
   />
 
   <!-- Popup for displaying system messages -->

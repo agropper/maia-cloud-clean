@@ -336,12 +336,16 @@ export default defineComponent({
     'trigger-save-to-couchdb',
     'close-no-save',
     'sign-in',
-    'sign-out'
+    'sign-out',
+    'group-count-updated'
   ],
   methods: {
-    editMessage(idx: number) {
-      this.$emit('edit-message', idx)
-      this.updateChatStatus('Modified')
+    editMessage(index: number) {
+      if (!this.appState.editBox.includes(index)) {
+        this.appState.editBox.push(index)
+        // Mark as modified when editing starts
+        this.updateChatStatus('Modified')
+      }
     },
     saveMessage(idx: number, content: string) {
       this.$emit('save-message', idx, content)
@@ -617,6 +621,9 @@ export default defineComponent({
         (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).updateStatus(newStatus)
       }
     },
+    resetChatStatus() {
+      this.updateChatStatus('Current')
+    },
                         checkForChanges() {
                       const currentState = {
                         historyLength: this.appState.chatHistory.length,
@@ -638,13 +645,18 @@ export default defineComponent({
                         return
                       }
                       
-                      // Check if files were added
-                      if (currentState.filesCount > this.lastChatState.filesCount) {
+                      // Check if files were added (only if we had files before)
+                      if (this.lastChatState.filesCount > 0 && currentState.filesCount > this.lastChatState.filesCount) {
                         this.updateChatStatus('Modified')
                       }
                       
-                      // Check if chat history changed
-                      if (currentState.historyLength > this.lastChatState.historyLength) {
+                      // Check if chat history changed (only if we had history before)
+                      if (this.lastChatState.historyLength > 0 && currentState.historyLength > this.lastChatState.historyLength) {
+                        this.updateChatStatus('Modified')
+                      }
+                      
+                      // Check for edits to existing messages
+                      if (currentState.hasEdits && !this.lastChatState.hasEdits) {
                         this.updateChatStatus('Modified')
                       }
                       
@@ -709,6 +721,9 @@ export default defineComponent({
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(groupCount)
                         }
+                        
+                        // Emit the updated count to parent component
+                        this.$emit('group-count-updated', groupCount)
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
                       }
@@ -772,6 +787,16 @@ export default defineComponent({
                       this.appState.chatHistory = loadedChat.chatHistory || []
                       this.appState.uploadedFiles = loadedChat.uploadedFiles || []
                       this.appState.currentChatId = loadedChat.id
+                      
+                      // Update the chat status to "Current" since we're just loading existing content
+                      this.updateChatStatus('Current')
+                      
+                      // Update the lastChatState to prevent false change detection
+                      this.lastChatState = {
+                        historyLength: this.appState.chatHistory.length,
+                        filesCount: this.appState.uploadedFiles.length,
+                        hasEdits: this.appState.editBox.length > 0
+                      }
                       
                       console.log('✅ Chat loaded successfully in ChatArea')
                     },
