@@ -105,7 +105,9 @@ export default defineComponent({
 
     // Handle deep link updates from ChatArea
     const handleDeepLinkUpdated = (deepLink: string) => {
+      console.log('🔍 [CHATPROMPT] handleDeepLinkUpdated called with:', deepLink);
       currentDeepLink.value = deepLink;
+      console.log('🔍 [CHATPROMPT] currentDeepLink.value updated to:', currentDeepLink.value);
     };
 
 
