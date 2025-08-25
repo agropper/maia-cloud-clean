@@ -13,6 +13,7 @@
             class="ai-select"
             option-label="label"
             option-value="value"
+            :disable="appState.isLoading"
           >
             <template v-slot:selected>
               <div class="row items-center">
@@ -56,6 +57,7 @@
             v-model="appState.currentQuery"
             @keyup.enter="triggerSendQuery"
             class="text-input"
+            :disable="appState.isLoading"
           >
             <template v-slot:append>
               <q-btn
@@ -65,6 +67,7 @@
                 :icon="isListening ? 'mic' : 'mic_none'"
                 :color="isListening ? 'primary' : 'grey'"
                 @click="toggleSpeechRecognition"
+                :disable="appState.isLoading"
               />
               <q-spinner
                 v-if="appState.isLoading"
