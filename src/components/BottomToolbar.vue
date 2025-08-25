@@ -19,7 +19,9 @@
                 <div 
                   v-if="selectedModel.icon" 
                   class="icon-container q-mr-sm"
-                  @click.stop="handleIconClick(selectedModel)"
+                  @click.stop.prevent="handleIconClick(selectedModel)"
+                  @mousedown.stop.prevent
+                  @mouseup.stop.prevent
                 >
                   <q-icon 
                     :name="selectedModel.icon" 
@@ -361,6 +363,10 @@ export default defineComponent({
     }
 
     const handleIconClick = (option: any) => {
+      // Prevent any default behavior and event bubbling
+      event?.preventDefault()
+      event?.stopPropagation()
+      
       // If this is the Personal Chat option with the manage_accounts icon, trigger agent management
       if (option.label === 'Personal Chat' && option.icon === 'manage_accounts') {
         props.triggerAgentManagement()
