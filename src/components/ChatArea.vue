@@ -639,45 +639,57 @@ export default defineComponent({
     resetChatStatus() {
       this.updateChatStatus('Current')
     },
-                        checkForChanges() {
-                      const currentState = {
-                        historyLength: this.appState.chatHistory.length,
-                        filesCount: this.appState.uploadedFiles.length,
-                        hasEdits: this.appState.editBox.length > 0
-                      }
-                      
-                      // Skip change detection only for fresh starts, not for shared chat loads
-                      if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0 && 
-                          this.appState.chatHistory.length === 0 && this.appState.uploadedFiles.length === 0) {
-                        this.lastChatState = currentState
-                        return
-                      }
-                      
-                      // Check if this is a shared chat load by URL
-                      if (window.location.pathname.includes('/shared/') && 
-                          this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
-                        this.lastChatState = currentState
-                        return
-                      }
-                      
-                      // Check if files were added (only if we had files before)
-                      if (this.lastChatState.filesCount > 0 && currentState.filesCount > this.lastChatState.filesCount) {
-                        this.updateChatStatus('Modified')
-                      }
-                      
-                      // Check if chat history changed (only if we had history before)
-                      if (this.lastChatState.historyLength > 0 && currentState.historyLength > this.lastChatState.historyLength) {
-                        this.updateChatStatus('Modified')
-                      }
-                      
-                      // Check for edits to existing messages
-                      if (currentState.hasEdits && !this.lastChatState.hasEdits) {
-                        this.updateChatStatus('Modified')
-                      }
-                      
-                      // Update last state
-                      this.lastChatState = currentState
-                    },
+                            checkForChanges() {
+      const currentState = {
+        historyLength: this.appState.chatHistory.length,
+        filesCount: this.appState.uploadedFiles.length,
+        hasEdits: this.appState.editBox.length > 0
+      }
+      
+      console.log('🔍 [CHATAREA] checkForChanges called:', {
+        currentState,
+        lastChatState: this.lastChatState,
+        pathname: window.location.pathname
+      })
+      
+      // Skip change detection only for fresh starts, not for shared chat loads
+      if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0 && 
+          this.appState.chatHistory.length === 0 && this.appState.uploadedFiles.length === 0) {
+        console.log('🔍 [CHATAREA] Fresh start, initializing state')
+        this.lastChatState = currentState
+        return
+      }
+      
+      // Check if this is a shared chat load by URL
+      if (window.location.pathname.includes('/shared/') && 
+          this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
+        console.log('🔍 [CHATAREA] Shared chat load, initializing state')
+        this.lastChatState = currentState
+        return
+      }
+      
+      // Check if files were added (including first file)
+      if (currentState.filesCount > this.lastChatState.filesCount) {
+        console.log('🔍 [CHATAREA] Files added, marking as Modified')
+        this.updateChatStatus('Modified')
+      }
+      
+      // Check if chat history changed (including first message)
+      if (currentState.historyLength > this.lastChatState.historyLength) {
+        console.log('🔍 [CHATAREA] Chat history changed, marking as Modified')
+        this.updateChatStatus('Modified')
+      }
+      
+      // Check for edits to existing messages
+      if (currentState.hasEdits && !this.lastChatState.hasEdits) {
+        console.log('🔍 [CHATAREA] Edits detected, marking as Modified')
+        this.updateChatStatus('Modified')
+      }
+      
+      // Update last state
+      this.lastChatState = currentState
+      console.log('🔍 [CHATAREA] State updated:', this.lastChatState)
+    },
                         initializeChatState() {
                       this.lastChatState = {
                         historyLength: this.appState.chatHistory.length,
