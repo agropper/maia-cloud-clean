@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, ref, watch, nextTick } from "vue";
+import { defineComponent, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { QFile, QIcon, QBtnToggle } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
@@ -103,35 +103,7 @@ export default defineComponent({
       }
     };
 
-    // Resize functionality for toolbar border
-    const startResize = (event: MouseEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      
-      const startY = event.clientY;
-      const startHeight = window.innerHeight * 0.25; // Start with 25% of viewport height
-      
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        moveEvent.preventDefault();
-        const deltaY = startY - moveEvent.clientY;
-        const newHeight = Math.max(80, Math.min(window.innerHeight * 0.6, startHeight + deltaY)); // Min 80px, Max 60% of viewport
-        
-        // Update CSS custom property for toolbar height
-        document.documentElement.style.setProperty('--toolbar-height', `${newHeight}px`);
-      };
-      
-      const handleMouseUp = () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.cursor = '';
-      };
-      
-      // Set cursor on body during resize
-      document.body.style.cursor = 'ns-resize';
-      
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    };
+
 
     // Handle deep link loading - only for actual deep link URLs
     const handleDeepLink = async () => {
@@ -519,6 +491,72 @@ export default defineComponent({
     // Call this to initialize timeline chunks, assuming you have them in `appState.timelineChunks`
     setTimelineChunks(appState.timelineChunks, appState);
 
+    // Update chat area bottom margin to account for fixed toolbar
+    const updateChatAreaMargin = () => {
+      console.log('🔍 updateChatAreaMargin called');
+      console.log('🔍 chatAreaRef.value:', chatAreaRef.value);
+      console.log('🔍 chatAreaRef.value?.$el:', chatAreaRef.value?.$el);
+      
+      if (chatAreaRef.value) {
+        // Try multiple ways to get the actual DOM element
+        let chatAreaElement = null;
+        
+        if (chatAreaRef.value.$el && chatAreaRef.value.$el.nodeType === Node.ELEMENT_NODE) {
+          // $el is a proper DOM element
+          chatAreaElement = chatAreaRef.value.$el;
+        } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentElement) {
+          // $el is a text node, get its parent
+          chatAreaElement = chatAreaRef.value.$el.parentElement;
+        } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentNode) {
+          // Fallback to parentNode
+          chatAreaElement = chatAreaRef.value.$el.parentNode;
+        }
+        
+        console.log('🔍 chatAreaElement:', chatAreaElement);
+        
+        if (chatAreaElement && chatAreaElement.nodeType === Node.ELEMENT_NODE) {
+          const toolbar = document.querySelector('.bottom-toolbar');
+          if (toolbar) {
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const toolbarTop = toolbarRect.top;
+            const marginBottom = viewportHeight - toolbarTop;
+            
+            console.log('🔍 Setting marginBottom:', marginBottom);
+            console.log('🔍 Toolbar position - top:', toolbarTop, 'bottom:', toolbarRect.bottom);
+            console.log('🔍 Viewport height:', viewportHeight);
+            
+            // Set the chat area height to stop at the toolbar boundary
+            chatAreaElement.style.height = `${toolbarTop}px`;
+            chatAreaElement.style.maxHeight = `${toolbarTop}px`;
+            chatAreaElement.style.overflowY = 'auto';
+            
+            console.log('🔍 Chat area height set to:', toolbarTop, 'px');
+          } else {
+            console.log('🔍 Toolbar not found');
+          }
+        } else {
+          console.log('🔍 Could not find valid DOM element for chat area');
+        }
+      } else {
+        console.log('🔍 chatAreaRef not ready yet');
+      }
+    };
+
+    // Call on mount and window resize
+    onMounted(async () => {
+      console.log('🔍 onMounted called');
+      // Wait for next tick to ensure DOM is ready
+      await nextTick();
+      console.log('🔍 After nextTick');
+      updateChatAreaMargin();
+      window.addEventListener('resize', updateChatAreaMargin);
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('resize', updateChatAreaMargin);
+    });
+
     return {
       appState,
       writeMessage,
@@ -565,7 +603,6 @@ export default defineComponent({
       handleDeepLinkUserIdentified,
       handleChatLoaded,
       chatAreaRef,
-      startResize,
     };
   },
 });
@@ -631,12 +668,7 @@ export default defineComponent({
     @group-count-updated="updateGroupCount"
   />
 
-  <!-- Resizable Border -->
-  <div 
-    class="toolbar-border" 
-    @mousedown="startResize"
-    title="Drag to resize toolbar height"
-  ></div>
+
 
   <!-- Bottom Toolbar -->
   <BottomToolbar

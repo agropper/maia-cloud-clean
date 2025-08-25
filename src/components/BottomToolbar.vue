@@ -45,47 +45,11 @@
         
         <!-- Secondary action row -->
         <div class="action-row">
-          <!-- Timeline Epoch Selector (if available) -->
-          <q-select
-            v-if="appState.timelineChunks?.length"
-            outlined
-            dense
-            v-model="appState.selectedEpoch"
-            :options="epochOptions"
-            label="Select Timeline Epoch"
-            class="epoch-select"
-          >
-            <template v-slot:option="scope">
-              <q-item v-bind="scope.itemProps">
-                <q-item-section>
-                  <q-item-label>Epoch {{ scope.opt.value }}</q-item-label>
-                  <q-item-label caption>
-                    {{ getChunkDates(scope.opt.value) }}
-                    ({{ getChunkTokenCount(scope.opt.value) }} tokens)
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-            <template v-slot:selected>
-              <q-item>
-                <q-item-section>
-                  <q-item-label
-                    >Epoch {{ appState.selectedEpoch }}</q-item-label
-                  >
-                  <q-item-label caption>
-                    {{ getChunkDates(appState.selectedEpoch) }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </template>
-          </q-select>
-          
           <!-- File Upload Button -->
           <q-btn
             @click="pickFiles"
             flat
             icon="attach_file"
-            v-if="appState.timelineChunks?.length === 0"
             class="file-btn"
           />
           
@@ -175,9 +139,6 @@ import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
 import {
-  createEpochOptions,
-  getChunkDates,
-  getChunkTokenCount,
   initSpeechRecognition,
   PAUSE_THRESHOLD
 } from '../utils'
@@ -273,7 +234,7 @@ export default defineComponent({
       }
     })
 
-    const epochOptions = computed(() => createEpochOptions(props.appState.timelineChunks))
+
 
     const handleSubmitAfterPause = () => {
       if (finalTranscript.value.trim()) {
@@ -369,10 +330,6 @@ export default defineComponent({
       isListening,
       isSpeechSupported,
       toggleSpeechRecognition,
-      epochOptions,
-      getChunkDates: (epoch: number) => getChunkDates(epoch, props.appState.timelineChunks),
-      getChunkTokenCount: (epoch: number) =>
-        getChunkTokenCount(epoch, props.appState.timelineChunks),
       selectedModel,
       getCurrentUserName,
       openGroupModal,
