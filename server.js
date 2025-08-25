@@ -920,7 +920,7 @@ app.post('/api/gemini-chat', async (req, res) => {
   try {
     if (!process.env.GEMINI_API_KEY) {
       // Fallback to mock if no API key
-      let { chatHistory, newValue, uploadedFiles } = req.body;
+      let { chatHistory = [], newValue, uploadedFiles = [] } = req.body;
       chatHistory = chatHistory.filter(msg => msg.role !== 'system');
       
       const mockResponse = mockAIResponses['gemini-chat'](newValue);
@@ -934,7 +934,7 @@ app.post('/api/gemini-chat', async (req, res) => {
     }
 
     // Use actual Gemini API
-    let { chatHistory, newValue, uploadedFiles } = req.body;
+    let { chatHistory = [], newValue, uploadedFiles = [] } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
     // Debug: Log the incoming chat history structure
@@ -1027,7 +1027,7 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
       return res.status(500).json({ message: 'DeepSeek API key not configured' });
     }
 
-    let { chatHistory, newValue, uploadedFiles } = req.body;
+    let { chatHistory = [], newValue, uploadedFiles = [] } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
     // Keep the original user message clean for chat history
@@ -1088,7 +1088,7 @@ app.post('/api/chatgpt-chat', async (req, res) => {
       return res.status(500).json({ message: 'ChatGPT API key not configured' });
     }
 
-    let { chatHistory, newValue, uploadedFiles } = req.body;
+    let { chatHistory = [], newValue, uploadedFiles = [] } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
     // Keep the original user message clean for chat history
