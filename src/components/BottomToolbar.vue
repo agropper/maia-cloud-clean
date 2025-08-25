@@ -19,8 +19,10 @@
                 <q-icon 
                   v-if="selectedModel.icon" 
                   :name="selectedModel.icon" 
-                  class="q-mr-sm"
+                  class="q-mr-sm clickable-icon"
                   size="1.2em"
+                  @click.stop="handleIconClick(selectedModel)"
+                  style="cursor: pointer;"
                 />
                 <span>{{ selectedModel.label }}</span>
               </div>
