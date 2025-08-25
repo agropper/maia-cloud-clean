@@ -13,6 +13,7 @@
             class="ai-select"
             option-label="label"
             option-value="value"
+            :disable="appState.isLoading"
           >
             <template v-slot:selected>
               <div class="row items-center">
@@ -56,6 +57,7 @@
             v-model="appState.currentQuery"
             @keyup.enter="triggerSendQuery"
             class="text-input"
+            :disable="appState.isLoading"
           >
             <template v-slot:append>
               <q-btn
@@ -65,6 +67,13 @@
                 :icon="isListening ? 'mic' : 'mic_none'"
                 :color="isListening ? 'primary' : 'grey'"
                 @click="toggleSpeechRecognition"
+                :disable="appState.isLoading"
+              />
+              <q-spinner
+                v-if="appState.isLoading"
+                color="primary"
+                size="1.2em"
+                class="q-ml-sm"
               />
             </template>
           </q-input>
@@ -72,10 +81,12 @@
           <!-- Send Button -->
           <q-btn 
             color="primary" 
-            label="Send" 
+            :label="appState.isLoading ? '' : 'Send'"
             @click="triggerSendQuery" 
             size="sm"
             class="send-btn"
+            :loading="appState.isLoading"
+            :disable="appState.isLoading"
           />
         </div>
         
@@ -367,8 +378,8 @@ export default defineComponent({
       event?.preventDefault()
       event?.stopPropagation()
       
-      // If this is the Personal Chat option with the manage_accounts icon, trigger agent management
-      if (option.label === 'Personal Chat' && option.icon === 'manage_accounts') {
+      // If this is the Private AI option with the manage_accounts icon, trigger agent management
+      if (option.label === 'Private AI' && option.icon === 'manage_accounts') {
         props.triggerAgentManagement()
       }
     }
