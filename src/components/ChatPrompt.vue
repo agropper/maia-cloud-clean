@@ -99,8 +99,38 @@ export default defineComponent({
       console.log('📂 Chat loaded from status line in ChatPrompt:', groupChat)
       // Pass the loaded chat to ChatArea
       if (chatAreaRef.value) {
-        (chatAreaRef.value as any).handleChatLoaded(groupChat)
+        chatAreaRef.value.handleChatLoaded(groupChat);
       }
+    };
+
+    // Resize functionality for toolbar border
+    const startResize = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const startY = event.clientY;
+      const startHeight = window.innerHeight * 0.25; // Start with 25% of viewport height
+      
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault();
+        const deltaY = startY - moveEvent.clientY;
+        const newHeight = Math.max(80, Math.min(window.innerHeight * 0.6, startHeight + deltaY)); // Min 80px, Max 60% of viewport
+        
+        // Update CSS custom property for toolbar height
+        document.documentElement.style.setProperty('--toolbar-height', `${newHeight}px`);
+      };
+      
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+      };
+      
+      // Set cursor on body during resize
+      document.body.style.cursor = 'ns-resize';
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
     };
 
     // Handle deep link loading - only for actual deep link URLs
@@ -535,6 +565,7 @@ export default defineComponent({
       handleDeepLinkUserIdentified,
       handleChatLoaded,
       chatAreaRef,
+      startResize,
     };
   },
 });
@@ -599,6 +630,13 @@ export default defineComponent({
     @sign-out="handleSignOut"
     @group-count-updated="updateGroupCount"
   />
+
+  <!-- Resizable Border -->
+  <div 
+    class="toolbar-border" 
+    @mousedown="startResize"
+    title="Drag to resize toolbar height"
+  ></div>
 
   <!-- Bottom Toolbar -->
   <BottomToolbar

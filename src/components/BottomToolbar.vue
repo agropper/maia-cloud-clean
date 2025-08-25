@@ -401,25 +401,32 @@ export default defineComponent({
   justify-content: center;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
-  margin-right: auto;
+  flex-wrap: wrap; /* Allow elements to wrap to new lines */
+  max-width: 100%; /* Ensure it never exceeds container width */
+  padding: 2px 6px; /* Reduced padding for less height */
+  min-height: 24px; /* Reduced minimum height */
+  flex: 1; /* Take remaining space */
+  justify-content: center; /* Center the content */
 }
 
 .status-text {
   font-weight: 500;
   color: #666;
+  white-space: nowrap; /* Prevent text from breaking */
 }
 
 .user-name {
   font-weight: 600;
   color: #333;
   margin: 0 8px;
+  white-space: nowrap; /* Prevent text from breaking */
 }
 
 .group-count-btn {
   min-width: 24px;
   height: 24px;
   padding: 0;
+  flex-shrink: 0; /* Prevent button from shrinking */
 }
 
 .group-count {
@@ -434,6 +441,7 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   line-height: 1;
+  flex-shrink: 0; /* Prevent count from shrinking */
 }
 
 .prompt {
@@ -449,33 +457,43 @@ export default defineComponent({
   display: flex;
   gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
+  flex-wrap: wrap; /* Allow wrapping on narrow screens */
+  min-height: 32px; /* Reduced minimum height */
 }
 
 .ai-select {
   min-width: 150px;
+  flex-shrink: 0; /* Prevent from shrinking too much */
 }
 
 .text-input {
   flex: 1;
+  min-width: 200px; /* Ensure minimum usable width */
 }
 
 .send-btn {
   min-width: 80px;
+  flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .action-row {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap; /* Allow wrapping on narrow screens */
+  min-height: 32px; /* Reduced minimum height */
+  justify-content: space-between; /* Distribute space between elements */
+  width: 100%; /* Use full width */
 }
 
 .epoch-select {
   min-width: 200px;
+  flex-shrink: 0; /* Prevent from shrinking too much */
 }
 
 .file-btn {
   min-width: 40px;
+  flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .message {
