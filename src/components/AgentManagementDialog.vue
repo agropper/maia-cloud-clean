@@ -4,7 +4,7 @@
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🤖 Agent Management</div>
         <q-space />
-        <q-btn icon="close" flat round dense v-close-popup />
+        <q-btn icon="close" flat round dense @click="handleClose" />
       </q-card-section>
 
       <q-card-section>
@@ -47,7 +47,7 @@
                   : 'Select a knowledge base first'
               "
             />
-            <q-btn label="Close" flat v-close-popup />
+            <q-btn label="Close" flat @click="handleClose" />
           </div>
         </div>
 
@@ -473,6 +473,42 @@
       :new-owner="ownershipTransferData.newOwner"
       @ownership-transferred="handleOwnershipTransferred"
     />
+
+    <!-- Warning Modal for Multiple Knowledge Bases -->
+    <q-dialog v-model="showWarningModal" persistent>
+      <q-card style="min-width: 400px; max-width: 600px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6 text-warning">
+            <q-icon name="warning" color="warning" class="q-mr-sm" />
+            Multiple Knowledge Bases Warning
+          </div>
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-body1 q-mb-md">
+            {{ warningMessage }}
+          </div>
+          <div class="text-caption text-grey-6">
+            This warning appears when your agent has more than one knowledge base attached, which can cause data contamination and hallucinations in AI responses.
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn 
+            label="Cancel" 
+            color="grey" 
+            flat 
+            @click="showWarningModal = false"
+            :autofocus="true"
+          />
+          <q-btn 
+            label="I understand" 
+            color="primary" 
+            @click="handleWarningConfirmed"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-dialog>
 </template>
 
@@ -563,6 +599,10 @@ export default defineComponent({
       type: Object,
       default: null,
     },
+    warning: {
+      type: String,
+      default: "",
+    },
   },
   emits: [
     "update:modelValue",
@@ -622,6 +662,10 @@ export default defineComponent({
       currentOwner: '',
       newOwner: ''
     });
+
+    // Warning modal state
+    const showWarningModal = ref(false);
+    const warningMessage = computed(() => props.warning || '');
 
     // Load current agent info
     const loadAgentInfo = async () => {
@@ -1482,6 +1526,21 @@ export default defineComponent({
       }
     };
 
+    // Handle close button click - check for warning
+    const handleClose = () => {
+      if (props.warning && props.warning.trim() !== '') {
+        showWarningModal.value = true;
+      } else {
+        emit("update:modelValue", false);
+      }
+    };
+
+    // Handle warning confirmation
+    const handleWarningConfirmed = () => {
+      showWarningModal.value = false;
+      emit("update:modelValue", false);
+    };
+
     return {
       showDialog,
       currentAgent,
@@ -1536,6 +1595,10 @@ export default defineComponent({
       handleSignInCancelled,
       showOwnershipTransferModal,
       ownershipTransferData,
+      showWarningModal,
+      warningMessage,
+      handleClose,
+      handleWarningConfirmed,
     };
   },
 });
