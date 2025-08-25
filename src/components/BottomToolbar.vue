@@ -17,7 +17,12 @@
             <template v-slot:option="scope">
               <q-item v-bind="scope.itemProps">
                 <q-item-section avatar v-if="scope.opt.icon">
-                  <q-icon :name="scope.opt.icon" />
+                  <q-icon 
+                    :name="scope.opt.icon" 
+                    class="clickable-icon"
+                    @click.stop="handleIconClick(scope.opt)"
+                    style="cursor: pointer;"
+                  />
                 </q-item-section>
                 <q-item-section>
                   <q-item-label>{{ scope.opt.label }}</q-item-label>
@@ -147,7 +152,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, watch } from 'vue'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -169,6 +174,7 @@ export default defineComponent({
     QItem,
     QItemSection,
     QItemLabel,
+    QIcon,
     GNAP,
     GroupManagementModal
   },
@@ -338,6 +344,13 @@ export default defineComponent({
       emit('chat-loaded', groupChat)
     }
 
+    const handleIconClick = (option: any) => {
+      // If this is the Personal Chat option with the manage_accounts icon, trigger agent management
+      if (option.label === 'Personal Chat' && option.icon === 'manage_accounts') {
+        props.triggerAgentManagement()
+      }
+    }
+
     return {
       isListening,
       isSpeechSupported,
@@ -348,6 +361,7 @@ export default defineComponent({
       showGroupModal,
       handleGroupDeleted,
       handleChatLoaded,
+      handleIconClick,
       isUserUnknown
     }
   }
@@ -441,6 +455,15 @@ export default defineComponent({
 }
 
 .send-btn {
+
+.clickable-icon {
+  transition: all 0.2s ease;
+}
+
+.clickable-icon:hover {
+  color: #1976d2;
+  transform: scale(1.1);
+}
   min-width: 80px;
   flex-shrink: 0; /* Prevent from shrinking */
 }
