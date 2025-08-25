@@ -16,14 +16,17 @@
           >
             <template v-slot:selected>
               <div class="row items-center">
-                <q-icon 
+                <div 
                   v-if="selectedModel.icon" 
-                  :name="selectedModel.icon" 
-                  class="q-mr-sm clickable-icon"
-                  size="1.2em"
+                  class="icon-container q-mr-sm"
                   @click.stop="handleIconClick(selectedModel)"
-                  style="cursor: pointer;"
-                />
+                >
+                  <q-icon 
+                    :name="selectedModel.icon" 
+                    class="clickable-icon"
+                    size="1.2em"
+                  />
+                </div>
                 <span>{{ selectedModel.label }}</span>
               </div>
             </template>
@@ -476,6 +479,17 @@ export default defineComponent({
 .clickable-icon:hover {
   color: #1976d2;
   transform: scale(1.1);
+}
+
+.icon-container {
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.icon-container:hover {
+  background-color: rgba(25, 118, 210, 0.1);
 }
   min-width: 80px;
   flex-shrink: 0; /* Prevent from shrinking */
