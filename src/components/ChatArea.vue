@@ -1,8 +1,8 @@
 <template>
   <div class="chat-area">
-    <!-- Badge Row: Agent Status and Group Sharing -->
+    <!-- Badge Row: Group Sharing Only (Agent Badge hidden) -->
     <div class="badge-row">
-      <!-- Agent Status Indicator -->
+      <!-- Agent Status Indicator - Hidden but functionality preserved -->
       <AgentStatusIndicator
         :agent="currentAgent"
         :warning="warning"
@@ -10,6 +10,7 @@
         @manage="$emit('manage-agent')"
         @sign-in="$emit('sign-in')"
         @sign-out="$emit('sign-out')"
+        style="display: none;"
       />
       
       <!-- Group Sharing Badge -->
