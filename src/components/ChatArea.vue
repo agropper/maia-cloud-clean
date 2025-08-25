@@ -13,17 +13,18 @@
         style="display: none;"
       />
       
-      <!-- Group Sharing Badge -->
-                        <GroupSharingBadge 
-                    ref="groupSharingBadgeRef"
-                    :onStatusChange="handleStatusChange"
-                    :onPost="handlePostToCloudant"
-                    :currentUser="currentUser"
-                    :onNewChat="handleNewChat"
-                    :onNewChatWithSameGroup="handleNewChatWithSameGroup"
-                    :onGroupDeleted="handleGroupDeleted"
-                    :onChatLoaded="handleChatLoaded"
-                  />
+            <!-- Group Sharing Badge - Hidden but functionality preserved -->
+      <GroupSharingBadge 
+        ref="groupSharingBadgeRef"
+        :onStatusChange="handleStatusChange"
+        :onPost="handlePostToCloudant"
+        :currentUser="currentUser"
+        :onNewChat="handleNewChat"
+        :onNewChatWithSameGroup="handleNewChatWithSameGroup"
+        :onGroupDeleted="handleGroupDeleted"
+        :onChatLoaded="handleChatLoaded"
+        style="display: none;"
+      />
     </div>
     
     <!-- File Badges -->
