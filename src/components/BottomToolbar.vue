@@ -72,12 +72,10 @@
           <!-- Send Button -->
           <q-btn 
             color="primary" 
-            :label="appState.isLoading ? '' : 'Send'"
+            label="Send" 
             @click="triggerSendQuery" 
             size="sm"
             class="send-btn"
-            :loading="appState.isLoading"
-            :disable="appState.isLoading"
           />
         </div>
         
@@ -370,8 +368,8 @@ export default defineComponent({
       event?.preventDefault()
       event?.stopPropagation()
       
-      // If this is the Private AI option with the manage_accounts icon, trigger agent management
-      if (option.label === 'Private AI' && option.icon === 'manage_accounts') {
+      // If this is the Personal Chat option with the manage_accounts icon, trigger agent management
+      if (option.label === 'Personal Chat' && option.icon === 'manage_accounts') {
         props.triggerAgentManagement()
       }
     }
