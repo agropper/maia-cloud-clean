@@ -69,12 +69,6 @@
                 @click="toggleSpeechRecognition"
                 :disable="appState.isLoading"
               />
-              <q-spinner
-                v-if="appState.isLoading"
-                color="primary"
-                size="1.2em"
-                class="q-ml-sm"
-              />
             </template>
           </q-input>
           
@@ -181,7 +175,7 @@
 <script lang="ts">
 import { defineComponent, ref, computed, watch } from 'vue'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QSpinner } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -204,6 +198,7 @@ export default defineComponent({
     QItemSection,
     QItemLabel,
     QIcon,
+    QSpinner,
     GNAP,
     GroupManagementModal
   },
