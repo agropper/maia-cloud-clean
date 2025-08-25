@@ -25,7 +25,7 @@ import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 
 const AIoptions = [
-  { label: "Personal Chat", value: `${API_BASE_URL}/personal-chat` },
+  { label: "Personal Chat", value: `${API_BASE_URL}/personal-chat`, icon: "manage_accounts" },
   { label: "Anthropic", value: `${API_BASE_URL}/anthropic-chat` },
   { label: "Gemini", value: `${API_BASE_URL}/gemini-chat` },
   { label: "ChatGPT", value: `${API_BASE_URL}/chatgpt-chat` },

@@ -11,7 +11,20 @@
             v-model="selectedModel"
             :options="AIoptions"
             class="ai-select"
-          />
+            option-label="label"
+            option-value="value"
+          >
+            <template v-slot:option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section avatar v-if="scope.opt.icon">
+                  <q-icon :name="scope.opt.icon" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.label }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
           
           <!-- Text Input -->
           <q-input
@@ -199,7 +212,7 @@ export default defineComponent({
       required: true
     },
     AIoptions: {
-      type: Array as PropType<{ label: string; value: string }[]>,
+      type: Array as PropType<{ label: string; value: string; icon?: string }[]>,
       required: true
     },
 
@@ -442,10 +455,7 @@ export default defineComponent({
   width: 100%; /* Use full width */
 }
 
-.epoch-select {
-  min-width: 200px;
-  flex-shrink: 0; /* Prevent from shrinking too much */
-}
+
 
 .file-btn {
   min-width: 40px;

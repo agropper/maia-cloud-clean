@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Text Finder</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .found { background: yellow; border: 2px solid red; padding: 5px; margin: 5px; }
+        .results { margin-top: 20px; }
+        button { padding: 10px; margin: 5px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Text Finder</h1>
+    <p>This tool will help find the "0 (0.0B)" text in your application.</p>
+    
+    <button onclick="findText()">Find "0 (0.0B)" Text</button>
+    <button onclick="findPartialText()">Find Partial Matches</button>
+    <button onclick="clearHighlights()">Clear Highlights</button>
+    
+    <div class="results" id="results"></div>
+
+    <script>
+        function findText() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h3>Searching for exact text: "0 (0.0B)"</h3>';
+            
+            // Search in the main application iframe/window
+            let searchTarget = window;
+            if (window.frames && window.frames.length > 0) {
+                searchTarget = window.frames[0];
+            }
+            
+            const found = [];
+            
+            // Search through all text nodes
+            function searchTextNodes(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent.trim();
+                    if (text.includes('0 (0.0B)')) {
+                        found.push({
+                            type: 'text',
+                            text: text,
+                            node: node,
+                            parent: node.parentElement
+                        });
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Also check element attributes
+                    for (let attr of node.attributes) {
+                        if (attr.value.includes('0 (0.0B)')) {
+                            found.push({
+                                type: 'attribute',
+                                text: attr.value,
+                                node: node,
+                                attribute: attr.name
+                            });
+                        }
+                    }
+                    
+                    // Recursively search child nodes
+                    for (let child of node.childNodes) {
+                        searchTextNodes(child);
+                    }
+                }
+            }
+            
+            try {
+                searchTextNodes(searchTarget.document.body);
+            } catch (e) {
+                results.innerHTML += '<p>Error accessing main document: ' + e.message + '</p>';
+            }
+            
+            if (found.length === 0) {
+                results.innerHTML += '<p>No exact matches found.</p>';
+            } else {
+                results.innerHTML += '<h4>Found ' + found.length + ' matches:</h4>';
+                found.forEach((item, index) => {
+                    results.innerHTML += `
+                        <div class="found">
+                            <strong>Match ${index + 1}:</strong> ${item.type}<br>
+                            <strong>Text:</strong> "${item.text}"<br>
+                            <strong>Element:</strong> ${item.node.tagName || 'Text Node'}<br>
+                            <strong>Classes:</strong> ${item.node.className || 'None'}<br>
+                            <strong>ID:</strong> ${item.node.id || 'None'}<br>
+                            ${item.attribute ? '<strong>Attribute:</strong> ' + item.attribute + '<br>' : ''}
+                        </div>
+                    `;
+                    
+                    // Highlight the found element
+                    if (item.node.parentElement) {
+                        item.node.parentElement.style.backgroundColor = 'yellow';
+                        item.node.parentElement.style.border = '2px solid red';
+                    }
+                });
+            }
+        }
+        
+        function findPartialText() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h3>Searching for partial matches</h3>';
+            
+            let searchTarget = window;
+            if (window.frames && window.frames.length > 0) {
+                searchTarget = window.frames[0];
+            }
+            
+            const found = [];
+            
+            function searchTextNodes(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent.trim();
+                    if (text.includes('0') && (text.includes('0B') || text.includes('0.0'))) {
+                        found.push({
+                            type: 'text',
+                            text: text,
+                            node: node,
+                            parent: node.parentElement
+                        });
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    for (let attr of node.attributes) {
+                        if (attr.value.includes('0') && (attr.value.includes('0B') || attr.value.includes('0.0'))) {
+                            found.push({
+                                type: 'attribute',
+                                text: attr.value,
+                                node: node,
+                                attribute: attr.name
+                            });
+                        }
+                    }
+                    
+                    for (let child of node.childNodes) {
+                        searchTextNodes(child);
+                    }
+                }
+            }
+            
+            try {
+                searchTextNodes(searchTarget.document.body);
+            } catch (e) {
+                results.innerHTML += '<p>Error accessing main document: ' + e.message + '</p>';
+            }
+            
+            if (found.length === 0) {
+                results.innerHTML += '<p>No partial matches found.</p>';
+            } else {
+                results.innerHTML += '<h4>Found ' + found.length + ' partial matches:</h4>';
+                found.forEach((item, index) => {
+                    results.innerHTML += `
+                        <div class="found">
+                            <strong>Match ${index + 1}:</strong> ${item.type}<br>
+                            <strong>Text:</strong> "${item.text}"<br>
+                            <strong>Element:</strong> ${item.node.tagName || 'Text Node'}<br>
+                            <strong>Classes:</strong> ${item.node.className || 'None'}<br>
+                            <strong>ID:</strong> ${item.node.id || 'None'}<br>
+                            ${item.attribute ? '<strong>Attribute:</strong> ' + item.attribute + '<br>' : ''}
+                        </div>
+                    `;
+                });
+            }
+        }
+        
+        function clearHighlights() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Highlights cleared.</p>';
+            
+            // Remove all highlights
+            const highlighted = document.querySelectorAll('.found');
+            highlighted.forEach(el => {
+                el.style.backgroundColor = '';
+                el.style.border = '';
+            });
+        }
+        
+        // Auto-search when page loads
+        window.onload = function() {
+            setTimeout(() => {
+                findText();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
