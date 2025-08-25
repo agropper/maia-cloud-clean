@@ -88,6 +88,7 @@ export default defineComponent({
     const pendingShareId = ref<string | null>(null);
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
+    const currentDeepLink = ref<string | null>(null);
 
     // Update group count when it changes in ChatArea
     const updateGroupCount = (count: number) => {
@@ -100,6 +101,11 @@ export default defineComponent({
       if (chatAreaRef.value) {
         chatAreaRef.value.handleChatLoaded(groupChat);
       }
+    };
+
+    // Handle deep link updates from ChatArea
+    const handleDeepLinkUpdated = (deepLink: string) => {
+      currentDeepLink.value = deepLink;
     };
 
 
@@ -557,6 +563,8 @@ export default defineComponent({
       pendingShareId,
       handleDeepLinkUserIdentified,
       handleChatLoaded,
+      handleDeepLinkUpdated,
+      currentDeepLink,
       chatAreaRef,
     };
   },
@@ -621,6 +629,7 @@ export default defineComponent({
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
     @group-count-updated="updateGroupCount"
+    @deep-link-updated="handleDeepLinkUpdated"
   />
 
 
@@ -639,6 +648,7 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :currentUser="currentUser"
     :groupCount="groupCount"
+    :deepLink="currentDeepLink"
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
     @chat-loaded="handleChatLoaded"

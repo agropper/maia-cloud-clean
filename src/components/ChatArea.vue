@@ -323,7 +323,8 @@ export default defineComponent({
       messageToDelete: null as any,
       precedingUserMessage: null as any,
       showSecurityNoticeModal: false,
-      showNoMessageErrorModal: false
+      showNoMessageErrorModal: false,
+      currentDeepLink: null as string | null
     }
   },
   emits: [
@@ -338,7 +339,8 @@ export default defineComponent({
     'close-no-save',
     'sign-in',
     'sign-out',
-    'group-count-updated'
+    'group-count-updated',
+    'deep-link-updated'
   ],
   methods: {
     editMessage(index: number) {
@@ -527,6 +529,12 @@ export default defineComponent({
           console.error('❌ GroupSharingBadge ref not found')
         }
         
+        // Store the deep link in component data for status line
+        this.currentDeepLink = deepLink
+        
+        // Emit the deep link update to parent component
+        this.$emit('deep-link-updated', deepLink)
+        
         // Reset status to Current
         this.updateChatStatus('Current')
         console.log('✅ Chat status updated to Current')
@@ -604,6 +612,12 @@ export default defineComponent({
         if (this.$refs.groupSharingBadgeRef) {
           (this.$refs.groupSharingBadgeRef as GroupSharingBadgeRef).setDeepLink(deepLink)
         }
+        
+        // Store the deep link in component data for status line
+        this.currentDeepLink = deepLink
+        
+        // Emit the deep link update to parent component
+        this.$emit('deep-link-updated', deepLink)
         
         // Reset status to Current
         this.updateChatStatus('Current')

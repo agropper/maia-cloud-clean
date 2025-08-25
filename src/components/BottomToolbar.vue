@@ -134,6 +134,20 @@
             </q-btn>
             
             <span class="status-text">saved chats</span>
+            
+            <!-- Deep Link Icon - Right end of status line -->
+            <q-btn
+              v-if="deepLink"
+              flat
+              round
+              dense
+              icon="link"
+              color="secondary"
+              @click="copyDeepLink"
+              size="sm"
+              class="q-ml-sm"
+              title="Copy deep link to clipboard"
+            />
           </div>
           
           <!-- Load Saved Chats Button - Disabled for Group Chat functionality -->
@@ -248,6 +262,10 @@ export default defineComponent({
     groupCount: {
       type: Number,
       default: 0
+    },
+    deepLink: {
+      type: String,
+      default: null as string | null
     }
   },
 
@@ -374,6 +392,45 @@ export default defineComponent({
       }
     }
 
+    const copyDeepLink = async () => {
+      if (!props.deepLink) return
+      
+      try {
+        await navigator.clipboard.writeText(props.deepLink)
+        showCopyNotification()
+      } catch (err) {
+        console.error('❌ Failed to copy deep link:', err)
+      }
+    }
+
+    const showCopyNotification = () => {
+      // Create a simple toast notification
+      const notification = document.createElement('div')
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: #4CAF50;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        z-index: 10000;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+      `
+      notification.textContent = 'Link copied to clipboard!'
+      document.body.appendChild(notification)
+      
+      // Remove after 1 second
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification)
+        }
+      }, 1000)
+    }
+
     return {
       isListening,
       isSpeechSupported,
@@ -385,6 +442,7 @@ export default defineComponent({
       handleGroupDeleted,
       handleChatLoaded,
       handleIconClick,
+      copyDeepLink,
       isUserUnknown
     }
   }
