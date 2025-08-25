@@ -322,7 +322,6 @@ export default defineComponent({
 
     const handleChatLoaded = (groupChat: any) => {
       // Emit the loaded chat to the parent component
-      console.log('📂 Group chat loaded in status line:', groupChat)
       emit('chat-loaded', groupChat)
     }
 

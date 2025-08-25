@@ -96,7 +96,6 @@ export default defineComponent({
 
     // Handle chat loaded from status line
     const handleChatLoaded = (groupChat: any) => {
-      console.log('📂 Chat loaded from status line in ChatPrompt:', groupChat)
       // Pass the loaded chat to ChatArea
       if (chatAreaRef.value) {
         chatAreaRef.value.handleChatLoaded(groupChat);
@@ -115,16 +114,13 @@ export default defineComponent({
         
         if (shareIdMatch) {
           const shareId = shareIdMatch[1];
-          console.log('🔗 Deep link detected:', shareId);
           
           // Store the share ID and show the user identification modal
           pendingShareId.value = shareId;
           showDeepLinkUserModal.value = true;
         } else {
-          console.log('🔗 Invalid deep link format:', path);
         }
       } else {
-        console.log('🔗 No deep link detected - normal server access');
       }
     };
 
@@ -136,12 +132,9 @@ export default defineComponent({
 
         if (data.agent) {
           currentAgent.value = data.agent;
-          console.log(`🤖 Current agent loaded: ${data.agent.name}`);
 
           if (data.agent.knowledgeBase) {
-            console.log(`📚 Current KB: ${data.agent.knowledgeBase.name}`);
           } else {
-            console.log(`📚 No KB assigned`);
           }
 
           // Handle warnings from the API
@@ -153,7 +146,6 @@ export default defineComponent({
           }
         } else {
           currentAgent.value = null;
-          console.log("🤖 No agent configured");
         }
       } catch (error) {
         console.error("❌ Error fetching current agent:", error);
@@ -164,15 +156,12 @@ export default defineComponent({
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
-        console.log('🔍 [FRONTEND] Checking for existing session...');
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
         const data = await response.json();
         
         if (data.authenticated && data.user) {
-          console.log('🔍 [FRONTEND] Found existing session for user:', data.user);
           currentUser.value = data.user;
         } else {
-          console.log('🔍 [FRONTEND] No existing session found, keeping Unknown User');
           // currentUser.value is already set to Unknown User by default
         }
       } catch (error) {
@@ -214,8 +203,6 @@ export default defineComponent({
       shareId: string;
     }) => {
       try {
-        console.log('🔗 User identified for deep link:', userData);
-        
         // Load the shared chat
         const { loadSharedChat } = useGroupChat();
         const groupChat = await loadSharedChat(userData.shareId);
@@ -248,8 +235,6 @@ export default defineComponent({
         await fetchCurrentAgent();
         
         writeMessage(`Welcome ${userData.name}! Loaded shared group chat from ${groupChat.currentUser}`, "success");
-        console.log('✅ Shared chat loaded successfully for identified user:', userData.name);
-        console.log('🔍 Current user set to:', currentUser.value);
         
         // Clear pending share ID
         pendingShareId.value = null;
@@ -264,7 +249,6 @@ export default defineComponent({
       if (agentInfo) {
         // Update the current agent with the new information
         currentAgent.value = agentInfo;
-        console.log("🤖 Agent updated:", agentInfo.name);
 
         // Update the AI options to use the new agent endpoint if available
         const personalChatOption = AIoptions.find(
@@ -275,7 +259,6 @@ export default defineComponent({
         }
       } else {
         currentAgent.value = null;
-        console.log("🤖 Agent cleared");
       }
     };
 
@@ -367,7 +350,6 @@ export default defineComponent({
     };
 
     const triggerLoadSavedChats = () => {
-      console.log("🔍 triggerLoadSavedChats called");
       showSavedChatsDialog.value = true;
       logSystemEvent("Load saved chats dialog opened", {}, appState);
     };
@@ -493,62 +475,35 @@ export default defineComponent({
 
     // Update chat area bottom margin to account for fixed toolbar
     const updateChatAreaMargin = () => {
-      console.log('🔍 updateChatAreaMargin called');
-      console.log('🔍 chatAreaRef.value:', chatAreaRef.value);
-      console.log('🔍 chatAreaRef.value?.$el:', chatAreaRef.value?.$el);
-      
       if (chatAreaRef.value) {
-        // Try multiple ways to get the actual DOM element
         let chatAreaElement = null;
         
         if (chatAreaRef.value.$el && chatAreaRef.value.$el.nodeType === Node.ELEMENT_NODE) {
-          // $el is a proper DOM element
           chatAreaElement = chatAreaRef.value.$el;
         } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentElement) {
-          // $el is a text node, get its parent
           chatAreaElement = chatAreaRef.value.$el.parentElement;
         } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentNode) {
-          // Fallback to parentNode
           chatAreaElement = chatAreaRef.value.$el.parentNode;
         }
-        
-        console.log('🔍 chatAreaElement:', chatAreaElement);
         
         if (chatAreaElement && chatAreaElement.nodeType === Node.ELEMENT_NODE) {
           const toolbar = document.querySelector('.bottom-toolbar');
           if (toolbar) {
             const toolbarRect = toolbar.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
             const toolbarTop = toolbarRect.top;
-            const marginBottom = viewportHeight - toolbarTop;
-            
-            console.log('🔍 Setting marginBottom:', marginBottom);
-            console.log('🔍 Toolbar position - top:', toolbarTop, 'bottom:', toolbarRect.bottom);
-            console.log('🔍 Viewport height:', viewportHeight);
             
             // Set the chat area height to stop at the toolbar boundary
             chatAreaElement.style.height = `${toolbarTop}px`;
             chatAreaElement.style.maxHeight = `${toolbarTop}px`;
             chatAreaElement.style.overflowY = 'auto';
-            
-            console.log('🔍 Chat area height set to:', toolbarTop, 'px');
-          } else {
-            console.log('🔍 Toolbar not found');
           }
-        } else {
-          console.log('🔍 Could not find valid DOM element for chat area');
         }
-      } else {
-        console.log('🔍 chatAreaRef not ready yet');
       }
     };
 
     // Call on mount and window resize
     onMounted(async () => {
-      console.log('🔍 onMounted called');
-      // Wait for next tick to ensure DOM is ready
       await nextTick();
-      console.log('🔍 After nextTick');
       updateChatAreaMargin();
       window.addEventListener('resize', updateChatAreaMargin);
     });

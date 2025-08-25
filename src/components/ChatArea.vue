@@ -781,24 +781,20 @@ export default defineComponent({
                       }
                     },
                     handleChatLoaded(loadedChat: any) {
-                      console.log('📂 Chat loaded in ChatArea:', loadedChat)
-                      
-                      // Load the chat data into the main chat state
+                      // Update the chat display with the loaded data
                       this.appState.chatHistory = loadedChat.chatHistory || []
                       this.appState.uploadedFiles = loadedChat.uploadedFiles || []
-                      this.appState.currentChatId = loadedChat.id
+                      this.appState.currentChatId = loadedChat.id || null
                       
-                      // Update the chat status to "Current" since we're just loading existing content
+                      // Update chat status to prevent false modification detection
                       this.updateChatStatus('Current')
                       
-                      // Update the lastChatState to prevent false change detection
+                      // Update last known state to prevent false modification detection
                       this.lastChatState = {
                         historyLength: this.appState.chatHistory.length,
                         filesCount: this.appState.uploadedFiles.length,
                         hasEdits: this.appState.editBox.length > 0
                       }
-                      
-                      console.log('✅ Chat loaded successfully in ChatArea')
                     },
                     getGroupBadgeStatus(): string {
                       // Get the current status from the Group Sharing Badge
