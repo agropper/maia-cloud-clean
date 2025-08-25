@@ -14,6 +14,17 @@
             option-label="label"
             option-value="value"
           >
+            <template v-slot:selected>
+              <div class="row items-center">
+                <q-icon 
+                  v-if="selectedModel.icon" 
+                  :name="selectedModel.icon" 
+                  class="q-mr-sm"
+                  size="1.2em"
+                />
+                <span>{{ selectedModel.label }}</span>
+              </div>
+            </template>
             <template v-slot:option="scope">
               <q-item v-bind="scope.itemProps">
                 <q-item-section avatar v-if="scope.opt.icon">
