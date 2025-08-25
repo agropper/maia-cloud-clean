@@ -475,8 +475,8 @@
     />
 
     <!-- Warning Modal for Multiple Knowledge Bases -->
-    <q-dialog v-model="showWarningModal" persistent>
-      <q-card style="min-width: 400px; max-width: 600px">
+    <q-dialog v-model="showWarningModal" persistent no-esc-dismiss no-backdrop-dismiss class="warning-modal-dialog">
+      <q-card style="min-width: 400px; max-width: 600px; z-index: 9999;" class="warning-modal-card">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6 text-warning">
             <q-icon name="warning" color="warning" class="q-mr-sm" />
@@ -496,14 +496,14 @@
         <q-card-actions align="right">
           <q-btn 
             label="Cancel" 
-            color="grey" 
+            color="primary" 
             flat 
             @click="showWarningModal = false"
             :autofocus="true"
           />
           <q-btn 
             label="I understand" 
-            color="primary" 
+            color="grey" 
             @click="handleWarningConfirmed"
           />
         </q-card-actions>
@@ -1613,5 +1613,15 @@ export default defineComponent({
 
 .q-card {
   border-radius: 12px;
+}
+
+/* Ensure warning modal is properly isolated */
+.warning-modal-dialog {
+  z-index: 9999 !important;
+}
+
+.warning-modal-card {
+  position: relative;
+  z-index: 10000 !important;
 }
 </style>
