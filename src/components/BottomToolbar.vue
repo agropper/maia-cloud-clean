@@ -126,12 +126,7 @@
             />
             
             <!-- User Display -->
-            <span class="status-text tooltip-container">
-          User
-          <div class="custom-tooltip">
-            You don't have to sign-in to use MAIA in public mode.
-          </div>
-        </span>
+            <span class="status-text">User</span>
             <span class="user-name">{{ getCurrentUserName() }}</span>
             <span class="status-text">has</span>
             
