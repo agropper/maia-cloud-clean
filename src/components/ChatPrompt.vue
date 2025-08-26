@@ -634,7 +634,7 @@ export default defineComponent({
   <!-- Bottom Toolbar -->
   <BottomToolbar
     :appState="appState"
-    :pickFiles="pickFiles"
+    
     :triggerSendQuery="triggerSendQuery"
     :triggerAuth="triggerAuth"
     :triggerJWT="triggerJWT"

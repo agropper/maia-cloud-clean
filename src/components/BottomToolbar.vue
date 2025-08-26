@@ -82,13 +82,23 @@
         
         <!-- Secondary action row -->
         <div class="action-row">
-          <!-- File Upload Button -->
-          <q-btn
-            @click="pickFiles"
-            flat
-            icon="attach_file"
-            class="file-btn"
-          />
+                  <!-- File Upload Button -->
+        <q-btn
+          @click="pickFiles"
+          flat
+          icon="attach_file"
+          class="file-btn"
+        />
+        
+        <!-- Hidden File Input -->
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          accept=".pdf,.txt,.md,.rtf"
+          style="display: none"
+          @change="handleFileUpload"
+        />
           
           <!-- Status Line - Centered on same line as paper clip button -->
           <div class="status-line">
@@ -217,10 +227,7 @@ export default defineComponent({
       type: Object as PropType<AppState>,
       required: true
     },
-    pickFiles: {
-      type: Function as PropType<(evt: Event) => void>,
-      required: true
-    },
+
     triggerSendQuery: {
       type: Function as PropType<() => void>,
       required: true
@@ -278,6 +285,7 @@ export default defineComponent({
     const interimTranscript = ref('')
 
     const showGroupModal = ref(false)
+    const fileInput = ref<HTMLInputElement | null>(null)
 
     const selectedModel = computed({
       get: () => {
@@ -376,6 +384,29 @@ export default defineComponent({
       // Emit the event to parent component so it can update the group count
       emit('group-deleted')
     }
+    
+    const handleFileUpload = (event: Event) => {
+      const files = (event.target as HTMLInputElement).files
+      if (files && files.length > 0) {
+        // Handle file upload directly
+        const file = files[0] // Take the first file for now
+        if (file) {
+          // Set the file in appState and trigger upload
+          props.appState.currentFile = file
+          // You can add additional file processing logic here if needed
+        }
+      }
+      // Reset the input so the same file can be selected again
+      if (fileInput.value) {
+        fileInput.value.value = ''
+      }
+    }
+    
+    const pickFiles = () => {
+      if (fileInput.value) {
+        fileInput.value.click()
+      }
+    }
 
     const handleChatLoaded = (groupChat: any) => {
       // Emit the loaded chat to the parent component
@@ -444,7 +475,10 @@ export default defineComponent({
       handleChatLoaded,
       handleIconClick,
       copyDeepLink,
-      isUserUnknown
+      isUserUnknown,
+      handleFileUpload,
+      pickFiles,
+      fileInput
     }
   }
 })
