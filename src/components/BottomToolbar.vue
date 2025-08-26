@@ -94,6 +94,9 @@
             self="bottom middle"
             :offset="[0, 10]"
             class="bg-dark text-white"
+            :delay="300"
+            :hide-delay="0"
+            :persistent="false"
           >
             Upload a PDF or other file for the AIs to process.
           </q-tooltip>
