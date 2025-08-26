@@ -8,6 +8,28 @@
       </q-card-section>
 
       <q-card-section>
+        <!-- Current Agent Summary -->
+        <div v-if="currentAgent" class="q-mb-md">
+          <q-card flat bordered class="agent-summary-card">
+            <q-card-section class="q-pa-sm">
+              <div class="row items-center">
+                <q-icon 
+                  :name="getStatusIcon(currentAgent)" 
+                  :color="getStatusColor(currentAgent)" 
+                  size="1.5rem"
+                  class="q-mr-sm"
+                />
+                <div class="agent-summary-text">
+                  <div class="text-body2">
+                    {{ getAgentName(currentAgent) }}
+                  </div>
+                  <div class="text-caption text-grey">{{ getStatusText(currentAgent) }}</div>
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+
         <!-- Agent List -->
         <div v-if="availableAgents.length > 0" class="q-mb-md">
           <h6 class="q-mb-sm">Available Agents:</h6>
@@ -1541,6 +1563,65 @@ export default defineComponent({
       emit("update:modelValue", false);
     };
 
+    // Helper functions for agent summary display
+    const getStatusIcon = (agent: DigitalOceanAgent) => {
+      if (!agent) return 'smart_toy';
+      switch (agent.status) {
+        case 'active':
+          return 'check_circle';
+        case 'creating':
+          return 'hourglass_empty';
+        case 'error':
+          return 'error';
+        default:
+          return 'smart_toy';
+      }
+    };
+
+    const getStatusColor = (agent: DigitalOceanAgent) => {
+      if (!agent) return 'grey';
+      switch (agent.status) {
+        case 'active':
+          return 'positive';
+        case 'creating':
+          return 'warning';
+        case 'error':
+          return 'negative';
+        default:
+          return 'grey';
+      }
+    };
+
+    const getAgentName = (agent: DigitalOceanAgent) => {
+      if (!agent) return 'No Agent Configured';
+      const userName = localCurrentUser.value?.displayName || localCurrentUser.value?.userId || 'Unknown User';
+      return `Personal AI ${agent.name} for User: ${userName}`;
+    };
+
+    const getStatusText = (agent: DigitalOceanAgent) => {
+      if (!agent) return 'Create an agent to get started';
+      
+      let text = `Status: ${agent.status} • Model: ${agent.model}`;
+      
+      // Add knowledge base information if available
+      if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
+        const kbCount = agent.knowledgeBases.length;
+        const primaryKB = agent.knowledgeBases[0];
+        const updatedDate = new Date(primaryKB.updated_at).toLocaleDateString();
+        
+        if (kbCount === 1) {
+          text += ` • Knowledge Base: ${primaryKB.name} (Updated: ${updatedDate})`;
+        } else {
+          text += ` • Knowledge Bases: ${kbCount} attached (Primary: ${primaryKB.name})`;
+        }
+      } else if (agent.knowledgeBase) {
+        const updatedDate = new Date(agent.knowledgeBase.updated_at).toLocaleDateString();
+        text += ` • Knowledge Base: ${agent.knowledgeBase.name} (Updated: ${updatedDate})`;
+      }
+      
+      return text;
+    };
+
     return {
       showDialog,
       currentAgent,
@@ -1599,6 +1680,10 @@ export default defineComponent({
       warningMessage,
       handleClose,
       handleWarningConfirmed,
+      getStatusIcon,
+      getStatusColor,
+      getAgentName,
+      getStatusText,
     };
   },
 });
@@ -1623,5 +1708,24 @@ export default defineComponent({
 .warning-modal-card {
   position: relative;
   z-index: 10000 !important;
+}
+
+/* Agent Summary Card Styling */
+.agent-summary-card {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 8px;
+}
+
+.agent-summary-text {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.agent-summary-text .text-caption {
+  white-space: normal;
+  line-height: 1.3;
+  word-break: break-word;
 }
 </style>
