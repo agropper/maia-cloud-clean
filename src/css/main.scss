@@ -1,5 +1,15 @@
 @import './base.scss';
 
+// Ensure proper cursor behavior for interactive elements
+button, 
+.q-btn, 
+[role="button"], 
+.clickable,
+.tooltip-wrapper,
+.user-tooltip {
+  cursor: pointer !important;
+}
+
 // Specific overrides for Quasar components
 .q-message,
 .q-card,
@@ -29,7 +39,7 @@
     // Make message content selectable
     div {
       user-select: text !important;
-      cursor: text !important;
+      /* Remove aggressive cursor override to allow hover states */
     }
   }
   
@@ -39,14 +49,14 @@
     
     .q-message-text {
       user-select: text !important;
-      cursor: text !important;
+      /* Remove aggressive cursor override */
     }
   }
   
   // Make markdown content selectable
   .vue-markdown {
     user-select: text !important;
-    cursor: text !important;
+    /* Remove aggressive cursor override */
     
     * {
       user-select: text !important;
