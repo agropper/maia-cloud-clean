@@ -1,5 +1,10 @@
 @import './base.scss';
 
+// Force default cursor on all elements to eliminate circle cursor
+html, body {
+  cursor: default !important;
+}
+
 // Ensure proper cursor behavior for interactive elements
 button, 
 .q-btn, 
@@ -13,6 +18,20 @@ button,
 // Override any Quasar or framework cursor styles that might cause circle cursor
 * {
   cursor: auto !important;
+}
+
+// Force override any cursor styles that might be causing circle cursor
+html, body, div, span, button, input, textarea, select, a, .q-btn, .q-card, .q-message, .q-input, .q-select, .q-file, .q-dialog, .q-popup-proxy {
+  cursor: auto !important;
+}
+
+// Disable any touch/drag cursors that might cause circle
+* {
+  -webkit-user-select: auto !important;
+  -moz-user-select: auto !important;
+  -ms-user-select: auto !important;
+  user-select: auto !important;
+  touch-action: auto !important;
 }
 
 // Restore proper cursors for specific elements
