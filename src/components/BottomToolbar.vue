@@ -126,7 +126,7 @@
             />
             
             <!-- User Display -->
-            <span class="status-text" title="You don't have to sign-in to use MAIA in public mode.">User</span>
+            <span class="status-text user-tooltip" data-tooltip="You don't have to sign-in to use MAIA in public mode.">User</span>
             <span class="user-name">{{ getCurrentUserName() }}</span>
             <span class="status-text">has</span>
             
@@ -660,5 +660,49 @@ export default defineComponent({
   background: rgba(255, 255, 255, 0.95);
 }
 
+.user-tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.user-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  pointer-events: none;
+}
+
+.user-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #333;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  pointer-events: none;
+}
+
+.user-tooltip:hover::after,
+.user-tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
 
 </style>
