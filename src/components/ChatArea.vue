@@ -263,22 +263,22 @@ export default defineComponent({
                     },
                     currentUser: {
                       handler(newUser, oldUser) {
-                        console.log(`🔍 [CHATAREA] currentUser changed:`, { old: oldUser, new: newUser })
+                
                         
                         // Always refresh group count when user changes (for sign-in/sign-out)
                         if (this.isUserReady) {
-                          console.log(`🔍 [CHATAREA] User changed, refreshing group count...`)
+                  
                           this.loadGroupCount()
                         }
                       }
                     },
                     isUserReady: {
                       handler(isReady: boolean, wasReady: boolean) {
-                        console.log(`🔍 [CHATAREA] isUserReady changed:`, { wasReady, isReady })
+                
                         
                         // Only load data when user becomes ready (not when becoming unready)
                         if (isReady && !wasReady) {
-                          console.log(`🔍 [CHATAREA] User is now ready, loading initial data...`)
+                  
                           this.loadInitialData()
                         }
                       },
@@ -498,7 +498,7 @@ export default defineComponent({
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
           console.log('🆕 Creating new group chat for user:', userId)
-          console.log('🔍 [SAVE] currentUser object:', currentUser, '-> userId string:', userId)
+  
           result = await saveGroupChat(
             this.appState.chatHistory,
             this.appState.uploadedFiles,
@@ -647,16 +647,12 @@ export default defineComponent({
         hasEdits: this.appState.editBox.length > 0
       }
       
-      console.log('🔍 [CHATAREA] checkForChanges called:', {
-        currentState,
-        lastChatState: this.lastChatState,
-        pathname: window.location.pathname
-      })
+
       
       // Skip change detection only for fresh starts, not for shared chat loads
       if (this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0 && 
           this.appState.chatHistory.length === 0 && this.appState.uploadedFiles.length === 0) {
-        console.log('🔍 [CHATAREA] Fresh start, initializing state')
+
         this.lastChatState = currentState
         return
       }
@@ -664,32 +660,32 @@ export default defineComponent({
       // Check if this is a shared chat load by URL
       if (window.location.pathname.includes('/shared/') && 
           this.lastChatState.historyLength === 0 && this.lastChatState.filesCount === 0) {
-        console.log('🔍 [CHATAREA] Shared chat load, initializing state')
+
         this.lastChatState = currentState
         return
       }
       
       // Check if files were added (including first file)
       if (currentState.filesCount > this.lastChatState.filesCount) {
-        console.log('🔍 [CHATAREA] Files added, marking as Modified')
+
         this.updateChatStatus('Modified')
       }
       
       // Check if chat history changed (including first message)
       if (currentState.historyLength > this.lastChatState.historyLength) {
-        console.log('🔍 [CHATAREA] Chat history changed, marking as Modified')
+
         this.updateChatStatus('Modified')
       }
       
       // Check for edits to existing messages
       if (currentState.hasEdits && !this.lastChatState.hasEdits) {
-        console.log('🔍 [CHATAREA] Edits detected, marking as Modified')
+
         this.updateChatStatus('Modified')
       }
       
       // Update last state
       this.lastChatState = currentState
-      console.log('🔍 [CHATAREA] State updated:', this.lastChatState)
+      
     },
                         initializeChatState() {
                       this.lastChatState = {
@@ -705,7 +701,7 @@ export default defineComponent({
                       try {
                         // Only proceed if user is ready
                         if (!this.isUserReady) {
-                          console.log(`🔍 [FRONTEND] User not ready, skipping group count load`)
+                  
                           return
                         }
                         
@@ -733,25 +729,25 @@ export default defineComponent({
                         if (isDeepLinkUser && deepLinkShareId) {
                           // Deep link users see chats that match their shareId
                           filteredGroups = allGroups.filter(group => group.shareId === deepLinkShareId)
-                          console.log(`🔍 [FRONTEND] Deep link user filtering: shareId === '${deepLinkShareId}'`)
+                  
                         } else {
                           // Regular users see chats that match their currentUser
                           filteredGroups = allGroups.filter(group => group.currentUser === currentUserName)
-                          console.log(`🔍 [FRONTEND] Regular user filtering: group.currentUser === '${currentUserName}'`)
+                  
                         }
                         
                         const groupCount = filteredGroups.length
                         
-                        console.log(`🔍 [FRONTEND] Loaded group count: ${groupCount} for current user (filtered from ${allGroups.length} total)`)
-                        console.log(`🔍 [FRONTEND] Current user: ${currentUserName}, Filtering logic: group.currentUser === '${currentUserName}'`)
-                        console.log(`🔍 [FRONTEND] Badge count updated to: ${groupCount}`)
+                
+                
+                
                         
                         if (this.$refs.groupSharingBadgeRef) {
                           (this.$refs.groupSharingBadgeRef as any).updateGroupCount(groupCount)
                         }
                         
                         // Emit the updated count to parent component
-                        console.log('🔍 [CHATAREA] Emitting group-count-updated event with count:', groupCount)
+                
                         this.$emit('group-count-updated', groupCount)
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
@@ -794,23 +790,23 @@ export default defineComponent({
 
                     },
                     handleGroupDeleted() {
-                      console.log('🔍 [CHATAREA] handleGroupDeleted called')
+              
                       // Only refresh group count if user is valid
                       if (this.isUserReady) {
-                        console.log('🔍 [CHATAREA] User is ready, calling loadGroupCount')
+                
                         this.loadGroupCount()
                       } else {
-                        console.log('🔍 [CHATAREA] User not ready, skipping loadGroupCount')
+                
                       }
                     },
                     // Method to manually trigger data loading when user becomes ready
                     async loadInitialData() {
                       if (this.isUserReady) {
-                        console.log(`🔍 [CHATAREA] Loading initial data for ready user...`)
+                
                         await this.loadGroupCount()
                         // Note: loadCurrentAgent and loadCurrentKB are handled by the parent ChatPrompt component
                       } else {
-                        console.log(`🔍 [CHATAREA] User not ready, skipping initial data load`)
+                
                       }
                     },
                     handleChatLoaded(loadedChat: any) {

@@ -92,9 +92,9 @@ export default defineComponent({
 
     // Update group count when it changes in ChatArea
     const updateGroupCount = (count: number) => {
-      console.log('🔍 [CHATPROMPT] updateGroupCount called with count:', count);
+      
       groupCount.value = count;
-      console.log('🔍 [CHATPROMPT] groupCount.value updated to:', groupCount.value);
+      
     };
 
     // Handle chat loaded from status line
@@ -107,14 +107,14 @@ export default defineComponent({
 
     // Handle deep link updates from ChatArea
     const handleDeepLinkUpdated = (deepLink: string) => {
-      console.log('🔍 [CHATPROMPT] handleDeepLinkUpdated called with:', deepLink);
+      
       currentDeepLink.value = deepLink;
-      console.log('🔍 [CHATPROMPT] currentDeepLink.value updated to:', currentDeepLink.value);
+      
     };
 
     // Handle group deletion from BottomToolbar
     const handleGroupDeleted = () => {
-      console.log('🔍 [CHATPROMPT] handleGroupDeleted called from BottomToolbar');
+      
       // Refresh the group count after deletion
       if (chatAreaRef.value) {
         chatAreaRef.value.loadGroupCount();

@@ -113,43 +113,23 @@ export default {
         loading.style.padding = '8px'
         container.appendChild(loading)
 
-        // Debug: Log the file structure to understand what we're working with
-        console.log('🔍 [PDF] File structure:', {
-          hasOriginalFile: !!this.currentFile.originalFile,
-          originalFileType: typeof this.currentFile.originalFile,
-          isFileInstance: this.currentFile.originalFile instanceof File,
-          hasBase64: this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && 'base64' in this.currentFile.originalFile,
-          base64Length: this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && this.currentFile.originalFile.base64 ? this.currentFile.originalFile.base64.length : 0,
-          hasFileUrl: !!this.currentFile.fileUrl,
-          hasContent: !!this.currentFile.content,
-          fileName: this.currentFile.name,
-          fileType: this.currentFile.type
-        })
+
         
-        // Additional debugging for the originalFile structure
-        if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object') {
-          console.log('🔍 [PDF] OriginalFile details:', {
-            keys: Object.keys(this.currentFile.originalFile),
-            hasBase64: 'base64' in this.currentFile.originalFile,
-            base64Type: typeof this.currentFile.originalFile.base64,
-            base64Sample: this.currentFile.originalFile.base64 ? this.currentFile.originalFile.base64.substring(0, 50) + '...' : 'none',
-            fullOriginalFile: JSON.stringify(this.currentFile.originalFile, null, 2)
-          })
-        }
+
 
         // Handle both fresh File objects and database-loaded objects
         let pdf
         
         if (this.currentFile.originalFile instanceof File) {
           // Fresh File object - use arrayBuffer()
-          console.log('🔍 [PDF] Using fresh File object')
+  
           const buf = await this.currentFile.originalFile.arrayBuffer()
           // @ts-ignore
           const task = pdfjsLib.getDocument({ data: buf })
           pdf = await task.promise
         } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && this.currentFile.originalFile.base64) {
           // Database-loaded file with base64 data - reconstruct the PDF
-          console.log('🔍 [PDF] Using base64 data from database')
+  
           try {
             const base64 = this.currentFile.originalFile.base64
             const binaryString = atob(base64)
@@ -166,7 +146,7 @@ export default {
           }
         } else if (this.currentFile.fileUrl) {
           // @ts-ignore
-          console.log('🔍 [PDF] Using file URL')
+  
           const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
           pdf = await task.promise
         } else {

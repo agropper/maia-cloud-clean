@@ -900,7 +900,7 @@ export default defineComponent({
       // Emit the current user to parent component
       emit("user-authenticated", userInfo);
 
-      console.log("🔍 User authenticated in AgentManagementDialog:", userInfo);
+      
 
       // Continue to knowledge base creation dialog instead of closing
       showCreateKbDialog.value = true;
@@ -914,7 +914,7 @@ export default defineComponent({
     // Handle sign-in cancellation
     const handleSignInCancelled = () => {
       showPasskeyAuthDialog.value = false;
-      console.log("🔍 Sign-in cancelled in AgentManagementDialog");
+      
     };
 
     // Handle ownership transfer completion
@@ -1045,7 +1045,7 @@ export default defineComponent({
         }
 
         // CRITICAL: Verify the switch actually worked by fetching the current agent state
-        console.log(`🔍 Verifying KB switch...`);
+
         const verifyResponse = await fetch(`${API_BASE_URL}/current-agent`);
         if (!verifyResponse.ok) {
           throw new Error("Failed to verify agent state after KB switch");
@@ -1149,13 +1149,13 @@ export default defineComponent({
 
     // Handle create new KB
     const handleCreateKnowledgeBase = () => {
-      console.log("🔍 handleCreateKnowledgeBase called");
-      console.log("🔍 currentUser:", props.currentUser);
-      console.log("🔍 showPasskeyAuthDialog:", showPasskeyAuthDialog.value);
+      
+      
+      
 
       if (!props.currentUser) {
         // Show passkey auth dialog for existing users
-        console.log("🔍 Showing passkey auth dialog - user not signed in");
+
         showPasskeyAuthDialog.value = true;
       } else {
         // User is already authenticated, show KB creation dialog
@@ -1374,7 +1374,7 @@ export default defineComponent({
         );
 
         const result = await response.json();
-        console.log("🔍 KB connection response:", { status: response.status, result });
+
 
         if (!response.ok) {
           // Check if this requires ownership transfer

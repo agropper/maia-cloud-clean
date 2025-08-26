@@ -428,7 +428,7 @@ export default defineComponent({
             .replace(/^-|-$/g, ""),
         };
 
-        console.log("🔍 Sending agent creation request:", transformedForm);
+
 
         const response = await fetch(`${API_BASE_URL}/agents`, {
           method: "POST",

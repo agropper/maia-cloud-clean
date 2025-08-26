@@ -126,8 +126,8 @@ export default defineComponent({
       const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
       
       // Debug logging to see what's happening with currentUser
-      console.log('🔍 AgentStatusIndicator - currentUser prop:', props.currentUser);
-      console.log('🔍 AgentStatusIndicator - computed userName:', userName);
+      
+      
       
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
@@ -200,7 +200,7 @@ export default defineComponent({
 
     // Watch for currentUser changes to trigger agent refresh
     watch(() => props.currentUser, (newUser, oldUser) => {
-      console.log('🔍 AgentStatusIndicator - currentUser changed:', { old: oldUser, new: newUser });
+      
       // When user changes, we need to refresh the agent data to get updated console message
       // This will trigger the parent component to re-fetch agent data
       

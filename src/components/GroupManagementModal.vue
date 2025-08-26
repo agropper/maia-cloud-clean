@@ -199,17 +199,17 @@ export default defineComponent({
         if (isDeepLinkUser && deepLinkShareId) {
           // Deep link users see chats that match their shareId
           filteredGroups = allGroups.filter(group => group.shareId === deepLinkShareId)
-          console.log(`🔍 [MODAL] Deep link user filtering: shareId === '${deepLinkShareId}'`)
+  
         } else {
           // Regular users see chats that match their currentUser
           filteredGroups = allGroups.filter(group => group.currentUser === currentUserName)
-          console.log(`🔍 [MODAL] Regular user filtering: group.currentUser === '${currentUserName}'`)
+  
         }
         
         groups.value = filteredGroups
         
-        console.log(`🔍 [MODAL] Filtered groups for user '${currentUserName}': ${filteredGroups.length}/${allGroups.length}`)
-        console.log(`🔍 [MODAL] Filtering logic: ${isDeepLinkUser ? 'shareId === ' + deepLinkShareId : 'group.currentUser === ' + currentUserName}`)
+
+
 
       } catch (error) {
         console.error('❌ Failed to load groups:', error)

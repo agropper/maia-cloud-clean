@@ -116,11 +116,11 @@ export default defineComponent({
   setup(props, { emit }) {
     const showDialog = computed({
       get: () => {
-        console.log("🔍 SignInDialog showDialog get:", props.modelValue);
+
         return props.modelValue;
       },
       set: (value) => {
-        console.log("🔍 SignInDialog showDialog set:", value);
+
         emit("update:modelValue", value);
       },
     });
@@ -134,15 +134,15 @@ export default defineComponent({
 
     // Debug currentStep changes
     watch(currentStep, (newStep) => {
-      console.log("🔍 SignInDialog currentStep changed to:", newStep);
+      
     });
 
     // Watch for dialog close to reset state
     watch(showDialog, (isOpen) => {
-      console.log("🔍 SignInDialog dialog state changed:", isOpen);
+      
       if (!isOpen) {
         // Reset state when dialog closes
-        console.log("🔍 Resetting SignInDialog state");
+
         currentStep.value = "userId";
         userId.value = "";
         userIdError.value = false;
@@ -270,7 +270,7 @@ export default defineComponent({
           // Close dialog
           showDialog.value = false;
 
-          console.log("🔍 User signed in via SignInDialog:", userInfo);
+  
         } else {
           throw new Error(result.error || "Authentication failed");
         }
