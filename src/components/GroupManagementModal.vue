@@ -43,7 +43,7 @@
                   </q-chip>
                 </div>
                 
-                <!-- First message preview (up to 60 characters) -->
+                <!-- Second message preview (up to 100 characters) -->
                 <div v-if="getFirstMessagePreview(group)" class="text-caption text-grey q-mb-xs">
                   {{ getFirstMessagePreview(group) }}...
                 </div>
@@ -262,10 +262,10 @@ export default defineComponent({
     }
 
     const getFirstMessagePreview = (group: GroupChat): string => {
-      if (group.chatHistory && group.chatHistory.length > 0) {
-        const firstMessage = group.chatHistory[0]
-        if (firstMessage.content && typeof firstMessage.content === 'string') {
-          return firstMessage.content.substring(0, 60)
+      if (group.chatHistory && group.chatHistory.length > 1) {
+        const secondMessage = group.chatHistory[1]
+        if (secondMessage.content && typeof secondMessage.content === 'string') {
+          return secondMessage.content.substring(0, 100)
         }
       }
       return ''
