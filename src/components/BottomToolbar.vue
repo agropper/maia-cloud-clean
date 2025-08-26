@@ -35,12 +35,15 @@
             <template v-slot:option="scope">
               <q-item v-bind="scope.itemProps">
                 <q-item-section avatar v-if="scope.opt.icon">
-                  <q-icon 
-                    :name="scope.opt.icon" 
-                    class="clickable-icon"
-                    @click.stop="handleIconClick(scope.opt)"
-                    style="cursor: pointer !important;"
-                  />
+                  <div class="tooltip-wrapper">
+                    <q-icon 
+                      :name="scope.opt.icon" 
+                      class="clickable-icon"
+                      @click.stop="handleIconClick(scope.opt)"
+                      style="cursor: pointer !important;"
+                    />
+                    <div class="tooltip-text">Choose your prefered AI agent and the health records that it uses.</div>
+                  </div>
                 </q-item-section>
                 <q-item-section>
                   <q-item-label>{{ scope.opt.label }}</q-item-label>
@@ -130,7 +133,7 @@
             <!-- User Display -->
             <div class="tooltip-wrapper">
               <span class="status-text">User</span>
-              <div class="tooltip-text">You don't have to sign-in to use MAIA in public mode.</div>
+              <div class="tooltip-text">Create and use passkeys to keep your chats more private.</div>
             </div>
             <span class="user-name">{{ getCurrentUserName() }}</span>
             <span class="status-text">has</span>
@@ -153,7 +156,7 @@
             
             <div class="tooltip-wrapper">
               <span class="status-text">saved chats</span>
-              <div class="tooltip-text">Number of chats saved to this group</div>
+              <div class="tooltip-text">Choose a saved and shared chat.</div>
             </div>
             
             <!-- Deep Link Icon - Right end of status line -->

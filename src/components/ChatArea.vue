@@ -117,13 +117,15 @@
         label="Save to CouchDB"
         @click="triggerSaveToCouchDB"
       /> -->
-      <q-btn 
-        v-if="getGroupBadgeStatus() === 'Modified'"
-        size="sm" 
-        color="primary" 
-        label="Post to Group" 
-        @click="saveToGroup" 
-      />
+      <div v-if="getGroupBadgeStatus() === 'Modified'" class="tooltip-wrapper">
+        <q-btn 
+          size="sm" 
+          color="primary" 
+          label="Post to Group" 
+          @click="saveToGroup" 
+        />
+        <div class="tooltip-text">Saves or updates a chat for sharing as a link to be shared.</div>
+      </div>
       <q-btn size="sm" color="warning" label="End without Saving" @click="closeNoSave" />
     </div>
   </div>
@@ -940,5 +942,35 @@ export default defineComponent({
   font-family: monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Tooltip styles */
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  background-color: #333;
+  color: white;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -100px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.tooltip-wrapper:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
 }
 </style>
