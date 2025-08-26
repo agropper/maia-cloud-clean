@@ -23,6 +23,7 @@ import { API_BASE_URL } from "../utils/apiBase";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
+import NavigationWarningModal from "./NavigationWarningModal.vue";
 
 const AIoptions = [
   { label: "Private AI", value: `${API_BASE_URL}/personal-chat`, icon: "manage_accounts" },
@@ -45,6 +46,7 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
+    NavigationWarningModal,
   },
   computed: {
     placeholderText() {
@@ -89,6 +91,10 @@ export default defineComponent({
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
     const currentDeepLink = ref<string | null>(null);
+    
+    // Navigation warning modal state
+    const showNavigationWarning = ref(false);
+    const pendingNavigation = ref<(() => void) | null>(null);
 
     // Update group count when it changes in ChatArea
     const updateGroupCount = (count: number) => {
@@ -119,6 +125,22 @@ export default defineComponent({
       if (chatAreaRef.value) {
         chatAreaRef.value.loadGroupCount();
       }
+    };
+
+    // Navigation warning handlers
+    const handleNavigationConfirmed = () => {
+      showNavigationWarning.value = false;
+      if (pendingNavigation.value) {
+        pendingNavigation.value();
+        pendingNavigation.value = null;
+      }
+    };
+
+    const handleNavigationCancelled = () => {
+      showNavigationWarning.value = false;
+      pendingNavigation.value = null;
+      // Restore the current state
+      window.history.pushState(null, '', window.location.href);
     };
 
 
@@ -515,15 +537,54 @@ export default defineComponent({
       }
     };
 
+    // Navigation guard functions
+    const checkForUnsavedChanges = (): boolean => {
+      // Check if there are unsaved changes
+      return appState.chatHistory.length > 0 && 
+             (appState.currentQuery.trim() !== '' || 
+              appState.uploadedFiles.length > 0 ||
+              appState.editBox.length > 0);
+    };
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (checkForUnsavedChanges()) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (checkForUnsavedChanges()) {
+        event.preventDefault();
+        showNavigationWarning.value = true;
+        // Store the navigation action for later execution
+        pendingNavigation.value = () => {
+          // Allow the navigation to proceed
+          window.history.pushState(null, '', window.location.href);
+          window.history.forward();
+        };
+      }
+    };
+
     // Call on mount and window resize
     onMounted(async () => {
       await nextTick();
       updateChatAreaMargin();
       window.addEventListener('resize', updateChatAreaMargin);
+      
+      // Add navigation guards
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('popstate', handlePopState);
+      
+      // Push initial state to enable popstate detection
+      window.history.pushState(null, '', window.location.href);
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', updateChatAreaMargin);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
     });
 
     return {
@@ -575,6 +636,9 @@ export default defineComponent({
       handleGroupDeleted,
       currentDeepLink,
       chatAreaRef,
+      showNavigationWarning,
+      handleNavigationConfirmed,
+      handleNavigationCancelled,
     };
   },
 });
@@ -693,5 +757,13 @@ export default defineComponent({
     v-model="showDeepLinkUserModal"
     :share-id="pendingShareId || ''"
     @user-identified="handleDeepLinkUserIdentified"
+  />
+
+  <!-- Navigation Warning Modal -->
+  <NavigationWarningModal
+    v-model="showNavigationWarning"
+    :has-unsaved-changes="true"
+    @confirm-navigation="handleNavigationConfirmed"
+    @cancel-navigation="handleNavigationCancelled"
   />
 </template>
