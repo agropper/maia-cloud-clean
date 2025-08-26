@@ -432,12 +432,7 @@ export default defineComponent({
       logSystemEvent("File uploaded", { fileName: file.name }, appState);
     };
 
-    const handleFileUpload = (event: Event) => {
-      const files = (event.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        triggerUploadFile(files[0]);
-      }
-    };
+
 
     const saveMessage = (idx: number, content: string) => {
       appState.chatHistory[idx].content = content;
@@ -544,7 +539,7 @@ export default defineComponent({
       triggerSaveToCouchDB,
       triggerSendQuery,
       triggerUploadFile,
-      handleFileUpload,
+      
       saveMessage,
       saveToFile,
       closeNoSave,
@@ -604,19 +599,7 @@ export default defineComponent({
   </q-btn-toggle>
   -->
 
-  <!-- File Upload -->
-  <q-file
-    v-model="appState.currentFile"
-    filled
-    counter
-    multiple
-    append
-    @input="handleFileUpload"
-  >
-    <template v-slot:prepend>
-      <q-icon name="attach_file"></q-icon>
-    </template>
-  </q-file>
+
 
   <!-- Chat Area Component -->
   <ChatArea
