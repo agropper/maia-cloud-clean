@@ -194,6 +194,7 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch } from 'vue'
+import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
 import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
 import { GNAP } from 'vue3-gnap'
@@ -385,15 +386,20 @@ export default defineComponent({
       emit('group-deleted')
     }
     
-    const handleFileUpload = (event: Event) => {
+    const handleFileUpload = async (event: Event) => {
       const files = (event.target as HTMLInputElement).files
       if (files && files.length > 0) {
-        // Handle file upload directly
         const file = files[0] // Take the first file for now
         if (file) {
-          // Set the file in appState and trigger upload
-          props.appState.currentFile = file
-          // You can add additional file processing logic here if needed
+          try {
+            // Use the uploadFile function to properly process and add the file
+            await uploadFile(file, props.appState, (message: string, type: string) => {
+              // Handle success/error messages if needed
+              console.log(`${type}: ${message}`)
+            })
+          } catch (error) {
+            console.error('File upload failed:', error)
+          }
         }
       }
       // Reset the input so the same file can be selected again
