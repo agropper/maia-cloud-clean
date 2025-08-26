@@ -10,6 +10,35 @@ button,
   cursor: pointer !important;
 }
 
+// Override any Quasar or framework cursor styles that might cause circle cursor
+* {
+  cursor: auto !important;
+}
+
+// Restore proper cursors for specific elements
+button, 
+.q-btn, 
+[role="button"], 
+.clickable,
+.tooltip-wrapper,
+.user-tooltip,
+a,
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+  cursor: pointer !important;
+}
+
+input, textarea, select {
+  cursor: text !important;
+}
+
+// Ensure help cursor for tooltips
+[title], 
+[data-tooltip] {
+  cursor: help !important;
+}
+
 // Specific overrides for Quasar components
 .q-message,
 .q-card,
