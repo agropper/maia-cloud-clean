@@ -92,7 +92,9 @@ export default defineComponent({
 
     // Update group count when it changes in ChatArea
     const updateGroupCount = (count: number) => {
+      console.log('🔍 [CHATPROMPT] updateGroupCount called with count:', count);
       groupCount.value = count;
+      console.log('🔍 [CHATPROMPT] groupCount.value updated to:', groupCount.value);
     };
 
     // Handle chat loaded from status line

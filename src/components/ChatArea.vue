@@ -751,6 +751,7 @@ export default defineComponent({
                         }
                         
                         // Emit the updated count to parent component
+                        console.log('🔍 [CHATAREA] Emitting group-count-updated event with count:', groupCount)
                         this.$emit('group-count-updated', groupCount)
                       } catch (error) {
                         console.error('❌ Failed to load group count:', error)
@@ -793,9 +794,13 @@ export default defineComponent({
 
                     },
                     handleGroupDeleted() {
+                      console.log('🔍 [CHATAREA] handleGroupDeleted called')
                       // Only refresh group count if user is valid
                       if (this.isUserReady) {
+                        console.log('🔍 [CHATAREA] User is ready, calling loadGroupCount')
                         this.loadGroupCount()
+                      } else {
+                        console.log('🔍 [CHATAREA] User not ready, skipping loadGroupCount')
                       }
                     },
                     // Method to manually trigger data loading when user becomes ready
