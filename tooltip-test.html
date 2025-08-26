@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tooltip Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        /* Test 1: Native HTML title attribute */
+        .native-tooltip {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #1976d2;
+        }
+        
+        /* Test 2: Pure CSS tooltip */
+        .css-tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            background: #f3e5f5;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #7b1fa2;
+        }
+        
+        .css-tooltip-text {
+            visibility: hidden;
+            width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: normal;
+        }
+        
+        .css-tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        
+        .css-tooltip-wrapper:hover .css-tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Test 3: JavaScript tooltip */
+        .js-tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #2e7d32;
+        }
+        
+        .js-tooltip-text {
+            display: none;
+            width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: normal;
+        }
+        
+        .js-tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        
+        .js-tooltip-wrapper:hover .js-tooltip-text {
+            display: block;
+        }
+        
+        .test-button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        
+        .test-button:hover {
+            background: #1565c0;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Tooltip Functionality Test Page</h1>
+    <p>This page tests different tooltip implementations to identify what works and what doesn't.</p>
+    
+    <div class="test-section">
+        <h2 class="test-title">Test 1: Native HTML Title Attribute</h2>
+        <p>This should work in all browsers without any CSS or JavaScript:</p>
+        <div class="native-tooltip">
+            <span title="This is a native HTML tooltip that should appear on hover">Hover over this text to see a native tooltip</span>
+        </div>
+        <p><strong>Expected:</strong> Tooltip appears on hover using browser's default styling</p>
+    </div>
+    
+    <div class="test-section">
+        <h2 class="test-title">Test 2: Pure CSS Tooltip</h2>
+        <p>This uses only CSS with :hover pseudo-class:</p>
+        <div class="css-tooltip-wrapper">
+            <span>Hover over this text to see a CSS tooltip</span>
+            <div class="css-tooltip-text">This is a pure CSS tooltip using :hover pseudo-class</div>
+        </div>
+        <p><strong>Expected:</strong> Custom styled tooltip appears on hover</p>
+    </div>
+    
+    <div class="test-section">
+        <h2 class="test-title">Test 3: CSS Display Tooltip</h2>
+        <p>This uses CSS display property instead of visibility:</p>
+        <div class="js-tooltip-wrapper">
+            <span>Hover over this text to see a display-based tooltip</span>
+            <div class="js-tooltip-text">This tooltip uses display: none/block instead of visibility</div>
+        </div>
+        <p><strong>Expected:</strong> Custom styled tooltip appears on hover</p>
+    </div>
+    
+    <div class="test-section">
+        <h2 class="test-title">Test Controls</h2>
+        <button class="test-button" onclick="testHover()">Test Hover Detection</button>
+        <button class="test-button" onclick="clearStatus()">Clear Status</button>
+    </div>
+    
+    <div id="status" class="status" style="display: none;">
+        <strong>Status:</strong> <span id="status-text"></span>
+    </div>
+    
+    <script>
+        function testHover() {
+            const statusDiv = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            
+            statusText.textContent = 'Testing hover detection...';
+            statusDiv.style.display = 'block';
+            
+            // Test if hover events are working
+            let hoverDetected = false;
+            
+            const testElement = document.createElement('div');
+            testElement.style.cssText = 'width: 100px; height: 100px; background: red; margin: 10px;';
+            testElement.textContent = 'Hover Test';
+            
+            testElement.addEventListener('mouseenter', () => {
+                hoverDetected = true;
+                testElement.style.background = 'green';
+                statusText.textContent = '✅ Hover events are working! Mouse entered the test element.';
+            });
+            
+            testElement.addEventListener('mouseleave', () => {
+                testElement.style.background = 'red';
+                statusText.textContent = '✅ Hover events are working! Mouse left the test element.';
+            });
+            
+            document.body.appendChild(testElement);
+            
+            // Remove test element after 5 seconds
+            setTimeout(() => {
+                if (document.body.contains(testElement)) {
+                    document.body.removeChild(testElement);
+                }
+                if (!hoverDetected) {
+                    statusText.textContent = '❌ No hover events detected. This might indicate a browser issue.';
+                }
+            }, 5000);
+        }
+        
+        function clearStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+        
+        // Add some debugging
+        console.log('Tooltip test page loaded');
+        console.log('Testing hover detection...');
+        
+        document.addEventListener('mouseover', (e) => {
+            if (e.target.classList.contains('css-tooltip-wrapper') || 
+                e.target.classList.contains('js-tooltip-wrapper')) {
+                console.log('Hover detected on tooltip wrapper:', e.target);
+            }
+        });
+    </script>
+</body>
+</html>

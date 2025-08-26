@@ -2948,6 +2948,16 @@ app.get('*', (req, res) => {
   res.render('index');
 });
 
+// Add tooltip test route
+app.get('/tooltip-test', (req, res) => {
+  res.sendFile(path.join(__dirname, 'tooltip-test.html'));
+});
+
+// Add Vue tooltip test route
+app.get('/vue-tooltip-test', (req, res) => {
+  res.render('index');
+});
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
