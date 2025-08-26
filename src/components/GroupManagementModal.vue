@@ -43,14 +43,9 @@
                   </q-chip>
                 </div>
                 
-                <div class="text-caption text-grey q-mb-xs">
-                  <q-icon name="school" size="xs" />
-                  {{ group.connectedKB || 'No KB connected' }}
-                </div>
-                
-                <div class="text-caption text-grey">
-                  <q-icon name="people" size="xs" />
-                  {{ formatParticipants(group) }}
+                <!-- First message preview (up to 60 characters) -->
+                <div v-if="getFirstMessagePreview(group)" class="text-caption text-grey q-mb-xs">
+                  {{ getFirstMessagePreview(group) }}...
                 </div>
                 
                 <!-- File attachments -->
@@ -266,6 +261,16 @@ export default defineComponent({
       }
     }
 
+    const getFirstMessagePreview = (group: GroupChat): string => {
+      if (group.chatHistory && group.chatHistory.length > 0) {
+        const firstMessage = group.chatHistory[0]
+        if (firstMessage.content && typeof firstMessage.content === 'string') {
+          return firstMessage.content.substring(0, 60)
+        }
+      }
+      return ''
+    }
+
     const copyGroupLink = async (group: GroupChat) => {
       try {
         const baseUrl = window.location.origin
@@ -400,6 +405,7 @@ export default defineComponent({
       formatDate,
       formatParticipants,
       formatFileList,
+      getFirstMessagePreview,
       copyGroupLink,
       confirmDelete,
       deleteGroup,
