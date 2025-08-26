@@ -38,15 +38,12 @@
             <template v-slot:option="scope">
               <q-item v-bind="scope.itemProps">
                 <q-item-section avatar v-if="scope.opt.icon">
-                  <div class="tooltip-wrapper">
-                    <q-icon 
-                      :name="scope.opt.icon" 
-                      class="clickable-icon"
-                      @click.stop="handleIconClick(scope.opt)"
-                      style="cursor: pointer !important;"
-                    />
-                    <div class="tooltip-text">Choose your AI consultant. Only your Private AI has direct access to your health records. The other AIs can only see the chat history and any addad documents.</div>
-                  </div>
+                  <q-icon 
+                    :name="scope.opt.icon" 
+                    class="clickable-icon"
+                    @click.stop="handleIconClick(scope.opt)"
+                    style="cursor: pointer !important;"
+                  />
                 </q-item-section>
                 <q-item-section>
                   <q-item-label>{{ scope.opt.label }}</q-item-label>

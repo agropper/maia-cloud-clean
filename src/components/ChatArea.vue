@@ -45,6 +45,7 @@
         :sent="x.role === 'user'"
       >
         <div>
+          <vue-markdown :source="typeof x.content === 'string' ? x.content : '[Non-string content]'" />
           <div class="tooltip-wrapper">
             <q-btn
               dense
@@ -57,7 +58,6 @@
             />
             <div class="tooltip-text">Edit or delete messages to remove any information you want to keep from the consultants you invite to this chat thread.</div>
           </div>
-          <vue-markdown :source="typeof x.content === 'string' ? x.content : '[Non-string content]'" />
         </div>
       </q-chat-message>
 
