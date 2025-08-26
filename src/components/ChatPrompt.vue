@@ -112,6 +112,15 @@ export default defineComponent({
       console.log('🔍 [CHATPROMPT] currentDeepLink.value updated to:', currentDeepLink.value);
     };
 
+    // Handle group deletion from BottomToolbar
+    const handleGroupDeleted = () => {
+      console.log('🔍 [CHATPROMPT] handleGroupDeleted called from BottomToolbar');
+      // Refresh the group count after deletion
+      if (chatAreaRef.value) {
+        chatAreaRef.value.loadGroupCount();
+      }
+    };
+
 
 
     // Handle deep link loading - only for actual deep link URLs
@@ -568,6 +577,7 @@ export default defineComponent({
       handleDeepLinkUserIdentified,
       handleChatLoaded,
       handleDeepLinkUpdated,
+      handleGroupDeleted,
       currentDeepLink,
       chatAreaRef,
     };
@@ -656,6 +666,7 @@ export default defineComponent({
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
     @chat-loaded="handleChatLoaded"
+    @group-deleted="handleGroupDeleted"
   />
 
   <!-- Popup for displaying system messages -->

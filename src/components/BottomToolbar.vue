@@ -197,7 +197,7 @@ import {
 export default defineComponent({
   name: 'BottomToolbar',
   
-  emits: ['sign-in', 'sign-out', 'chat-loaded'],
+  emits: ['sign-in', 'sign-out', 'chat-loaded', 'group-deleted'],
 
   components: {
     QBtn,
@@ -373,7 +373,8 @@ export default defineComponent({
 
     const handleGroupDeleted = () => {
       // This function will be called when a group is deleted
-      // We can add logic here if needed
+      // Emit the event to parent component so it can update the group count
+      emit('group-deleted')
     }
 
     const handleChatLoaded = (groupChat: any) => {
