@@ -83,24 +83,22 @@
         <!-- Secondary action row -->
         <div class="action-row">
                   <!-- File Upload Button -->
-        <q-btn
-          @click="pickFiles"
-          flat
-          icon="attach_file"
-          class="file-btn"
-        >
-          <q-tooltip
-            anchor="top middle"
-            self="bottom middle"
-            :offset="[0, 10]"
-            class="bg-dark text-white"
-            :delay="300"
-            :hide-delay="0"
-            :persistent="false"
+        <div class="tooltip-container">
+          <q-btn
+            @click="pickFiles"
+            @mouseenter="showTooltip = true"
+            @mouseleave="showTooltip = false"
+            flat
+            icon="attach_file"
+            class="file-btn"
+          />
+          <div 
+            v-show="showTooltip" 
+            class="custom-tooltip"
           >
             Upload a PDF or other file for the AIs to process.
-          </q-tooltip>
-        </q-btn>
+          </div>
+        </div>
         
         <!-- Hidden File Input -->
         <input
@@ -300,6 +298,7 @@ export default defineComponent({
 
     const showGroupModal = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
+    const showTooltip = ref(false)
 
     const selectedModel = computed({
       get: () => {
@@ -497,7 +496,8 @@ export default defineComponent({
       isUserUnknown,
       handleFileUpload,
       pickFiles,
-      fileInput
+      fileInput,
+      showTooltip
     }
   }
 })
@@ -669,5 +669,39 @@ export default defineComponent({
 
 .loading-pane.true {
   background: rgba(255, 255, 255, 0.95);
+}
+
+.tooltip-container {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-tooltip {
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  width: 200px;
+  text-align: center;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.custom-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
 }
 </style>
