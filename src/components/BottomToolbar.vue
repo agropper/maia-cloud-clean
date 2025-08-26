@@ -16,18 +16,21 @@
           >
             <template v-slot:selected>
               <div class="row items-center">
-                <div 
+                                <div
                   v-if="selectedModel.icon" 
                   class="icon-container q-mr-sm"
                   @click.stop.prevent="handleIconClick(selectedModel)"
                   @mousedown.stop.prevent
                   @mouseup.stop.prevent
                 >
-                  <q-icon 
-                    :name="selectedModel.icon" 
-                    class="clickable-icon"
-                    size="1.2em"
-                  />
+                  <div class="tooltip-wrapper">
+                    <q-icon 
+                      :name="selectedModel.icon" 
+                      class="clickable-icon"
+                      size="1.2em"
+                    />
+                    <div class="tooltip-text">Choose your prefered AI agent and the health records that it uses.</div>
+                  </div>
                 </div>
                 <span>{{ selectedModel.label }}</span>
               </div>
@@ -42,7 +45,7 @@
                       @click.stop="handleIconClick(scope.opt)"
                       style="cursor: pointer !important;"
                     />
-                    <div class="tooltip-text">Choose your prefered AI agent and the health records that it uses.</div>
+                    <div class="tooltip-text">Choose your AI consultant. Only your Private AI has direct access to your health records. The other AIs can only see the chat history and any addad documents.</div>
                   </div>
                 </q-item-section>
                 <q-item-section>
@@ -74,13 +77,16 @@
           </q-input>
           
           <!-- Send Button -->
-          <q-btn 
-            color="primary" 
-            label="Send" 
-            @click="triggerSendQuery" 
-            size="sm"
-            class="send-btn"
-          />
+          <div class="tooltip-wrapper">
+            <q-btn 
+              color="primary" 
+              label="Send" 
+              @click="triggerSendQuery" 
+              size="sm"
+              class="send-btn"
+            />
+            <div class="tooltip-text">Send a message to the chosen AI. Chats shared with people as a deep link will not be updated unless you also click POST TO GROUP. You are responsible for sharing the deep link and notifying members of the group of changes. You can use, texts, emails, or patient portal messages to introduce your consultants to the shared chat link.</div>
+          </div>
         </div>
         
         <!-- Secondary action row -->
@@ -151,7 +157,7 @@
               >
                 <div class="group-count">{{ groupCount }}</div>
               </q-btn>
-              <div class="tooltip-text">View shared groups</div>
+              <div class="tooltip-text">Choose a saved and shared chat.</div>
             </div>
             
             <div class="tooltip-wrapper">

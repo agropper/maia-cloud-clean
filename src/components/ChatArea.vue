@@ -45,15 +45,18 @@
         :sent="x.role === 'user'"
       >
         <div>
-          <q-btn
-            dense
-            flat
-            size="sm"
-            icon="edit"
-            :class="['edit-button', x.role.toString()]"
-            v-if="!appState.editBox.includes(idx)"
-            @click="editMessage(idx)"
-          />
+          <div class="tooltip-wrapper">
+            <q-btn
+              dense
+              flat
+              size="sm"
+              icon="edit"
+              :class="['edit-button', x.role.toString()]"
+              v-if="!appState.editBox.includes(idx)"
+              @click="editMessage(idx)"
+            />
+            <div class="tooltip-text">Edit or delete messages to remove any information you want to keep from the consultants you invite to this chat thread.</div>
+          </div>
           <vue-markdown :source="typeof x.content === 'string' ? x.content : '[Non-string content]'" />
         </div>
       </q-chat-message>
