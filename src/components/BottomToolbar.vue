@@ -39,7 +39,7 @@
                     :name="scope.opt.icon" 
                     class="clickable-icon"
                     @click.stop="handleIconClick(scope.opt)"
-                    style="cursor: pointer;"
+                    style="cursor: pointer !important;"
                   />
                 </q-item-section>
                 <q-item-section>
@@ -83,13 +83,15 @@
         <!-- Secondary action row -->
         <div class="action-row">
                   <!-- File Upload Button -->
-        <q-btn
-          @click="pickFiles"
-          flat
-          icon="attach_file"
-          class="file-btn"
-          title="Upload a PDF or other file for the AIs to process."
-        />
+        <div class="tooltip-wrapper">
+          <q-btn
+            @click="pickFiles"
+            flat
+            icon="attach_file"
+            class="file-btn"
+          />
+          <div class="tooltip-text">Upload a PDF or other file for the AIs to process.</div>
+        </div>
         
         <!-- Hidden File Input -->
         <input
@@ -134,34 +136,40 @@
             <span class="status-text">has</span>
             
             <!-- Shared Chats Button -->
-            <q-btn
-              flat
-              round
-              dense
-              size="sm"
-              color="primary"
-              class="group-count-btn q-mr-sm"
-              @click="openGroupModal"
-              title="View shared groups"
-            >
-              <div class="group-count">{{ groupCount }}</div>
-            </q-btn>
+            <div class="tooltip-wrapper">
+              <q-btn
+                flat
+                round
+                dense
+                size="sm"
+                color="primary"
+                class="group-count-btn q-mr-sm"
+                @click="openGroupModal"
+              >
+                <div class="group-count">{{ groupCount }}</div>
+              </q-btn>
+              <div class="tooltip-text">View shared groups</div>
+            </div>
             
-            <span class="status-text">saved chats</span>
+            <div class="tooltip-wrapper">
+              <span class="status-text">saved chats</span>
+              <div class="tooltip-text">Number of chats saved to this group</div>
+            </div>
             
             <!-- Deep Link Icon - Right end of status line -->
-            <q-btn
-              v-if="deepLink"
-              flat
-              round
-              dense
-              icon="link"
-              color="secondary"
-              @click="copyDeepLink"
-              size="sm"
-              class="q-ml-sm"
-              title="Copy deep link to clipboard"
-            />
+            <div v-if="deepLink" class="tooltip-wrapper">
+              <q-btn
+                flat
+                round
+                dense
+                icon="link"
+                color="secondary"
+                @click="copyDeepLink"
+                size="sm"
+                class="q-ml-sm"
+              />
+              <div class="tooltip-text">Copy deep link to clipboard</div>
+            </div>
           </div>
           
           <!-- Load Saved Chats Button - Disabled for Group Chat functionality -->
@@ -703,6 +711,11 @@ export default defineComponent({
 .tooltip-wrapper:hover .tooltip-text {
   visibility: visible;
   opacity: 1;
+}
+
+/* Ensure clickable icons show pointer cursor */
+.clickable-icon {
+  cursor: pointer !important;
 }
 
 </style>
