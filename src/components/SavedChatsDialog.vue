@@ -39,8 +39,26 @@
               @click="selectChat(chat)"
             >
               <q-item-section>
+                <!-- First message preview (up to 60 characters) -->
+                <q-item-label v-if="getFirstMessagePreview(chat)" caption class="q-mb-xs">
+                  {{ getFirstMessagePreview(chat) }}...
+                </q-item-label>
+                
+                <!-- Chat title -->
                 <q-item-label>{{ formatChatLabel(chat) }}</q-item-label>
-                <q-item-label caption>
+                
+                <!-- Documents list -->
+                <q-item-label v-if="chat.uploadedFiles && chat.uploadedFiles.length > 0" caption class="q-mt-xs">
+                  <div class="documents-list">
+                    <span v-for="(file, index) in chat.uploadedFiles" :key="index" class="document-item">
+                      📎 {{ file.name }}
+                      <span v-if="index < chat.uploadedFiles.length - 1">, </span>
+                    </span>
+                  </div>
+                </q-item-label>
+                
+                <!-- Message count and date -->
+                <q-item-label caption class="q-mt-xs">
                   {{ chat.messageCount }} messages •
                   {{ formatChatDate(chat.updatedAt) }}
                 </q-item-label>
@@ -145,6 +163,16 @@ export default defineComponent({
       emit("update:modelValue", false);
     };
 
+    const getFirstMessagePreview = (chat: SavedChat): string => {
+      if (chat.chatHistory && chat.chatHistory.length > 0) {
+        const firstMessage = chat.chatHistory[0];
+        if (firstMessage.content && typeof firstMessage.content === 'string') {
+          return firstMessage.content.substring(0, 60);
+        }
+      }
+      return '';
+    };
+
     const handleDeleteChat = async (chatId: string) => {
       try {
         await deleteChat(chatId);
@@ -180,6 +208,7 @@ export default defineComponent({
       handleDeleteChat,
       formatChatLabel,
       formatChatDate,
+      getFirstMessagePreview,
       watchIsOpen,
       refresh: loadSavedChats,
     };
@@ -195,3 +224,12 @@ export default defineComponent({
   },
 });
 </script>
+
+<style lang="scss" scoped>
+.documents-list {
+  .document-item {
+    font-size: 0.85em;
+    color: #666;
+  }
+}
+</style>
