@@ -126,7 +126,7 @@
             />
             
             <!-- User Display -->
-            <span class="status-text">User</span>
+            <span class="status-text" title="You don't have to sign-in to use MAIA in public mode.">User</span>
             <span class="user-name">{{ getCurrentUserName() }}</span>
             <span class="status-text">has</span>
             
