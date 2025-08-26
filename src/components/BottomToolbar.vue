@@ -86,16 +86,11 @@
         <div class="tooltip-container">
           <q-btn
             @click="pickFiles"
-            @mouseenter="showTooltip = true"
-            @mouseleave="showTooltip = false"
             flat
             icon="attach_file"
             class="file-btn"
           />
-          <div 
-            v-show="showTooltip" 
-            class="custom-tooltip"
-          >
+          <div class="custom-tooltip">
             Upload a PDF or other file for the AIs to process.
           </div>
         </div>
@@ -298,7 +293,6 @@ export default defineComponent({
 
     const showGroupModal = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
-    const showTooltip = ref(false)
 
     const selectedModel = computed({
       get: () => {
@@ -496,8 +490,7 @@ export default defineComponent({
       isUserUnknown,
       handleFileUpload,
       pickFiles,
-      fileInput,
-      showTooltip
+      fileInput
     }
   }
 })
@@ -692,6 +685,9 @@ export default defineComponent({
   text-align: center;
   z-index: 1000;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .custom-tooltip::after {
@@ -703,5 +699,10 @@ export default defineComponent({
   border-width: 5px;
   border-style: solid;
   border-color: #333 transparent transparent transparent;
+}
+
+.tooltip-container:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
 }
 </style>
