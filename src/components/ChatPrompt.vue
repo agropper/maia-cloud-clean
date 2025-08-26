@@ -48,12 +48,12 @@ export default defineComponent({
   },
   computed: {
     placeholderText() {
-      const personalChatValue = this.AIoptions.find(
-        (option) => option.label === "Personal Chat"
+      const privateAIValue = this.AIoptions.find(
+        (option) => option.label === "Private AI"
       )?.value;
       if (
         this.appState.chatHistory.length === 0 &&
-        this.appState.selectedAI === personalChatValue
+        this.appState.selectedAI === privateAIValue
       ) {
         return "Click Send for patient summary";
       }
@@ -384,13 +384,13 @@ export default defineComponent({
     };
 
     const triggerSendQuery = async () => {
-      // If Personal Chat is selected and chatHistory is empty, only use the default if the input is empty or matches the default
-      const personalChatValue = AIoptions.find(
-        (option) => option.label === "Personal Chat"
+      // If Private AI is selected and chatHistory is empty, only use the default if the input is empty or matches the default
+      const privateAIValue = AIoptions.find(
+        (option) => option.label === "Private AI"
       )?.value;
       const defaultPrompt = "Show patient summary";
       if (
-        appState.selectedAI === personalChatValue &&
+        appState.selectedAI === privateAIValue &&
         appState.chatHistory.length === 0
       ) {
         // If the user has typed something, use that instead of the default
