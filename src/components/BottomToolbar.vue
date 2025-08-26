@@ -88,7 +88,11 @@
           flat
           icon="attach_file"
           class="file-btn"
-        />
+        >
+          <q-tooltip>
+            Upload a PDF or other file for the AIs to process.
+          </q-tooltip>
+        </q-btn>
         
         <!-- Hidden File Input -->
         <input
