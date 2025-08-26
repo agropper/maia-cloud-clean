@@ -83,15 +83,21 @@
         <!-- Secondary action row -->
         <div class="action-row">
                   <!-- File Upload Button -->
-        <div class="tooltip-container">
-          <q-btn
-            @click="pickFiles"
-            flat
-            icon="attach_file"
-            class="file-btn"
-          />
-          <span class="tooltip">Upload a PDF or other file for the AIs to process.</span>
-        </div>
+        <q-btn
+          @click="pickFiles"
+          flat
+          icon="attach_file"
+          class="file-btn"
+        >
+          <q-tooltip
+            anchor="top middle"
+            self="bottom middle"
+            :offset="[0, 10]"
+            class="bg-dark text-white"
+          >
+            Upload a PDF or other file for the AIs to process.
+          </q-tooltip>
+        </q-btn>
         
         <!-- Hidden File Input -->
         <input
@@ -199,7 +205,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -222,6 +228,7 @@ export default defineComponent({
     QItemSection,
     QItemLabel,
     QIcon,
+    QTooltip,
     GNAP,
     GroupManagementModal
   },
@@ -621,48 +628,7 @@ export default defineComponent({
   flex-shrink: 0; /* Prevent from shrinking */
 }
 
-/* Custom Tooltip Styles */
-.tooltip-container {
-  position: relative;
-  display: inline-block;
-}
 
-.tooltip {
-  visibility: hidden;
-  width: 200px;
-  background-color: #333;
-  color: #fff;
-  text-align: center;
-  border-radius: 6px;
-  padding: 8px 12px;
-  position: absolute;
-  z-index: 1000;
-  bottom: 125%;
-  left: 50%;
-  margin-left: -100px;
-  opacity: 0;
-  transition: opacity 0.3s;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: normal;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: #333 transparent transparent transparent;
-}
-
-.tooltip-container:hover .tooltip {
-  visibility: visible;
-  opacity: 1;
-}
 
 .message {
   padding: 8px 16px;
