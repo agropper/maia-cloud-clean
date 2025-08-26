@@ -175,8 +175,8 @@
       @chatLoaded="handleChatLoaded"
     />
 
-    <!-- Loading Pane - Only show when actually loading, not when user is unknown -->
-    <div v-if="appState.isLoading && !isUserUnknown" :class="'loading-pane ' + appState.isLoading">
+    <!-- Loading Pane - Show when actually loading -->
+    <div v-if="appState.isLoading" :class="'loading-pane ' + appState.isLoading">
       <q-circular-progress indeterminate rounded size="30px" color="primary" class="q-ma-md" />
     </div>
   </div>
