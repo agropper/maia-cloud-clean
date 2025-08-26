@@ -126,7 +126,10 @@
             />
             
             <!-- User Display -->
-            <span class="status-text user-tooltip" data-tooltip="You don't have to sign-in to use MAIA in public mode.">User</span>
+            <div class="tooltip-wrapper">
+              <span class="status-text">User</span>
+              <div class="tooltip-text">You don't have to sign-in to use MAIA in public mode.</div>
+            </div>
             <span class="user-name">{{ getCurrentUserName() }}</span>
             <span class="status-text">has</span>
             
@@ -660,49 +663,46 @@ export default defineComponent({
   background: rgba(255, 255, 255, 0.95);
 }
 
-.user-tooltip {
+.tooltip-wrapper {
   position: relative;
+  display: inline-block;
   cursor: help;
 }
 
-.user-tooltip::after {
-  content: attr(data-tooltip);
+.tooltip-text {
+  visibility: hidden;
+  width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px 12px;
   position: absolute;
+  z-index: 1000;
   bottom: 125%;
   left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
+  margin-left: -125px;
+  opacity: 0;
+  transition: opacity 0.3s;
   font-size: 12px;
   line-height: 1.4;
-  white-space: nowrap;
-  z-index: 1000;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  pointer-events: none;
+  white-space: normal;
 }
 
-.user-tooltip::before {
-  content: '';
+.tooltip-text::after {
+  content: "";
   position: absolute;
-  bottom: 125%;
+  top: 100%;
   left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #333;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  pointer-events: none;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
 }
 
-.user-tooltip:hover::after,
-.user-tooltip:hover::before {
-  opacity: 1;
+.tooltip-wrapper:hover .tooltip-text {
   visibility: visible;
+  opacity: 1;
 }
 
 </style>
