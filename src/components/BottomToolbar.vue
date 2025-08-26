@@ -83,17 +83,13 @@
         <!-- Secondary action row -->
         <div class="action-row">
                   <!-- File Upload Button -->
-        <div class="tooltip-container">
-          <q-btn
-            @click="pickFiles"
-            flat
-            icon="attach_file"
-            class="file-btn"
-          />
-          <div class="custom-tooltip">
-            Upload a PDF or other file for the AIs to process.
-          </div>
-        </div>
+        <q-btn
+          @click="pickFiles"
+          flat
+          icon="attach_file"
+          class="file-btn"
+          title="Upload a PDF or other file for the AIs to process."
+        />
         
         <!-- Hidden File Input -->
         <input
@@ -669,45 +665,5 @@ export default defineComponent({
   background: rgba(255, 255, 255, 0.95);
 }
 
-.tooltip-container {
-  position: relative;
-  display: inline-block;
-}
 
-.custom-tooltip {
-  position: absolute;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: normal;
-  width: 200px;
-  text-align: center;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-}
-
-.custom-tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: #333 transparent transparent transparent;
-}
-
-.tooltip-container:hover .custom-tooltip {
-  opacity: 1;
-  visibility: visible;
-}
 </style>
