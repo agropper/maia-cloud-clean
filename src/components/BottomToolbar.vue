@@ -88,11 +88,8 @@
           flat
           icon="attach_file"
           class="file-btn"
-        >
-          <q-tooltip>
-            Upload a PDF or other file for the AIs to process.
-          </q-tooltip>
-        </q-btn>
+          title="Upload a PDF or other file for the AIs to process."
+        />
         
         <!-- Hidden File Input -->
         <input
@@ -200,7 +197,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -223,7 +220,6 @@ export default defineComponent({
     QItemSection,
     QItemLabel,
     QIcon,
-    QTooltip,
     GNAP,
     GroupManagementModal
   },
