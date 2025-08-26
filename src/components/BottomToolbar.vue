@@ -200,7 +200,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -223,6 +223,7 @@ export default defineComponent({
     QItemSection,
     QItemLabel,
     QIcon,
+    QTooltip,
     GNAP,
     GroupManagementModal
   },
