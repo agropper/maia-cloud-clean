@@ -23,7 +23,7 @@ import { API_BASE_URL } from "../utils/apiBase";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
-import NavigationWarningModal from "./NavigationWarningModal.vue";
+
 
 const AIoptions = [
   { label: "Private AI", value: `${API_BASE_URL}/personal-chat`, icon: "manage_accounts" },
@@ -46,7 +46,7 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
-    NavigationWarningModal,
+
   },
   computed: {
     placeholderText() {
@@ -92,9 +92,7 @@ export default defineComponent({
     const chatAreaRef = ref<any>(null);
     const currentDeepLink = ref<string | null>(null);
     
-    // Navigation warning modal state
-    const showNavigationWarning = ref(false);
-    const pendingNavigation = ref<(() => void) | null>(null);
+
 
     // Update group count when it changes in ChatArea
     const updateGroupCount = (count: number) => {
@@ -127,21 +125,7 @@ export default defineComponent({
       }
     };
 
-    // Navigation warning handlers
-    const handleNavigationConfirmed = () => {
-      showNavigationWarning.value = false;
-      if (pendingNavigation.value) {
-        pendingNavigation.value();
-        pendingNavigation.value = null;
-      }
-    };
 
-    const handleNavigationCancelled = () => {
-      showNavigationWarning.value = false;
-      pendingNavigation.value = null;
-      // Restore the current state
-      window.history.pushState(null, '', window.location.href);
-    };
 
 
 
@@ -555,16 +539,7 @@ export default defineComponent({
     };
 
     const handlePopState = (event: PopStateEvent) => {
-      if (checkForUnsavedChanges()) {
-        event.preventDefault();
-        showNavigationWarning.value = true;
-        // Store the navigation action for later execution
-        pendingNavigation.value = () => {
-          // Allow the navigation to proceed
-          window.history.pushState(null, '', window.location.href);
-          window.history.forward();
-        };
-      }
+      // Navigation warning feature removed
     };
 
     // Call on mount and window resize
@@ -636,9 +611,7 @@ export default defineComponent({
       handleGroupDeleted,
       currentDeepLink,
       chatAreaRef,
-      showNavigationWarning,
-      handleNavigationConfirmed,
-      handleNavigationCancelled,
+
     };
   },
 });
@@ -759,11 +732,5 @@ export default defineComponent({
     @user-identified="handleDeepLinkUserIdentified"
   />
 
-  <!-- Navigation Warning Modal -->
-  <NavigationWarningModal
-    v-model="showNavigationWarning"
-    :has-unsaved-changes="true"
-    @confirm-navigation="handleNavigationConfirmed"
-    @cancel-navigation="handleNavigationCancelled"
-  />
+
 </template>

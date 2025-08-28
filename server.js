@@ -37,6 +37,7 @@ const app = express();
 
 // Unified Cloudant/CouchDB setup
 import { createCouchDBClient } from './src/utils/couchdb-client.js';
+import maia2Client from './src/utils/maia2-client.js';
 
 const couchDBClient = createCouchDBClient();
 
@@ -70,6 +71,18 @@ const initializeDatabase = async () => {
 
 // Initialize database
 initializeDatabase();
+
+// Initialize MAIA2 client
+const initializeMAIA2 = async () => {
+  try {
+    await maia2Client.initialize();
+    console.log('✅ MAIA2 Client initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize MAIA2 Client:', error);
+  }
+};
+
+initializeMAIA2();
 
 
 
@@ -176,7 +189,30 @@ if (process.env.NODE_ENV === 'production') {
   sessionConfig.store = store;
   console.log('🔧 Using enhanced MemoryStore for production with 5-minute activity timeout');
 } else {
-  console.log('🔧 Using default MemoryStore for development');
+  // In development, use default MemoryStore without aggressive timeout
+  const MemoryStore = session.MemoryStore;
+  const store = new MemoryStore();
+  
+  // Only clean up expired cookies in development, not inactivity timeout
+  setInterval(() => {
+    store.all((err, sessions) => {
+      if (err) return;
+      const now = Date.now();
+      
+      Object.keys(sessions).forEach(sessionId => {
+        const session = sessions[sessionId];
+        
+        // Check for expired cookies only
+        if (session.cookie && session.cookie.expires && session.cookie.expires < now) {
+          store.destroy(sessionId);
+          console.log(`🔒 Session ${sessionId} expired and destroyed`);
+        }
+      });
+    });
+  }, 5 * 60 * 1000); // Check every 5 minutes
+  
+  sessionConfig.store = store;
+  console.log('🔧 Using default MemoryStore for development (no inactivity timeout)');
 }
 
 app.use(session(sessionConfig));
@@ -274,6 +310,32 @@ app.use((req, res, next) => {
 
 // Custom route for index.html with environment variables (must come before static files)
 app.get('/', (req, res) => {
+  const appTitle = process.env.APP_TITLE || 'MAIA';
+  const environment = process.env.NODE_ENV || 'development';
+  
+  res.render('index.ejs', {
+    APP_TITLE: appTitle,
+    ENVIRONMENT: environment,
+    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+  });
+});
+
+// Admin panel route - TEMPORARILY OPEN FOR TESTING (no authentication required)
+app.get('/admin', (req, res) => {
+  console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
+  
+  const appTitle = process.env.APP_TITLE || 'MAIA';
+  const environment = process.env.NODE_ENV || 'development';
+  
+  res.render('index.ejs', {
+    APP_TITLE: appTitle,
+    ENVIRONMENT: environment,
+    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+  });
+});
+
+// Admin registration route - no authentication required (this is how admins initially register)
+app.get('/admin/register', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   
@@ -2820,6 +2882,11 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
+import adminManagementRoutes from './src/routes/admin-management-routes.js';
+
+// Import MAIA2 routes
+import maia2Routes from './src/routes/maia2-api-routes.js';
+import maia2DatabaseSetup from './src/routes/maia2-database-setup.js';
 
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
@@ -2830,6 +2897,13 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin-management', adminManagementRoutes);
+
+// Mount MAIA2 routes
+app.use('/api/maia2', maia2Routes);
+
+// Mount MAIA2 database setup routes
+app.use('/api/maia2-setup', maia2DatabaseSetup);
 
 // =============================================================================
 // DEEP LINK USER MANAGEMENT

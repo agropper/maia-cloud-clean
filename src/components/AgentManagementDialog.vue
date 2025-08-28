@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="showDialog" persistent>
+  <q-dialog v-model="showDialog" persistent @show="onDialogOpen">
     <q-card style="min-width: 600px; max-width: 800px">
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🤖 Agent Management</div>
@@ -8,6 +8,67 @@
       </q-card-section>
 
       <q-card-section>
+        <!-- Workflow Progress Section - Only for authenticated users -->
+        <div v-if="isAuthenticated" class="q-mb-lg">
+          <h6 class="q-mb-sm">🔐 Private AI Setup Progress</h6>
+          <div class="workflow-steps">
+            <div 
+              v-for="(step, index) in workflowSteps" 
+              :key="index"
+              class="workflow-step"
+              :class="{ 'completed': step.completed, 'current': step.current }"
+            >
+              <div class="step-indicator">
+                <q-icon 
+                  v-if="step.completed"
+                  name="check_circle" 
+                  color="positive" 
+                  size="1.2rem"
+                />
+                <q-icon 
+                  v-else-if="step.current"
+                  name="radio_button_checked" 
+                  color="primary" 
+                  size="1.2rem"
+                />
+                <q-icon 
+                  v-else
+                  name="radio_button_unchecked" 
+                  color="grey-4" 
+                  size="1.2rem"
+                />
+              </div>
+              <div class="step-content">
+                <div class="step-title" :class="{ 'text-grey-6': !step.completed && !step.current }">
+                  {{ step.title }}
+                </div>
+              </div>
+              <div class="step-help">
+                <q-btn 
+                  flat 
+                  dense 
+                  size="sm" 
+                  color="primary" 
+                  icon="help_outline"
+                  @click="showStepHelp(index)"
+                  class="help-btn"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <!-- Request Administrator Approval Button (below first step) -->
+          <div v-if="!currentAgent && !hasRequestedApproval" class="q-mt-md text-center">
+            <q-btn
+              label="Request Administrator Approval"
+              color="primary"
+              @click="showAdminApprovalDialog = true"
+              :loading="isRequestingApproval"
+              class="q-px-lg"
+            />
+          </div>
+        </div>
+
         <!-- Current Agent Summary -->
         <div v-if="currentAgent" class="q-mb-md">
           <q-card flat bordered class="agent-summary-card">
@@ -86,14 +147,23 @@
 
         <!-- Content (only show when not loading) -->
         <div v-else>
+
+
           <!-- No Agent Configured -->
           <div v-if="!currentAgent" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
-              Create a new agent to get started with AI assistance
+              <span v-if="isAuthenticated">
+                You need administrator approval to access private AI agents and health record knowledge bases.
+              </span>
+              <span v-else>
+                Create a new agent to get started with AI assistance
+              </span>
             </div>
+
             <q-btn
+              v-if="!isAuthenticated"
               label="Create New Agent"
               color="primary"
               size="lg"
@@ -496,6 +566,117 @@
       @ownership-transferred="handleOwnershipTransferred"
     />
 
+    <!-- Admin Approval Request Dialog -->
+    <q-dialog v-model="showAdminApprovalDialog" persistent>
+      <q-card style="min-width: 500px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">🔒 Administrator Approval Required</div>
+          <q-space />
+          <q-btn icon="close" flat round dense @click="showAdminApprovalDialog = false" />
+        </q-card-section>
+        <q-card-section>
+          <div class="text-body1 q-mb-md">
+            As a signed-in user, you need administrator approval to access private AI agents and health record knowledge bases.
+          </div>
+          <div class="text-body2 q-mb-md">
+            This ensures proper resource allocation and privacy protection for your personal health data.
+          </div>
+          
+          <!-- Email Input Field -->
+          <div class="q-mt-lg">
+            <q-input
+              v-model="userEmail"
+              label="Email Address *"
+              type="email"
+              outlined
+              dense
+              :rules="[val => !!val || 'Email is required']"
+              placeholder="Enter your email address"
+              class="q-mb-md"
+            />
+            <div class="text-caption text-grey">
+              The administrator will use this email to notify you when your private AI agent and knowledge base are ready.
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" @click="showAdminApprovalDialog = false" />
+          <q-btn
+            color="primary"
+            label="Request Private AI Support"
+            @click="requestAdminApproval"
+            :loading="isRequestingApproval"
+            icon="send"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Step Help Email Dialog -->
+    <q-dialog v-model="showStepHelpDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 700px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            <q-icon name="email" color="primary" class="q-mr-sm" />
+            Email Administrator - {{ currentStepHelp.title }}
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense @click="showStepHelpDialog = false" />
+        </q-card-section>
+        <q-card-section>
+          <!-- Email Form -->
+          <div class="q-mb-md">
+            <q-input
+              v-model="helpEmailData.from"
+              label="From Email *"
+              type="email"
+              outlined
+              dense
+              :rules="[val => !!val || 'From email is required']"
+              placeholder="Enter your email address"
+            />
+          </div>
+          
+          <div class="q-mb-md">
+            <q-input
+              v-model="helpEmailData.subject"
+              label="Subject *"
+              outlined
+              dense
+              :rules="[val => !!val || 'Subject is required']"
+              placeholder="Enter email subject"
+            />
+          </div>
+          
+          <div class="q-mb-md">
+            <q-input
+              v-model="helpEmailData.body"
+              label="Message Body *"
+              type="textarea"
+              outlined
+              :rules="[val => !!val || 'Message body is required']"
+              placeholder="Enter your message to the administrator"
+              rows="6"
+            />
+          </div>
+          
+          <div class="text-caption text-grey-6">
+            This email will be sent to the administrator regarding: {{ currentStepHelp.description }}
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" @click="showStepHelpDialog = false" />
+          <q-btn 
+            color="primary" 
+            label="Send Email" 
+            @click="sendHelpEmail"
+            :loading="isSendingHelpEmail"
+            icon="send"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Warning Modal for Multiple Knowledge Bases -->
     <q-dialog v-model="showWarningModal" persistent no-esc-dismiss no-backdrop-dismiss class="warning-modal-dialog">
       <q-card style="min-width: 400px; max-width: 600px; z-index: 9999;" class="warning-modal-card">
@@ -689,49 +870,297 @@ export default defineComponent({
     const showWarningModal = ref(false);
     const warningMessage = computed(() => props.warning || '');
 
+    // Admin approval request state
+    const showAdminApprovalDialog = ref(false);
+    const isRequestingApproval = ref(false);
+    const userEmail = ref('');
+
+    // Step help dialog state
+    const showStepHelpDialog = ref(false);
+    const currentStepHelp = ref({
+      title: '',
+      description: '',
+      details: ''
+    });
+    
+    // Help email data
+    const helpEmailData = ref({
+      from: '',
+      subject: '',
+      body: ''
+    });
+    
+    const isSendingHelpEmail = ref(false);
+    
+    // Track if approval has been requested
+    const hasRequestedApproval = ref(false);
+
+    // Workflow progress state
+    const workflowSteps = ref([
+      {
+        title: "User authenticated with passkey",
+        helpTitle: "Passkey Authentication",
+        helpDescription: "You have successfully signed in using a secure passkey (WebAuthn).",
+        helpDetails: "This provides strong, phishing-resistant authentication without passwords.",
+        completed: false,
+        current: false
+      },
+      {
+        title: "Private AI agent requested",
+        helpTitle: "Administrator Approval Request",
+        helpDescription: "You have requested access to private AI agents and health record knowledge bases.",
+        helpDetails: "The administrator will review your request and approve access to dedicated resources.",
+        completed: false,
+        current: false
+      },
+      {
+        title: "Private AI agent created",
+        helpTitle: "AI Agent Creation",
+        helpDescription: "Administrator has approved your request and created a dedicated AI agent.",
+        helpDetails: "This agent will be exclusively available to you for processing your health data.",
+        completed: false,
+        current: false
+      },
+      {
+        title: "Private knowledge base created",
+        helpTitle: "Knowledge Base Setup",
+        helpDescription: "A private health record knowledge base has been created for your use.",
+        helpDetails: "This knowledge base will contain your uploaded health documents and medical records.",
+        completed: false,
+        current: false
+      },
+      {
+        title: "Knowledge base indexed and available",
+        helpTitle: "Ready for Use",
+        helpDescription: "Your knowledge base has been indexed and is ready to answer health-related questions.",
+        helpDetails: "You can now chat with your AI agent about your health data with full privacy protection.",
+        completed: false,
+        current: false
+      }
+    ]);
+
+    // Check if user is already authenticated from passkey system
+    const checkAuthenticationStatus = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+        if (response.ok) {
+          const authData = await response.json();
+          if (authData.authenticated && authData.user) {
+            localCurrentUser.value = authData.user;
+            isAuthenticated.value = true;
+            console.log("🔐 User already authenticated:", authData.user);
+          } else {
+            // Check if we have a currentUser prop and it's not "Unknown User"
+            if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+              localCurrentUser.value = props.currentUser;
+              isAuthenticated.value = true;
+              console.log("🔐 User authenticated via props:", props.currentUser);
+            } else {
+              isAuthenticated.value = false;
+              localCurrentUser.value = null;
+              console.log("🔐 No user authenticated or Unknown User");
+            }
+          }
+        } else {
+          // Check if we have a currentUser prop and it's not "Unknown User"
+          if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+            localCurrentUser.value = props.currentUser;
+            isAuthenticated.value = true;
+            console.log("🔐 User authenticated via props:", props.currentUser);
+          } else {
+            isAuthenticated.value = false;
+            localCurrentUser.value = null;
+            console.log("🔐 No user authenticated or Unknown User");
+          }
+        }
+      } catch (error) {
+        console.log("🔐 Error checking authentication, checking props:", error);
+        // Fallback to props
+        if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+          localCurrentUser.value = props.currentUser;
+          isAuthenticated.value = true;
+          console.log("🔐 User authenticated via props fallback:", props.currentUser);
+        } else {
+          isAuthenticated.value = false;
+          localCurrentUser.value = null;
+          console.log("🔐 No user authenticated or Unknown User");
+        }
+      }
+    };
+
+    // Show step help dialog
+    const showStepHelp = (stepIndex: number) => {
+      const step = workflowSteps.value[stepIndex];
+      currentStepHelp.value = {
+        title: step.helpTitle,
+        description: step.helpDescription,
+        details: step.helpDetails
+      };
+      
+      // Pre-populate email fields
+      helpEmailData.value = {
+        from: userEmail.value || '',
+        subject: `Help Request: ${step.helpTitle}`,
+        body: ''
+      };
+      
+      showStepHelpDialog.value = true;
+    };
+
+    // Send help email to administrator
+    const sendHelpEmail = async () => {
+      // Validate required fields
+      if (!helpEmailData.value.from || !helpEmailData.value.subject || !helpEmailData.value.body) {
+        $q.notify({
+          type: "negative",
+          message: "Please fill in all required fields",
+        });
+        return;
+      }
+
+      isSendingHelpEmail.value = true;
+      try {
+        // Send email notification to admin using Resend
+        const response = await fetch('/api/admin/request-approval', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: localCurrentUser.value?.userId || 'Unknown User',
+            email: helpEmailData.value.from,
+            requestType: 'help_request',
+            message: `Help Request from ${localCurrentUser.value?.userId || 'Unknown User'}:\n\nSubject: ${helpEmailData.value.subject}\n\nMessage:\n${helpEmailData.value.body}`
+          }),
+        });
+
+        if (response.ok) {
+          $q.notify({
+            type: "positive",
+            message: "Help email sent successfully to administrator",
+          });
+          showStepHelpDialog.value = false;
+          
+          // Reset email data
+          helpEmailData.value = {
+            from: '',
+            subject: '',
+            body: ''
+          };
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error sending help email:', error);
+        $q.notify({
+          type: "negative",
+          message: `Failed to send help email: ${error.message}`,
+        });
+      } finally {
+        isSendingHelpEmail.value = false;
+      }
+    };
+
+    // Update workflow progress based on current state
+    const updateWorkflowProgress = () => {
+      // Reset all steps
+      workflowSteps.value.forEach(step => {
+        step.completed = false;
+        step.current = false;
+      });
+
+      // Step 1: User authenticated with passkey
+      if (isAuthenticated.value) {
+        workflowSteps.value[0].completed = true;
+        workflowSteps.value[1].current = true; // Next step is current
+      }
+
+      // Step 2: Private AI agent requested
+      // This will be updated when the user actually requests approval
+      // For now, we'll check if they have any agents (which means they were approved)
+      if (currentAgent.value) {
+        workflowSteps.value[1].completed = true;
+        workflowSteps.value[2].completed = true;
+        workflowSteps.value[3].current = true; // Next step is current
+      }
+
+      // Step 3: Private AI agent created
+      // This is handled above when currentAgent exists
+
+      // Step 4: Private knowledge base created
+      if (knowledgeBase.value) {
+        workflowSteps.value[3].completed = true;
+        workflowSteps.value[4].current = true; // Next step is current
+      }
+
+      // Step 5: Knowledge base indexed and available
+      // This would typically be determined by the KB status
+      // For now, we'll assume if KB exists, it's available
+      if (knowledgeBase.value) {
+        workflowSteps.value[4].completed = true;
+      }
+    };
+
     // Load current agent info
     const loadAgentInfo = async () => {
       isLoading.value = true;
       try {
-        // Load current agent info (this includes KB associations)
-        const currentAgentResponse = await fetch(
-          `${API_BASE_URL}/current-agent`
-        );
-        if (!currentAgentResponse.ok) {
-          throw new Error("Failed to load current agent");
-        }
-
-        const currentAgentData = await currentAgentResponse.json();
-
-        if (currentAgentData.agent) {
-          currentAgent.value = currentAgentData.agent;
-          console.log(
-            `🤖 Current agent loaded: ${currentAgentData.agent.name}`
+        // For authenticated users, only load current agent if they have been approved
+        // For unauthenticated users (legacy), load current agent from legacy system
+        if (!isAuthenticated.value) {
+          // Load current agent info from legacy system
+          const currentAgentResponse = await fetch(
+            `${API_BASE_URL}/current-agent`
           );
-
-          if (currentAgentData.agent.knowledgeBase) {
-            console.log(
-              `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
-            );
-          } else {
-            console.log(`📚 No KB assigned`);
+          if (!currentAgentResponse.ok) {
+            throw new Error("Failed to load current agent");
           }
 
-          // Handle warnings from the API
-          if (currentAgentData.warning) {
-            console.warn(currentAgentData.warning);
+          const currentAgentData = await currentAgentResponse.json();
+
+          if (currentAgentData.agent) {
+            currentAgent.value = currentAgentData.agent;
+            console.log(
+              `🤖 Current agent loaded: ${currentAgentData.agent.name}`
+            );
+
+            if (currentAgentData.agent.knowledgeBase) {
+              console.log(
+                `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
+              );
+            } else {
+              console.log(`📚 No KB assigned`);
+            }
+
+            // Handle warnings from the API
+            if (currentAgentData.warning) {
+              console.warn(currentAgentData.warning);
+            }
+          } else {
+            currentAgent.value = null;
+            console.log("🤖 No agent configured");
           }
         } else {
+          // Authenticated user without admin approval - no current agent
           currentAgent.value = null;
-          console.log("🤖 No agent configured");
+          console.log("🔐 Authenticated user - no current agent until admin approval");
         }
 
         // Load all agents for the agent list
         try {
-          const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
-          if (agentsResponse.ok) {
-            const agents: DigitalOceanAgent[] = await agentsResponse.json();
-            availableAgents.value = agents;
+          // For authenticated users, only show agents if they have been approved
+          // For unauthenticated users (legacy), show all agents
+          if (!isAuthenticated.value) {
+            const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
+            if (agentsResponse.ok) {
+              const agents: DigitalOceanAgent[] = await agentsResponse.json();
+              availableAgents.value = agents;
+            }
+          } else {
+            // Authenticated user - check if they have been approved for agents
+            // For now, we'll show no agents until admin approval
+            availableAgents.value = [];
+            console.log("🔐 Authenticated user - no agents available until admin approval");
           }
         } catch (agentsError) {
           console.warn("Failed to load agents list:", agentsError);
@@ -739,30 +1168,38 @@ export default defineComponent({
 
         // Load all knowledge bases for the KB list
         try {
-          const knowledgeBasesResponse = await fetch(
-            `${API_BASE_URL}/knowledge-bases`
-          );
-          if (knowledgeBasesResponse.ok) {
-            const knowledgeBases: DigitalOceanKnowledgeBase[] =
-              await knowledgeBasesResponse.json();
+          // For authenticated users, only show KBs if they have been approved
+          // For unauthenticated users (legacy), show all KBs
+          if (!isAuthenticated.value) {
+            const knowledgeBasesResponse = await fetch(
+              `${API_BASE_URL}/knowledge-bases`
+            );
+            if (knowledgeBasesResponse.ok) {
+              const knowledgeBases: DigitalOceanKnowledgeBase[] =
+                await knowledgeBasesResponse.json();
 
-            // Get all connected KBs from the current agent
-            const connectedKBs =
-              currentAgent.value?.knowledgeBases ||
-              (currentAgent.value?.knowledgeBase
-                ? [currentAgent.value.knowledgeBase]
-                : []);
+              // Get all connected KBs from the current agent
+              const connectedKBs =
+                currentAgent.value?.knowledgeBases ||
+                (currentAgent.value?.knowledgeBase
+                  ? [currentAgent.value.knowledgeBase]
+                  : []);
 
-            // Combine available KBs with connected KBs, avoiding duplicates
-            const allKBs = [...knowledgeBases];
-            connectedKBs.forEach((connectedKB) => {
-              if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
-                allKBs.push(connectedKB);
-              }
-            });
+              // Combine available KBs with connected KBs, avoiding duplicates
+              const allKBs = [...knowledgeBases];
+              connectedKBs.forEach((connectedKB) => {
+                if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
+                  allKBs.push(connectedKB);
+                }
+              });
 
-            availableKnowledgeBases.value = allKBs;
-
+              availableKnowledgeBases.value = allKBs;
+            }
+          } else {
+            // Authenticated user - check if they have been approved for KBs
+            // For now, we'll show no KBs until admin approval
+            availableKnowledgeBases.value = [];
+            console.log("🔐 Authenticated user - no knowledge bases available until admin approval");
           }
         } catch (kbError) {
           console.warn("Failed to load knowledge bases:", kbError);
@@ -986,9 +1423,23 @@ export default defineComponent({
     };
 
     // Load agent info when dialog opens
-    const onDialogOpen = () => {
-      loadAgentInfo();
+    const onDialogOpen = async () => {
+      console.log("🔐 Dialog opening - checking authentication status...");
+      await checkAuthenticationStatus();
+      console.log("🔐 Authentication status checked, loading agent info...");
+      await loadAgentInfo();
+      console.log("🔐 Agent info loaded");
+      updateWorkflowProgress(); // Update workflow progress after loading data
     };
+
+    // Watch for changes in currentUser prop
+    watch(() => props.currentUser, async (newUser) => {
+      if (newUser) {
+        console.log("🔐 currentUser prop changed:", newUser);
+        await checkAuthenticationStatus();
+        updateWorkflowProgress(); // Update workflow progress when user changes
+      }
+    }, { immediate: true });
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
@@ -1622,6 +2073,70 @@ export default defineComponent({
       return text;
     };
 
+    // Request admin approval for private AI and knowledge base access
+    const requestAdminApproval = async () => {
+      if (!localCurrentUser.value?.userId) {
+        $q.notify({
+          type: "negative",
+          message: "User not authenticated",
+        });
+        return;
+      }
+
+      isRequestingApproval.value = true;
+      try {
+        // Validate email is provided
+        if (!userEmail.value) {
+          $q.notify({
+            type: "negative",
+            message: "Please provide your email address",
+          });
+          return;
+        }
+
+        // Send email notification to admin using Resend
+        const response = await fetch('/api/admin/request-approval', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: localCurrentUser.value.userId,
+            email: userEmail.value,
+            requestType: 'private_ai_access',
+            message: `User ${localCurrentUser.value.userId} (${userEmail.value}) is requesting access to private AI agents and health record knowledge bases.`
+          }),
+        });
+
+        if (response.ok) {
+          $q.notify({
+            type: "positive",
+            message: "Approval request sent successfully! The administrator will review your request.",
+          });
+          
+          // Mark that approval has been requested
+          hasRequestedApproval.value = true;
+          
+          showAdminApprovalDialog.value = false;
+          
+          // Update workflow progress to show step 2 is completed
+          workflowSteps.value[1].completed = true;
+          workflowSteps.value[1].current = false;
+          workflowSteps.value[2].current = true; // Step 3 is now current
+        } else {
+          throw new Error('Failed to send approval request');
+        }
+      } catch (error: any) {
+        console.error('Error requesting admin approval:', error);
+        $q.notify({
+          type: "negative",
+          message: `Failed to send approval request: ${error.message}`,
+        });
+      } finally {
+        isRequestingApproval.value = false;
+      }
+    };
+
     return {
       showDialog,
       currentAgent,
@@ -1684,6 +2199,20 @@ export default defineComponent({
       getStatusColor,
       getAgentName,
       getStatusText,
+      showAdminApprovalDialog,
+      isRequestingApproval,
+      userEmail,
+      requestAdminApproval,
+      checkAuthenticationStatus,
+      isAuthenticated,
+      workflowSteps,
+      showStepHelp,
+      showStepHelpDialog,
+      currentStepHelp,
+      helpEmailData,
+      isSendingHelpEmail,
+      sendHelpEmail,
+      hasRequestedApproval,
     };
   },
 });
@@ -1727,5 +2256,66 @@ export default defineComponent({
   white-space: normal;
   line-height: 1.3;
   word-break: break-word;
+}
+
+/* Workflow Steps Styling */
+.workflow-steps {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e9ecef;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.workflow-step:last-child {
+  margin-bottom: 0;
+}
+
+.workflow-step.completed {
+  background: rgba(76, 175, 80, 0.1);
+  border-left: 3px solid #4caf50;
+}
+
+.workflow-step.current {
+  background: rgba(33, 150, 243, 0.1);
+  border-left: 3px solid #2196f3;
+}
+
+.step-indicator {
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title {
+  font-weight: 500;
+  line-height: 1.3;
+  font-size: 0.9rem;
+}
+
+.step-help {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.help-btn {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.help-btn:hover {
+  opacity: 1;
 }
 </style>

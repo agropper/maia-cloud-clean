@@ -1,4 +1,5 @@
 import express from 'express';
+import fetch from 'node-fetch';
 
 const router = express.Router();
 
@@ -193,6 +194,133 @@ router.post('/verify-admin', async (req, res) => {
   } catch (error) {
     console.error('❌ [ADMIN] Error verifying admin password:', error);
     res.status(500).json({ error: 'Failed to verify admin password' });
+  }
+});
+
+// Admin approval request endpoint
+router.post('/request-approval', async (req, res) => {
+  try {
+    const { username, email, requestType, message } = req.body;
+    
+    if (!username || !requestType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and request type are required'
+      });
+    }
+
+    // Send email notification to admin using Resend
+    const emailData = {
+      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      to: process.env.RESEND_ADMIN_EMAIL || 'agropper@healthurl.com',
+      subject: `MAIA2 Admin Approval Request: ${requestType}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2c3e50;">🔒 MAIA2 Administrator Approval Request</h2>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #34495e; margin-top: 0;">Request Details</h3>
+            <p><strong>Request Type:</strong> ${requestType}</p>
+            <p><strong>Username:</strong> ${username}</p>
+            <p><strong>User Email:</strong> ${email || 'No email provided'}</p>
+            <p><strong>Request Date:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #27ae60; margin-top: 0;">User Message</h3>
+            <p>${message}</p>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #856404; margin-top: 0;">Action Required</h3>
+            <p>Please review this request and either:</p>
+            <ul>
+              <li>Approve the user's access to private AI agents and knowledge bases</li>
+              <li>Contact the user for additional information</li>
+              <li>Deny the request with a reason</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #7f8c8d; font-size: 14px;">
+              This is an automated notification from the MAIA2 system.
+            </p>
+          </div>
+          
+          <div style="background-color: #f1f2f6; padding: 20px; border-radius: 8px; margin: 20px 0; border-top: 3px solid #3498db;">
+            <h3 style="color: #2c3e50; margin-top: 0;">🔧 Administrator Actions</h3>
+            <p>To manage this user and other private AI requests:</p>
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${process.env.ADMIN_BASE_URL || 'http://localhost:3001'}/admin" 
+                 style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                Access Admin Panel
+              </a>
+            </div>
+            <p style="font-size: 14px; color: #7f8c8d;">
+              <strong>Note:</strong> You must be authenticated with admin privileges to access the panel.
+            </p>
+          </div>
+        </div>
+      `
+    };
+
+    // Send email using Resend
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY || 're_GpLZHw5L_BcL5NLwWV4WJrmoN6qWzTjiF'}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error('Resend API error:', resendResponse.status, errorData);
+      throw new Error(`Failed to send email: ${resendResponse.status}`);
+    }
+
+    const resendResult = await resendResponse.json();
+    console.log('✅ Admin approval request email sent:', resendResult);
+
+    // Log the approval request in the database (optional)
+    try {
+      if (couchDBClient) {
+        const approvalRequest = {
+          _id: `approval_request_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'admin_approval_request',
+          username,
+          email,
+          requestType,
+          message,
+          status: 'pending',
+          requestedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          emailSent: true,
+          emailId: resendResult.id
+        };
+
+        await couchDBClient.saveDocument('maia2_admin_approvals', approvalRequest);
+        console.log('✅ Approval request logged to database');
+      }
+    } catch (dbError) {
+      console.warn('⚠️ Failed to log approval request to database:', dbError.message);
+      // Don't fail the request if database logging fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Approval request sent successfully',
+      emailId: resendResult.id
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing admin approval request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process approval request',
+      error: error.message
+    });
   }
 });
 

@@ -149,6 +149,70 @@ ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com,http://local
 - **Type**: String
 - **Required**: Yes (for DigitalOcean AI functionality)
 
+## **📧 Email Service Configuration (Resend)**
+
+### **RESEND_API_KEY**
+- **Purpose**: API key for Resend email service (admin notifications)
+- **Type**: String
+- **Required**: Yes (for admin approval request emails)
+- **Security**: High - Controls email sending capability
+
+### **RESEND_FROM_EMAIL**
+- **Purpose**: Sender email address for admin notification emails
+- **Type**: Email address
+- **Required**: No (defaults to 'onboarding@resend.dev')
+- **Note**: Must be a verified domain in your Resend account
+
+### **RESEND_ADMIN_EMAIL**
+- **Purpose**: Recipient email address for admin notifications
+- **Type**: Email address
+- **Required**: No (defaults to 'agropper@healthurl.com')
+- **Note**: This is where admin approval requests will be sent
+
+## **🔧 Admin Management Configuration**
+
+### **ADMIN_USERNAME** ⭐ **NEW VARIABLE**
+- **Purpose**: Reserved username for administrator registration
+- **Type**: String
+- **Required**: Yes (for admin functionality)
+- **Security**: High - This controls who can become an administrator
+
+```bash
+# In your .env file
+ADMIN_USERNAME=admin
+
+# In production
+ADMIN_USERNAME=your-admin-username
+```
+
+### **ADMIN_SECRET** ⭐ **NEW VARIABLE**
+- **Purpose**: Secret key required for administrator registration
+- **Type**: String
+- **Required**: Yes (for admin functionality)
+- **Security**: High - This secret controls administrator access
+
+```bash
+# In your .env file
+ADMIN_SECRET=your-secure-admin-secret-here
+
+# In production
+ADMIN_SECRET=your-production-admin-secret
+```
+
+### **ADMIN_BASE_URL** ⭐ **NEW VARIABLE**
+- **Purpose**: Base URL for admin panel links in emails
+- **Type**: URL
+- **Required**: No (defaults to localhost:3001)
+- **Note**: Used in admin email footers
+
+```bash
+# Local development
+ADMIN_BASE_URL=http://localhost:3001
+
+# Production
+ADMIN_BASE_URL=https://your-domain.com
+```
+
 ## **🗄️ Database Configuration**
 
 ### **CLOUDANT_URL**
@@ -263,33 +327,107 @@ ENABLE_REQUEST_LOGGING=true
 
 ## **🔧 Development Configuration**
 
-### **Example .env File**
+### **Complete Example .env File**
 ```bash
-# Admin Configuration
+# =============================================================================
+# MAIA Cloud Environment Variables Template
+# =============================================================================
+# Copy this file to .env and fill in your actual values
+# NEVER commit .env files to version control
+
+# =============================================================================
+# ADMIN CONFIGURATION
+# =============================================================================
+# Administrative password for KB ownership transfers and admin operations
 ADMIN_PASSWORD=MAIA-Admin-2025-Secure!@#
 
-# Domain Configuration
+# =============================================================================
+# DOMAIN CONFIGURATION
+# =============================================================================
+# Domain for passkey authentication (Relying Party ID)
+PASSKEY_RPID=localhost
+# Full URL for passkey authentication (including protocol)
+PASSKEY_ORIGIN=http://localhost:3001
+# General domain setting for the application
+DOMAIN=localhost
+# Base URL for the application (CORS and general configuration)
 ORIGIN=http://localhost:3001
+# Comma-separated list of allowed CORS origins
 ALLOWED_ORIGINS=http://localhost:3001
 
-# AI Service Keys
-ANTHROPIC_API_KEY=your-anthropic-key
-GEMINI_API_KEY=your-gemini-key
-DEEPSEEK_API_KEY=your-deepseek-key
-DIGITALOCEAN_API_TOKEN=your-do-token
+# =============================================================================
+# AI SERVICE API KEYS
+# =============================================================================
+# Anthropic Claude integration
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+# Google Gemini integration
+GEMINI_API_KEY=your-gemini-api-key-here
+# DeepSeek integration
+DEEPSEEK_API_KEY=your-deepseek-api-key-here
+# DigitalOcean Personal AI
+DIGITALOCEAN_API_TOKEN=your-digitalocean-token-here
+# OpenAI ChatGPT
+OPENAI_API_KEY=your-openai-api-key-here
+# ChatGPT (alternative)
+CHATGPT_API_KEY=your-chatgpt-api-key-here
 
-# Database Configuration
-CLOUDANT_URL=your-cloudant-url
-CLOUDANT_API_KEY=your-cloudant-key
+# =============================================================================
+# EMAIL SERVICE (RESEND)
+# =============================================================================
+# API key for Resend email service (admin notifications)
+RESEND_API_KEY=re_your-resend-api-key-here
+# Sender email address for admin notification emails
+RESEND_FROM_EMAIL=onboarding@resend.dev
+# Recipient email address for admin notifications
+RESEND_ADMIN_EMAIL=agropper@healthurl.com
 
-# Security
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+# Cloudant/CouchDB connection URL
+CLOUDANT_URL=your-cloudant-url-here
+# Cloudant/CouchDB username
+CLOUDANT_USERNAME=your-cloudant-username
+# Cloudant/CouchDB password
+CLOUDANT_PASSWORD=your-cloudant-password
+# Cloudant/CouchDB database name
+CLOUDANT_DATABASE=maia_chats
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+# Secret key for Express session encryption
 SESSION_SECRET=your-super-secret-session-key-change-this
+# Enable HTTPS in production
+HTTPS=false
 
-# Application
+# =============================================================================
+# APPLICATION CONFIGURATION
+# =============================================================================
+# Server port number
 PORT=3001
+# Application environment
 NODE_ENV=development
+# Application title
+APP_TITLE=MAIA
+# Application version
+APP_VERSION=1.0.0
+# Enable single patient mode
 SINGLE_PATIENT_MODE=false
+# Enable detailed request logging
 ENABLE_REQUEST_LOGGING=true
+
+# =============================================================================
+# DIGITALOCEAN CONFIGURATION
+# =============================================================================
+# DigitalOcean API token
+DIGITALOCEAN_TOKEN=your-digitalocean-token-here
+# DigitalOcean project ID
+DIGITALOCEAN_PROJECT_ID=your-project-id-here
+# DigitalOcean base URL
+DIGITALOCEAN_BASE_URL=https://api.digitalocean.com
+# DigitalOcean GenAI endpoint
+DIGITALOCEAN_GENAI_ENDPOINT=https://your-endpoint.agents.do-ai.run/api/v1
 ```
 
 ## **🚀 Production Deployment**
@@ -310,6 +448,8 @@ When deploying to DigitalOcean App Platform, set these environment variables in 
 - [ ] **Database credentials** are correct
 - [ ] **CORS origins** are properly configured
 - [ ] **NODE_ENV** is set to `production`
+- [ ] **RESEND_API_KEY** is valid and secure
+- [ ] **RESEND_FROM_EMAIL** is from a verified domain
 
 ## **⚠️ Security Warnings**
 

@@ -381,6 +381,18 @@ export class CouchDBClient {
       url: this.db.config.url
     }
   }
+
+  // Get database information
+  async getDatabaseInfo(databaseName) {
+    try {
+      const db = this.db.use(databaseName)
+      const info = await db.info()
+      return info
+    } catch (error) {
+      console.error(`❌ Failed to get database info for ${databaseName}:`, error)
+      throw error
+    }
+  }
 }
 
 // Factory function for easy instantiation
