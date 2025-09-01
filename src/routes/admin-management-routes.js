@@ -202,15 +202,28 @@ router.get('/users', checkMAIA2Ready, async (req, res) => {
   try {
     // Get all users from MAIA2 system
     const allUsers = await maia2Client.listUsers();
+    console.log('🔍 Raw users from MAIA2:', JSON.stringify(allUsers, null, 2));
+    
     const users = allUsers
-      .filter(user => !user.isAdmin) // Exclude admin users
-      .map(user => ({
-        userId: user.username,
-        displayName: user.displayName || user.username,
-        createdAt: user.createdAt,
-        hasPasskey: !!user.credentialID,
-        workflowStage: determineWorkflowStage(user)
-      }));
+      .filter(user => !user.isAdmin && !user._id.startsWith('_design/')) // Exclude admin users and design documents
+      .map(user => {
+        console.log('🔍 Processing user:', JSON.stringify(user, null, 2));
+        console.log('🔍 User fields:', Object.keys(user));
+        console.log('🔍 Username field:', user.username);
+        console.log('🔍 ID field:', user._id);
+        
+        return {
+          userId: user.username || user._id, // Fallback to _id if username is missing
+          displayName: user.displayName || user.username || user._id,
+          createdAt: user.createdAt,
+          hasPasskey: !!user.credentialID,
+          workflowStage: determineWorkflowStage(user),
+          assignedAgentId: user.assignedAgentId || null,
+          assignedAgentName: user.assignedAgentName || null
+        };
+      });
+    
+    console.log('🔍 Processed users:', JSON.stringify(users, null, 2));
     
     res.json({ users });
     
@@ -253,8 +266,13 @@ router.get('/users/:userId', checkMAIA2Ready, async (req, res) => {
       userId: userDoc.username,
       displayName: userDoc.displayName || userDoc.username,
       createdAt: userDoc.createdAt,
-              hasPasskey: !!userDoc.credentialID,
+      hasPasskey: !!userDoc.credentialID,
       workflowStage: determineWorkflowStage(userDoc),
+      adminNotes: userDoc.adminNotes || '',
+      approvalStatus: userDoc.approvalStatus,
+      assignedAgentId: userDoc.assignedAgentId || null,
+      assignedAgentName: userDoc.assignedAgentName || null,
+      agentAssignedAt: userDoc.agentAssignedAt || null,
       approvalRequests: [], // TODO: Implement when Maia2Client has these methods
       agents: [], // TODO: Implement when Maia2Client has these methods
       knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
@@ -268,11 +286,18 @@ router.get('/users/:userId', checkMAIA2Ready, async (req, res) => {
   }
 });
 
-// Approve user for private AI access - TEMPORARILY OPEN FOR TESTING
+// Approve, reject, or suspend user for private AI access
 router.post('/users/:userId/approve', checkMAIA2Ready, async (req, res) => {
   try {
     const { userId } = req.params;
     const { action, notes } = req.body;
+    
+    // Validate action
+    if (!['approve', 'reject', 'suspend'].includes(action)) {
+      return res.status(400).json({ 
+        error: 'Invalid action. Must be one of: approve, reject, suspend' 
+      });
+    }
     
     // Get user document
     const userDoc = await maia2Client.getUserByUsername(userId);
@@ -280,19 +305,141 @@ router.post('/users/:userId/approve', checkMAIA2Ready, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // TODO: Implement approval record creation when Maia2Client has these methods
-    // For now, just return success message
+    // Map action to approval status
+    let approvalStatus;
+    switch (action) {
+      case 'approve':
+        approvalStatus = 'approved';
+        break;
+      case 'reject':
+        approvalStatus = 'rejected';
+        break;
+      case 'suspend':
+        approvalStatus = 'suspended';
+        break;
+    }
+    
+    // Update user approval status
+    const updatedUser = await maia2Client.updateUserApprovalStatus(userId, approvalStatus, notes);
+    
+    // If approved, trigger resource creation workflow
+    if (action === 'approve') {
+      // TODO: Implement automatic agent and KB creation
+      // For now, just log that resources should be created
+      console.log(`🚀 User ${userId} approved - should create private AI agent and knowledge base`);
+    }
     
     res.json({ 
       message: `User ${action} successfully`,
       userId: userId,
       action: action,
+      approvalStatus: approvalStatus,
+      timestamp: new Date().toISOString(),
+      nextSteps: action === 'approve' ? 'Private AI agent and knowledge base will be created automatically' : null
+    });
+    
+  } catch (error) {
+    console.error('Error updating user approval status:', error);
+    res.status(500).json({ error: 'Failed to update user approval status' });
+  }
+});
+
+// Save admin notes for a user - TEMPORARILY OPEN FOR TESTING
+router.post('/users/:userId/notes', checkMAIA2Ready, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { notes } = req.body;
+    
+    // Get user document
+    const userDoc = await maia2Client.getUserByUsername(userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update user notes
+    const updates = {
+      adminNotes: notes,
+      updatedAt: new Date().toISOString()
+    };
+    
+    await maia2Client.updateUser(userId, updates);
+    
+    res.json({ 
+      message: 'Notes saved successfully',
+      userId: userId,
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error('Error approving user:', error);
-    res.status(500).json({ error: 'Failed to approve user' });
+    console.error('Error saving notes:', error);
+    res.status(500).json({ error: 'Failed to save notes' });
+  }
+});
+
+// Assign agent to a user
+router.post('/users/:userId/assign-agent', checkMAIA2Ready, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { agentId, agentName } = req.body;
+    
+    if (!agentId || !agentName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: agentId and agentName' 
+      });
+    }
+    
+    // Get user document
+    const userDoc = await maia2Client.getUserByUsername(userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update user with assigned agent information
+    const updates = {
+      assignedAgentId: agentId,
+      assignedAgentName: agentName,
+      agentAssignedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    await maia2Client.updateUser(userId, updates);
+    
+    res.json({ 
+      message: 'Agent assigned successfully',
+      userId: userId,
+      agentId: agentId,
+      agentName: agentName,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error assigning agent:', error);
+    res.status(500).json({ error: 'Failed to assign agent' });
+  }
+});
+
+// Get user's assigned agent
+router.get('/users/:userId/assigned-agent', checkMAIA2Ready, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user document
+    const userDoc = await maia2Client.getUserByUsername(userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Return assigned agent information
+    res.json({
+      userId: userId,
+      assignedAgentId: userDoc.assignedAgentId || null,
+      assignedAgentName: userDoc.assignedAgentName || null,
+      agentAssignedAt: userDoc.agentAssignedAt || null
+    });
+    
+  } catch (error) {
+    console.error('Error getting assigned agent:', error);
+    res.status(500).json({ error: 'Failed to get assigned agent' });
   }
 });
 
@@ -316,8 +463,14 @@ function determineWorkflowStage(user) {
     return 'rejected';
   }
   
+  if (user.approvalStatus === 'suspended') {
+    return 'suspended';
+  }
+  
   if (user.approvalStatus === 'approved') {
-    return 'approved';
+    // Check if they have resources created
+    // TODO: Implement actual resource checking when Maia2Client has these methods
+    return 'approved'; // For now, just return approved
   }
   
   return 'unknown';

@@ -122,8 +122,20 @@ class Maia2Client {
       // For now, get all users and filter by username
       // In production, this would use a proper CouchDB view
       const allUsers = await this.couchDBClient.getAllDocuments('maia2_users');
+      console.log('🔍 getAllUsers returned:', allUsers.length, 'documents');
+      
       // Filter for users with type='user' OR users without type field (legacy users)
-      const user = allUsers.find(u => (u.type === 'user' || !u.type) && u.username === username);
+      const filteredUsers = allUsers.filter(u => (u.type === 'user' || !u.type));
+      console.log('🔍 Filtered users:', filteredUsers.length, 'documents');
+      
+      // Look for user by username or _id
+      const user = filteredUsers.find(u => u.username === username || u._id === username);
+      console.log('🔍 Looking for username:', username);
+      console.log('🔍 Found user:', user ? 'YES' : 'NO');
+      if (user) {
+        console.log('🔍 User details:', JSON.stringify(user, null, 2));
+      }
+      
       return user || null;
     } catch (error) {
       console.error('❌ Failed to get user by username:', error.message);
@@ -153,6 +165,45 @@ class Maia2Client {
       return { ...updatedUser, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to update user:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update user approval status
+   */
+  async updateUserApprovalStatus(username, approvalStatus, adminNotes = '') {
+    if (!this.isInitialized) throw new Error('MAIA2 Client not initialized');
+    
+    try {
+      // Get user by username first
+      const user = await this.getUserByUsername(username);
+      if (!user) {
+        throw new Error(`User ${username} not found`);
+      }
+
+      const updates = {
+        approvalStatus: approvalStatus,
+        adminNotes: adminNotes,
+        approvalDate: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // If approved, also set up initial resources
+      if (approvalStatus === 'approved') {
+        updates.status = 'active';
+        updates.approvedAt = new Date().toISOString();
+      } else if (approvalStatus === 'rejected') {
+        updates.status = 'suspended';
+        updates.rejectedAt = new Date().toISOString();
+      }
+
+      const result = await this.updateUser(user._id, updates);
+
+      console.log(`✅ User ${username} approval status updated to: ${approvalStatus}`);
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to update user approval status:', error.message);
       throw error;
     }
   }

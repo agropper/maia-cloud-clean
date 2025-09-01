@@ -36,6 +36,7 @@ export interface UploadedFile {
   size: number
   type: 'transcript' | 'timeline' | 'markdown' | 'text' | 'pdf' | 'rtf'
   content: string
+  transcript?: string // AI-ready markdown content for PDFs and RTFs
   originalFile?: File
   fileUrl?: string
   uploadedAt: Date

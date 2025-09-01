@@ -213,13 +213,16 @@ const uploadPDFFile = async (
       name: file.name,
       size: file.size,
       type: 'pdf',
-      content: result.markdown,
+      content: result.text, // Raw PDF text for display
+      transcript: result.markdown, // Converted markdown for AI use
       originalFile: file,
       uploadedAt: new Date()
     }
+    
     appState.uploadedFiles.push(uploadedFile)
+    
     // Don't add to chat history - just make available as context
-    writeMessage(`PDF file loaded successfully (${result.pages} pages, ${result.characters} characters)`, 'success')
+    writeMessage(`PDF file processed successfully (${result.pages} pages, ${result.characters} characters)`, 'success')
   } catch (error) {
     let errorMessage = 'Unknown error'
     if (error instanceof Error) {
@@ -240,6 +243,7 @@ const uploadMarkdownFile = async (
   appState.isLoading = true
   try {
     const content = await file.text()
+    
     const uploadedFile: UploadedFile = {
       id: `file-${Date.now()}-${Math.random()}`,
       name: file.name,
@@ -272,6 +276,7 @@ const uploadTimelineFile = async (
   appState.isLoading = true
   try {
     const content = await file.text()
+    
     const uploadedFile: UploadedFile = {
       id: `file-${Date.now()}-${Math.random()}`,
       name: file.name,
@@ -304,6 +309,7 @@ const uploadRTFFile = async (
   appState.isLoading = true
   try {
     const markdownContent = await processRTFFile(file)
+    
     const uploadedFile: UploadedFile = {
       id: `file-${Date.now()}-${Math.random()}`,
       name: file.name.replace('.rtf', '.md'),
@@ -335,6 +341,7 @@ const uploadTextFile = async (
   appState.isLoading = true
   try {
     const content = await file.text()
+    
     const uploadedFile: UploadedFile = {
       id: `file-${Date.now()}-${Math.random()}`,
       name: file.name,

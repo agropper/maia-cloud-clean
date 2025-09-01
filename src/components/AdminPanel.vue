@@ -243,6 +243,13 @@
                     {{ formatWorkflowStage(selectedUser.workflowStage) }}
                   </QChip>
                 </p>
+                <p><strong>Assigned Agent:</strong> 
+                  <span v-if="selectedUser.assignedAgentName">
+                    {{ selectedUser.assignedAgentName }}
+                    <QChip color="info" size="sm" label="Active" />
+                  </span>
+                  <span v-else class="text-grey-6">None assigned</span>
+                </p>
               </div>
             </div>
           </div>
@@ -296,6 +303,15 @@
                 @click="approveUser('suspended')"
                 :loading="isProcessingApproval"
               />
+              
+              <QBtn
+                v-if="selectedUser.workflowStage === 'approved'"
+                color="info"
+                icon="smart_toy"
+                label="Assign Agent"
+                @click="showAssignAgentDialog = true"
+                :loading="isLoadingAgents"
+              />
             </div>
           </div>
 
@@ -309,11 +325,103 @@
               rows="3"
               placeholder="Add notes about this user or decision..."
             />
+            <div class="q-mt-sm">
+              <QBtn
+                color="primary"
+                icon="save"
+                label="Save Notes"
+                @click="saveNotes"
+                :loading="isSavingNotes"
+                size="sm"
+              />
+            </div>
           </div>
         </QCardSection>
 
         <QCardActions align="right">
           <QBtn flat label="Close" @click="showUserModal = false" />
+        </QCardActions>
+      </QCard>
+    </QDialog>
+
+    <!-- Agent Assignment Dialog -->
+    <QDialog v-model="showAssignAgentDialog" persistent>
+      <QCard style="min-width: 600px">
+        <QCardSection>
+          <div class="text-h6">Assign AI Agent to {{ selectedUser?.displayName }}</div>
+        </QCardSection>
+
+        <QCardSection>
+          <div v-if="isLoadingAgents" class="text-center q-pa-md">
+            <QIcon name="hourglass_empty" size="2rem" class="q-mb-md" />
+            <div>Loading available agents...</div>
+          </div>
+
+          <div v-else-if="agents.length === 0" class="text-center q-pa-md">
+            <QIcon name="warning" size="2rem" class="q-mb-md" color="warning" />
+            <div>No agents available</div>
+          </div>
+
+          <div v-else class="q-gutter-md">
+            <div v-for="agent in agents" :key="agent.id" class="agent-option">
+              <QCard outlined class="cursor-pointer" @click="selectAgent(agent)">
+                <QCardSection>
+                  <div class="row items-center q-gutter-md">
+                    <div class="col">
+                      <div class="text-h6">{{ agent.name }}</div>
+                      <div class="text-caption text-grey-6">{{ agent.description || 'No description' }}</div>
+                      <div class="text-caption">
+                        <strong>Model:</strong> {{ agent.model }} | 
+                        <strong>Status:</strong> 
+                        <QChip 
+                          :color="agent.status === 'running' ? 'positive' : 'warning'" 
+                          size="sm" 
+                          :label="agent.status"
+                        />
+                      </div>
+                    </div>
+                    <div class="col-auto">
+                      <QIcon 
+                        name="check_circle" 
+                        color="positive" 
+                        size="1.5rem"
+                        v-if="selectedUser?.assignedAgentId === agent.id"
+                      />
+                    </div>
+                  </div>
+                </QCardSection>
+              </QCard>
+            </div>
+          </div>
+        </QCardSection>
+
+        <QCardSection v-if="selectedAgent">
+          <div class="text-subtitle2 q-mb-sm">Selected Agent:</div>
+          <div class="row items-center q-gutter-md">
+            <div class="col">
+              <div class="text-h6">{{ selectedAgent.name }}</div>
+              <div class="text-caption text-grey-6">{{ selectedAgent.description || 'No description' }}</div>
+            </div>
+            <QBtn
+              color="negative"
+              icon="close"
+              size="sm"
+              @click="selectedAgent = null"
+              label="Clear Selection"
+            />
+          </div>
+        </QCardSection>
+
+        <QCardActions align="right">
+          <QBtn flat label="Cancel" @click="showAssignAgentDialog = false" />
+          <QBtn
+            color="primary"
+            icon="save"
+            label="Assign Agent"
+            @click="assignAgent"
+            :loading="isAssigningAgent"
+            :disable="!selectedAgent"
+          />
         </QCardActions>
       </QCard>
     </QDialog>
@@ -372,8 +480,14 @@ export default defineComponent({
     const isLoading = ref(false);
     const isRegistering = ref(false);
     const isProcessingApproval = ref(false);
+    const isSavingNotes = ref(false);
+    const isAssigningAgent = ref(false);
+    const isLoadingAgents = ref(false);
     const users = ref([]);
+    const agents = ref([]);
+    const selectedAgent = ref(null);
     const showUserModal = ref(false);
+    const showAssignAgentDialog = ref(false);
     const selectedUser = ref(null);
     const adminNotes = ref('');
     const errorMessage = ref('');
@@ -414,6 +528,14 @@ export default defineComponent({
         field: 'workflowStage',
         align: 'center',
         sortable: true
+      },
+      {
+        name: 'assignedAgent',
+        label: 'Assigned Agent',
+        field: 'assignedAgentName',
+        align: 'left',
+        sortable: true,
+        format: (val) => val || 'None'
       },
       {
         name: 'actions',
@@ -569,11 +691,22 @@ export default defineComponent({
         const response = await fetch(`/api/admin-management/users/${user.userId}`);
         if (response.ok) {
           const userDetails = await response.json();
-          selectedUser.value = userDetails;
+          // Ensure userId is preserved from the original user object
+          selectedUser.value = {
+            ...userDetails,
+            userId: user.userId // Preserve the userId from the table row
+          };
+          // Load existing admin notes if they exist
+          if (userDetails.adminNotes) {
+            adminNotes.value = userDetails.adminNotes;
+          }
         }
       } catch (error) {
         console.error('Error loading user details:', error);
       }
+      
+      // Load available agents for assignment
+      await loadAgents();
     };
     
     const approveUser = async (action) => {
@@ -617,6 +750,117 @@ export default defineComponent({
         });
       } finally {
         isProcessingApproval.value = false;
+      }
+    };
+    
+    const saveNotes = async () => {
+      if (!selectedUser.value || !adminNotes.value.trim()) return;
+      
+      isSavingNotes.value = true;
+      try {
+        const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            notes: adminNotes.value
+          })
+        });
+        
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: 'Notes saved successfully'
+          });
+          
+          // Update the selected user's notes in the local state
+          if (selectedUser.value) {
+            selectedUser.value.adminNotes = adminNotes.value;
+          }
+        } else {
+          throw new Error('Failed to save notes');
+        }
+      } catch (error) {
+        $q.notify({
+          type: 'negative',
+          message: `Failed to save notes: ${error.message}`
+        });
+      } finally {
+        isSavingNotes.value = false;
+      }
+    };
+
+    const loadAgents = async () => {
+      isLoadingAgents.value = true;
+      try {
+        const response = await fetch('/api/agents');
+        if (response.ok) {
+          const agentsData = await response.json();
+          agents.value = agentsData;
+        } else {
+          throw new Error('Failed to load agents');
+        }
+      } catch (error) {
+        console.error('Error loading agents:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to load agents: ${error.message}`
+        });
+      } finally {
+        isLoadingAgents.value = false;
+      }
+    };
+
+    const selectAgent = (agent) => {
+      selectedAgent.value = agent;
+    };
+
+    const assignAgent = async () => {
+      if (!selectedUser.value || !selectedAgent.value) return;
+      
+      isAssigningAgent.value = true;
+      try {
+        const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/assign-agent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            agentId: selectedAgent.value.id,
+            agentName: selectedAgent.value.name
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          $q.notify({
+            type: 'positive',
+            message: `Agent ${selectedAgent.value.name} assigned successfully to ${selectedUser.value.displayName}`
+          });
+          
+          // Update the selected user's agent information
+          if (selectedUser.value) {
+            selectedUser.value.assignedAgentId = selectedAgent.value.id;
+            selectedUser.value.assignedAgentName = selectedAgent.value.name;
+          }
+          
+          // Close the dialog and reset
+          showAssignAgentDialog.value = false;
+          selectedAgent.value = null;
+          
+          // Refresh users list to show updated information
+          await loadUsers();
+        } else {
+          throw new Error('Failed to assign agent');
+        }
+      } catch (error) {
+        $q.notify({
+          type: 'negative',
+          message: `Failed to assign agent: ${error.message}`
+        });
+      } finally {
+        isAssigningAgent.value = false;
       }
     };
     
@@ -730,8 +974,14 @@ export default defineComponent({
       isLoading,
       isRegistering,
       isProcessingApproval,
+      isSavingNotes,
+      isAssigningAgent,
+      isLoadingAgents,
       users,
+      agents,
+      selectedAgent,
       showUserModal,
+      showAssignAgentDialog,
       selectedUser,
       adminNotes,
       adminForm,
@@ -740,8 +990,12 @@ export default defineComponent({
       errorMessage,
       registerAdmin,
       loadUsers,
+      loadAgents,
       viewUserDetails,
       approveUser,
+      saveNotes,
+      selectAgent,
+      assignAgent,
       getWorkflowStageColor,
       formatWorkflowStage,
       formatDate,
@@ -823,5 +1077,29 @@ export default defineComponent({
 
 .error-message .q-banner {
   border-radius: 8px;
+}
+
+.agent-option {
+  transition: all 0.2s ease;
+}
+
+.agent-option:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.agent-option .q-card {
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.agent-option .q-card:hover {
+  border-color: #1976d2;
+}
+
+.agent-option .q-card.selected {
+  border-color: #4caf50;
+  background-color: #f1f8e9;
 }
 </style>

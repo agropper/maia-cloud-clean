@@ -780,6 +780,253 @@ const mockAIResponses = {
   'deepseek-r1-chat': (message) => `[DeepSeek R1] My analysis of: "${message}". This is a mock response for local testing.`
 };
 
+// Upload file to DigitalOcean Spaces bucket (legacy endpoint)
+app.post('/api/upload-file', async (req, res) => {
+  try {
+    const { fileName, content, fileType } = req.body;
+    
+    if (!fileName || !content) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'File name and content are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars)`);
+    
+    // Generate a unique key for the file in the bucket
+    const timestamp = Date.now();
+    const cleanName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const bucketKey = `${cleanName}`;
+    
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const uploadCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: bucketKey,
+      Body: content,
+      ContentType: fileType || 'text/plain',
+      Metadata: {
+        'original-filename': fileName,
+        'upload-timestamp': timestamp.toString()
+      }
+    });
+
+    await s3Client.send(uploadCommand);
+    console.log(`✅ Successfully uploaded file to bucket: ${bucketKey}`);
+    
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      fileInfo: {
+        bucketKey,
+        fileName,
+        fileType: fileType || 'text/plain',
+        size: content.length,
+        uploadedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error uploading file to bucket:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to upload file to bucket: ${error.message}`,
+      error: 'UPLOAD_FAILED'
+    });
+  }
+});
+
+// Upload file to DigitalOcean Spaces bucket with user folder support
+app.post('/api/upload-to-bucket', async (req, res) => {
+  try {
+    const { fileName, content, fileType, userFolder } = req.body;
+    
+    if (!fileName || !content) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'File name and content are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars) to folder: ${userFolder || 'root'}`);
+    
+    // Generate a unique key for the file in the bucket
+    const timestamp = Date.now();
+    const cleanName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const bucketKey = userFolder ? `${userFolder}${cleanName}` : cleanName;
+    
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const uploadCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: bucketKey,
+      Body: content,
+      ContentType: fileType || 'text/plain',
+      Metadata: {
+        'original-filename': fileName,
+        'upload-timestamp': timestamp.toString(),
+        'user-folder': userFolder || 'root'
+      }
+    });
+
+    await s3Client.send(uploadCommand);
+    console.log(`✅ Successfully uploaded file to bucket: ${bucketKey}`);
+    
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      fileInfo: {
+        bucketKey,
+        fileName,
+        fileType: fileType || 'text/plain',
+        size: content.length,
+        uploadedAt: new Date().toISOString(),
+        userFolder: userFolder || 'root'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error uploading file to bucket:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to upload file to bucket: ${error.message}`,
+      error: 'UPLOAD_FAILED'
+    });
+  }
+});
+
+// Get files from DigitalOcean Spaces bucket
+app.get('/api/bucket-files', async (req, res) => {
+  try {
+    console.log('📋 Listing files from DigitalOcean Spaces bucket');
+    
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      MaxKeys: 100
+    });
+
+    const result = await s3Client.send(listCommand);
+    const files = result.Contents || [];
+    
+    console.log(`✅ Found ${files.length} files in bucket`);
+    
+    res.json({
+      success: true,
+      files: files.map(file => ({
+        key: file.Key,
+        size: file.Size,
+        lastModified: file.LastModified,
+        etag: file.ETag
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Error listing bucket files:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to list bucket files: ${error.message}`,
+      error: 'LIST_FAILED'
+    });
+  }
+});
+
+// Delete file from DigitalOcean Spaces bucket
+app.delete('/api/delete-bucket-file', async (req, res) => {
+  try {
+    const { key } = req.body;
+    if (!key) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'File key is required',
+        error: 'MISSING_KEY'
+      });
+    }
+    
+    console.log(`🗑️ Deleting file from DigitalOcean Spaces bucket: ${key}`);
+    
+    const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key
+    });
+
+    await s3Client.send(deleteCommand);
+    console.log(`✅ Successfully deleted file from bucket: ${key}`);
+    
+    res.json({
+      success: true,
+      message: 'File deleted successfully',
+      deletedKey: key
+    });
+  } catch (error) {
+    console.error('❌ Error deleting file from bucket:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to delete file from bucket: ${error.message}`,
+      error: 'DELETE_FAILED'
+    });
+  }
+});
+
 // Personal Chat endpoint (DigitalOcean Agent Platform)
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
@@ -3038,5 +3285,7 @@ app.listen(PORT, () => {
   console.log(`🚀 MAIA Secure Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
-      console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
+  console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
+  console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
+  console.log(`📅 Server started at: ${new Date().toISOString()}`);
 }); 

@@ -214,7 +214,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, useQuasar } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -297,6 +297,7 @@ export default defineComponent({
   },
 
   setup(props, { emit }) {
+    const $q = useQuasar()
     const isListening = ref(false)
     const recognition = ref<SpeechRecognition | null>(null)
     const isSpeechSupported = ref(false)
@@ -411,13 +412,27 @@ export default defineComponent({
         const file = files[0] // Take the first file for now
         if (file) {
           try {
-            // Use the uploadFile function to properly process and add the file
+            console.log(`📁 Processing file: ${file.name} (${Math.round(file.size / 1024)}KB)`)
+            
+            // Process file through the proper upload pipeline (which handles bucket upload)
             await uploadFile(file, props.appState, (message: string, type: string) => {
-              // Handle success/error messages if needed
               console.log(`${type}: ${message}`)
             })
-          } catch (error) {
+            
+            // Show success notification
+            $q.notify({
+              type: 'positive',
+              message: `File "${file.name}" processed and uploaded successfully!`,
+              timeout: 3000
+            })
+            
+          } catch (error: any) {
             console.error('File upload failed:', error)
+            $q.notify({
+              type: 'negative',
+              message: `Failed to upload "${file.name}": ${error.message || 'Unknown error'}`,
+              timeout: 5000
+            })
           }
         }
       }
