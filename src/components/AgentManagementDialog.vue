@@ -89,6 +89,17 @@
               class="q-px-lg"
             />
           </div>
+
+          <!-- Start Indexing Button (when on Step 6 but no indexing job) -->
+          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started')" class="q-mt-md text-center">
+            <q-btn
+              label="START INDEXING"
+              color="primary"
+              @click="startIndexingJob(currentKbId)"
+              icon="play_arrow"
+              class="q-px-lg"
+            />
+          </div>
         </div>
 
         <!-- Current Agent Summary -->
@@ -2523,6 +2534,57 @@ export default defineComponent({
       currentKbId = null;
     };
 
+    // Start indexing job for a knowledge base
+    const startIndexingJob = async (kbId: string) => {
+      try {
+        console.log(`🚀 Starting indexing job for KB: ${kbId}`);
+        
+        const response = await fetch(`${API_BASE_URL}/test-start-indexing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            kbId: kbId,
+            kbName: knowledgeBase.value?.name || 'Unknown KB'
+          }),
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log(`✅ Indexing job started successfully: ${result.indexingJob.uuid}`);
+            
+            // Update workflow step
+            workflowSteps.value[5].title = 'Indexing job started - monitoring progress...';
+            
+            // Show success notification
+            $q.notify({
+              type: "positive",
+              message: "Indexing job started successfully! Monitoring progress...",
+            });
+            
+            // Restart the indexing monitor
+            startIndexingMonitor(knowledgeBase.value);
+            
+          } else {
+            throw new Error(result.message || 'Failed to start indexing job');
+          }
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Failed to start indexing job: ${response.status} ${response.statusText}`);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error starting indexing job:', error);
+        $q.notify({
+          type: "negative",
+          message: `Failed to start indexing job: ${error.message}`,
+        });
+      }
+    };
+
     // Cancel indexing process
     const cancelIndexing = async () => {
       try {
@@ -2606,6 +2668,24 @@ export default defineComponent({
               });
             }
             // If status is 'processing' or 'pending', continue monitoring
+          } else if (statusData.needsIndexing) {
+            console.log('📊 No indexing job found - indexing needs to be started');
+            
+            // Update workflow step to show that indexing needs to be started
+            workflowSteps.value[5].title = 'Knowledge base ready - indexing needs to be started';
+            
+            // Show notification with option to start indexing
+            $q.notify({
+              type: "info",
+              message: "Knowledge base created but indexing hasn't started. Use the test endpoint to start indexing.",
+              actions: [
+                { label: 'Start Indexing', color: 'primary', handler: () => startIndexingJob(kbId) }
+              ]
+            });
+            
+            // Stop monitoring since there's no job to monitor
+            stopIndexingMonitor();
+            
           } else {
             console.warn('⚠️ No indexing job data available');
           }
@@ -3107,6 +3187,7 @@ export default defineComponent({
       checkUserBucketFiles,
       startIndexingMonitor,
       stopIndexingMonitor,
+      startIndexingJob,
       cancelIndexing,
       showCancelIndexingModal,
       isCancellingIndexing,

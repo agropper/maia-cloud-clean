@@ -2916,7 +2916,8 @@ app.get('/api/knowledge-bases/:kbId/indexing-status', async (req, res) => {
     if (!indexingJobs || indexingJobs.length === 0) {
       return res.json({
         success: false,
-        message: 'No indexing jobs found'
+        message: 'No indexing jobs found',
+        needsIndexing: true
       });
     }
     
@@ -2939,6 +2940,76 @@ app.get('/api/knowledge-bases/:kbId/indexing-status', async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: `Failed to get indexing status: ${error.message}` 
+    });
+  }
+});
+
+// Test endpoint to start indexing job for a knowledge base
+app.post('/api/test-start-indexing', async (req, res) => {
+  try {
+    const { kbId, kbName } = req.body;
+    
+    if (!kbId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Knowledge base ID is required'
+      });
+    }
+    
+    console.log(`🚀 Starting indexing job for KB: ${kbName || kbId}`);
+    
+    // Get the knowledge base details to find data sources
+    const kbResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+    const kbData = kbResponse.data || kbResponse;
+    
+    if (!kbData.datasources || kbData.datasources.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No data sources found for this knowledge base'
+      });
+    }
+    
+    // Get the first data source (spaces_data_source)
+    const dataSource = kbData.datasources[0];
+    if (!dataSource.spaces_data_source) {
+      return res.status(400).json({
+        success: false,
+        message: 'No spaces data source found'
+      });
+    }
+    
+    // Create indexing job using DigitalOcean API
+    const indexingJobData = {
+      data_source_uuid: dataSource.spaces_data_source.uuid
+    };
+    
+    console.log(`📊 Creating indexing job with data source: ${dataSource.spaces_data_source.uuid}`);
+    
+    const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
+      method: 'POST',
+      body: JSON.stringify(indexingJobData)
+    });
+    
+    const indexingJob = indexingJobResponse.data || indexingJobResponse;
+    
+    console.log(`✅ Indexing job created successfully: ${indexingJob.uuid}`);
+    console.log(`📊 Job status: ${indexingJob.status}`);
+    
+    res.json({
+      success: true,
+      message: 'Indexing job started successfully',
+      indexingJob: {
+        uuid: indexingJob.uuid,
+        status: indexingJob.status,
+        created_at: indexingJob.created_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Start indexing job error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to start indexing job: ${error.message}` 
     });
   }
 });
