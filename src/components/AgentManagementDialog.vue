@@ -2536,6 +2536,8 @@ export default defineComponent({
 
     // Start indexing job for a knowledge base
     const startIndexingJob = async (kbId: string) => {
+      // Also log to browser console for user visibility
+      console.log('🚀 AUTO-START INDEXING: Starting indexing job for knowledge base...');
       try {
         console.log(`🚀 Starting indexing job for KB: ${kbId}`);
         

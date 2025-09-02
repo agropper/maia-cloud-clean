@@ -3014,6 +3014,149 @@ app.post('/api/test-start-indexing', async (req, res) => {
   }
 });
 
+// Auto-start indexing for the most recent knowledge base
+app.post('/api/auto-start-indexing', async (req, res) => {
+  try {
+    console.log('🚀 AUTO-START INDEXING ENDPOINT CALLED!');
+    console.log('🚀 AUTO-START INDEXING: Getting most recent knowledge base...');
+    
+    // Get all knowledge bases
+    const kbResponse = await doRequest('/v2/gen-ai/knowledge_bases');
+    
+    // For debugging, return the raw response structure
+    console.log('🔍 Raw KB response type:', typeof kbResponse);
+    console.log('🔍 Raw KB response keys:', Object.keys(kbResponse || {}));
+    
+    // Check if response has knowledge_bases array
+    if (kbResponse && kbResponse.knowledge_bases && Array.isArray(kbResponse.knowledge_bases)) {
+      console.log('✅ Response has knowledge_bases array');
+      const kbList = kbResponse.knowledge_bases;
+      console.log('🔍 KB list length:', kbList.length);
+      
+      if (kbList.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'No knowledge bases found'
+        });
+      }
+      
+      const mostRecentKB = kbList[0];
+      console.log('🔍 Most recent KB object:', JSON.stringify(mostRecentKB, null, 2));
+      console.log(`📚 Most recent KB: ${mostRecentKB.name} (${mostRecentKB.uuid})`);
+      console.log(`📅 Created: ${mostRecentKB.created_at}`);
+      console.log(`📊 Current indexing status: ${mostRecentKB.last_indexing_job?.status || 'No indexing job'}`);
+      
+      // Check if this KB already has a completed indexing job
+      if (mostRecentKB.last_indexing_job && mostRecentKB.last_indexing_job.status === 'INDEX_JOB_STATUS_COMPLETED') {
+        console.log(`ℹ️ KB ${mostRecentKB.name} already has a completed indexing job`);
+        return res.json({
+          success: true,
+          message: 'Knowledge base already has a completed indexing job',
+          knowledgeBase: {
+            name: mostRecentKB.name,
+            uuid: mostRecentKB.uuid,
+            created_at: mostRecentKB.created_at
+          },
+          existingIndexingJob: {
+            uuid: mostRecentKB.last_indexing_job.uuid,
+            status: mostRecentKB.last_indexing_job.status,
+            created_at: mostRecentKB.last_indexing_job.created_at,
+            finished_at: mostRecentKB.last_indexing_job.finished_at
+          }
+        });
+      }
+    } else {
+      console.log('❌ Unexpected response structure');
+      return res.status(500).json({
+        success: false,
+        message: 'Unexpected response structure from DigitalOcean API',
+        response: kbResponse
+      });
+    }
+    
+    // Define mostRecentKB variable for the rest of the function
+    const mostRecentKB = kbResponse.knowledge_bases[0];
+    
+    // Get the knowledge base details to find data sources
+    const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${mostRecentKB.uuid}`);
+    const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
+    
+    if (!kbDetails.datasources || kbDetails.datasources.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No data sources found for this knowledge base'
+      });
+    }
+    
+    // Get the first data source (spaces_data_source)
+    const dataSource = kbDetails.datasources[0];
+    if (!dataSource.spaces_data_source) {
+      return res.status(400).json({
+        success: false,
+        message: 'No spaces data source found'
+      });
+    }
+    
+    console.log(`📊 Found data source: ${dataSource.spaces_data_source.uuid}`);
+    console.log(`📁 Bucket: ${dataSource.spaces_data_source.bucket_name}, Path: ${dataSource.spaces_data_source.item_path}`);
+    
+    // Create indexing job using DigitalOcean API
+    const indexingJobData = {
+      data_source_uuid: dataSource.spaces_data_source.uuid
+    };
+    
+    console.log(`🚀 Creating indexing job for KB: ${mostRecentKB.name}`);
+    
+    const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${mostRecentKB.uuid}/indexing_jobs`, {
+      method: 'POST',
+      body: JSON.stringify(indexingJobData)
+    });
+    
+    const indexingJob = indexingJobResponse.data || indexingJobResponse;
+    
+    console.log(`✅ Indexing job created successfully!`);
+    console.log(`📊 Job UUID: ${indexingJob.uuid}`);
+    console.log(`📊 Job Status: ${indexingJob.status}`);
+    console.log(`📊 Created At: ${indexingJob.created_at}`);
+    
+    // Now check the status immediately
+    console.log(`🔍 Checking indexing job status...`);
+    const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${mostRecentKB.uuid}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs/${indexingJob.uuid}`);
+    const jobStatus = jobStatusResponse.data || jobStatusResponse;
+    
+    console.log(`📊 Current Job Status: ${jobStatus.status}`);
+    console.log(`📊 Tokens Processed: ${jobStatus.tokens_processed || 0}`);
+    console.log(`📊 Progress: ${jobStatus.progress || 'N/A'}`);
+    
+    res.json({
+      success: true,
+      message: 'Indexing job started successfully for most recent KB',
+      knowledgeBase: {
+        name: mostRecentKB.name,
+        uuid: mostRecentKB.uuid,
+        created_at: mostRecentKB.created_at
+      },
+      indexingJob: {
+        uuid: indexingJob.uuid,
+        status: indexingJob.status,
+        created_at: indexingJob.created_at
+      },
+      currentStatus: {
+        status: jobStatus.status,
+        tokens_processed: jobStatus.tokens_processed || 0,
+        progress: jobStatus.progress || 'N/A'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Auto-start indexing error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to auto-start indexing: ${error.message}` 
+    });
+  }
+});
+
 // Associate knowledge base with agent
 
 
