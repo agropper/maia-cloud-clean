@@ -379,8 +379,8 @@
       </q-card>
     </q-dialog>
 
-    <!-- Choose Files Dialog -->
-    <q-dialog v-model="showCreateKbDialog" persistent>
+    <!-- Step 4: Choose Files Dialog -->
+    <q-dialog v-model="showChooseFilesDialog" persistent>
       <q-card style="min-width: 600px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">📁 Choose Files for Knowledge Base</div>
@@ -403,7 +403,7 @@
             </div>
 
             <q-form
-              @submit="uploadSelectedFilesToBucket"
+              @submit="handleChooseFilesSubmit"
               class="q-gutter-md"
             >
               <q-input
@@ -422,35 +422,6 @@
                 rows="3"
                 hint="Optional description of the knowledge base contents"
               />
-
-              <!-- Existing Files in User's Bucket Folder -->
-              <div v-if="userBucketFiles.length > 0" class="q-mb-md">
-                <div class="text-subtitle2 q-mb-sm text-positive">
-                  📁 Files in Your Bucket Folder ({{ userBucketFiles.length }} files):
-                </div>
-                <div class="q-pa-sm bg-positive-1 rounded-borders">
-                  <div
-                    v-for="file in userBucketFiles"
-                    :key="file.key"
-                    class="q-mb-xs"
-                  >
-                    <q-item dense>
-                      <q-item-section>
-                        <q-item-label>{{ file.key.split('/').pop() }}</q-item-label>
-                        <q-item-label caption>{{
-                          formatFileSize(file.size || 0)
-                        }} bytes | Last modified: {{ new Date(file.lastModified).toLocaleDateString() }}</q-item-label>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-icon name="check_circle" color="positive" size="sm" />
-                      </q-item-section>
-                    </q-item>
-                  </div>
-                </div>
-                <div class="text-caption text-positive q-mt-sm">
-                  ✅ These files are already stored in your DigitalOcean Spaces folder and ready for knowledge base creation.
-                </div>
-              </div>
 
               <!-- Document List -->
               <div>
@@ -486,6 +457,85 @@
               </div>
             </q-form>
           </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Step 5: Create Knowledge Base Dialog -->
+    <q-dialog v-model="showCreateKbDialog" persistent>
+      <q-card style="min-width: 600px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">🚀 Create Knowledge Base</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-md">
+            Create knowledge base from your existing bucket files:
+          </div>
+
+          <q-form
+            @submit="handleCreateKbSubmit"
+            class="q-gutter-md"
+          >
+            <q-input
+              v-model="newKbName"
+              label="Knowledge Base Name"
+              outlined
+              :rules="[(val) => !!val || 'Name is required']"
+              hint="Enter a descriptive name for your knowledge base"
+              readonly
+            />
+
+            <q-input
+              v-model="newKbDescription"
+              label="Description"
+              outlined
+              type="textarea"
+              rows="3"
+              hint="Optional description of the knowledge base contents"
+              readonly
+            />
+
+            <!-- Existing Files in User's Bucket Folder -->
+            <div class="q-mb-md">
+              <div class="text-subtitle2 q-mb-sm text-positive">
+                📁 Files in Your Bucket Folder ({{ userBucketFiles.length }} files):
+              </div>
+              <div class="q-pa-sm bg-positive-1 rounded-borders">
+                <div
+                  v-for="file in userBucketFiles"
+                  :key="file.key"
+                  class="q-mb-xs"
+                >
+                  <q-item dense>
+                    <q-item-section>
+                      <q-item-label>{{ file.key.split('/').pop() }}</q-item-label>
+                      <q-item-label caption>{{
+                        formatFileSize(file.size || 0)
+                      }} bytes | Last modified: {{ new Date(file.lastModified).toLocaleDateString() }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-icon name="check_circle" color="positive" size="sm" />
+                    </q-item-section>
+                  </q-item>
+                </div>
+              </div>
+              <div class="text-caption text-positive q-mt-sm">
+                ✅ These files are already stored in your DigitalOcean Spaces folder and ready for knowledge base creation.
+              </div>
+            </div>
+
+            <div class="row q-gutter-sm q-mt-md">
+              <q-btn
+                label="Create Knowledge Base from Bucket Files"
+                color="primary"
+                type="submit"
+                :loading="isCreatingKb"
+              />
+              <q-btn label="Cancel" flat v-close-popup />
+            </div>
+          </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -768,7 +818,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch } from "vue";
+import { defineComponent, ref, computed, watch, nextTick } from "vue";
 import type { PropType } from "vue";
 import { useQuasar } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
@@ -890,6 +940,7 @@ export default defineComponent({
     const showDeleteConfirm = ref(false);
     const showWizard = ref(false);
     const showAddDocumentDialog = ref(false);
+    const showChooseFilesDialog = ref(false);
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
@@ -902,6 +953,11 @@ export default defineComponent({
     const showPasskeyAuthDialog = ref(false);
     const localCurrentUser = ref<any>(null);
     const isAuthenticated = ref(false);
+    const isUpdatingWorkflow = ref(false);
+    const hasLoggedAgentAssignment = ref(false);
+    const hasLoggedNoAgents = ref(false);
+    const hasLoggedNoKBs = ref(false);
+    const hasLoggedStep5 = ref(false);
 
     // Dialog state for confirmations
     const showConfirmDialog = ref(false);
@@ -1008,17 +1064,17 @@ export default defineComponent({
           if (authData.authenticated && authData.user) {
             localCurrentUser.value = authData.user;
             isAuthenticated.value = true;
-            console.log("🔐 User authenticated:", authData.user.userId);
+            // User authenticated
           } else {
             // Check if we have a currentUser prop and it's not "Unknown User"
             if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
               localCurrentUser.value = props.currentUser;
               isAuthenticated.value = true;
-              console.log("🔐 User authenticated via props:", props.currentUser.userId);
+              console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
             } else {
               isAuthenticated.value = false;
               localCurrentUser.value = null;
-              console.log("🔐 No user authenticated");
+              console.log(`🔐 No user authenticated`);
             }
           }
         } else {
@@ -1026,11 +1082,11 @@ export default defineComponent({
           if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
             localCurrentUser.value = props.currentUser;
             isAuthenticated.value = true;
-            console.log("🔐 User authenticated via props:", props.currentUser.userId);
+            console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
           } else {
             isAuthenticated.value = false;
             localCurrentUser.value = null;
-            console.log("🔐 No user authenticated");
+            console.log(`🔐 No user authenticated`);
           }
         }
       } catch (error) {
@@ -1039,11 +1095,11 @@ export default defineComponent({
         if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log("🔐 User authenticated via props fallback:", props.currentUser.userId);
+          console.log(`🔐 User authenticated via props fallback: ${props.currentUser.userId}`);
         } else {
           isAuthenticated.value = false;
           localCurrentUser.value = null;
-          console.log("🔐 No user authenticated");
+          console.log(`🔐 No user authenticated`);
         }
       }
     };
@@ -1122,11 +1178,17 @@ export default defineComponent({
     };
 
     // Update workflow progress based on current state
-    const updateWorkflowProgress = () => {
-      // Reset all steps
+    const updateWorkflowProgress = async () => {
+      // Prevent duplicate calls
+      if (isUpdatingWorkflow.value) return;
+      isUpdatingWorkflow.value = true;
+      
+      try {
+              // Reset all steps
       workflowSteps.value.forEach(step => {
         step.completed = false;
         step.current = false;
+        // Reset logged flags when workflow is updated
       });
 
       // Step 1: User authenticated with passkey
@@ -1142,15 +1204,37 @@ export default defineComponent({
         workflowSteps.value[1].completed = true;
         workflowSteps.value[2].completed = true;
         
-        // Step 4: CHOOSE FILES FOR KNOWLEDGE BASE (current)
-        // This step is current when user has agent but no files uploaded yet
-        workflowSteps.value[3].current = true; // Step 4 is current
-        
-        // Step 5: CREATE KNOWLEDGE BASE (ready when files are selected)
-        // This step becomes current when files are ready for KB creation
-        if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-          workflowSteps.value[3].completed = true;
-          workflowSteps.value[4].current = true; // Step 5 is current
+        // Step 4: CHOOSE FILES FOR KNOWLEDGE BASE
+        // Check if user has files in their bucket folder
+        try {
+          const response = await fetch('/api/bucket-files');
+          const data = await response.json();
+          
+          // Filter files for current user
+          const userFiles = data.files.filter((file: any) => 
+            file.key && file.key.startsWith(`${localCurrentUser.value?.userId}/`)
+          );
+          
+          if (userFiles.length > 0) {
+            // User has files - complete step 4 and advance to step 5
+            workflowSteps.value[3].completed = true;
+            workflowSteps.value[3].current = false;
+            workflowSteps.value[4].current = true;
+            // Only log once per session to prevent duplicates
+            if (!hasLoggedStep5.value) {
+              console.log(`🎯 STEP 5 ACTIVATED: User has ${userFiles.length} files in bucket, ready to create knowledge base`);
+              hasLoggedStep5.value = true;
+            }
+          } else {
+            // No files yet - step 4 is current
+            workflowSteps.value[3].current = true;
+            workflowSteps.value[4].current = false;
+          }
+        } catch (error) {
+          console.error('Error checking bucket files:', error);
+          // Fallback: step 4 is current
+          workflowSteps.value[3].current = true;
+          workflowSteps.value[4].current = false;
         }
       }
 
@@ -1163,10 +1247,13 @@ export default defineComponent({
       if (knowledgeBase.value) {
         workflowSteps.value[5].completed = true;
       }
+      } finally {
+        isUpdatingWorkflow.value = false;
+      }
     };
 
     // Update workflow progress when agent is assigned
-    const updateWorkflowProgressForAgent = () => {
+    const updateWorkflowProgressForAgent = async () => {
       // Step 1: User authenticated with passkey (already completed)
       workflowSteps.value[0].completed = true;
       
@@ -1177,15 +1264,50 @@ export default defineComponent({
       workflowSteps.value[2].completed = true;
       workflowSteps.value[2].current = false;
       
-      // Step 4: CHOOSE FILES FOR KNOWLEDGE BASE (now current)
-      workflowSteps.value[3].current = true;
-      
-      console.log("✅ Workflow progress updated: Agent created, ready for file selection");
+      // Step 4: CHOOSE FILES FOR KNOWLEDGE BASE
+      // Check if user already has files in bucket
+      try {
+        const response = await fetch('/api/bucket-files');
+        const data = await response.json();
+        
+        // Filter files for current user
+        const userFiles = data.files.filter((file: any) => 
+          file.key && file.key.startsWith(`${localCurrentUser.value?.userId}/`)
+        );
+        
+        if (userFiles.length > 0) {
+          // User already has files - complete step 4 and advance to step 5
+          workflowSteps.value[3].completed = true;
+          workflowSteps.value[3].current = false;
+          workflowSteps.value[4].current = true;
+          // Only log once per session to prevent duplicates
+          if (!hasLoggedStep5.value) {
+            console.log(`🎯 STEP 5 ACTIVATED: User already has ${userFiles.length} files in bucket, ready to create knowledge base`);
+            hasLoggedStep5.value = true;
+          }
+        } else {
+          // No files yet - step 4 is current
+          workflowSteps.value[3].current = true;
+          workflowSteps.value[4].current = false;
+          console.log("✅ Workflow progress updated: Agent created, ready for file selection");
+        }
+      } catch (error) {
+        console.error('Error checking bucket files:', error);
+        // Fallback: step 4 is current
+        workflowSteps.value[3].current = true;
+        workflowSteps.value[4].current = false;
+        console.log("✅ Workflow progress updated: Agent created, ready for file selection");
+      }
     };
 
-    // Check for existing files in user's bucket folder
-    const checkUserBucketFiles = async () => {
+    // Check for existing files in user's bucket folder (with robust caching)
+    const checkUserBucketFiles = async (forceRefresh = false) => {
       if (!localCurrentUser.value?.userId) return [];
+      
+      // Use cached value if available and not forcing refresh
+      if (!forceRefresh && userBucketFiles.value.length > 0) {
+        return userBucketFiles.value;
+      }
       
       try {
         const username = localCurrentUser.value.userId
@@ -1199,7 +1321,8 @@ export default defineComponent({
             const userFiles = result.files.filter(file => 
               file.key.startsWith(userFolder) && !file.key.endsWith('/')
             )
-            console.log(`📁 Found ${userFiles.length} files in user folder: ${userFolder}`)
+            // Update the cached value
+            userBucketFiles.value = userFiles;
             return userFiles
           }
         }
@@ -1266,10 +1389,14 @@ export default defineComponent({
                     type: 'assigned',
                     assignedAt: assignedAgentData.agentAssignedAt
                   };
-                  console.log(`🔐 User has assigned agent: ${assignedAgentData.assignedAgentName}`);
+                  // Only log once per session to prevent duplicates
+        if (!hasLoggedAgentAssignment.value) {
+          console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
+          hasLoggedAgentAssignment.value = true;
+        }
                   
                   // Update workflow progress - agent is created
-                  updateWorkflowProgressForAgent();
+                  await updateWorkflowProgressForAgent();
                 } else {
                   currentAgent.value = null;
                   console.log("🔐 User has no agent assigned yet");
@@ -1302,7 +1429,11 @@ export default defineComponent({
             // Authenticated user - check if they have been approved for agents
             // For now, we'll show no agents until admin approval
             availableAgents.value = [];
-            console.log("🔐 No agents available until admin approval");
+            // Only log if user doesn't have an agent assigned
+        if (!hasLoggedNoAgents.value && !currentAgent.value) {
+          console.log(`🔐 No additional agents available for assignment`);
+          hasLoggedNoAgents.value = true;
+        }
           }
         } catch (agentsError) {
           console.warn("Failed to load agents list:", agentsError);
@@ -1341,7 +1472,13 @@ export default defineComponent({
             // Authenticated user - check if they have been approved for KBs
             // For now, we'll show no KBs until admin approval
             availableKnowledgeBases.value = [];
-            console.log("🔐 No knowledge bases available until admin approval");
+            // Only log if user doesn't have files ready for KB creation
+            // Check bucket files directly to avoid timing issues
+            const bucketFiles = await checkUserBucketFiles();
+            if (!hasLoggedNoKBs.value && !bucketFiles.length) {
+              console.log(`🔐 No existing knowledge bases found - ready to create new one`);
+              hasLoggedNoKBs.value = true;
+            }
           }
         } catch (kbError) {
           console.warn("Failed to load knowledge bases:", kbError);
@@ -1566,21 +1703,24 @@ export default defineComponent({
 
     // Load agent info when dialog opens
     const onDialogOpen = async () => {
-              console.log("🔐 Dialog opening - checking authentication status...");
+        console.log(`🔐 Dialog opening - checking authentication status...`);
         await checkAuthenticationStatus();
         await loadAgentInfo();
-        console.log("🔐 Agent info loaded");
-      updateWorkflowProgress(); // Update workflow progress after loading data
+        // Display current agent information (only if not already logged)
+        if (currentAgent.value && !hasLoggedAgentAssignment.value) {
+          console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
+        }
+        await updateWorkflowProgress(); // Update workflow progress after loading data
     };
 
     // Watch for changes in currentUser prop
     watch(() => props.currentUser, async (newUser) => {
       if (newUser) {
         if (localCurrentUser.value?.userId !== newUser.userId) {
-          console.log("🔐 User changed to:", newUser.userId);
+          console.log(`🔐 User changed to: ${newUser.userId}`);
         }
         await checkAuthenticationStatus();
-        updateWorkflowProgress(); // Update workflow progress when user changes
+        await updateWorkflowProgress(); // Update workflow progress when user changes
       }
     }, { immediate: true });
 
@@ -1773,17 +1913,36 @@ export default defineComponent({
         console.log("🔍 No authenticated user found, showing passkey auth dialog");
         showPasskeyAuthDialog.value = true;
       } else {
-        // User is already authenticated, show file selection dialog
-        console.log(
-          "🔍 Showing file selection dialog - user already signed in as:",
-          authenticatedUser.userId || authenticatedUser.username
-        );
-        console.log('🔧 NEW CODE - File selection dialog opening')
+        // Check if user already has files in bucket
+        const bucketFiles = await checkUserBucketFiles();
         
-        // Load user's existing files from bucket folder
-        userBucketFiles.value = await checkUserBucketFiles()
-        
-        showCreateKbDialog.value = true;
+        if (bucketFiles.length > 0) {
+          // User already has files - skip to knowledge base creation
+          console.log(`🎯 User already has ${bucketFiles.length} files, proceeding to knowledge base creation`);
+          // Update workflow to step 5
+          workflowSteps.value[3].completed = true;
+          workflowSteps.value[3].current = false;
+          workflowSteps.value[4].current = true;
+          // Ensure userBucketFiles is updated before opening dialog
+          userBucketFiles.value = bucketFiles;
+          
+          // Set default KB name and description for testing since we're skipping Step 4
+          if (!newKbName.value) {
+            newKbName.value = "kb1";
+          }
+          if (!newKbDescription.value) {
+            newKbDescription.value = "kb1 description";
+          }
+          
+          // Use nextTick to ensure Vue reactivity is complete before opening dialog
+          await nextTick();
+          
+          // Show knowledge base creation dialog instead
+          showCreateKbDialog.value = true;
+        } else {
+          // No files yet - show file selection dialog
+          showChooseFilesDialog.value = true;
+        }
       }
     };
 
@@ -1794,18 +1953,13 @@ export default defineComponent({
       
       if (!authenticatedUser) {
         // Show passkey auth dialog for existing users
-        console.log("🔍 No authenticated user found, showing passkey auth dialog");
         showPasskeyAuthDialog.value = true;
       } else {
         // User is already authenticated, show KB creation dialog
-        console.log(
-          "🔍 Showing KB creation dialog - user already signed in as:",
-          authenticatedUser.userId || authenticatedUser.username
-        );
-        console.log('🔧 NEW CODE LOADED - KB creation dialog opening')
+        // KB creation dialog opening
         
-        // Load user's existing files from bucket folder
-        userBucketFiles.value = await checkUserBucketFiles()
+        // Load user's existing files from bucket folder (force refresh)
+        await checkUserBucketFiles(true);
         
         showCreateKbDialog.value = true;
       }
@@ -1826,12 +1980,6 @@ export default defineComponent({
 
       isCreatingKb.value = true;
       try {
-        console.log('🚀 NEW CODE - Starting file upload to bucket with', selectedDocuments.value.length, 'selected files')
-        console.log('📁 Selected files:', selectedDocuments.value)
-        console.log('📁 Available files:', props.uploadedFiles?.map(f => f.name))
-        
-        // Step 1: Upload selected files to Spaces bucket in user-specific folder
-        console.log('📤 NEW CODE - Starting bucket upload to user folder...')
         const uploadedFiles = []
         const username = localCurrentUser.value?.userId || 'unknown'
         const userFolder = `${username}/`
@@ -1839,7 +1987,6 @@ export default defineComponent({
         for (const fileId of selectedDocuments.value) {
           const file = props.uploadedFiles.find(f => f.id === fileId)
           if (file) {
-            console.log(`🔍 Processing file: ${file.name}, type: ${file.type}`)
             
             // For PDFs and RTFs, we need to extract transcript first
             let aiContent = null
@@ -1852,13 +1999,11 @@ export default defineComponent({
                 aiContent = file.transcript
                 fileName = file.name.replace('.pdf', '.md')
                 fileType = 'text/markdown'
-                console.log(`📄 Using PDF markdown transcript: ${fileName} (${aiContent?.length || 0} chars)`)
               } else if (file.content && file.content.length > 0) {
                 // Fallback to raw content if no transcript available
                 aiContent = file.content
                 fileName = file.name.replace('.pdf', '.md')
                 fileType = 'text/markdown'
-                console.log(`📄 Using PDF raw content as fallback: ${fileName} (${aiContent?.length || 0} chars)`)
               } else {
                 console.warn(`⚠️ PDF file ${fileName} has no content or transcript - skipping`)
                 continue
@@ -1869,13 +2014,11 @@ export default defineComponent({
                 aiContent = file.transcript
                 fileName = file.name.replace('.rtf', '.md')
                 fileType = 'text/markdown'
-                console.log(`📄 Using RTF markdown transcript: ${fileName} (${aiContent?.length || 0} chars)`)
               } else if (file.content && file.content.length > 0) {
                 // Fallback to raw content if no transcript available
                 aiContent = file.content
                 fileName = file.name.replace('.rtf', '.md')
                 fileType = 'text/markdown'
-                console.log(`📄 Using RTF raw content as fallback: ${fileName} (${aiContent?.length || 0} chars)`)
               } else {
                 console.warn(`⚠️ RTF file ${fileName} has no content or transcript - skipping`)
                 continue
@@ -1884,11 +2027,9 @@ export default defineComponent({
               // Already in markdown format
               aiContent = file.content
               fileType = 'text/markdown'
-              console.log(`📄 Using existing markdown: ${fileName} (${aiContent?.length || 0} chars)`)
             } else {
               // Other file types
               aiContent = file.content
-              console.log(`📄 Using content for ${fileName} (${aiContent?.length || 0} chars)`)
             }
             
             if (!aiContent || aiContent.length === 0) {
@@ -1898,7 +2039,6 @@ export default defineComponent({
             
             // Upload to user-specific folder in DigitalOcean Spaces - FIRST INSTANCE
             const bucketKey = `${userFolder}${fileName}`
-            console.log(`📤 Uploading to bucket: ${bucketKey} (${aiContent.length} chars)`)
             
             const uploadResponse = await fetch('/api/upload-to-bucket', {
               method: 'POST',
@@ -1934,24 +2074,26 @@ export default defineComponent({
           }
         }
         
-        console.log(`✅ NEW CODE - Uploaded ${uploadedFiles.length} files to bucket`)
+        // Step 2: Update user bucket files and show success (force refresh)
+        await checkUserBucketFiles(true);
         
-        // Step 2: Update user bucket files and show success
-        userBucketFiles.value = await checkUserBucketFiles()
-        
-        // Clear form and close dialog
+        // Clear form and close Step 4 dialog
         selectedDocuments.value = []
-        showCreateKbDialog.value = false;
+        showChooseFilesDialog.value = false;
         
         $q.notify({
           type: "positive",
-          message: `Successfully uploaded ${uploadedFiles.length} files to your bucket folder!`,
+          message: `Successfully uploaded ${uploadedFiles.length} files to your bucket folder! Now you can create your knowledge base.`,
         });
         
         // Update workflow progress to step 5
         if (uploadedFiles.length > 0) {
           workflowSteps.value[3].completed = true; // Step 4 completed
           workflowSteps.value[4].current = true;   // Step 5 is current
+          
+          // Show Step 5 dialog to create knowledge base
+          // The KB name and description are already saved in newKbName and newKbDescription
+          showCreateKbDialog.value = true;
         }
         
       } catch (error: any) {
@@ -1971,12 +2113,12 @@ export default defineComponent({
 
       isCreatingKb.value = true;
       try {
-        console.log('🚀 NEW CODE - KB creation starting with', selectedDocuments.value.length, 'selected files')
+        console.log('🚀 KB creation starting with', selectedDocuments.value.length, 'selected files')
         console.log('📁 Selected files:', selectedDocuments.value)
         console.log('📁 Available files:', props.uploadedFiles?.map(f => f.name))
         
         // Step 1: Upload selected files to Spaces bucket in user-specific folder
-        console.log('📤 NEW CODE - Starting bucket upload to user folder...')
+        console.log('📤 Starting bucket upload to user folder...')
         const uploadedFiles = []
         const username = localCurrentUser.value?.userId || 'unknown'
         const userFolder = `${username}/`
@@ -2114,12 +2256,107 @@ export default defineComponent({
       }
     };
 
+    // Handle Step 4: Choose files and upload to bucket
+    const handleChooseFilesSubmit = async () => {
+      console.log('🚀 Step 4: Form submitted - calling uploadSelectedFilesToBucket');
+      await uploadSelectedFilesToBucket();
+    };
+
+    // Handle Step 5: Create knowledge base from bucket files
+    const handleCreateKbSubmit = async () => {
+      await createKnowledgeBaseFromBucketFiles();
+    };
+
+    // Create knowledge base directly from existing bucket files
+    const createKnowledgeBaseFromBucketFiles = async () => {
+      if (!newKbName.value) return;
+
+      isCreatingKb.value = true;
+      try {
+        // Get username from session or props
+        let username = localCurrentUser.value?.userId;
+        if (!username) {
+          // Fallback: try to get username from props
+          username = props.currentUser?.userId;
+        }
+        if (!username) {
+          // Final fallback: try to get from session
+          try {
+            const authResponse = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+            if (authResponse.ok) {
+              const authData = await authResponse.json();
+              username = authData.user?.userId;
+            }
+          } catch (error) {
+            console.log('Could not get username from session:', error);
+          }
+        }
+        
+        const requestBody = {
+          name: newKbName.value,
+          description: newKbDescription.value,
+          username: username || 'unknown',
+          documents: userBucketFiles.value.map(file => ({
+            id: file.key,
+            name: file.key.split('/').pop(),
+            content: file.content || '',
+            bucketKey: file.key
+          }))
+        };
+
+        const response = await fetch(`${API_BASE_URL}/knowledge-bases`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`❌ KB creation failed: ${response.status} ${response.statusText}`)
+          console.error(`❌ Error details: ${errorText}`)
+          throw new Error(`Failed to create knowledge base: ${response.status} ${response.statusText}`);
+        }
+
+        const newKb = await response.json();
+        const kbName = newKb.name || newKb.knowledge_base?.name || 'Unknown KB';
+        console.log(`✅ Knowledge base created successfully from bucket files: ${kbName}`)
+
+        // Add to available knowledge bases
+        availableKnowledgeBases.value.push(newKb);
+
+        // Set as current knowledge base
+        knowledgeBase.value = newKb;
+
+        // Clear form
+        newKbName.value = "";
+        newKbDescription.value = "";
+        showCreateKbDialog.value = false;
+
+        $q.notify({
+          type: "positive",
+          message: "Knowledge base created successfully from your bucket files!",
+        });
+      } catch (error: any) {
+        console.error('❌ KB creation from bucket files failed:', error)
+        $q.notify({
+          type: "negative",
+          message: `Failed to create knowledge base: ${error.message}`,
+        });
+      } finally {
+        isCreatingKb.value = false;
+      }
+    };
+
     // User's existing files in bucket folder
     const userBucketFiles = ref([]);
 
-    // Computed property to check if there are uploaded documents
+    // Computed property to check if there are documents available for KB creation
     const hasUploadedDocuments = computed(() => {
-      return props.uploadedFiles && props.uploadedFiles.length > 0;
+      // Check if user has files in bucket OR uploaded files
+      return (userBucketFiles.value && userBucketFiles.value.length > 0) || 
+             (props.uploadedFiles && props.uploadedFiles.length > 0);
     });
     
 
@@ -2598,6 +2835,7 @@ export default defineComponent({
       showDeleteConfirm,
       showWizard,
       showAddDocumentDialog,
+      showChooseFilesDialog,
       showCreateKbDialog,
       showSwitchKbDialog,
       selectedKnowledgeBase,
@@ -2620,8 +2858,11 @@ export default defineComponent({
       handleChooseFiles,
       handleCreateKnowledgeBase,
       handleFileUpload,
+      handleChooseFilesSubmit,
+      handleCreateKbSubmit,
       uploadSelectedFilesToBucket,
       createKnowledgeBase,
+      createKnowledgeBaseFromBucketFiles,
       formatFileSize,
       confirmDetachKnowledgeBase,
       confirmConnectKnowledgeBase,

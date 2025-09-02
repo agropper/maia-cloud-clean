@@ -2711,16 +2711,24 @@ app.post('/api/current-agent', async (req, res) => {
 // Create knowledge base
 app.post('/api/knowledge-bases', async (req, res) => {
   try {
-    const { name, description, document_uuids } = req.body;
+    const { name, description, documents, username } = req.body;
+    
+    // Convert documents array to document_uuids if needed
+    const document_uuids = documents ? documents.map(doc => doc.id || doc.bucketKey) : [];
+    
+    // Use username-prefixed KB name for better organization
+    // If username is provided, prepend it to the KB name
+    const kbName = username ? `${username}-${name}` : name;
+    const itemPath = username ? `${username}/` : "wed271/"; // Default fallback
+    
+
     
     // Get available embedding models first
     let embeddingModelId = null;
     
     try {
       const modelsResponse = await doRequest('/v2/gen-ai/models');
-      console.log(`🔍 Models response structure:`, Object.keys(modelsResponse));
       const models = modelsResponse.models || modelsResponse.data?.models || [];
-      console.log(`🔍 Found ${models.length} models`);
       
       // Find embedding models that can be used for knowledge bases
       // These are typically text embedding models
@@ -2741,7 +2749,6 @@ app.post('/api/knowledge-bases', async (req, res) => {
         
         embeddingModelId = preferredModel.uuid;
         console.log(`📚 Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
-        console.log(`🔍 embeddingModelId after assignment: ${embeddingModelId}`);
       } else {
         console.log(`⚠️ No embedding models found, proceeding without specific embedding model`);
       }
@@ -2750,62 +2757,38 @@ app.post('/api/knowledge-bases', async (req, res) => {
     }
     
     const kbData = {
-      name,
-      description,
+      name: kbName,
+      description: `${kbName} description`,
       project_id: '90179b7c-8a42-4a71-a036-b4c2bea2fe59',
-      database_uuid: 'genai-driftwood',
+      database_id: '881761c6-e72d-4f35-a48e-b320cd1f46e4',
+      region: "tor1",
       datasources: [
         {
-          type: 'text',
-          content: 'This is a sample knowledge base for testing purposes.'
+          "spaces_data_source": {
+            "bucket_name": "maia",
+            "item_path": itemPath,
+            "region": "tor1"
+          }
         }
       ]
     };
 
-    // Try with embedding model ID
-    // Try with embedding model UUID
-    console.log(`🔍 embeddingModelId before check: ${embeddingModelId}`);
     if (embeddingModelId) {
       kbData.embedding_model_uuid = embeddingModelId;
-      console.log(`🔍 Sending embedding model UUID: ${embeddingModelId}`);
-    } else {
-      console.log(`🔍 No embedding model specified, letting DigitalOcean choose default`);
     }
 
-    console.log(`📚 Creating knowledge base: ${name}${embeddingModelId ? ` with embedding model: ${embeddingModelId}` : ''}`);
-    console.log(`🔍 Request body: ${JSON.stringify(kbData, null, 2)}`);
+    console.log(`📚 Creating knowledge base: ${kbName}${embeddingModelId ? ` with embedding model: ${embeddingModelId}` : ''}`);
     const knowledgeBase = await doRequest('/v2/gen-ai/knowledge_bases', {
       method: 'POST',
       body: JSON.stringify(kbData)
     });
 
     const kbId = knowledgeBase.data?.uuid || knowledgeBase.uuid;
-    console.log(`✅ Created knowledge base: ${name} (${kbId})`);
+    console.log(`✅ Created knowledge base: ${kbName} (${kbId})`);
 
-    // If documents are provided, add them as data sources
-    if (document_uuids && document_uuids.length > 0) {
-      console.log(`📄 Adding ${document_uuids.length} documents to knowledge base`);
-      
-      for (const docId of document_uuids) {
-        try {
-          // For now, we'll create a simple text data source
-          // In a real implementation, you'd need to store the document content
-          const dataSourceData = {
-            type: 'file_upload',
-            source: `document_${docId}.txt` // Placeholder - in real app, you'd have actual file content
-          };
-
-          const dataSource = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources`, {
-            method: 'POST',
-            body: JSON.stringify(dataSourceData)
-          });
-
-          console.log(`✅ Added document ${docId} as data source`);
-        } catch (docError) {
-          console.error(`❌ Failed to add document ${docId}:`, docError.message);
-        }
-      }
-    }
+    // Note: Documents are already accessible through the spaces_data_source
+    // No need to add individual documents as separate data sources
+    console.log(`📚 Knowledge base created successfully with access to files in ${itemPath}`);
 
     res.json(knowledgeBase.data || knowledgeBase);
   } catch (error) {
@@ -3288,4 +3271,162 @@ app.listen(PORT, () => {
   console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
   console.log(`📅 Server started at: ${new Date().toISOString()}`);
+}); 
+
+// Test endpoint for knowledge base creation debugging
+app.post('/api/test-create-kb', async (req, res) => {
+  try {
+    console.log('🧪 TEST ENDPOINT: Creating knowledge base for debugging');
+    
+    // List all environment variables we need
+    const envVars = {
+      DIGITALOCEAN_TOKEN: process.env.DIGITALOCEAN_TOKEN ? 'Present' : 'Missing',
+      DIGITALOCEAN_GENAI_ENDPOINT: process.env.DIGITALOCEAN_GENAI_ENDPOINT || 'Missing',
+      DIGITALOCEAN_PROJECT_ID: process.env.DIGITALOCEAN_PROJECT_ID || 'Missing',
+      DIGITALOCEAN_BASE_URL: process.env.DIGITALOCEAN_BASE_URL || 'Missing',
+      DIGITALOCEAN_BUCKET: process.env.DIGITALOCEAN_BUCKET || 'Missing',
+      DIGITALOCEAN_ENDPOINT_URL: process.env.DIGITALOCEAN_ENDPOINT_URL || 'Missing',
+      DIGITALOCEAN_AWS_ACCESS_KEY_ID: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID ? 'Present' : 'Missing',
+      DIGITALOCEAN_AWS_SECRET_ACCESS_KEY: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY ? 'Present' : 'Missing'
+    };
+    
+    console.log('🔍 Environment Variables Status:', envVars);
+    
+    // Get the models to find the embedding model ID using the same approach as working code
+    let embeddingModelId = null;
+    let modelsResponse = null;
+    
+    try {
+      modelsResponse = await doRequest('/v2/gen-ai/models');
+      console.log(`🔍 Models response structure:`, Object.keys(modelsResponse));
+      const models = modelsResponse.models || modelsResponse.data?.models || [];
+      console.log(`🔍 Found ${models.length} models`);
+      
+      // Find embedding models that can be used for knowledge bases
+      // These are typically text embedding models
+      const embeddingModels = models.filter(model => 
+        model.name && (
+          model.name.toLowerCase().includes('embedding') ||
+          model.name.toLowerCase().includes('gte') ||
+          model.name.toLowerCase().includes('mini') ||
+          model.name.toLowerCase().includes('mpnet')
+        )
+      );
+      
+      if (embeddingModels.length > 0) {
+        // Prefer GTE Large as it's a high-quality embedding model
+        const preferredModel = embeddingModels.find(model => 
+          model.name.toLowerCase().includes('gte large')
+        ) || embeddingModels[0];
+        
+        embeddingModelId = preferredModel.uuid;
+        console.log(`📚 Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
+        console.log(`🔍 embeddingModelId after assignment: ${embeddingModelId}`);
+      } else {
+        console.log(`⚠️ No embedding models found, proceeding without specific embedding model`);
+      }
+    } catch (modelError) {
+      console.log(`⚠️ Failed to get models, proceeding without specific embedding model`);
+    }
+    
+    // Get project ID from existing agents
+    let projectId = null;
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      console.log(`🔍 Found ${agents.length} existing agents`);
+      
+      if (agents.length > 0) {
+        projectId = agents[0].project_id;
+        console.log(`🔍 Using project ID from existing agent: ${projectId}`);
+      }
+    } catch (agentError) {
+      console.log(`⚠️ Failed to get agents, using default project ID`);
+      projectId = '90179b7c-8a42-4a71-a036-b4c2bea2fe59';
+    }
+    
+    // Get database UUID from environment or use default
+    let databaseUuid = null;
+    try {
+      const databasesResponse = await doRequest('/v2/gen-ai/databases');
+      const databases = databasesResponse.databases || databasesResponse.data?.databases || [];
+
+      
+      // Find genai-driftwood database
+      const driftwoodDb = databases.find(db => 
+        db.name && db.name.toLowerCase().includes('genai-driftwood')
+      );
+      
+      if (driftwoodDb) {
+        databaseUuid = driftwoodDb.uuid;
+        console.log(`📊 Found genai-driftwood database: ${driftwoodDb.name} (${databaseUuid})`);
+      } else {
+        console.log(`⚠️ genai-driftwood database not found, using default`);
+        databaseUuid = '881761c6-e72d-4f35-a48e-b320cd1f46e4';
+      }
+    } catch (dbError) {
+      console.log(`⚠️ Failed to get databases, using default database UUID`);
+      databaseUuid = '881761c6-e72d-4f35-a48e-b320cd1f46e4';
+    }
+    
+    // Test knowledge base creation with correct data source structure
+    // Based on DigitalOcean API docs: spaces_data_source with bucket_name, item_path, and region
+    // Use dynamic KB name with username prefix for better organization
+    const username = "wed271"; // In production, this would come from the authenticated user
+    const kbName = `${username}-kb1`;
+    
+    const testKbData = {
+      name: kbName,
+      description: `${kbName} description`,
+      project_id: projectId,
+      database_id: databaseUuid,
+      region: "tor1",
+      datasources: [
+        {
+          "spaces_data_source": {
+            "bucket_name": "maia",
+            "item_path": `${username}/`,
+            "region": "tor1"
+          }
+        }
+      ]
+    };
+    
+    // Add embedding model if found
+    if (embeddingModelId) {
+      testKbData.embedding_model_uuid = embeddingModelId;
+    }
+    
+    console.log('📚 Creating knowledge base:', testKbData.name, 'with embedding model:', embeddingModelId || 'default');
+    
+    // Use the same approach as working code
+    const knowledgeBase = await doRequest('/v2/gen-ai/knowledge_bases', {
+      method: 'POST',
+      body: JSON.stringify(testKbData)
+    });
+    
+    console.log('✅ Knowledge base created successfully:', knowledgeBase);
+    
+    res.json({
+      success: true,
+      message: 'Test knowledge base created successfully',
+      data: knowledgeBase,
+      environment: envVars,
+      models: modelsResponse ? (modelsResponse.models?.length || modelsResponse.data?.models?.length || 0) : 0,
+      embeddingModel: embeddingModelId ? 'Found' : 'Default',
+      projectId,
+      databaseUuid,
+      username,
+      kbName
+    });
+    
+  } catch (error) {
+    console.error('❌ Test endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test failed',
+      error: error.message,
+      stack: error.stack
+    });
+  }
 }); 
