@@ -78,6 +78,17 @@
               class="q-px-lg"
             />
           </div>
+
+          <!-- Cancel Indexing Button (when on Step 6) -->
+          <div v-if="workflowSteps[5].current" class="q-mt-md text-center">
+            <q-btn
+              label="CANCEL INDEXING"
+              color="warning"
+              @click="showCancelIndexingModal = true"
+              icon="stop"
+              class="q-px-lg"
+            />
+          </div>
         </div>
 
         <!-- Current Agent Summary -->
@@ -814,6 +825,36 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Cancel Indexing Confirmation Modal -->
+    <q-dialog v-model="showCancelIndexingModal" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="q-pb-none">
+          <div class="text-h6">Cancel Indexing?</div>
+        </q-card-section>
+        
+        <q-card-section>
+          <p>Are you sure you want to cancel the knowledge base indexing process?</p>
+          <p class="text-caption text-grey">
+            This will stop the current indexing and you'll need to restart it later.
+          </p>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn 
+            flat 
+            label="Cancel" 
+            @click="showCancelIndexingModal = false"
+          />
+          <q-btn 
+            label="Yes, Cancel Indexing" 
+            color="warning" 
+            @click="cancelIndexing"
+            :loading="isCancellingIndexing"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-dialog>
 </template>
 
@@ -1002,6 +1043,10 @@ export default defineComponent({
     
     // Track if approval has been requested
     const hasRequestedApproval = ref(false);
+
+    // Cancel indexing modal state
+    const showCancelIndexingModal = ref(false);
+    const isCancellingIndexing = ref(false);
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -2338,6 +2383,8 @@ export default defineComponent({
         workflowSteps.value[4].current = false;
         workflowSteps.value[5].current = true;
         
+        console.log(`🎯 STEP 6 ACTIVATED: Knowledge base created, starting indexing monitor`);
+        
         // Start monitoring indexing status
         startIndexingMonitor(newKb);
 
@@ -2438,16 +2485,24 @@ export default defineComponent({
 
     // Start monitoring knowledge base indexing status
     const startIndexingMonitor = async (knowledgeBase: any) => {
-      if (!knowledgeBase?.uuid) {
+      // Extract UUID from different possible response structures
+      const kbUuid = knowledgeBase?.uuid || 
+                     knowledgeBase?.id || 
+                     knowledgeBase?.knowledge_base?.uuid || 
+                     knowledgeBase?.knowledge_base?.id;
+      
+      if (!kbUuid) {
         console.warn('⚠️ No knowledge base UUID available for indexing monitor');
+        console.log('🔍 Knowledge base object structure:', knowledgeBase);
         return;
       }
 
       // Stop any existing monitor
       stopIndexingMonitor();
       
-      currentKbId = knowledgeBase.uuid;
-      console.log(`📊 Starting indexing monitor for KB: ${knowledgeBase.name} (${currentKbId})`);
+      currentKbId = kbUuid;
+      const kbName = knowledgeBase.name || knowledgeBase.knowledge_base?.name || 'Unknown KB';
+      console.log(`📊 Starting indexing monitor for KB: ${kbName} (${currentKbId})`);
       
       // Start monitoring every 30 seconds
       indexingInterval = setInterval(async () => {
@@ -2466,6 +2521,39 @@ export default defineComponent({
         console.log('📊 Stopped indexing monitor');
       }
       currentKbId = null;
+    };
+
+    // Cancel indexing process
+    const cancelIndexing = async () => {
+      try {
+        isCancellingIndexing.value = true;
+        console.log('🛑 Cancelling indexing process...');
+        
+        // Stop the monitoring
+        stopIndexingMonitor();
+        
+        // Update workflow step to show cancelled
+        workflowSteps.value[5].title = 'Knowledge base indexing cancelled by user';
+        workflowSteps.value[5].current = false;
+        
+        // Show notification
+        $q.notify({
+          type: "warning",
+          message: "Indexing process cancelled. You can restart indexing later.",
+        });
+        
+        // Close modal
+        showCancelIndexingModal.value = false;
+        
+      } catch (error) {
+        console.error('❌ Error cancelling indexing:', error);
+        $q.notify({
+          type: "negative",
+          message: "Failed to cancel indexing process.",
+        });
+      } finally {
+        isCancellingIndexing.value = false;
+      }
     };
 
     // Check indexing status using DigitalOcean API
@@ -3019,6 +3107,9 @@ export default defineComponent({
       checkUserBucketFiles,
       startIndexingMonitor,
       stopIndexingMonitor,
+      cancelIndexing,
+      showCancelIndexingModal,
+      isCancellingIndexing,
     };
   },
 });
