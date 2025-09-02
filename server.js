@@ -2882,6 +2882,67 @@ app.get('/api/knowledge-bases/:kbId/data-sources/:dsId/indexing-jobs/:jobId', as
   }
 });
 
+// Get knowledge base indexing status (for workflow monitoring)
+app.get('/api/knowledge-bases/:kbId/indexing-status', async (req, res) => {
+  try {
+    const { kbId } = req.params;
+    
+    console.log(`📊 Checking indexing status for KB: ${kbId}`);
+    
+    // Get the knowledge base details to find data sources
+    const kbResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+    const kbData = kbResponse.data || kbResponse;
+    
+    if (!kbData.datasources || kbData.datasources.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No data sources found for this knowledge base'
+      });
+    }
+    
+    // Get the first data source (spaces_data_source)
+    const dataSource = kbData.datasources[0];
+    if (!dataSource.spaces_data_source) {
+      return res.json({
+        success: false,
+        message: 'No spaces data source found'
+      });
+    }
+    
+    // Get indexing jobs for this data source
+    const indexingJobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs`);
+    const indexingJobs = indexingJobsResponse.data || indexingJobsResponse;
+    
+    if (!indexingJobs || indexingJobs.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No indexing jobs found'
+      });
+    }
+    
+    // Get the most recent indexing job
+    const latestJob = indexingJobs[0]; // Assuming jobs are ordered by creation date
+    
+    // Get detailed status of the latest job
+    const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs/${latestJob.uuid}`);
+    const jobStatus = jobStatusResponse.data || jobStatusResponse;
+    
+    console.log(`📊 Indexing job status: ${jobStatus.status}, Tokens: ${jobStatus.tokens_processed || 0}`);
+    
+    res.json({
+      success: true,
+      indexingJob: jobStatus
+    });
+    
+  } catch (error) {
+    console.error('❌ Get indexing status error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to get indexing status: ${error.message}` 
+    });
+  }
+});
+
 // Associate knowledge base with agent
 
 

@@ -818,7 +818,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, nextTick } from "vue";
+import { defineComponent, ref, computed, watch, nextTick, onUnmounted } from "vue";
 import type { PropType } from "vue";
 import { useQuasar } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
@@ -1046,10 +1046,10 @@ export default defineComponent({
         current: false
       },
       {
-        title: "Knowledge base indexed and available",
-        helpTitle: "Ready for Use",
-        helpDescription: "Your knowledge base has been indexed and is ready to answer health-related questions.",
-        helpDetails: "You can now chat with your AI agent about your health data with full privacy protection.",
+        title: "Knowledge base being indexed. This can take many minutes. Tokens=0",
+        helpTitle: "Indexing in Progress",
+        helpDescription: "Your knowledge base is being indexed for AI processing. This can take several minutes.",
+        helpDetails: "The system will automatically check indexing status and update token count every 30 seconds.",
         completed: false,
         current: false
       }
@@ -1241,11 +1241,15 @@ export default defineComponent({
       // Step 3: Private AI agent created
       // This is handled above when currentAgent exists
 
-      // Step 6: Knowledge base indexed and available
-      // This would typically be determined by the KB status
-      // For now, we'll assume if KB exists, it's available
+      // Step 6: Knowledge base indexing status
+      // Check if KB exists and start monitoring indexing
       if (knowledgeBase.value) {
-        workflowSteps.value[5].completed = true;
+        workflowSteps.value[4].completed = true;
+        workflowSteps.value[4].current = false;
+        workflowSteps.value[5].current = true;
+        
+        // Start monitoring indexing status
+        startIndexingMonitor(knowledgeBase.value);
       }
       } finally {
         isUpdatingWorkflow.value = false;
@@ -2329,6 +2333,14 @@ export default defineComponent({
         // Set as current knowledge base
         knowledgeBase.value = newKb;
 
+        // Update workflow progress to Step 6 (indexing)
+        workflowSteps.value[4].completed = true;
+        workflowSteps.value[4].current = false;
+        workflowSteps.value[5].current = true;
+        
+        // Start monitoring indexing status
+        startIndexingMonitor(newKb);
+
         // Clear form
         newKbName.value = "";
         newKbDescription.value = "";
@@ -2420,7 +2432,102 @@ export default defineComponent({
       }
     };
 
+    // Indexing monitoring variables
+    let indexingInterval: NodeJS.Timeout | null = null;
+    let currentKbId: string | null = null;
 
+    // Start monitoring knowledge base indexing status
+    const startIndexingMonitor = async (knowledgeBase: any) => {
+      if (!knowledgeBase?.uuid) {
+        console.warn('⚠️ No knowledge base UUID available for indexing monitor');
+        return;
+      }
+
+      // Stop any existing monitor
+      stopIndexingMonitor();
+      
+      currentKbId = knowledgeBase.uuid;
+      console.log(`📊 Starting indexing monitor for KB: ${knowledgeBase.name} (${currentKbId})`);
+      
+      // Start monitoring every 30 seconds
+      indexingInterval = setInterval(async () => {
+        await checkIndexingStatus(currentKbId);
+      }, 30000);
+      
+      // Check immediately
+      await checkIndexingStatus(currentKbId);
+    };
+
+    // Stop monitoring indexing status
+    const stopIndexingMonitor = () => {
+      if (indexingInterval) {
+        clearInterval(indexingInterval);
+        indexingInterval = null;
+        console.log('📊 Stopped indexing monitor');
+      }
+      currentKbId = null;
+    };
+
+    // Check indexing status using DigitalOcean API
+    const checkIndexingStatus = async (kbId: string) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/knowledge-bases/${kbId}/indexing-status`);
+        if (response.ok) {
+          const statusData = await response.json();
+          
+          if (statusData.success && statusData.indexingJob) {
+            const job = statusData.indexingJob;
+            const tokenCount = job.tokens_processed || job.tokens || 0;
+            const status = job.status || 'unknown';
+            
+            // Update the workflow step title with current token count
+            workflowSteps.value[5].title = `Knowledge base being indexed. This can take many minutes. Tokens=${tokenCount}`;
+            
+            console.log(`📊 Indexing status: ${status}, Tokens: ${tokenCount}`);
+            
+            // Check if indexing is complete
+            if (status === 'completed' || status === 'success') {
+              console.log(`✅ Knowledge base indexing completed! Total tokens indexed: ${tokenCount}`);
+              
+              // Mark step 6 as completed
+              workflowSteps.value[5].completed = true;
+              workflowSteps.value[5].current = false;
+              workflowSteps.value[5].title = `Knowledge base indexed and available (${tokenCount} tokens)`;
+              
+              // Stop monitoring
+              stopIndexingMonitor();
+              
+              // Show success notification
+              $q.notify({
+                type: "positive",
+                message: `Knowledge base indexing completed! ${tokenCount} tokens processed.`,
+              });
+            } else if (status === 'failed' || status || 'error') {
+              console.error(`❌ Knowledge base indexing failed: ${job.error || 'Unknown error'}`);
+              
+              // Update step title to show error
+              workflowSteps.value[5].title = `Knowledge base indexing failed. Please contact support.`;
+              
+              // Stop monitoring
+              stopIndexingMonitor();
+              
+              // Show error notification
+              $q.notify({
+                type: "negative",
+                message: "Knowledge base indexing failed. Please contact support.",
+              });
+            }
+            // If status is 'processing' or 'pending', continue monitoring
+          } else {
+            console.warn('⚠️ No indexing job data available');
+          }
+        } else {
+          console.warn(`⚠️ Failed to check indexing status: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('❌ Error checking indexing status:', error);
+      }
+    };
 
     // Helper to check if a KB is connected to the current agent
     const isKnowledgeBaseConnected = (kb: DigitalOceanKnowledgeBase) => {
@@ -2820,6 +2927,11 @@ export default defineComponent({
       }
     };
 
+    // Cleanup function for indexing monitor
+    onUnmounted(() => {
+      stopIndexingMonitor();
+    });
+
     return {
       showDialog,
       currentAgent,
@@ -2905,6 +3017,8 @@ export default defineComponent({
       cleanupBucket,
       userBucketFiles,
       checkUserBucketFiles,
+      startIndexingMonitor,
+      stopIndexingMonitor,
     };
   },
 });

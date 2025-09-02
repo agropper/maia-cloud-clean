@@ -345,10 +345,10 @@ The field name mismatch has been resolved. The system should now:
 
 ---
 
-## 🎯 STEP 6: KNOWLEDGE BASE INDEXING AND AVAILABILITY
+## 🎯 STEP 6: KNOWLEDGE BASE INDEXING MONITORING
 
 ### **Status: IMPLEMENTED** 
-**Date**: September 1, 2025 - 23:55 UTC
+**Date**: September 2, 2025 - 00:10 UTC
 
 ### **Current Workflow Status**
 - ✅ **Step 1**: User authenticated with passkey
@@ -356,14 +356,16 @@ The field name mismatch has been resolved. The system should now:
 - ✅ **Step 3**: Private AI agent created
 - ✅ **Step 4**: Choose files for knowledge base
 - ✅ **Step 5**: Create knowledge base
-- ✅ **Step 6**: Knowledge base indexed and available
+- ✅ **Step 6**: Knowledge base indexing status monitoring
 
 ### **Step 6 Implementation**
-1. **✅ KB Indexing**: Knowledge base is properly indexed by DigitalOcean through `spaces_data_source`
-2. **✅ Document Processing**: Documents are accessible through the bucket folder, no individual addition needed
-3. **✅ Availability Check**: KB is ready for AI agent use immediately after creation
-4. **✅ Workflow Completion**: Step 6 is now marked as completed
-5. **✅ Debug Cleanup**: Removed excessive debug messages for production use
+1. **✅ Automatic Workflow Advancement**: After KB creation, workflow automatically advances to Step 6
+2. **✅ Real-time Indexing Monitoring**: Monitors indexing status every 30 seconds using DigitalOcean API
+3. **✅ Dynamic Token Count Updates**: Updates workflow step title with current token count: "Tokens=<>"
+4. **✅ Indexing Status Tracking**: Monitors status (processing, completed, failed) from DigitalOcean API
+5. **✅ Automatic Completion**: Marks Step 6 as completed when indexing finishes
+6. **✅ User Notifications**: Shows success/error notifications based on indexing results
+7. **✅ Resource Cleanup**: Automatically stops monitoring when component unmounts
 
 ### **Issue Identified and Fixed**
 **Problem**: The system was automatically trying to add individual documents as separate data sources after KB creation, causing:
@@ -402,12 +404,34 @@ The field name mismatch has been resolved. The system should now:
 - `✅ Created knowledge base: ${kbName} (${kbId})`
 - `📚 Knowledge base created successfully with access to files in ${itemPath}`
 
+### **Step 6 Technical Implementation**
+
+#### **Frontend (AgentManagementDialog.vue)**
+- **Indexing Monitor**: `startIndexingMonitor()` function starts monitoring after KB creation
+- **Status Checking**: `checkIndexingStatus()` polls DigitalOcean API every 30 seconds
+- **Dynamic Updates**: Workflow step title updates with real-time token count
+- **Lifecycle Management**: `onUnmounted()` hook ensures proper cleanup
+
+#### **Backend (server.js)**
+- **New Endpoint**: `/api/knowledge-bases/:kbId/indexing-status`
+- **DigitalOcean API Integration**: Uses `genai_get_indexing_job` endpoint
+- **Data Source Discovery**: Automatically finds `spaces_data_source` for the KB
+- **Job Status Retrieval**: Gets latest indexing job status and token count
+
+#### **API Integration**
+- **Endpoint**: `GET /v2/gen-ai/knowledge_bases/{kbId}/data_sources/{dsId}/indexing_jobs`
+- **Status Values**: `processing`, `completed`, `failed`, `pending`
+- **Token Count**: `tokens_processed` field from DigitalOcean API response
+- **Real-time Updates**: 30-second polling interval for live status
+
 ### **Final Working System**
 - **KB Creation**: ✅ Works with username prefixing (`wed271-kb1`)
 - **Data Source**: ✅ Uses `spaces_data_source` pointing to user folder (`wed271/`)
 - **Document Access**: ✅ All files in the folder are automatically accessible
 - **No Errors**: ✅ Clean creation without document addition failures
 - **Clean Console**: ✅ Minimal, informative logging for production use
+- **Indexing Monitoring**: ✅ Real-time status updates with token count
+- **Workflow Automation**: ✅ Automatic progression through all steps
 
 ### **Console Output (Clean)**
 ```
@@ -416,6 +440,15 @@ The field name mismatch has been resolved. The system should now:
 ✅ Created knowledge base: wed271-kb1 (uuid)
 📚 Knowledge base created successfully with access to files in wed271/
 ```
+
+### **Step 6 Expected Behavior**
+1. **Immediate Advancement**: After KB creation, workflow automatically advances to Step 6
+2. **Real-time Updates**: Step title shows "Knowledge base being indexed. This can take many minutes. Tokens=0"
+3. **Token Count Updates**: Token count updates every 30 seconds (e.g., "Tokens=150", "Tokens=450")
+4. **Status Monitoring**: Console shows indexing progress: "📊 Indexing status: processing, Tokens: 150"
+5. **Completion**: When indexing finishes, step shows "Knowledge base indexed and available (750 tokens)"
+6. **Success Notification**: User sees success message with final token count
+7. **Workflow Complete**: Step 6 is marked as completed, entire workflow is finished
 
 ---
 
