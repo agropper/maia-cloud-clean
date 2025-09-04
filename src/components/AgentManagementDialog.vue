@@ -8,8 +8,22 @@
       </q-card-section>
 
       <q-card-section>
+        <!-- Agent Badge for All Users -->
+        <div v-if="currentAgent" class="q-mb-lg">
+          <AgentStatusIndicator
+            :agent="currentAgent"
+            :warning="warning"
+            :currentUser="localCurrentUser"
+            :currentWorkflowStep="currentWorkflowStep"
+            :showManageButton="false"
+            :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
+          />
+        </div>
+
         <!-- Workflow Progress Section - Only for authenticated users -->
         <div v-if="isAuthenticated" class="q-mb-lg">
+          <!-- Show detailed progress list only when no agent or no KBs -->
+          <div v-if="!currentAgent || !currentAgent.knowledgeBases || currentAgent.knowledgeBases.length === 0">
           <h6 class="q-mb-sm">🔐 Private AI Setup Progress</h6>
           <div class="workflow-steps">
             <div 
@@ -69,7 +83,7 @@
           </div>
 
           <!-- Choose Files Button (when agent is assigned) -->
-          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval" class="q-mt-md text-center">
+          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current" class="q-mt-md text-center">
             <q-btn
               label="CREATE KNOWLEDGE BASE"
               color="positive"
@@ -100,29 +114,22 @@
               class="q-px-lg"
             />
           </div>
+          </div>
+
+          <!-- Show manage button when agent and KBs are ready -->
+          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0" class="q-mt-md text-center">
+            <q-btn
+              label="MANAGE HEALTH RECORDS KNOWLEDGE BASES"
+              color="primary"
+              @click="handleManageKnowledgeBases"
+              icon="manage_accounts"
+              class="q-px-lg"
+              size="lg"
+            />
+          </div>
         </div>
 
-        <!-- Current Agent Summary -->
-        <div v-if="currentAgent" class="q-mb-md">
-          <q-card flat bordered class="agent-summary-card">
-            <q-card-section class="q-pa-sm">
-              <div class="row items-center">
-                <q-icon 
-                  :name="getStatusIcon(currentAgent)" 
-                  :color="getStatusColor(currentAgent)" 
-                  size="1.5rem"
-                  class="q-mr-sm"
-                />
-                <div class="agent-summary-text">
-                  <div class="text-body2">
-                    {{ getAgentName(currentAgent) }}
-                  </div>
-                  <div class="text-caption text-grey">{{ getStatusText(currentAgent) }}</div>
-                </div>
-              </div>
-            </q-card-section>
-          </q-card>
-        </div>
+
 
         <!-- Agent List -->
         <div v-if="availableAgents.length > 0" class="q-mb-md">
@@ -271,7 +278,7 @@
                     <q-item class="kb-item">
                       <q-item-section>
                         <q-item-label>
-                          {{ kb.name }}
+                          {{ kb.name || 'NO NAME' }} ({{ kb.uuid }})
                           <!-- Protection Status Icon -->
                           <q-icon
                             v-if="kb.isProtected"
@@ -895,6 +902,7 @@ import {
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import KBOwnershipTransferModal from "./KBOwnershipTransferModal.vue";
+import AgentStatusIndicator from "./AgentStatusIndicator.vue";
 import type { UploadedFile } from "../types";
 
 export interface DigitalOceanAgent {
@@ -939,6 +947,7 @@ export default defineComponent({
     AgentCreationWizard,
     PasskeyAuthDialog,
     KBOwnershipTransferModal,
+    AgentStatusIndicator,
     QCheckbox,
     QChip,
     QTooltip,
@@ -976,6 +985,8 @@ export default defineComponent({
       get: () => props.modelValue,
       set: (value) => emit("update:modelValue", value),
     });
+
+
 
     // Agent state
     const currentAgent = ref<DigitalOceanAgent | null>(null);
@@ -1102,7 +1113,7 @@ export default defineComponent({
         current: false
       },
       {
-        title: "Knowledge base being indexed. This can take many minutes. Tokens=0",
+        title: "Knowledge base being indexed. This can take many minutes.",
         helpTitle: "Indexing in Progress",
         helpDescription: "Your knowledge base is being indexed for AI processing. This can take several minutes.",
         helpDetails: "The system will automatically check indexing status and update token count every 30 seconds.",
@@ -1110,6 +1121,12 @@ export default defineComponent({
         current: false
       }
     ]);
+
+    // Get current workflow step for Agent Badge display
+    const currentWorkflowStep = computed(() => {
+      const currentStep = workflowSteps.value.find(step => step.current);
+      return currentStep ? currentStep.title : '';
+    });
 
     // Check if user is already authenticated from passkey system
     const checkAuthenticationStatus = async () => {
@@ -1240,7 +1257,7 @@ export default defineComponent({
       isUpdatingWorkflow.value = true;
       
       try {
-              // Reset all steps
+      // Reset all steps
       workflowSteps.value.forEach(step => {
         step.completed = false;
         step.current = false;
@@ -1401,7 +1418,8 @@ export default defineComponent({
         if (!isAuthenticated.value) {
           // Load current agent info from legacy system
           const currentAgentResponse = await fetch(
-            `${API_BASE_URL}/current-agent`
+            `${API_BASE_URL}/current-agent`,
+            { credentials: 'include' }
           );
           if (!currentAgentResponse.ok) {
             throw new Error("Failed to load current agent");
@@ -1436,12 +1454,35 @@ export default defineComponent({
           if (localCurrentUser.value?.userId) {
             try {
               const assignedAgentResponse = await fetch(
-                `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`
+                `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
+                { credentials: 'include' }
               );
               if (assignedAgentResponse.ok) {
                 const assignedAgentData = await assignedAgentResponse.json();
                 if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
-                  // Create a mock agent object for the assigned agent
+                  // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
+                  const currentAgentResponse = await fetch(
+                    `${API_BASE_URL}/current-agent`,
+                    { credentials: 'include' }
+                  );
+                  if (currentAgentResponse.ok) {
+                    const currentAgentData = await currentAgentResponse.json();
+                    if (currentAgentData.agent) {
+                      currentAgent.value = currentAgentData.agent;
+                      console.log(
+                        `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
+                      );
+                      
+                      // Handle warnings from the API
+                      if (currentAgentData.warning) {
+                        console.warn(currentAgentData.warning);
+                      }
+                    } else {
+                      currentAgent.value = null;
+                      console.log("🤖 No agent configured for authenticated user");
+                    }
+                  } else {
+                    // Fallback to mock agent if API fails
                   currentAgent.value = {
                     id: assignedAgentData.assignedAgentId,
                     name: assignedAgentData.assignedAgentName,
@@ -1449,11 +1490,14 @@ export default defineComponent({
                     type: 'assigned',
                     assignedAt: assignedAgentData.agentAssignedAt
                   };
+                    console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
+                  }
+                  
                   // Only log once per session to prevent duplicates
-        if (!hasLoggedAgentAssignment.value) {
-          console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
-          hasLoggedAgentAssignment.value = true;
-        }
+                  if (!hasLoggedAgentAssignment.value) {
+                    console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
+                    hasLoggedAgentAssignment.value = true;
+                  }
                   
                   // Update workflow progress - agent is created
                   await updateWorkflowProgressForAgent();
@@ -1463,10 +1507,14 @@ export default defineComponent({
                 }
               } else {
                 currentAgent.value = null;
-                console.log("🔐 Failed to check assigned agent");
+                if (assignedAgentResponse.status === 429) {
+                  console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
+                } else {
+                  console.log("🔐 Failed to check assigned agent:", assignedAgentResponse.status, assignedAgentResponse.statusText);
+                }
               }
             } catch (error) {
-              console.warn("Failed to check assigned agent:", error);
+              console.warn("🔐 Failed to check assigned agent:", error);
               currentAgent.value = null;
             }
           } else {
@@ -1501,14 +1549,15 @@ export default defineComponent({
 
         // Load all knowledge bases for the KB list
         try {
-          // For authenticated users, only show KBs if they have been approved
-          // For unauthenticated users (legacy), show all KBs
-          if (!isAuthenticated.value) {
+          // For authenticated users, show ONLY their own KBs (no shared KBs)
+          // For unauthenticated users (legacy), show all available KBs
+          if (isAuthenticated.value) {
+            const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId;
             const knowledgeBasesResponse = await fetch(
-              `${API_BASE_URL}/knowledge-bases`
+              `${API_BASE_URL}/knowledge-bases?user=${currentUsername}`
             );
             if (knowledgeBasesResponse.ok) {
-              const knowledgeBases: DigitalOceanKnowledgeBase[] =
+              const userKnowledgeBases: DigitalOceanKnowledgeBase[] =
                 await knowledgeBasesResponse.json();
 
               // Get all connected KBs from the current agent
@@ -1518,8 +1567,8 @@ export default defineComponent({
                   ? [currentAgent.value.knowledgeBase]
                   : []);
 
-              // Combine available KBs with connected KBs, avoiding duplicates
-              const allKBs = [...knowledgeBases];
+              // Combine user KBs with connected KBs, avoiding duplicates
+              const allKBs = [...userKnowledgeBases];
               connectedKBs.forEach((connectedKB) => {
                 if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
                   allKBs.push(connectedKB);
@@ -1527,17 +1576,34 @@ export default defineComponent({
               });
 
               availableKnowledgeBases.value = allKBs;
+              console.log(`🔐 Loaded ${userKnowledgeBases.length} knowledge bases for authenticated user ${currentUsername}:`, allKBs);
             }
           } else {
-            // Authenticated user - check if they have been approved for KBs
-            // For now, we'll show no KBs until admin approval
-            availableKnowledgeBases.value = [];
-            // Only log if user doesn't have files ready for KB creation
-            // Check bucket files directly to avoid timing issues
-            const bucketFiles = await checkUserBucketFiles();
-            if (!hasLoggedNoKBs.value && !bucketFiles.length) {
-              console.log(`🔐 No existing knowledge bases found - ready to create new one`);
-              hasLoggedNoKBs.value = true;
+            // Unauthenticated user - show all available KBs (legacy behavior)
+            const knowledgeBasesResponse = await fetch(
+              `${API_BASE_URL}/knowledge-bases`
+            );
+            if (knowledgeBasesResponse.ok) {
+              const allKnowledgeBases: DigitalOceanKnowledgeBase[] =
+                await knowledgeBasesResponse.json();
+
+              // Get all connected KBs from the current agent
+              const connectedKBs =
+                currentAgent.value?.knowledgeBases ||
+                (currentAgent.value?.knowledgeBase
+                  ? [currentAgent.value.knowledgeBase]
+                  : []);
+
+              // Combine all KBs with connected KBs, avoiding duplicates
+              const allKBs = [...allKnowledgeBases];
+              connectedKBs.forEach((connectedKB) => {
+                if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
+                  allKBs.push(connectedKB);
+                }
+              });
+
+              availableKnowledgeBases.value = allKBs;
+              console.log(`🔐 Loaded ${allKnowledgeBases.length} knowledge bases for unauthenticated user (legacy mode):`, allKBs);
             }
           }
         } catch (kbError) {
@@ -1764,8 +1830,8 @@ export default defineComponent({
     // Load agent info when dialog opens
     const onDialogOpen = async () => {
         console.log(`🔐 Dialog opening - checking authentication status...`);
-        await checkAuthenticationStatus();
-        await loadAgentInfo();
+      await checkAuthenticationStatus();
+      await loadAgentInfo();
         // Display current agent information (only if not already logged)
         if (currentAgent.value && !hasLoggedAgentAssignment.value) {
           console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
@@ -1781,6 +1847,11 @@ export default defineComponent({
         }
         await checkAuthenticationStatus();
         await updateWorkflowProgress(); // Update workflow progress when user changes
+        
+        // Refresh knowledge bases when user changes
+        if (newUser.userId) {
+          await refreshKnowledgeBases();
+        }
       }
     }, { immediate: true });
 
@@ -1862,7 +1933,7 @@ export default defineComponent({
 
         // CRITICAL: Verify the switch actually worked by fetching the current agent state
 
-        const verifyResponse = await fetch(`${API_BASE_URL}/current-agent`);
+        const verifyResponse = await fetch(`${API_BASE_URL}/current-agent`, { credentials: 'include' });
         if (!verifyResponse.ok) {
           throw new Error("Failed to verify agent state after KB switch");
         }
@@ -1925,15 +1996,24 @@ export default defineComponent({
     // Refresh knowledge bases list
     const refreshKnowledgeBases = async () => {
       try {
-        const kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+        // For authenticated users, fetch user-specific KBs
+        // For unauthenticated users, fetch all KBs
+        let kbResponse;
+        if (isAuthenticated.value && localCurrentUser.value?.userId) {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases?user=${localCurrentUser.value.userId}`);
+        } else {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+        }
+        
         if (kbResponse.ok) {
           const knowledgeBases: DigitalOceanKnowledgeBase[] =
             await kbResponse.json();
 
           // Get all connected KBs from the current agent
-          const connectedKBs = currentAgent.value?.knowledgeBase
+          const connectedKBs = currentAgent.value?.knowledgeBases ||
+            (currentAgent.value?.knowledgeBase
             ? [currentAgent.value.knowledgeBase]
-            : [];
+              : []);
 
           // Combine available KBs with connected KBs, avoiding duplicates
           const allKBs = [...knowledgeBases];
@@ -1945,7 +2025,7 @@ export default defineComponent({
 
           availableKnowledgeBases.value = allKBs;
           console.log(
-            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected)`
+            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected) for user ${localCurrentUser.value?.userId || 'Unknown User'}`
           );
 
           // Update the current knowledge base to reflect the switch
@@ -2493,6 +2573,7 @@ export default defineComponent({
     // Indexing monitoring variables
     let indexingInterval: NodeJS.Timeout | null = null;
     let currentKbId: string | null = null;
+    let indexingStartTime: number = 0;
 
     // Start monitoring knowledge base indexing status
     const startIndexingMonitor = async (knowledgeBase: any) => {
@@ -2515,10 +2596,13 @@ export default defineComponent({
       const kbName = knowledgeBase.name || knowledgeBase.knowledge_base?.name || 'Unknown KB';
       console.log(`📊 Starting indexing monitor for KB: ${kbName} (${currentKbId})`);
       
-      // Start monitoring every 30 seconds
+      // Record start time for timing measurement
+      indexingStartTime = Date.now();
+      
+      // Start monitoring every 10 seconds
       indexingInterval = setInterval(async () => {
         await checkIndexingStatus(currentKbId);
-      }, 30000);
+      }, 10000);
       
       // Check immediately
       await checkIndexingStatus(currentKbId);
@@ -2629,32 +2713,50 @@ export default defineComponent({
           
           if (statusData.success && statusData.indexingJob) {
             const job = statusData.indexingJob;
-            const tokenCount = job.tokens_processed || job.tokens || 0;
             const status = job.status || 'unknown';
+            const phase = job.phase || 'unknown';
             
-            // Update the workflow step title with current token count
-            workflowSteps.value[5].title = `Knowledge base being indexed. This can take many minutes. Tokens=${tokenCount}`;
+            // Update the workflow step title with current status and elapsed time
+            const elapsedSeconds = Math.round((Date.now() - indexingStartTime) / 1000);
+            workflowSteps.value[5].title = `Knowledge base being indexed. Status: ${status}, Phase: ${phase} (${elapsedSeconds}s)`;
             
-            console.log(`📊 Indexing status: ${status}, Tokens: ${tokenCount}`);
+            // Hide the CREATE KNOWLEDGE BASE button once indexing starts
+            if (status === 'INDEX_JOB_STATUS_IN_PROGRESS' || status === 'INDEX_JOB_STATUS_PENDING') {
+              showCreateKbDialog.value = false;
+            }
             
-            // Check if indexing is complete
-            if (status === 'completed' || status === 'success') {
-              console.log(`✅ Knowledge base indexing completed! Total tokens indexed: ${tokenCount}`);
+            console.log(`📊 Indexing status: ${status}, Phase: ${phase} - Updated monitoring logic`);
+            
+            // Debug: Log the exact status values to help troubleshoot
+            console.log(`🔍 Debug - Status: "${status}", Phase: "${phase}", Expected: "INDEX_JOB_STATUS_COMPLETED"`);
+            
+            // Check if indexing is complete (check both status and phase)
+            if (status === 'INDEX_JOB_STATUS_COMPLETED' || status === 'completed' || status === 'success' || 
+                phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
+              const completionTime = Date.now();
+              const indexingDuration = Math.round((completionTime - indexingStartTime) / 1000);
+              console.log(`✅ Knowledge base indexing completed in ${indexingDuration} seconds!`);
               
               // Mark step 6 as completed
               workflowSteps.value[5].completed = true;
               workflowSteps.value[5].current = false;
-              workflowSteps.value[5].title = `Knowledge base indexed and available (${tokenCount} tokens)`;
+              workflowSteps.value[5].title = `Knowledge base indexed and available`;
               
               // Stop monitoring
               stopIndexingMonitor();
               
+              // Remove the CANCEL button
+              showCancelIndexingModal.value = false;
+              
               // Show success notification
               $q.notify({
                 type: "positive",
-                message: `Knowledge base indexing completed! ${tokenCount} tokens processed.`,
+                message: `Knowledge base indexing completed successfully in ${indexingDuration} seconds!`,
               });
-            } else if (status === 'failed' || status || 'error') {
+              
+              // Attach the knowledge base to the current agent
+              await attachKnowledgeBaseToAgent(kbId, job);
+            } else if (status === 'INDEX_JOB_STATUS_FAILED' || status === 'failed' || status === 'error') {
               console.error(`❌ Knowledge base indexing failed: ${job.error || 'Unknown error'}`);
               
               // Update step title to show error
@@ -2669,7 +2771,7 @@ export default defineComponent({
                 message: "Knowledge base indexing failed. Please contact support.",
               });
             }
-            // If status is 'processing' or 'pending', continue monitoring
+            // If status is 'INDEX_JOB_STATUS_IN_PROGRESS' or 'INDEX_JOB_STATUS_PENDING', continue monitoring
           } else if (statusData.needsIndexing) {
             console.log('📊 No indexing job found - indexing needs to be started');
             
@@ -2696,6 +2798,86 @@ export default defineComponent({
         }
       } catch (error) {
         console.error('❌ Error checking indexing status:', error);
+      }
+    };
+
+    // Refresh agent data to get updated knowledge base list
+    const refreshAgentData = async () => {
+      try {
+        // Refresh the current agent data using the current-agent endpoint
+        const response = await fetch(`${API_BASE_URL}/current-agent`, { credentials: 'include' });
+        if (response.ok) {
+          const result = await response.json();
+          if (result.agent) {
+            currentAgent.value = result.agent;
+            console.log('✅ Agent data refreshed with updated knowledge bases:', result.agent.knowledgeBases?.length || 0, 'KBs');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error refreshing agent data:', error);
+      }
+    };
+
+    // Attach knowledge base to current agent
+    const attachKnowledgeBaseToAgent = async (kbId: string, jobStatus: any) => {
+      try {
+        if (!currentAgent.value) {
+          console.warn('⚠️ No current agent to attach KB to');
+          return;
+        }
+        
+        console.log(`🔍 Debug - currentAgent.value:`, currentAgent.value);
+        console.log(`🔍 Debug - currentAgent.value?.uuid:`, currentAgent.value?.uuid);
+        console.log(`🔍 Debug - currentAgent.value?.id:`, currentAgent.value?.id);
+        
+        if (!currentAgent.value.uuid && !currentAgent.value.id) {
+          console.warn('⚠️ Current agent has no UUID or ID');
+          return;
+        }
+        
+        const agentId = currentAgent.value.uuid || currentAgent.value.id;
+        console.log(`🔗 Attaching knowledge base ${kbId} to agent ${agentId}`);
+        
+        // Call the backend to attach the KB to the agent
+        const response = await fetch(`${API_BASE_URL}/agents/${agentId}/knowledge-bases`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            knowledgeBaseId: kbId,
+            action: 'attach'
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`✅ Knowledge base attached to agent successfully:`, result);
+          
+          // Refresh agent data to show updated KB list
+          await refreshAgentData();
+          
+          // Refresh the agent data to show the new KB
+          emit("refresh-agent-data");
+          
+          // Show success notification
+          $q.notify({
+            type: "positive",
+            message: "Knowledge base attached to agent successfully!",
+          });
+        } else {
+          console.error(`❌ Failed to attach KB to agent: ${response.status}`);
+          $q.notify({
+            type: "negative",
+            message: "Failed to attach knowledge base to agent",
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error attaching KB to agent:', error);
+        $q.notify({
+          type: "negative",
+          message: "Error attaching knowledge base to agent",
+        });
       }
     };
 
@@ -2759,10 +2941,9 @@ export default defineComponent({
           message: `Knowledge base "${kb.name}" detached from agent.`,
         });
 
-        // Refresh the current agent data to get updated KB associations
-        await loadAgentInfo();
-        // Also refresh the knowledge base list
-        await refreshKnowledgeBases();
+        // Refresh agent data to show updated KB list
+        await refreshAgentData();
+        
         // Notify parent component to refresh agent data
         emit("refresh-agent-data");
       } catch (error: any) {
@@ -2851,10 +3032,9 @@ export default defineComponent({
           });
         }
 
-        // Refresh the current agent data to get updated KB associations
-        await loadAgentInfo();
-        // Also refresh the knowledge base list
-        await refreshKnowledgeBases();
+        // Refresh agent data to show updated KB list
+        await refreshAgentData();
+        
         // Notify parent component to refresh agent data
         emit("refresh-agent-data");
       } catch (error: any) {
@@ -2957,81 +3137,7 @@ export default defineComponent({
       emit("update:modelValue", false);
     };
 
-    // Helper functions for agent summary display
-    const getStatusIcon = (agent: DigitalOceanAgent) => {
-      if (!agent) return 'smart_toy';
-      
-      // Handle assigned agent type
-      if (agent.type === 'assigned') {
-        return 'check_circle';
-      }
-      
-      switch (agent.status) {
-        case 'active':
-          return 'check_circle';
-        case 'creating':
-          return 'hourglass_empty';
-        case 'error':
-          return 'error';
-        default:
-          return 'smart_toy';
-      }
-    };
 
-    const getStatusColor = (agent: DigitalOceanAgent) => {
-      if (!agent) return 'grey';
-      
-      // Handle assigned agent type
-      if (agent.type === 'assigned') {
-        return 'positive';
-      }
-      
-      switch (agent.status) {
-        case 'active':
-          return 'positive';
-        case 'creating':
-          return 'warning';
-        case 'error':
-          return 'negative';
-        default:
-          return 'grey';
-      }
-    };
-
-    const getAgentName = (agent: DigitalOceanAgent) => {
-      if (!agent) return 'No Agent Configured';
-      const userName = localCurrentUser.value?.displayName || localCurrentUser.value?.userId || 'Unknown User';
-      return `Personal AI ${agent.name} for User: ${userName}`;
-    };
-
-    const getStatusText = (agent: DigitalOceanAgent) => {
-      if (!agent) return 'Create an agent to get started';
-      
-      // Handle assigned agent type
-      if (agent.type === 'assigned') {
-        return `Assigned Agent • Ready for knowledge base creation`;
-      }
-      
-      let text = `Status: ${agent.status} • Model: ${agent.model}`;
-      
-      // Add knowledge base information if available
-      if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
-        const kbCount = agent.knowledgeBases.length;
-        const primaryKB = agent.knowledgeBases[0];
-        const updatedDate = new Date(primaryKB.updated_at).toLocaleDateString();
-        
-        if (kbCount === 1) {
-          text += ` • Knowledge Base: ${primaryKB.name} (Updated: ${updatedDate})`;
-        } else {
-          text += ` • Knowledge Bases: ${kbCount} attached (Primary: ${primaryKB.name})`;
-        }
-      } else if (agent.knowledgeBase) {
-        const updatedDate = new Date(agent.knowledgeBase.updated_at).toLocaleDateString();
-        text += ` • Knowledge Base: ${agent.knowledgeBase.name} (Updated: ${updatedDate})`;
-      }
-      
-      return text;
-    };
 
     // Request admin approval for private AI and knowledge base access
     const requestAdminApproval = async () => {
@@ -3102,6 +3208,19 @@ export default defineComponent({
       stopIndexingMonitor();
     });
 
+    // Handle manage knowledge bases button click
+    const handleManageKnowledgeBases = () => {
+      // Start a new progress sequence with Step 4 (CHOOSE FILES FOR KNOWLEDGE BASE)
+      // Reset workflow to step 4
+      workflowSteps.value.forEach((step, index) => {
+        step.completed = index < 3; // Steps 1-3 are completed
+        step.current = index === 3; // Step 4 is current
+      });
+      
+      // Show the choose files dialog
+      showChooseFilesDialog.value = true;
+    };
+
     return {
       showDialog,
       currentAgent,
@@ -3165,10 +3284,6 @@ export default defineComponent({
       warningMessage,
       handleClose,
       handleWarningConfirmed,
-      getStatusIcon,
-      getStatusColor,
-      getAgentName,
-      getStatusText,
       showAdminApprovalDialog,
       isRequestingApproval,
       userEmail,
@@ -3193,7 +3308,13 @@ export default defineComponent({
       cancelIndexing,
       showCancelIndexingModal,
       isCancellingIndexing,
+      attachKnowledgeBaseToAgent,
+      refreshAgentData,
+      currentWorkflowStep,
+      handleManageKnowledgeBases,
     };
+
+
   },
 });
 </script>

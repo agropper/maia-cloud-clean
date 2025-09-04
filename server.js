@@ -53,9 +53,21 @@ const initializeDatabase = async () => {
     // Test the connection
     const connected = await couchDBClient.testConnection();
     if (connected) {
-      // Initialize database
+      // Initialize main database
       await couchDBClient.initializeDatabase();
       await couchDBClient.createShareIdView(); // Create the share ID view
+      
+      // Create knowledge base protection database
+      try {
+        await couchDBClient.createDatabase('maia_knowledge_bases');
+        console.log('✅ Created maia_knowledge_bases database');
+      } catch (error) {
+        if (error.statusCode === 412) {
+          console.log('✅ maia_knowledge_bases database already exists');
+        } else {
+          console.warn('⚠️ Could not create maia_knowledge_bases database:', error.message);
+        }
+      }
       
       // Get service info
       const serviceInfo = couchDBClient.getServiceInfo();
@@ -2031,6 +2043,48 @@ app.get('/api/agents', async (req, res) => {
   }
 });
 
+// Get specific agent by ID
+app.get('/api/agents/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Get agent details from DigitalOcean API
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+    
+    if (!agentData) {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+    
+    // Extract knowledge base information
+    let connectedKnowledgeBases = [];
+    if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
+      connectedKnowledgeBases = agentData.knowledge_bases;
+    }
+    
+    // Transform agent data for frontend
+    const transformedAgent = {
+      id: agentData.uuid,
+      name: agentData.name,
+      description: agentData.instruction || '',
+      model: agentData.model?.name || 'Unknown',
+      status: agentData.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
+      instructions: agentData.instruction || '',
+      uuid: agentData.uuid,
+      deployment: agentData.deployment,
+      knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
+      knowledgeBases: connectedKnowledgeBases, // Add all connected KBs
+      created_at: agentData.created_at,
+      updated_at: agentData.updated_at
+    };
+    
+    res.json(transformedAgent);
+  } catch (error) {
+    console.error('❌ Get agent error:', error);
+    res.status(500).json({ message: `Failed to get agent: ${error.message}` });
+  }
+});
+
 // Test route to check if API routes are working
 app.get('/api/test', (req, res) => {
   console.log('🔍 /api/test route hit');
@@ -2043,8 +2097,31 @@ app.get('/api/current-agent', async (req, res) => {
   try {
     // Get current user from session if available
     const currentUser = req.session?.userId || 'Unknown User';
+    console.log(`🔍 [current-agent] Current user: ${currentUser}, Session:`, req.session);
     
-
+    // For authenticated users, check if they have an assigned agent
+    let agentId = null;
+    if (currentUser !== 'Unknown User') {
+      try {
+        console.log(`🔍 [current-agent] Checking assigned agent for user: ${currentUser}`);
+        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
+        if (assignedAgentResponse.ok) {
+          const assignedAgentData = await assignedAgentResponse.json();
+          if (assignedAgentData.assignedAgentId) {
+            agentId = assignedAgentData.assignedAgentId;
+            console.log(`🔐 Using assigned agent for user ${currentUser}: ${assignedAgentData.assignedAgentName} (${agentId})`);
+          } else {
+            console.log(`🔍 [current-agent] No assigned agent for user ${currentUser}`);
+          }
+        } else {
+          console.log(`🔍 [current-agent] Failed to get assigned agent for user ${currentUser}: ${assignedAgentResponse.status}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to check assigned agent for user ${currentUser}:`, error.message);
+      }
+    } else {
+      console.log(`🔍 [current-agent] Using legacy agent lookup for unauthenticated user`);
+    }
     
     // Get group chat count for current user
     let groupChatCount = 0;
@@ -2071,25 +2148,28 @@ app.get('/api/current-agent', async (req, res) => {
       return res.json({ agent: null });
     }
 
-    // Extract agent UUID from the endpoint URL
-    const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
-    // console.log(`🔍 Endpoint URL: ${endpointUrl}`);
-    
-    // Get all agents and find the one with matching deployment URL
-    const agentsResponse = await doRequest('/v2/gen-ai/agents');
-    const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
-    
-    // Find the agent whose deployment URL matches our endpoint
-    const matchingAgent = agents.find(agent => 
-      agent.deployment?.url === endpointUrl.replace('/api/v1', '')
-    );
-    
-    if (!matchingAgent) {
-      console.log('❌ No agent found with matching deployment URL');
-      return res.json({ agent: null, message: 'No agent found with this deployment URL' });
+    // Use assigned agent ID if available, otherwise find agent by endpoint URL
+    if (!agentId) {
+      // Extract agent UUID from the endpoint URL (legacy behavior for unauthenticated users)
+      const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
+      // console.log(`🔍 Endpoint URL: ${endpointUrl}`);
+      
+      // Get all agents and find the one with matching deployment URL
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      // Find the agent whose deployment URL matches our endpoint
+      const matchingAgent = agents.find(agent => 
+        agent.deployment?.url === endpointUrl.replace('/api/v1', '')
+      );
+      
+      if (!matchingAgent) {
+        console.log('❌ No agent found with matching deployment URL');
+        return res.json({ agent: null, message: 'No agent found with this deployment URL' });
+      }
+      
+      agentId = matchingAgent.uuid;
     }
-    
-    const agentId = matchingAgent.uuid;
     // console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
     
     // Get agent details including associated knowledge bases
@@ -2098,17 +2178,20 @@ app.get('/api/current-agent', async (req, res) => {
     
     // console.log(`📋 Agent details from API:`, JSON.stringify(agentData, null, 2));
     
-    // Extract knowledge base information
+    // Extract knowledge base information - SHOW ALL KBs ATTACHED TO AGENT (DigitalOcean API is source of truth)
     let connectedKnowledgeBases = [];
     let warning = null;
     
     if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
-      if (agentData.knowledge_bases.length > 1) {
-        // Multiple KBs detected - this is a safety issue
-        warning = `⚠️ WARNING: Agent has ${agentData.knowledge_bases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please check the DigitalOcean dashboard and ensure only one KB is attached.`;
-      }
+      // Agent Badge shows ALL KBs attached to the agent (no user filtering)
+      connectedKnowledgeBases = agentData.knowledge_bases;
       
-      connectedKnowledgeBases = agentData.knowledge_bases; // Return ALL connected KBs
+      console.log(`📚 Agent Badge: Showing ${connectedKnowledgeBases.length} KBs attached to agent (DigitalOcean API source of truth)`);
+      
+      // Warning about multiple KBs (regardless of user permissions)
+      if (connectedKnowledgeBases.length > 1) {
+        warning = `⚠️ WARNING: This agent has ${connectedKnowledgeBases.length} knowledge bases attached. This can cause data contamination and hallucinations. Please ensure only one KB is attached.`;
+      }
     } else {
       console.log(`📚 No knowledge bases associated with agent`);
     }
@@ -2147,6 +2230,67 @@ app.get('/api/current-agent', async (req, res) => {
   } catch (error) {
     console.error('❌ Get current agent error:', error);
     res.status(500).json({ message: `Failed to get current agent: ${error.message}` });
+  }
+});
+
+// Attach knowledge base to agent (general route - must come before specific routes)
+app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { knowledgeBaseId, action } = req.body;
+    
+    if (!knowledgeBaseId) {
+      return res.status(400).json({ message: 'knowledgeBaseId is required' });
+    }
+    
+    console.log(`🔗 Attaching knowledge base ${knowledgeBaseId} to agent ${agentId}`);
+    
+    // Use the DigitalOcean API to attach the knowledge base to the agent
+    const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${knowledgeBaseId}`, {
+      method: 'POST'
+    });
+    
+    console.log(`✅ Knowledge base attached to agent successfully:`, result);
+    
+    // Wait a moment for the API to process
+    console.log(`⏳ Waiting 2 seconds for API to process attachment...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Verify the attachment by getting the agent details
+    console.log(`🔍 Verifying attachment for agent ${agentId}`);
+    const agentDetails = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
+    const attachedKBs = agentData.knowledge_bases || [];
+    
+    console.log(`📚 Agent now has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid || kb.id));
+    
+    const isAttached = attachedKBs.some(kb => (kb.uuid || kb.id) === knowledgeBaseId);
+    if (isAttached) {
+      console.log(`✅ Knowledge base ${knowledgeBaseId} successfully attached to agent ${agentId}`);
+      res.json({
+        success: true,
+        message: 'Knowledge base attached successfully',
+        result: { agent: agentData },
+        verification: {
+          attached: true,
+          knowledgeBases: attachedKBs
+        }
+      });
+    } else {
+      console.log(`❌ Knowledge base ${knowledgeBaseId} failed to attach to agent ${agentId}`);
+      res.json({
+        success: false,
+        message: 'Failed to attach knowledge base - verification failed',
+        result: { agent: agentData },
+        verification: {
+          attached: false,
+          knowledgeBases: attachedKBs
+        }
+      });
+    }
+  } catch (error) {
+    console.error('❌ Attach KB error:', error);
+    res.status(500).json({ message: `Failed to attach knowledge base: ${error.message}` });
   }
 });
 
@@ -2607,6 +2751,9 @@ app.delete('/api/agents/:agentId', async (req, res) => {
 // Unified KB list with protection status
 app.get('/api/knowledge-bases', async (req, res) => {
   try {
+    // Get the current authenticated user from the request
+    const currentUser = req.headers['x-current-user'] || req.query.user;
+    
     // 1. Fetch KBs from DigitalOcean
     const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
     const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []).map(kb => ({
@@ -2638,7 +2785,55 @@ app.get('/api/knowledge-bases', async (req, res) => {
       };
     });
 
-    res.json(mergedKBs);
+    // 4. Filter KBs by user ownership if a user is specified
+    let filteredKBs = mergedKBs;
+    if (currentUser) {
+      console.log(`🔐 Filtering KBs for user: ${currentUser}`);
+      console.log(`🔐 Total KBs before filtering: ${mergedKBs.length}`);
+      
+      // For authenticated users, show ONLY their own KBs (no shared KBs)
+      filteredKBs = mergedKBs.filter(kb => {
+        const hasOwner = kb.owner === currentUser;
+        const hasNamePrefix = kb.name && kb.name.startsWith(`${currentUser}-`);
+        const matches = hasOwner || hasNamePrefix;
+        
+        if (matches) {
+          console.log(`🔐 KB ${kb.name} (${kb.uuid}) matches user ${currentUser} - Owner: ${kb.owner || 'user-prefixed'}`);
+        }
+        
+        return matches;
+      });
+      
+      console.log(`🔐 Filtered KBs for user ${currentUser}: ${filteredKBs.length} of ${mergedKBs.length} total`);
+    } else {
+      // For unauthenticated users, filter out protected KBs (those with username prefixes or explicit owners)
+      console.log(`🔐 Filtering KBs for unauthenticated user - hiding protected KBs`);
+      console.log(`🔐 Total KBs before filtering: ${mergedKBs.length}`);
+      
+      filteredKBs = mergedKBs.filter(kb => {
+        // Check if KB has a username prefix (e.g., "wed271-kb1", "agropper-kb1")
+        // Only consider it a username prefix if it's a short alphanumeric string followed by a dash
+        // This excludes names like "casandra-fhir-download-json-06162025" which are descriptive names
+        const hasUsernamePrefix = kb.name && /^[a-zA-Z0-9]{3,8}-[a-zA-Z0-9]+$/.test(kb.name);
+        // Check if KB has an explicit owner
+        const hasExplicitOwner = kb.owner && kb.owner !== null;
+        // Check if KB is marked as protected
+        const isProtected = kb.isProtected === true;
+        
+        // Show KB only if it's NOT protected (no username prefix, no explicit owner, not marked protected)
+        const shouldShow = !hasUsernamePrefix && !hasExplicitOwner && !isProtected;
+        
+        if (!shouldShow) {
+          console.log(`🔐 KB ${kb.name} (${kb.uuid}) is PROTECTED - Owner: ${kb.owner || 'username-prefixed'}, Protected: ${isProtected}`);
+        }
+        
+        return shouldShow;
+      });
+      
+      console.log(`🔐 Filtered KBs for unauthenticated user: ${filteredKBs.length} of ${mergedKBs.length} total (protected KBs hidden)`);
+    }
+
+    res.json(filteredKBs);
   } catch (error) {
     console.error('❌ Failed to fetch merged knowledge bases:', error);
     res.status(500).json({ error: 'Failed to fetch knowledge bases' });
@@ -2716,10 +2911,9 @@ app.post('/api/knowledge-bases', async (req, res) => {
     // Convert documents array to document_uuids if needed
     const document_uuids = documents ? documents.map(doc => doc.id || doc.bucketKey) : [];
     
-    // Use username-prefixed KB name for better organization
-    // If username is provided, prepend it to the KB name
+    // Use username-prefixed KB name for better organization if username is provided
     const kbName = username ? `${username}-${name}` : name;
-    const itemPath = username ? `${username}/` : "wed271/"; // Default fallback
+    const itemPath = username ? `${username}/` : "shared/";
     
 
     
@@ -2783,8 +2977,43 @@ app.post('/api/knowledge-bases', async (req, res) => {
       body: JSON.stringify(kbData)
     });
 
-    const kbId = knowledgeBase.data?.uuid || knowledgeBase.uuid;
+    const kbId = knowledgeBase.knowledge_base?.uuid || knowledgeBase.data?.uuid || knowledgeBase.uuid;
     console.log(`✅ Created knowledge base: ${kbName} (${kbId})`);
+
+    // Store user ownership information in Cloudant
+    if (kbId) {
+      try {
+        console.log(`🔐 Attempting to store ownership info for KB ${kbId} (${kbName})`);
+        console.log(`🔐 Username: ${username}, isProtected: ${!!username}`);
+        
+        const ownershipDoc = {
+          _id: `kb_${kbId}`,
+          kbId: kbId,
+          kbName: kbName,
+          owner: username || null, // null for shared KBs
+          createdAt: new Date().toISOString(),
+          isProtected: !!username, // Only protected if username is provided
+          itemPath: itemPath
+        };
+        
+        console.log(`🔐 Ownership document:`, JSON.stringify(ownershipDoc, null, 2));
+        
+        const result = await couchDBClient.saveDocument('maia_knowledge_bases', ownershipDoc);
+        console.log(`🔐 Save result:`, result);
+        
+        if (username) {
+          console.log(`✅ Stored ownership info for KB ${kbId} owned by ${username}`);
+        } else {
+          console.log(`✅ Stored ownership info for KB ${kbId} as shared KB`);
+        }
+      } catch (ownershipError) {
+        console.error(`❌ Failed to store ownership info for KB ${kbId}:`, ownershipError);
+        console.error(`❌ Error details:`, ownershipError.stack);
+        // Don't fail the request if ownership storage fails
+      }
+    } else {
+      console.warn(`⚠️ Cannot store ownership info - KB ID is undefined`);
+    }
 
     // Note: Documents are already accessible through the spaces_data_source
     // No need to add individual documents as separate data sources
@@ -2889,46 +3118,64 @@ app.get('/api/knowledge-bases/:kbId/indexing-status', async (req, res) => {
     
     console.log(`📊 Checking indexing status for KB: ${kbId}`);
     
-    // Get the knowledge base details to find data sources
+    // Get the knowledge base details
     const kbResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
     const kbData = kbResponse.data || kbResponse;
+    const kb = kbData.knowledge_base || kbData;
     
-    if (!kbData.datasources || kbData.datasources.length === 0) {
+    console.log(`📊 KB response structure:`, Object.keys(kb || {}));
+    
+    // Check if there's a last indexing job
+    if (!kb.last_indexing_job) {
       return res.json({
         success: false,
-        message: 'No data sources found for this knowledge base'
-      });
-    }
-    
-    // Get the first data source (spaces_data_source)
-    const dataSource = kbData.datasources[0];
-    if (!dataSource.spaces_data_source) {
-      return res.json({
-        success: false,
-        message: 'No spaces data source found'
-      });
-    }
-    
-    // Get indexing jobs for this data source
-    const indexingJobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs`);
-    const indexingJobs = indexingJobsResponse.data || indexingJobsResponse;
-    
-    if (!indexingJobs || indexingJobs.length === 0) {
-      return res.json({
-        success: false,
-        message: 'No indexing jobs found',
+        message: 'No indexing job found for this knowledge base',
         needsIndexing: true
       });
     }
     
-    // Get the most recent indexing job
-    const latestJob = indexingJobs[0]; // Assuming jobs are ordered by creation date
+    const lastJob = kb.last_indexing_job;
+    console.log(`📊 Last indexing job:`, lastJob);
     
-    // Get detailed status of the latest job
-    const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs/${latestJob.uuid}`);
-    const jobStatus = jobStatusResponse.data || jobStatusResponse;
+    // Check if there are data source jobs
+    if (!lastJob.data_source_jobs || lastJob.data_source_jobs.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No data source jobs found in indexing job',
+        needsIndexing: true
+      });
+    }
     
-    console.log(`📊 Indexing job status: ${jobStatus.status}, Tokens: ${jobStatus.tokens_processed || 0}`);
+    // Get the data source UUID from the first data source job
+    const dataSourceJob = lastJob.data_source_jobs[0];
+    const dataSourceUuid = dataSourceJob.data_source_uuid;
+    
+    if (!dataSourceUuid) {
+      return res.json({
+        success: false,
+        message: 'No data source UUID found in indexing job',
+        needsIndexing: true
+      });
+    }
+    
+    console.log(`📊 Data source UUID: ${dataSourceUuid}`);
+    
+    // We already have the job status from the KB details, no need for additional API call
+    const jobStatus = {
+      uuid: lastJob.uuid,
+      status: lastJob.status,
+      phase: lastJob.phase,
+      tokens: lastJob.tokens || 0,
+      total_datasources: lastJob.total_datasources || 0,
+      completed_datasources: lastJob.completed_datasources || 0,
+      total_items_indexed: lastJob.total_items_indexed || 0,
+      created_at: lastJob.created_at,
+      updated_at: lastJob.updated_at,
+      started_at: lastJob.started_at,
+      finished_at: lastJob.finished_at
+    };
+    
+    console.log(`📊 Indexing job status: ${jobStatus.status}, Phase: ${jobStatus.phase}, Tokens: ${jobStatus.tokens}`);
     
     res.json({
       success: true,
@@ -3157,6 +3404,384 @@ app.post('/api/auto-start-indexing', async (req, res) => {
   }
 });
 
+// Re-index specific knowledge base by name
+app.post('/api/reindex-specific-kb', async (req, res) => {
+  try {
+    const { kbName } = req.body;
+    
+    if (!kbName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Knowledge base name is required'
+      });
+    }
+    
+    console.log(`🔄 RE-INDEXING SPECIFIC KB: Looking for "${kbName}"...`);
+    
+    // Get all knowledge bases
+    const kbResponse = await doRequest('/v2/gen-ai/knowledge_bases');
+    const kbList = kbResponse.knowledge_bases || [];
+    
+    // Find the specific KB by name
+    const targetKB = kbList.find(kb => kb.name === kbName);
+    
+    if (!targetKB) {
+      return res.status(404).json({
+        success: false,
+        message: `Knowledge base "${kbName}" not found`
+      });
+    }
+    
+    console.log(`✅ Found target KB: ${targetKB.name} (${targetKB.uuid})`);
+    console.log(`📅 Created: ${targetKB.created_at}`);
+    console.log(`📊 Current indexing status: ${targetKB.last_indexing_job?.status || 'No indexing job'}`);
+    
+    // Get the knowledge base details to find data sources
+    console.log(`🔍 Fetching detailed info for KB: ${targetKB.uuid}`);
+    const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}`);
+    const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
+    
+    console.log(`🔍 KB details response keys:`, Object.keys(kbDetails || {}));
+    
+    // Extract the knowledge base data from the nested structure
+    const kbData = kbDetails.knowledge_base || kbDetails;
+    console.log(`🔍 KB data keys:`, Object.keys(kbData || {}));
+    
+    // Check if we have data source information from the last indexing job
+    if (kbData.last_indexing_job && kbData.last_indexing_job.data_source_jobs && kbData.last_indexing_job.data_source_jobs.length > 0) {
+      console.log(`✅ Found data source info from last indexing job`);
+      const dataSourceJob = kbData.last_indexing_job.data_source_jobs[0];
+      console.log(`📊 Data source UUID: ${dataSourceJob.data_source_uuid}`);
+      console.log(`📊 Files indexed: ${dataSourceJob.indexed_file_count}/${dataSourceJob.total_file_count}`);
+      console.log(`📊 Bytes indexed: ${dataSourceJob.total_bytes_indexed}/${dataSourceJob.total_bytes}`);
+      
+      // Use the data source UUID from the last indexing job
+      const dataSourceUuid = dataSourceJob.data_source_uuid;
+      
+      // Create indexing job using DigitalOcean API
+      const indexingJobData = {
+        data_source_uuid: dataSourceUuid
+      };
+      
+      console.log(`🚀 Creating re-indexing job for KB: ${targetKB.name}`);
+      const startTime = Date.now();
+      
+      const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}/indexing_jobs`, {
+        method: 'POST',
+        body: JSON.stringify(indexingJobData)
+      });
+      
+      const indexingJob = indexingJobResponse.data || indexingJobResponse;
+      const jobCreationTime = Date.now();
+      
+      console.log(`✅ Re-indexing job created successfully!`);
+      console.log(`📊 Job UUID: ${indexingJob.uuid}`);
+      console.log(`📊 Job Status: ${indexingJob.status}`);
+      console.log(`📊 Created At: ${indexingJob.created_at}`);
+      console.log(`⏱️ Job creation took: ${jobCreationTime - startTime}ms`);
+      
+      // Now check the status immediately
+      console.log(`🔍 Checking initial indexing job status...`);
+      const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}/data_sources/${dataSourceUuid}/indexing_jobs/${indexingJob.uuid}`);
+      const jobStatus = jobStatusResponse.data || jobStatusResponse;
+      
+      console.log(`📊 Initial Job Status: ${jobStatus.status}`);
+      console.log(`📊 Tokens Processed: ${jobStatus.tokens_processed || 0}`);
+      console.log(`📊 Progress: ${jobStatus.progress || 'N/A'}`);
+      
+      res.json({
+        success: true,
+        message: `Re-indexing job started successfully for "${kbName}"`,
+        knowledgeBase: {
+          name: targetKB.name,
+          uuid: targetKB.uuid,
+          created_at: targetKB.created_at
+        },
+        indexingJob: {
+          uuid: indexingJob.uuid,
+          status: indexingJob.status,
+          created_at: indexingJob.created_at
+        },
+        currentStatus: {
+          status: jobStatus.status,
+          tokens_processed: jobStatus.tokens_processed || 0,
+          progress: jobStatus.progress || 'N/A'
+        },
+        timing: {
+          job_creation_ms: jobCreationTime - startTime,
+          start_time: new Date(startTime).toISOString()
+        }
+      });
+      
+    } else {
+      console.log(`❌ No data source information found in KB details`);
+      return res.status(400).json({
+        success: false,
+        message: 'No data source information found for this knowledge base',
+        kbDetails: kbDetails
+      });
+    }
+    
+    console.log(`📊 Found data source: ${dataSource.spaces_data_source.uuid}`);
+    console.log(`📁 Bucket: ${dataSource.spaces_data_source.bucket_name}, Path: ${dataSource.spaces_data_source.item_path}`);
+    
+    // Create indexing job using DigitalOcean API
+    const indexingJobData = {
+      data_source_uuid: dataSource.spaces_data_source.uuid
+    };
+    
+    console.log(`🚀 Creating re-indexing job for KB: ${targetKB.name}`);
+    const startTime = Date.now();
+    
+    const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}/indexing_jobs`, {
+      method: 'POST',
+      body: JSON.stringify(indexingJobData)
+    });
+    
+    const indexingJob = indexingJobResponse.data || indexingJobResponse;
+    const jobCreationTime = Date.now();
+    
+    console.log(`✅ Re-indexing job created successfully!`);
+    console.log(`📊 Job UUID: ${indexingJob.uuid}`);
+    console.log(`📊 Job Status: ${indexingJob.status}`);
+    console.log(`📊 Created At: ${indexingJob.created_at}`);
+    console.log(`⏱️ Job creation took: ${jobCreationTime - startTime}ms`);
+    
+    // Now check the status immediately
+    console.log(`🔍 Checking initial indexing job status...`);
+    const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}/data_sources/${dataSource.spaces_data_source.uuid}/indexing_jobs/${indexingJob.uuid}`);
+    const jobStatus = jobStatusResponse.data || jobStatusResponse;
+    
+    console.log(`📊 Initial Job Status: ${jobStatus.status}`);
+    console.log(`📊 Tokens Processed: ${jobStatus.tokens_processed || 0}`);
+    console.log(`📊 Progress: ${jobStatus.progress || 'N/A'}`);
+    
+    res.json({
+      success: true,
+      message: `Re-indexing job started successfully for "${kbName}"`,
+      knowledgeBase: {
+        name: targetKB.name,
+        uuid: targetKB.uuid,
+        created_at: targetKB.created_at
+      },
+      indexingJob: {
+        uuid: indexingJob.uuid,
+        status: indexingJob.status,
+        created_at: indexingJob.created_at
+      },
+      currentStatus: {
+        status: jobStatus.status,
+        tokens_processed: jobStatus.tokens_processed || 0,
+        progress: jobStatus.progress || 'N/A'
+      },
+      timing: {
+        job_creation_ms: jobCreationTime - startTime,
+        start_time: new Date(startTime).toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Re-index specific KB error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to re-index specific KB: ${error.message}` 
+    });
+  }
+});
+
+// Test endpoint: Create KB from wed271 folder and monitor indexing
+app.post('/api/test-large-file-indexing', async (req, res) => {
+  try {
+    console.log(`🧪 TEST: Creating KB from wed271 folder with large file...`);
+    
+    // Create a unique KB name with timestamp
+    const timestamp = Date.now();
+    const cleanName = `test-large-file-${timestamp}`;
+    
+    // Ensure the name is valid for DigitalOcean API
+    const validName = cleanName.replace(/[^a-zA-Z0-9-]/g, '-').substring(0, 50);
+    
+    console.log(`📚 Creating knowledge base: ${validName}`);
+    
+    // Get available embedding models first
+    let embeddingModelId = null;
+    
+    try {
+      const modelsResponse = await doRequest('/v2/gen-ai/models');
+      const models = modelsResponse.models || modelsResponse.data?.models || [];
+      
+      // Find embedding models that can be used for knowledge bases
+      const embeddingModels = models.filter(model => 
+        model.name && (
+          model.name.toLowerCase().includes('embedding') ||
+          model.name.toLowerCase().includes('gte') ||
+          model.name.toLowerCase().includes('mini') ||
+          model.name.toLowerCase().includes('mpnet')
+        )
+      );
+      
+      if (embeddingModels.length > 0) {
+        // Prefer GTE Large as it's a high-quality embedding model
+        const preferredModel = embeddingModels.find(model => 
+          model.name.toLowerCase().includes('gte large')
+        ) || embeddingModels[0];
+        
+        embeddingModelId = preferredModel.uuid;
+        console.log(`📚 Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
+      } else {
+        console.log(`⚠️ No embedding models found, proceeding without specific embedding model`);
+      }
+    } catch (modelError) {
+      console.log(`⚠️ Failed to get models, proceeding without specific embedding model`);
+    }
+    
+    const kbData = {
+      name: validName,
+      description: `${validName} - Test KB with large file from wed271 folder`,
+      project_id: '90179b7c-8a42-4a71-a036-b4c2bea2fe59',
+      database_id: '881761c6-e72d-4f35-a48e-b320cd1f46e4',
+      region: "tor1",
+      datasources: [
+        {
+          "spaces_data_source": {
+            "bucket_name": "maia",
+            "item_path": "wed271/",
+            "region": "tor1"
+          }
+        }
+      ]
+    };
+
+    if (embeddingModelId) {
+      kbData.embedding_model_uuid = embeddingModelId;
+    }
+
+    console.log(`🚀 Creating knowledge base with data source: wed271/`);
+    const startTime = Date.now();
+    
+    const knowledgeBase = await doRequest('/v2/gen-ai/knowledge_bases', {
+      method: 'POST',
+      body: JSON.stringify(kbData)
+    });
+
+    const kbId = knowledgeBase.knowledge_base?.uuid || knowledgeBase.data?.uuid || knowledgeBase.uuid;
+    const kbCreationTime = Date.now();
+    
+    console.log(`✅ Created knowledge base: ${validName} (${kbId})`);
+    console.log(`⏱️ KB creation took: ${kbCreationTime - startTime}ms`);
+    
+    // Now start monitoring the indexing progress
+    console.log(`🔍 Starting indexing progress monitor...`);
+    
+    // Start monitoring in background
+    monitorIndexingProgress(kbId, validName, startTime);
+    
+    res.json({
+      success: true,
+      message: `Test KB created successfully. Monitoring indexing progress...`,
+      knowledgeBase: {
+        name: validName,
+        uuid: kbId,
+        created_at: knowledgeBase.data?.created_at || knowledgeBase.created_at
+      },
+      timing: {
+        kb_creation_ms: kbCreationTime - startTime,
+        start_time: new Date(startTime).toISOString()
+      },
+      note: "Indexing progress will be logged to console. Check server logs for updates."
+    });
+    
+  } catch (error) {
+    console.error('❌ Test large file indexing error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to create test KB: ${error.message}` 
+    });
+  }
+});
+
+// Helper function to monitor indexing progress
+async function monitorIndexingProgress(kbId, kbName, startTime) {
+  let checkCount = 0;
+  const maxChecks = 60; // Monitor for up to 60 minutes
+  
+  const monitorInterval = setInterval(async () => {
+    try {
+      checkCount++;
+      const currentTime = Date.now();
+      const elapsedMinutes = Math.round((currentTime - startTime) / 60000 * 100) / 100;
+      
+      console.log(`\n📊 [${checkCount}] Checking indexing status for ${kbName} (${elapsedMinutes} minutes elapsed)...`);
+      
+      // Get the knowledge base details to find data sources
+      const kbResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+      const kbData = kbResponse.data || kbResponse;
+      
+      if (kbData.knowledge_base) {
+        const kb = kbData.knowledge_base;
+        
+        if (kb.last_indexing_job) {
+          const job = kb.last_indexing_job;
+          console.log(`📊 Indexing Job Status: ${job.status}`);
+          console.log(`📊 Phase: ${job.phase}`);
+          console.log(`📊 Tokens: ${job.tokens || 'N/A'}`);
+          console.log(`📊 Progress: ${job.progress || 'N/A'}`);
+          
+          if (job.status === 'INDEX_JOB_STATUS_COMPLETED') {
+            const totalTime = Math.round((currentTime - startTime) / 1000);
+            console.log(`\n🎉 INDEXING COMPLETED!`);
+            console.log(`📊 Total time: ${totalTime} seconds (${elapsedMinutes} minutes)`);
+            console.log(`📊 Final tokens: ${job.tokens || 'N/A'}`);
+            console.log(`📊 Job UUID: ${job.uuid}`);
+            clearInterval(monitorInterval);
+            return;
+          }
+        } else {
+          console.log(`📊 No indexing job found yet...`);
+        }
+      }
+      
+      // Stop monitoring after max checks or if taking too long
+      if (checkCount >= maxChecks) {
+        console.log(`\n⏰ Monitoring stopped after ${maxChecks} checks (${elapsedMinutes} minutes)`);
+        clearInterval(monitorInterval);
+        return;
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error checking indexing status:`, error);
+      checkCount++;
+      
+      if (checkCount >= maxChecks) {
+        console.log(`\n⏰ Monitoring stopped due to errors after ${checkCount} checks`);
+        clearInterval(monitorInterval);
+        return;
+      }
+    }
+  }, 30000); // Check every 30 seconds
+  
+  // Also check immediately
+  setTimeout(async () => {
+    try {
+      console.log(`\n📊 [IMMEDIATE] Checking initial indexing status for ${kbName}...`);
+      
+      const kbResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+      const kbData = kbResponse.data || kbResponse;
+      
+      if (kbData.knowledge_base && kbData.knowledge_base.last_indexing_job) {
+        const job = kbData.knowledge_base.last_indexing_job;
+        console.log(`📊 Initial Indexing Job Status: ${job.status}`);
+        console.log(`📊 Initial Phase: ${job.phase}`);
+        console.log(`📊 Initial Tokens: ${job.tokens || 'N/A'}`);
+      } else {
+        console.log(`📊 No initial indexing job found yet...`);
+      }
+    } catch (error) {
+      console.error(`❌ Error checking initial status:`, error);
+    }
+  }, 5000); // Check after 5 seconds
+}
+
 // Associate knowledge base with agent
 
 
@@ -3187,6 +3812,8 @@ app.get('/api/agents/:agentId/knowledge-bases', async (req, res) => {
     res.status(500).json({ message: `Failed to get agent knowledge bases: ${error.message}` });
   }
 });
+
+
 
 // Detach knowledge base from agent
 app.delete('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
@@ -3392,6 +4019,8 @@ import adminManagementRoutes from './src/routes/admin-management-routes.js';
 // Import MAIA2 routes
 import maia2Routes from './src/routes/maia2-api-routes.js';
 import maia2DatabaseSetup from './src/routes/maia2-database-setup.js';
+import maia3DatabaseSetup from './src/routes/maia3-database-setup.js';
+import databaseMigration from './src/routes/database-migration.js';
 
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
@@ -3409,6 +4038,8 @@ app.use('/api/maia2', maia2Routes);
 
 // Mount MAIA2 database setup routes
 app.use('/api/maia2-setup', maia2DatabaseSetup);
+app.use('/api/maia3-setup', maia3DatabaseSetup);
+app.use('/api/database-migration', databaseMigration);
 
 // =============================================================================
 // DEEP LINK USER MANAGEMENT

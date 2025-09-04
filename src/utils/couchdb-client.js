@@ -7,7 +7,7 @@ export class CouchDBClient {
     const url = config.url || process.env.CLOUDANT_URL || process.env.COUCHDB_URL || 'http://localhost:5984'
     const username = config.username || process.env.CLOUDANT_USERNAME || process.env.COUCHDB_USER || 'maia_admin'
     const password = config.password || process.env.CLOUDANT_PASSWORD || process.env.COUCHDB_PASSWORD || 'MaiaSecure2024!'
-    const database = config.database || process.env.CLOUDANT_DATABASE || process.env.COUCHDB_DATABASE || 'maia_chats'
+    const database = config.database || process.env.CLOUDANT_DATABASE || process.env.COUCHDB_DATABASE || 'maia3_chats'
 
     // Build connection string for Cloudant/CouchDB
     let connectionString

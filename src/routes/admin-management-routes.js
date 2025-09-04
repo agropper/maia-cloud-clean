@@ -202,16 +202,21 @@ router.get('/users', checkMAIA2Ready, async (req, res) => {
   try {
     // Get all users from MAIA2 system
     const allUsers = await maia2Client.listUsers();
-    console.log('🔍 Raw users from MAIA2:', JSON.stringify(allUsers, null, 2));
     
     const users = allUsers
-      .filter(user => !user.isAdmin && !user._id.startsWith('_design/')) // Exclude admin users and design documents
+      .filter(user => {
+        // For wed271, allow it through even if it has isAdmin: true (special case)
+        if (user._id === 'wed271') {
+          console.log('🔍 [SPECIAL] Including wed271 despite admin status:', {
+            userId: user._id,
+            isAdmin: user.isAdmin
+          });
+          return !user._id.startsWith('_design/');
+        }
+        // For all other users, exclude admin users and design documents
+        return !user.isAdmin && !user._id.startsWith('_design/');
+      })
       .map(user => {
-        console.log('🔍 Processing user:', JSON.stringify(user, null, 2));
-        console.log('🔍 User fields:', Object.keys(user));
-        console.log('🔍 Username field:', user.username);
-        console.log('🔍 ID field:', user._id);
-        
         return {
           userId: user.username || user._id, // Fallback to _id if username is missing
           displayName: user.displayName || user.username || user._id,
@@ -221,9 +226,8 @@ router.get('/users', checkMAIA2Ready, async (req, res) => {
           assignedAgentId: user.assignedAgentId || null,
           assignedAgentName: user.assignedAgentName || null
         };
-      });
-    
-    console.log('🔍 Processed users:', JSON.stringify(users, null, 2));
+      })
+      .filter(processedUser => processedUser.userId !== 'admin'); // Exclude admin user from final list
     
     res.json({ users });
     
@@ -423,8 +427,26 @@ router.get('/users/:userId/assigned-agent', checkMAIA2Ready, async (req, res) =>
   try {
     const { userId } = req.params;
     
-    // Get user document
-    const userDoc = await maia2Client.getUserByUsername(userId);
+    // Get user document with retry logic for rate limits
+    let userDoc = null;
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries && !userDoc) {
+      try {
+        userDoc = await maia2Client.getUserByUsername(userId);
+        break;
+      } catch (error) {
+        if (error.statusCode === 429 && retries < maxRetries - 1) {
+          console.warn(`Rate limit hit for getUserByUsername, retrying in ${(retries + 1) * 2} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, (retries + 1) * 2000));
+          retries++;
+        } else {
+          throw error;
+        }
+      }
+    }
+    
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -439,7 +461,11 @@ router.get('/users/:userId/assigned-agent', checkMAIA2Ready, async (req, res) =>
     
   } catch (error) {
     console.error('Error getting assigned agent:', error);
-    res.status(500).json({ error: 'Failed to get assigned agent' });
+    if (error.statusCode === 429) {
+      res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
+    } else {
+      res.status(500).json({ error: 'Failed to get assigned agent' });
+    }
   }
 });
 

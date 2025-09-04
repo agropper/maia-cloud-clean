@@ -102,7 +102,7 @@ class Maia2Client {
         loginCount: 0
       };
 
-      const result = await this.couchDBClient.saveDocument('maia2_users', user);
+      const result = await this.couchDBClient.saveDocument('maia_users', user);
 
       console.log(`✅ User created: ${user.username}`);
       return { ...user, _id: result.id, _rev: result.rev };
@@ -121,7 +121,7 @@ class Maia2Client {
     try {
       // For now, get all users and filter by username
       // In production, this would use a proper CouchDB view
-      const allUsers = await this.couchDBClient.getAllDocuments('maia2_users');
+      const allUsers = await this.couchDBClient.getAllDocuments('maia_users');
       console.log('🔍 getAllUsers returned:', allUsers.length, 'documents');
       
       // Filter for users with type='user' OR users without type field (legacy users)
@@ -151,7 +151,7 @@ class Maia2Client {
     
     try {
       // Get current user document
-      const currentUser = await this.couchDBClient.getDocument('maia2_users', userId);
+      const currentUser = await this.couchDBClient.getDocument('maia_users', userId);
 
       const updatedUser = {
         ...currentUser,
@@ -159,7 +159,7 @@ class Maia2Client {
         updatedAt: new Date().toISOString()
       };
 
-      const result = await this.couchDBClient.saveDocument('maia2_users', updatedUser);
+      const result = await this.couchDBClient.saveDocument('maia_users', updatedUser);
 
       console.log(`✅ User updated: ${userId}`);
       return { ...updatedUser, _rev: result.rev };
@@ -219,9 +219,21 @@ class Maia2Client {
       
       // Get all users and filter in memory for now
       // In production, this would use proper CouchDB views
-      const allUsers = await this.couchDBClient.getAllDocuments('maia2_users');
+      const allUsers = await this.couchDBClient.getAllDocuments('maia_users');
+      
       // Filter for users with type='user' OR users without type field (legacy users)
-      let filteredUsers = allUsers.filter(u => u.type === 'user' || !u.type);
+      // Also include users with _id that matches common user patterns (like wed271)
+      let filteredUsers = allUsers.filter(u => {
+        // Include users with type='user'
+        if (u.type === 'user') return true;
+        // Include users without type field (legacy users)
+        if (!u.type) return true;
+        // Include users with userId field (like wed271)
+        if (u.userId) return true;
+        // Include users whose _id doesn't start with underscore or contain "design"
+        if (u._id && !u._id.startsWith('_') && !u._id.includes('design')) return true;
+        return false;
+      });
       
       if (status) {
         filteredUsers = filteredUsers.filter(u => u.status === status);
@@ -541,7 +553,7 @@ class Maia2Client {
     if (!this.isInitialized) return { status: 'not_initialized' };
 
     const databases = [
-      'maia2_users',
+      'maia_users',
       'maia2_agents',
       'maia2_knowledge_bases',
       'maia2_user_resources',

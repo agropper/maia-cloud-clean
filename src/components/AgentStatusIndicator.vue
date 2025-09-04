@@ -113,27 +113,35 @@ export default defineComponent({
     currentUser: {
       type: Object as () => any,
       default: null
+    },
+    currentWorkflowStep: {
+      type: String,
+      default: ''
     }
   },
   emits: ['manage', 'sign-in', 'sign-out'],
   setup(props) {
     const agentName = computed(() => {
       if (!props.agent) {
+        // For authenticated users, show "Agent: none" instead of "No Agent Configured"
+        if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+          return 'Agent: none'
+        }
         return 'No Agent Configured'
       }
       
       // Get current user from props - prioritize displayName over userId
       const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
       
-      // Debug logging to see what's happening with currentUser
-      
-      
-      
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
 
     const statusText = computed(() => {
       if (!props.agent) {
+        // For authenticated users, show progress information
+        if (props.currentUser && props.currentUser.userId !== 'Unknown User' && props.currentWorkflowStep) {
+          return `Progress: ${props.currentWorkflowStep}`
+        }
         return 'Create an agent to get started'
       }
       
@@ -162,6 +170,13 @@ export default defineComponent({
       if (!props.agent) {
         return 'smart_toy'
       }
+      
+      // For authenticated users, always show the AI agent icon regardless of status
+      if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+        return 'smart_toy'
+      }
+      
+      // For unauthenticated users, show status-based icons
       switch (props.agent.status) {
         case 'active':
           return 'check_circle'

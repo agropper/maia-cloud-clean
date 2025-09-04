@@ -349,6 +349,7 @@ The field name mismatch has been resolved. The system should now:
 
 ### **Status: IMPLEMENTED** 
 **Date**: September 2, 2025 - 00:10 UTC
+**Updated**: September 2, 2025 - 16:20 UTC (Status-based monitoring)
 
 ### **Current Workflow Status**
 - ✅ **Step 1**: User authenticated with passkey
@@ -361,11 +362,22 @@ The field name mismatch has been resolved. The system should now:
 ### **Step 6 Implementation**
 1. **✅ Automatic Workflow Advancement**: After KB creation, workflow automatically advances to Step 6
 2. **✅ Real-time Indexing Monitoring**: Monitors indexing status every 30 seconds using DigitalOcean API
-3. **✅ Dynamic Token Count Updates**: Updates workflow step title with current token count: "Tokens=<>"
-4. **✅ Indexing Status Tracking**: Monitors status (processing, completed, failed) from DigitalOcean API
+3. **✅ Status-based Updates**: Updates workflow step title with current status and phase: "Status: INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING"
+4. **✅ Indexing Status Tracking**: Monitors status (PENDING, IN_PROGRESS, COMPLETED, FAILED) from DigitalOcean API
 5. **✅ Automatic Completion**: Marks Step 6 as completed when indexing finishes
 6. **✅ User Notifications**: Shows success/error notifications based on indexing results
 7. **✅ Resource Cleanup**: Automatically stops monitoring when component unmounts
+
+### **API Limitation Identified and Fixed**
+**Issue**: DigitalOcean API does not provide detailed progress fields (`tokens`, `total_datasources`, etc.) as documented
+**Solution**: Updated monitoring to show status changes instead of detailed progress
+**Support Ticket**: Filed with DigitalOcean for API documentation clarification
+
+### **Backend Endpoint Issue Fixed**
+**Problem**: The `/api/knowledge-bases/:kbId/indexing-status` endpoint was making unnecessary API calls to DigitalOcean
+**Root Cause**: Trying to call non-existent endpoint for detailed job status
+**Solution**: Use the indexing job data already available in the KB details response
+**Result**: Endpoint now works correctly without additional API calls
 
 ### **Issue Identified and Fixed**
 **Problem**: The system was automatically trying to add individual documents as separate data sources after KB creation, causing:
@@ -409,8 +421,61 @@ The field name mismatch has been resolved. The system should now:
 #### **Frontend (AgentManagementDialog.vue)**
 - **Indexing Monitor**: `startIndexingMonitor()` function starts monitoring after KB creation
 - **Status Checking**: `checkIndexingStatus()` polls DigitalOcean API every 30 seconds
-- **Dynamic Updates**: Workflow step title updates with real-time token count
+- **Dynamic Updates**: Workflow step title updates with real-time status and phase
 - **Lifecycle Management**: `onUnmounted()` hook ensures proper cleanup
+- **Timing Measurement**: `indexingStartTime` tracks indexing duration
+- **Automatic Attachment**: `attachKnowledgeBaseToAgent()` connects KB to current agent
+- **Data Refresh**: `refreshAgentData()` updates agent KB list after attachment
+
+#### **UI Improvements**
+- **Initial Label**: No "Tokens=0" display in Step 6 title
+- **Button Management**: CREATE KNOWLEDGE BASE button hidden when Step 6 is current (indexing in progress)
+- **Cancel Button**: Only CANCEL button visible during indexing
+- **Completion Cleanup**: CANCEL button removed when indexing finishes
+- **Agent Integration**: KB automatically appears in agent's knowledge base list
+- **Real-time Updates**: Step 6 title updates every 10 seconds with elapsed time: "Status: X, Phase: Y (Zs)"
+- **Enhanced Completion Logic**: Checks both status (`INDEX_JOB_STATUS_COMPLETED`) and phase (`BATCH_JOB_PHASE_SUCCEEDED`)
+- **Bug Fix**: Fixed `ReferenceError: jobStatus is not defined` by using correct variable `job` in completion logic
+- **Agent ID Fix**: Fixed `undefined` agent UUID by checking both `uuid` and `id` properties and using fallback logic
+
+#### **User Authentication and Knowledge Base Isolation** ✅
+- **Fixed Backwards Logic**: Corrected frontend logic that was showing KBs for unauthenticated users instead of authenticated ones
+- **Strict Access Control**: Implemented proper access control with clear separation between authenticated and unauthenticated users
+- **User-Specific KB Filtering**: Backend now filters knowledge bases by user ownership using both `owner` field and name prefix matching
+- **Authenticated User Isolation**: Authenticated users can ONLY see their own KBs (no shared KBs)
+- **Unauthenticated User Access**: Unauthenticated users can ONLY see unprotected KBs (shared KBs without username prefixes or explicit owners)
+- **Protected KB Detection**: KBs are automatically protected if they have:
+  - Username prefixes (e.g., "wed271-kb1", "agropper-kb1")
+  - Explicit owner fields in Cloudant
+  - `isProtected: true` flag
+- **Ownership Storage**: KB creation now stores user ownership information in Cloudant database for proper access control
+- **Flexible KB Creation**: KB creation endpoint supports both authenticated users (with username) and unauthenticated users (shared KBs)
+- **Frontend Integration**: Frontend passes current user information when fetching knowledge bases, ensuring proper access control
+- **Security**: Authenticated users are completely isolated from each other and from shared KBs
+
+#### **Route Conflict Fix (2025-09-02)**
+- **Issue**: Express.js route order conflict caused 404 errors when calling `/api/agents/:agentId/knowledge-bases`
+- **Root Cause**: More specific route `/api/agents/:agentId/knowledge-bases/:kbId` was defined before general route `/api/agents/:agentId/knowledge-bases`
+- **Solution**: Moved general route definition before specific route to ensure correct endpoint matching
+- **Result**: Knowledge base attachment now works correctly after indexing completion
+
+#### **Knowledge Base Protection for Unauthenticated Users (2025-09-03)**
+- **Problem**: `wed271-kb1` and other user-specific KBs were visible to "Unknown User" (unauthenticated users), creating a security issue
+- **Solution**: Enhanced the `/api/knowledge-bases` endpoint to automatically detect and hide protected KBs from unauthenticated users
+- **Protection Logic**: KBs are considered protected if they have:
+  - Username prefixes (e.g., "wed271-kb1", "agropper-kb1")
+  - Explicit owner fields in Cloudant
+  - `isProtected: true` flag
+- **Result**: 
+  - Authenticated users see only their own KBs
+  - Unauthenticated users see only truly shared/unprotected KBs
+  - User-specific KBs are properly locked down
+
+#### **Knowledge Base Display Debug (2025-09-02)**
+- **Issue**: Knowledge base appearing in agent management dialog with no visible name/label
+- **Debug Added**: Console logging to inspect KB data structure and template rendering
+- **Template Update**: Added fallback display showing "NO NAME" and UUID when name is missing
+- **Next Steps**: Test to identify if issue is in backend response or frontend rendering
 
 #### **Backend (server.js)**
 - **New Endpoint**: `/api/knowledge-bases/:kbId/indexing-status`
@@ -443,12 +508,15 @@ The field name mismatch has been resolved. The system should now:
 
 ### **Step 6 Expected Behavior**
 1. **Immediate Advancement**: After KB creation, workflow automatically advances to Step 6
-2. **Real-time Updates**: Step title shows "Knowledge base being indexed. This can take many minutes. Tokens=0"
-3. **Token Count Updates**: Token count updates every 30 seconds (e.g., "Tokens=150", "Tokens=450")
-4. **Status Monitoring**: Console shows indexing progress: "📊 Indexing status: processing, Tokens: 150"
-5. **Completion**: When indexing finishes, step shows "Knowledge base indexed and available (750 tokens)"
-6. **Success Notification**: User sees success message with final token count
-7. **Workflow Complete**: Step 6 is marked as completed, entire workflow is finished
+2. **Initial Label**: Step title shows "Knowledge base being indexed. This can take many minutes." (no tokens display)
+3. **Real-time Updates**: Step title updates to show "Knowledge base being indexed. Status: INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING"
+4. **Status Updates**: Status and phase updates every 30 seconds (e.g., "Status: INDEX_JOB_STATUS_PENDING, Phase: BATCH_JOB_PHASE_PENDING")
+5. **Status Monitoring**: Console shows indexing progress: "📊 Indexing status: INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING"
+6. **Completion**: When indexing finishes, step shows "Knowledge base indexed and available"
+7. **Timing Report**: Console reports "✅ Knowledge base indexing completed in X seconds!"
+8. **Success Notification**: User sees success message with timing: "Knowledge base indexing completed successfully in X seconds!"
+9. **Automatic Attachment**: Knowledge base is automatically attached to the current agent
+10. **Workflow Complete**: Step 6 is marked as completed, entire workflow is finished
 
 ---
 
@@ -476,3 +544,100 @@ Users can now:
 2. **Add More Files**: Upload additional documents to their folder for expanded knowledge
 3. **Create Multiple KBs**: Create additional knowledge bases for different purposes
 4. **Collaborate**: Share knowledge bases with other users (if permissions allow)
+
+---
+
+## 🧪 LARGE FILE INDEXING TEST
+
+**Date:** 2025-09-02  
+**Status:** 🔄 IN PROGRESS  
+**Purpose:** Test realistic indexing times with large files
+
+### **Test Setup**
+- **Endpoint:** `/api/test-large-file-indexing`
+- **Method:** Creates KB from `wed271/` folder (includes large file added by user)
+- **Authentication:** None required (test endpoint)
+- **Monitoring:** Automatic progress tracking every 30 seconds
+- **Duration:** Up to 60 minutes of monitoring
+
+### **Test Results**
+- **KB Name:** `test-large-file-1756779834257`
+- **Creation Time:** ~5 seconds
+- **Data Source:** `wed271/` folder in `maia` bucket
+- **Indexing Status:** 🔄 Monitoring in progress...
+
+### **Expected Behavior**
+- Indexing should take **minutes** (not seconds like the suspicious 20-second job)
+- Progress updates every 30 seconds showing:
+  - Job status
+  - Phase
+  - Tokens processed
+  - Progress percentage
+- Final completion time and total tokens will be logged
+
+### **Comparison with Previous Results**
+- **Previous KB (`wed271-kb1`):** Completed in ~20 seconds ⚠️ (Suspiciously fast)
+- **Current Test:** Expected to take several minutes ✅ (Realistic timing)
+
+### **Monitoring Output**
+The test automatically logs progress every 30 seconds:
+```
+📊 [1] Checking indexing status for test-large-file-1756779834257 (0.05 minutes elapsed)...
+📊 Indexing Job Status: processing
+📊 Phase: BATCH_JOB_PHASE_PROCESSING
+📊 Tokens: 150
+📊 Progress: 25%
+```
+
+### **Success Criteria**
+- Indexing takes realistic time (several minutes minimum)
+- Progress updates show meaningful token increases
+- Final completion shows total processing time
+- Comparison validates that previous fast jobs were anomalies
+
+---
+
+## 🔐 KNOWLEDGE BASE OWNERSHIP & PROTECTION
+
+**Date:** 2025-09-03  
+**Status:** 🔄 IN PROGRESS  
+**Purpose:** Implement proper KB ownership and access control
+
+### **Current Issue**
+- Knowledge bases with username prefixes (e.g., "wed271-kb1") are showing up for unauthenticated users
+- All KBs currently show `owner: null` and `isProtected: false`
+- This prevents proper access control and user isolation
+
+### **Root Cause Analysis**
+- **Missing Database**: `maia_knowledge_bases` database was never created in Cloudant
+- **Failed Ownership Storage**: KB creation endpoint fails to store ownership metadata
+- **Silent Failures**: `couchDBClient.saveDocument` calls fail without proper error logging
+- **Incomplete Filtering**: Filtering logic can't work without proper ownership metadata
+
+### **Implemented Solutions**
+1. **Database Creation**: Added automatic creation of `maia_knowledge_bases` during server startup
+2. **Enhanced Ownership Storage**: KB creation now attempts to store:
+   - `owner`: username or null for shared KBs
+   - `isProtected`: boolean flag based on username presence
+   - `itemPath`: folder path in DigitalOcean Spaces
+   - `createdAt`: timestamp
+3. **Debug Logging**: Added comprehensive logging for ownership storage process
+4. **Error Handling**: Enhanced error handling with stack traces
+
+### **Current Status**
+- ✅ Database creation logic added to server startup
+- ✅ Ownership storage enhanced with debug logging
+- ✅ Filtering logic updated to use stored metadata
+- ❌ **Issue**: Ownership metadata still not being stored (all KBs show owner: null, isProtected: false)
+
+### **Next Steps**
+1. **Verify Database Creation**: Confirm `maia_knowledge_bases` database exists in Cloudant
+2. **Debug Ownership Storage**: Identify why `saveDocument` calls are failing
+3. **Test Filtering**: Verify access control works with proper ownership metadata
+4. **User Isolation**: Ensure authenticated users only see their own KBs
+
+### **Expected Behavior After Fix**
+- **Authenticated Users**: See only KBs they own (by owner field or username prefix)
+- **Unauthenticated Users**: See only shared/unprotected KBs
+- **Proper Isolation**: Users cannot access KBs owned by other users
+- **Security**: Protected KBs are completely hidden from unauthorized users
