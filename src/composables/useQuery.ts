@@ -18,6 +18,20 @@ export const postData = async (uri: string, data: any): Promise<any> => {
     });
 
     if (!response.ok) {
+      // Check if it's an agent selection required error
+      if (response.status === 400) {
+        try {
+          const errorData = await response.json();
+          if (errorData.requiresAgentSelection) {
+            // Create a custom error with the requiresAgentSelection flag
+            const error = new Error(errorData.message || 'Agent selection required');
+            (error as any).requiresAgentSelection = true;
+            throw error;
+          }
+        } catch (parseError) {
+          // If we can't parse the error response, fall through to generic error
+        }
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
@@ -32,7 +46,8 @@ export const sendQuery = async (
   uri: string,
   chatHistory: ChatHistoryItem[],
   appState: AppState,
-  currentUser?: any
+  currentUser?: any,
+  onAgentSelectionRequired?: () => void
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
   
@@ -74,6 +89,16 @@ export const sendQuery = async (
     const historyTokens = estimateTokenCount(chatHistoryToSend.map(msg => msg.content).join('\n'))
     totalTokens += historyTokens
 
+    // Log which agent and knowledge base will be used for this query
+    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
+                      uri.includes('anthropic-chat') ? 'Anthropic' :
+                      uri.includes('gemini-chat') ? 'Gemini' :
+                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
+                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    
+    const userInfo = currentUser?.displayName || currentUser?.userId || 'Unknown User'
+    console.log(`🎯 QUERY DETAILS: User: ${userInfo} | AI: ${aiProvider} | Endpoint: ${uri}`)
+    
     const response = await postData(uri, {
       chatHistory: chatHistoryToSend,
       newValue: appState.currentQuery || '',
@@ -90,24 +115,25 @@ export const sendQuery = async (
     const responseTime = Date.now() - startTime
     const contextKB = Math.round(contextSize / 1024 * 100) / 100
     
-    // Get AI provider name from URI
-    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
-                      uri.includes('anthropic-chat') ? 'Anthropic' :
-                      uri.includes('gemini-chat') ? 'Gemini' :
-                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
-                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
-    
     console.log(`🤖 ${aiProvider}: ${totalTokens} tokens, ${contextKB}KB context, ${appState.uploadedFiles?.length || 0} files`)
     console.log(`✅ ${aiProvider} response: ${responseTime}ms`)
+    console.log(`📋 Check server logs for actual agent and knowledge base used`)
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     const responseTime = Date.now() - startTime
     const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
                       uri.includes('anthropic-chat') ? 'Anthropic' :
                       uri.includes('gemini-chat') ? 'Gemini' :
                       uri.includes('chatgpt-chat') ? 'ChatGPT' :
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    
+    // Check if this is an agent selection required error
+    if (error.requiresAgentSelection && onAgentSelectionRequired) {
+      console.log(`🔍 Agent selection required for ${aiProvider}:`, error.message)
+      onAgentSelectionRequired();
+      return []; // Return empty array to prevent further processing
+    }
     
     console.error(`❌ ${aiProvider} error (${responseTime}ms):`, error)
     throw error;

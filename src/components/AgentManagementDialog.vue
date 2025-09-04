@@ -8,8 +8,8 @@
       </q-card-section>
 
       <q-card-section>
-        <!-- Agent Badge for All Users -->
-        <div v-if="currentAgent" class="q-mb-lg">
+        <!-- Agent Badge for All Users - Always show -->
+        <div class="q-mb-lg">
           <AgentStatusIndicator
             :agent="currentAgent"
             :warning="warning"
@@ -102,7 +102,7 @@
               icon="stop"
               class="q-px-lg"
             />
-          </div>
+        </div>
 
           <!-- Start Indexing Button (when on Step 6 but no indexing job) -->
           <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started')" class="q-mt-md text-center">
@@ -113,8 +113,8 @@
               icon="play_arrow"
               class="q-px-lg"
             />
-          </div>
-          </div>
+                  </div>
+                </div>
 
           <!-- Show manage button when agent and KBs are ready -->
           <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0" class="q-mt-md text-center">
@@ -126,7 +126,7 @@
               class="q-px-lg"
               size="lg"
             />
-          </div>
+              </div>
         </div>
 
 
@@ -140,7 +140,7 @@
                 <q-item-label>
                   {{ agent.name }}
                   <q-chip
-                    v-if="currentAgent && currentAgent.id === agent.id"
+                    v-if="currentAgent && (currentAgent.id === agent.id || currentAgent.uuid === agent.uuid)"
                     size="sm"
                     color="primary"
                     text-color="white"
@@ -234,7 +234,9 @@
 
           <!-- Agent Management (if agent exists) -->
           <div v-if="currentAgent">
-            <!-- Knowledge Base Section -->
+          </div>
+
+          <!-- Knowledge Base Section - Always show for all users -->
             <q-card flat bordered class="q-mb-md">
               <q-card-section>
                 <div class="row items-center q-mb-sm">
@@ -378,10 +380,28 @@
                 </div>
               </q-card-section>
             </q-card>
-          </div>
         </div>
       </q-card-section>
     </q-card>
+
+    <!-- Knowledge Base Link Suggestion Modal -->
+    <q-dialog v-model="showKbLinkSuggestionDialog" persistent>
+      <q-card style="min-width: 500px">
+        <q-card-section class="row items-center q-pb-none">
+          <q-avatar icon="link" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">Link Knowledge Base</span>
+        </q-card-section>
+        <q-card-section>
+          <p>Great! You've selected an agent. Now you should link a knowledge base to it for better AI responses.</p>
+          <p class="text-caption text-grey">
+            Click the link icon (🔗) next to any knowledge base in the list below to connect it to your selected agent.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Got it!" color="primary" @click="showKbLinkSuggestionDialog = false" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Agent Creation Wizard -->
     <AgentCreationWizard
@@ -898,6 +918,7 @@ import {
   QCheckbox,
   QChip,
   QTooltip,
+  QAvatar,
 } from "quasar";
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
@@ -951,6 +972,7 @@ export default defineComponent({
     QCheckbox,
     QChip,
     QTooltip,
+    QAvatar,
   },
   props: {
     modelValue: {
@@ -1006,6 +1028,7 @@ export default defineComponent({
     const showChooseFilesDialog = ref(false);
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
+    const showKbLinkSuggestionDialog = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
@@ -1040,6 +1063,13 @@ export default defineComponent({
     // Warning modal state
     const showWarningModal = ref(false);
     const warningMessage = computed(() => props.warning || '');
+
+    // Watch for warning changes and show modal immediately
+    watch(() => props.warning, (newWarning) => {
+      if (newWarning && newWarning.trim() !== '') {
+        showWarningModal.value = true;
+      }
+    }, { immediate: true });
 
     // Admin approval request state
     const showAdminApprovalDialog = ref(false);
@@ -1534,14 +1564,13 @@ export default defineComponent({
               availableAgents.value = agents;
             }
           } else {
-            // Authenticated user - check if they have been approved for agents
-            // For now, we'll show no agents until admin approval
-            availableAgents.value = [];
-            // Only log if user doesn't have an agent assigned
-        if (!hasLoggedNoAgents.value && !currentAgent.value) {
-          console.log(`🔐 No additional agents available for assignment`);
-          hasLoggedNoAgents.value = true;
-        }
+            // Authenticated user - show all available agents for selection
+            const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
+            if (agentsResponse.ok) {
+              const agents: DigitalOceanAgent[] = await agentsResponse.json();
+              availableAgents.value = agents;
+              console.log(`[*] Available agents: ${agents.length}`);
+            }
           }
         } catch (agentsError) {
           console.warn("Failed to load agents list:", agentsError);
@@ -1576,7 +1605,7 @@ export default defineComponent({
               });
 
               availableKnowledgeBases.value = allKBs;
-              console.log(`🔐 Loaded ${userKnowledgeBases.length} knowledge bases for authenticated user ${currentUsername}:`, allKBs);
+              console.log(`[*] Available knowledge bases: ${userKnowledgeBases.length}`);
             }
           } else {
             // Unauthenticated user - show all available KBs (legacy behavior)
@@ -1603,7 +1632,7 @@ export default defineComponent({
               });
 
               availableKnowledgeBases.value = allKBs;
-              console.log(`🔐 Loaded ${allKnowledgeBases.length} knowledge bases for unauthenticated user (legacy mode):`, allKBs);
+              console.log(`[*] Available knowledge bases: ${allKnowledgeBases.length}`);
             }
           }
         } catch (kbError) {
@@ -1623,7 +1652,7 @@ export default defineComponent({
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
       try {
-        const response = await fetch(`/api/set-current-agent`, {
+        const response = await fetch(`/api/current-agent`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1633,18 +1662,39 @@ export default defineComponent({
 
         if (response.ok) {
           const result = await response.json();
-          console.log("✅ Agent selected:", result);
+          console.log("✅ Agent saved to Cloudant:", result);
 
-          // Emit agent update event
-          emit("agent-updated", result.agent);
-
-          // Close dialog
-          emit("update:modelValue", false);
+          // Step 2: Read the agent back from Cloudant to verify it was saved
+          const verifyResponse = await fetch(`/api/current-agent`, {
+            credentials: 'include'
+          });
+          
+          if (verifyResponse.ok) {
+            const verifyResult = await verifyResponse.json();
+            
+            if (verifyResult.agent && verifyResult.agent.uuid === agentId) {
+              console.log("[*] Agent selected and verified:", verifyResult.agent.name);
+              
+              // Step 3: Only now update the UI
+              currentAgent.value = verifyResult.agent;
+              
+              // Emit agent update event
+              emit("agent-updated", verifyResult.agent);
 
           $q.notify({
             type: "positive",
-            message: `Agent ${result.agent.name} is now active!`,
-          });
+                message: `Agent "${verifyResult.agent.name}" selected and verified!`,
+                timeout: 3000,
+              });
+
+              // Show KB link suggestion modal
+              showKbLinkSuggestionDialog.value = true;
+            } else {
+              throw new Error("Agent verification failed - agent not found in Cloudant");
+            }
+          } else {
+            throw new Error("Failed to verify agent in Cloudant");
+          }
         } else {
           throw new Error("Failed to set current agent");
         }
@@ -1812,7 +1862,8 @@ export default defineComponent({
             
             // Refresh agent info to show the new KB connection
             await loadAgentInfo();
-            emit("refresh-agent-data");
+            // Don't emit refresh-agent-data to prevent overriding the current agent
+            // emit("refresh-agent-data");
           } else {
             throw new Error(`Failed to connect KB after transfer: ${response.statusText}`);
           }
@@ -1843,7 +1894,7 @@ export default defineComponent({
     watch(() => props.currentUser, async (newUser) => {
       if (newUser) {
         if (localCurrentUser.value?.userId !== newUser.userId) {
-          console.log(`🔐 User changed to: ${newUser.userId}`);
+          console.log(`[*] Current user: ${newUser.userId}`);
         }
         await checkAuthenticationStatus();
         await updateWorkflowProgress(); // Update workflow progress when user changes
@@ -2050,7 +2101,7 @@ export default defineComponent({
       
       if (!authenticatedUser) {
         // Show passkey auth dialog for existing users
-        console.log("🔍 No authenticated user found, showing passkey auth dialog");
+        // No authenticated user found, showing passkey auth dialog
         showPasskeyAuthDialog.value = true;
       } else {
         // Check if user already has files in bucket
@@ -2271,8 +2322,7 @@ export default defineComponent({
             let fileName = file.name
             let fileType = 'text/plain'
             
-            console.log(`🔍 Processing file: ${fileName}, type: ${file.type}, has transcript: ${!!file.transcript}`)
-            console.log(`🔍 File content length: ${file.content?.length || 0}, transcript length: ${file.transcript?.length || 0}`)
+            // Processing file for upload
             
             // For PDFs and RTFs, use the extracted markdown content
             if (file.type === 'pdf' && file.transcript) {
@@ -2585,7 +2635,7 @@ export default defineComponent({
       
       if (!kbUuid) {
         console.warn('⚠️ No knowledge base UUID available for indexing monitor');
-        console.log('🔍 Knowledge base object structure:', knowledgeBase);
+        // Knowledge base object structure logged
         return;
       }
 
@@ -2728,7 +2778,7 @@ export default defineComponent({
             console.log(`📊 Indexing status: ${status}, Phase: ${phase} - Updated monitoring logic`);
             
             // Debug: Log the exact status values to help troubleshoot
-            console.log(`🔍 Debug - Status: "${status}", Phase: "${phase}", Expected: "INDEX_JOB_STATUS_COMPLETED"`);
+            // Checking indexing status
             
             // Check if indexing is complete (check both status and phase)
             if (status === 'INDEX_JOB_STATUS_COMPLETED' || status === 'completed' || status === 'success' || 
@@ -2810,7 +2860,7 @@ export default defineComponent({
           const result = await response.json();
           if (result.agent) {
             currentAgent.value = result.agent;
-            console.log('✅ Agent data refreshed with updated knowledge bases:', result.agent.knowledgeBases?.length || 0, 'KBs');
+            console.log('[*] Agent data refreshed with', result.agent.knowledgeBases?.length || 0, 'connected KBs');
           }
         }
       } catch (error) {
@@ -2826,9 +2876,7 @@ export default defineComponent({
           return;
         }
         
-        console.log(`🔍 Debug - currentAgent.value:`, currentAgent.value);
-        console.log(`🔍 Debug - currentAgent.value?.uuid:`, currentAgent.value?.uuid);
-        console.log(`🔍 Debug - currentAgent.value?.id:`, currentAgent.value?.id);
+        // Checking current agent values
         
         if (!currentAgent.value.uuid && !currentAgent.value.id) {
           console.warn('⚠️ Current agent has no UUID or ID');
@@ -2857,8 +2905,8 @@ export default defineComponent({
           // Refresh agent data to show updated KB list
           await refreshAgentData();
           
-          // Refresh the agent data to show the new KB
-          emit("refresh-agent-data");
+          // Don't emit refresh-agent-data to prevent overriding the current agent
+          // emit("refresh-agent-data");
           
           // Show success notification
           $q.notify({
@@ -2883,7 +2931,10 @@ export default defineComponent({
 
     // Helper to check if a KB is connected to the current agent
     const isKnowledgeBaseConnected = (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return false;
+      if (!currentAgent.value) {
+        // No current agent
+        return false;
+      }
 
       // Check against all connected KBs
       const connectedKBs =
@@ -2891,7 +2942,10 @@ export default defineComponent({
         (currentAgent.value.knowledgeBase
           ? [currentAgent.value.knowledgeBase]
           : []);
-      return connectedKBs.some((connectedKB) => connectedKB.uuid === kb.uuid);
+      
+      const isConnected = connectedKBs.some((connectedKB) => connectedKB.uuid === kb.uuid);
+      // KB connection status checked
+      return isConnected;
     };
 
     // Handle KB detachment with confirmation
@@ -2944,8 +2998,11 @@ export default defineComponent({
         // Refresh agent data to show updated KB list
         await refreshAgentData();
         
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
+        // Emit event to parent to update agent badge
+        emit("agent-updated", currentAgent.value);
+        
+        // Don't emit refresh-agent-data to prevent overriding the current agent
+        // emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to detach KB:", error);
         $q.notify({
@@ -2959,8 +3016,12 @@ export default defineComponent({
 
     // Handle KB connection
     const connectKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!currentAgent.value) {
+        // No current agent
+        return;
+      }
 
+      console.log(`[*] Connecting KB "${kb.name}" to agent "${currentAgent.value.name}"`);
       isUpdating.value = true;
       try {
         const response = await fetch(
@@ -3035,8 +3096,11 @@ export default defineComponent({
         // Refresh agent data to show updated KB list
         await refreshAgentData();
         
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
+        // Emit event to parent to update agent badge
+        emit("agent-updated", currentAgent.value);
+        
+        // Don't emit refresh-agent-data to prevent overriding the current agent
+        // emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to connect KB:", error);
         $q.notify({
@@ -3239,6 +3303,7 @@ export default defineComponent({
       showChooseFilesDialog,
       showCreateKbDialog,
       showSwitchKbDialog,
+      showKbLinkSuggestionDialog,
       selectedKnowledgeBase,
       newKbName,
       newKbDescription,

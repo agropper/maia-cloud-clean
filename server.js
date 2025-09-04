@@ -1079,22 +1079,178 @@ app.post('/api/personal-chat', async (req, res) => {
       { role: 'user', content: cleanUserMessage, name: currentUser }
     ];
 
+    // Determine which agent to use based on user assignment
+    let agentModel = null;
+    let agentName = 'Unknown Agent';
+    let agentEndpoint = null;
+    let agentId = null;
+    let knowledgeBases = [];
+    
+    if (currentUser !== 'Unknown User') {
+      try {
+        console.log(`🔍 [personal-chat] Checking assigned agent for user: ${currentUser}`);
+        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
+        if (assignedAgentResponse.ok) {
+          const assignedAgentData = await assignedAgentResponse.json();
+          if (assignedAgentData.assignedAgentId) {
+            // Get the agent's deployment URL from DigitalOcean API
+            try {
+              const agentResponse = await doRequest(`/v2/gen-ai/agents/${assignedAgentData.assignedAgentId}`);
+              const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+              
+              if (agentData && agentData.deployment?.url) {
+                agentModel = agentData.name;  // Use agent name for DigitalOcean API
+                agentName = agentData.name;
+                agentId = assignedAgentData.assignedAgentId;
+                agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's specific endpoint
+                console.log(`🔐 [personal-chat] Using assigned agent for user ${currentUser}: ${agentData.name} (${agentModel})`);
+                console.log(`🌐 [personal-chat] Using agent endpoint: ${agentEndpoint}`);
+                
+                // Get knowledge base info for this agent
+                if (agentData.knowledge_bases) {
+                  knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+                }
+              } else {
+                console.log(`🔍 [personal-chat] Agent ${assignedAgentData.assignedAgentName} has no deployment URL`);
+              }
+            } catch (agentError) {
+              console.warn(`Failed to get agent details for ${assignedAgentData.assignedAgentId}:`, agentError.message);
+            }
+          } else {
+            console.log(`🔍 [personal-chat] No assigned agent for user ${currentUser}, checking current agent selection`);
+          }
+        } else {
+          console.log(`🔍 [personal-chat] Failed to get assigned agent for user ${currentUser}: ${assignedAgentResponse.status}, using Unknown User's current agent`);
+        }
+      } catch (error) {
+        console.warn(`Failed to check assigned agent for user ${currentUser}:`, error.message);
+        console.log(`🔍 [personal-chat] Using Unknown User's current agent due to error`);
+      }
+    }
+    
+    // If no agent found for authenticated user, check for current agent selection
+    if (!agentModel) {
+      if (currentUser !== 'Unknown User') {
+        // Check if user has a current agent selection stored in Cloudant
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          if (userDoc && userDoc.currentAgentId) {
+            // Get the agent's deployment URL from DigitalOcean API
+            const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+            const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+            
+            if (agentData && agentData.deployment?.url) {
+              agentModel = agentData.name;  // Use agent name for DigitalOcean API
+              agentName = agentData.name;
+              agentId = userDoc.currentAgentId;
+              agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's deployment URL
+              console.log(`🔐 [personal-chat] Using user's current agent selection: ${agentData.name} (${agentModel})`);
+              console.log(`🌐 [personal-chat] Using agent endpoint: ${agentEndpoint}`);
+              
+              // Get knowledge base info for this agent
+              if (agentData.knowledge_bases) {
+                knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+              }
+            } else {
+              console.log(`🔍 [personal-chat] User's current agent ${userDoc.currentAgentName} has no deployment URL`);
+            }
+          } else {
+            console.log(`🔍 [personal-chat] No current agent selection found for user ${currentUser}`);
+            return res.status(400).json({ 
+              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+              requiresAgentSelection: true
+            });
+          }
+        } catch (userError) {
+          console.warn(`Failed to get current agent selection for user ${currentUser}:`, userError.message);
+          return res.status(400).json({ 
+            message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+            requiresAgentSelection: true
+          });
+        }
+      } else {
+        // For Unknown User, check if they have a current agent selection stored in Cloudant
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          if (userDoc && userDoc.currentAgentId) {
+            // Get the agent's deployment URL from DigitalOcean API
+            const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+            const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+            
+            if (agentData && agentData.deployment?.url) {
+              agentModel = agentData.name;  // Use agent name for DigitalOcean API
+              agentName = agentData.name;
+              agentId = userDoc.currentAgentId;
+              agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's deployment URL
+              console.log(`🔐 [personal-chat] Using Unknown User's current agent selection: ${agentData.name} (${agentModel})`);
+              console.log(`🌐 [personal-chat] Using agent endpoint: ${agentEndpoint}`);
+              
+              // Get knowledge base info for this agent
+              if (agentData.knowledge_bases) {
+                knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+              }
+            } else {
+              console.log(`🔍 [personal-chat] Unknown User's current agent ${userDoc.currentAgentName} has no deployment URL`);
+            }
+          } else {
+            console.log(`🔍 [personal-chat] No current agent selection found for Unknown User`);
+            return res.status(400).json({ 
+              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+              requiresAgentSelection: true
+            });
+          }
+        } catch (userError) {
+          console.warn(`Failed to get current agent selection for Unknown User:`, userError.message);
+          return res.status(400).json({ 
+            message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+            requiresAgentSelection: true
+          });
+        }
+      }
+    }
+
     const params = {
       messages: [
         ...chatHistory,
         { role: 'user', content: aiUserMessage }
       ],
-      model: 'agent-05102025'
+      model: agentModel
     };
 
     // Log token usage and context info
     const totalTokens = estimateTokenCount(aiUserMessage);
     const contextSize = aiContext ? Math.round(aiContext.length / 1024 * 100) / 100 : 0;
-    console.log(`🤖 Personal AI: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
+    console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
+    console.log(`[*] Current user: ${currentUser}, Agent: ${agentName}, Connected KBs: [${knowledgeBases.join(', ')}]`);
 
-    const response = await personalChatClient.chat.completions.create(params);
-    const responseTime = Date.now() - startTime;
-    console.log(`✅ Personal AI response: ${responseTime}ms`);
+    // Get agent-specific API key
+    let agentApiKey;
+    try {
+      agentApiKey = await getAgentApiKey(agentId);
+      console.log(`🔑 Retrieved agent-specific API key for agent: ${agentId}`);
+    } catch (error) {
+      console.error(`❌ Failed to get agent-specific API key, falling back to global key:`, error.message);
+      agentApiKey = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+    }
+
+    // Create agent-specific OpenAI client
+    // Note: Agent-specific endpoints may require different authentication
+    const agentClient = new OpenAI({
+      baseURL: agentEndpoint,
+      apiKey: agentApiKey
+    });
+    
+    console.log(`🔑 Using API key for agent endpoint: ${agentApiKey ? 'Present' : 'Missing'}`);
+
+    let response;
+    try {
+      response = await agentClient.chat.completions.create(params);
+      const responseTime = Date.now() - startTime;
+      console.log(`[*] AI Response time: ${responseTime}ms`);
+    } catch (agentError) {
+      console.error(`❌ Agent-specific endpoint failed: ${agentError.message}`);
+      throw agentError; // Re-throw the error to be handled by the outer catch block
+    }
     
     // Add the response with proper name field
     newChatHistory.push({
@@ -1110,6 +1266,9 @@ app.post('/api/personal-chat', async (req, res) => {
     // Fallback to mock response on error
     let { chatHistory, newValue } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
+    
+    // Get current user for error response
+    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
     const mockResponse = mockAIResponses['personal-chat'](newValue);
     const newChatHistory = [
@@ -2016,6 +2175,29 @@ const doRequest = async (endpoint, options = {}) => {
   return response.json();
 };
 
+// Cache for agent API keys to avoid repeated API calls
+const agentApiKeyCache = new Map();
+
+// Agent-specific API keys (created via DigitalOcean API)
+const agentApiKeys = {
+  '2960ae8d-8514-11f0-b074-4e013e2ddde4': 'fnCsOfehzcEemiTKdowBFbjAIf7jSFwz', // agent-08292025
+  '059fc237-7077-11f0-b056-36d958d30bcf': 'QDb19YdQi2adFlF76VLCg7qSk6BzS8sS', // agent-08032025
+  '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4': '6_LUNA_A-MVAxNkuaPbE3FnErmcBF7JK'  // agent-05102025
+};
+
+// Helper function to get agent-specific API key
+const getAgentApiKey = async (agentId) => {
+  // Check if we have a hardcoded key for this agent
+  if (agentApiKeys[agentId]) {
+    console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
+    return agentApiKeys[agentId];
+  }
+
+  // Fallback to global API key if no agent-specific key found
+  console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
+  return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+};
+
 // List agents
 app.get('/api/agents', async (req, res) => {
   try {
@@ -2097,13 +2279,13 @@ app.get('/api/current-agent', async (req, res) => {
   try {
     // Get current user from session if available
     const currentUser = req.session?.userId || 'Unknown User';
-    console.log(`🔍 [current-agent] Current user: ${currentUser}, Session:`, req.session);
+    console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
     if (currentUser !== 'Unknown User') {
       try {
-        console.log(`🔍 [current-agent] Checking assigned agent for user: ${currentUser}`);
+        // Checking assigned agent for user
         const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
@@ -2111,16 +2293,16 @@ app.get('/api/current-agent', async (req, res) => {
             agentId = assignedAgentData.assignedAgentId;
             console.log(`🔐 Using assigned agent for user ${currentUser}: ${assignedAgentData.assignedAgentName} (${agentId})`);
           } else {
-            console.log(`🔍 [current-agent] No assigned agent for user ${currentUser}`);
+            // No assigned agent for user
           }
         } else {
-          console.log(`🔍 [current-agent] Failed to get assigned agent for user ${currentUser}: ${assignedAgentResponse.status}`);
+          // Failed to get assigned agent for user
         }
       } catch (error) {
         console.warn(`Failed to check assigned agent for user ${currentUser}:`, error.message);
       }
     } else {
-      console.log(`🔍 [current-agent] Using legacy agent lookup for unauthenticated user`);
+      // Using legacy agent lookup for unauthenticated user
     }
     
     // Get group chat count for current user
@@ -2143,32 +2325,56 @@ app.get('/api/current-agent', async (req, res) => {
       console.error('Error getting group chat count:', error);
     }
     
-    if (!process.env.DIGITALOCEAN_GENAI_ENDPOINT) {
-      console.log('🤖 No agent endpoint configured');
-      return res.json({ agent: null });
-    }
-
-    // Use assigned agent ID if available, otherwise find agent by endpoint URL
+    // Use assigned agent ID if available, otherwise check for current agent selection
     if (!agentId) {
-      // Extract agent UUID from the endpoint URL (legacy behavior for unauthenticated users)
-      const endpointUrl = process.env.DIGITALOCEAN_GENAI_ENDPOINT;
-      // console.log(`🔍 Endpoint URL: ${endpointUrl}`);
-      
-      // Get all agents and find the one with matching deployment URL
-      const agentsResponse = await doRequest('/v2/gen-ai/agents');
-      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
-      
-      // Find the agent whose deployment URL matches our endpoint
-      const matchingAgent = agents.find(agent => 
-        agent.deployment?.url === endpointUrl.replace('/api/v1', '')
-      );
-      
-      if (!matchingAgent) {
-        console.log('❌ No agent found with matching deployment URL');
-        return res.json({ agent: null, message: 'No agent found with this deployment URL' });
+      if (currentUser !== 'Unknown User') {
+        // Check if user has a current agent selection stored in Cloudant
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          if (userDoc && userDoc.currentAgentId) {
+            agentId = userDoc.currentAgentId;
+            console.log(`🔐 [current-agent] Using user's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+          } else {
+            // No current agent selection found for user
+            return res.json({ 
+              agent: null, 
+              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+              requiresAgentSelection: true
+            });
+          }
+        } catch (userError) {
+          console.warn(`Failed to get current agent selection for user ${currentUser}:`, userError.message);
+          return res.json({ 
+            agent: null, 
+            message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+            requiresAgentSelection: true
+          });
+        }
+      } else {
+        // For Unknown User, check if they have a current agent selection stored in Cloudant
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          console.log(`🔍 [current-agent] Retrieved Unknown User document:`, userDoc);
+          if (userDoc && userDoc.currentAgentId) {
+            agentId = userDoc.currentAgentId;
+            console.log(`🔐 [current-agent] Using Unknown User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+          } else {
+            // Unknown User - no current agent selection available
+            return res.json({ 
+              agent: null, 
+              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+              requiresAgentSelection: true
+            });
+          }
+        } catch (userError) {
+          console.error(`❌ Failed to get Unknown User's current agent:`, userError);
+          return res.json({ 
+            agent: null, 
+            message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+            requiresAgentSelection: true
+          });
+        }
       }
-      
-      agentId = matchingAgent.uuid;
     }
     // console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
     
@@ -2211,7 +2417,8 @@ app.get('/api/current-agent', async (req, res) => {
       consoleMessage: `🔍 Backend Session: ${req.session ? 'Active' : 'None'} | User: ${currentUser} | Chats: ${groupChatCount}`
     };
 
-    const endpoint = process.env.DIGITALOCEAN_GENAI_ENDPOINT + '/api/v1';
+    // Use the agent's deployment URL for the endpoint
+    const endpoint = agentData.deployment?.url ? `${agentData.deployment.url}/api/v1` : null;
     
 
     
@@ -2862,6 +3069,7 @@ app.get('/api/models', async (req, res) => {
 app.post('/api/current-agent', async (req, res) => {
   try {
     const { agentId } = req.body;
+    const currentUser = req.session?.userId || 'Unknown User';
     
     if (!agentId) {
       return res.status(400).json({ message: 'Agent ID is required' });
@@ -2876,9 +3084,64 @@ app.post('/api/current-agent', async (req, res) => {
       return res.status(404).json({ message: 'Agent not found' });
     }
     
-    // Set the current agent endpoint
+    // Store the current agent selection in Cloudant for the user
+    if (currentUser !== 'Unknown User') {
+      try {
+        // Get user document from Cloudant
+        const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        
+        // Update user document with current agent selection
+        const updatedUserDoc = {
+          ...userDoc,
+          currentAgentId: selectedAgent.uuid,
+          currentAgentName: selectedAgent.name,
+          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
+          currentAgentSetAt: new Date().toISOString()
+        };
+        
+        // Save updated user document
+        await couchDBClient.updateDocument('maia_users', updatedUserDoc);
+        console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
+      } catch (userError) {
+        console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
+      }
+    } else {
+      // For Unknown User, store in their own document
+      try {
+        // Try to get existing Unknown User document
+        let userDoc;
+        try {
+          userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+        } catch (getError) {
+          // Document doesn't exist, create new one
+          userDoc = {
+            _id: 'Unknown User',
+            type: 'user',
+            createdAt: new Date().toISOString()
+          };
+        }
+        
+        // Update user document with current agent selection
+        const updatedUserDoc = {
+          ...userDoc,
+          _id: 'Unknown User', // Ensure _id is always set
+          currentAgentId: selectedAgent.uuid,
+          currentAgentName: selectedAgent.name,
+          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
+          currentAgentSetAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Save updated user document
+        console.log(`🔍 Saving Unknown User document:`, updatedUserDoc);
+        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+        console.log(`✅ Stored current agent selection for Unknown User: ${selectedAgent.name} (${agentId})`);
+      } catch (userError) {
+        console.error(`❌ Failed to store current agent selection for Unknown User:`, userError);
+      }
+    }
+    
     const endpoint = selectedAgent.deployment?.url + '/api/v1';
-    process.env.DIGITALOCEAN_GENAI_ENDPOINT = endpoint;
     
     console.log(`✅ Set current agent to: ${selectedAgent.name} (${agentId})`);
     console.log(`🔗 Endpoint: ${endpoint}`);

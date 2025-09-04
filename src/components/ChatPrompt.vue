@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { QFile, QIcon, QBtnToggle } from "quasar";
+import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
@@ -46,6 +46,12 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
+    QDialog,
+    QCard,
+    QCardSection,
+    QAvatar,
+    QBtn,
+    QCardActions,
 
   },
   computed: {
@@ -84,6 +90,7 @@ export default defineComponent({
     const showAgentManagementDialog = ref(false);
     const showPasskeyAuthDialog = ref(false);
     const showDeepLinkUserModal = ref(false);
+    const showAgentSelectionModal = ref(false);
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>({ userId: 'Unknown User', displayName: 'Unknown User' });
@@ -157,6 +164,7 @@ export default defineComponent({
 
         if (data.agent) {
           currentAgent.value = data.agent;
+          console.log("[*] Current agent:", data.agent.name);
 
           if (data.agent.knowledgeBase) {
           } else {
@@ -171,6 +179,13 @@ export default defineComponent({
           }
         } else {
           currentAgent.value = null;
+          console.log("[*] No agent selected");
+          
+          // Check if agent selection is required
+          if (data.requiresAgentSelection) {
+            // Show modal dialog to select agent
+            showAgentSelectionModal.value = true;
+          }
         }
       } catch (error) {
         console.error("❌ Error fetching current agent:", error);
@@ -207,7 +222,13 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      await fetchCurrentAgent();
+      // Only fetch if we don't already have an agent to prevent overriding
+      // the agent that was just selected
+      if (!currentAgent.value) {
+        await fetchCurrentAgent();
+      } else {
+        // Agent already exists, skipping fetch
+      }
     };
 
     const showPopup = () => {
@@ -257,7 +278,12 @@ export default defineComponent({
         await nextTick();
         
         // Trigger agent refresh to ensure the Agent badge updates with new user
-        await fetchCurrentAgent();
+        // Only fetch if we don't already have an agent to prevent overriding
+        if (!currentAgent.value) {
+          await fetchCurrentAgent();
+        } else {
+          // Agent already exists, skipping fetch
+        }
         
         writeMessage(`Welcome ${userData.name}! Loaded shared group chat from ${groupChat.currentUser}`, "success");
         
@@ -270,7 +296,7 @@ export default defineComponent({
       }
     };
 
-    const handleAgentUpdated = (agentInfo: any) => {
+    const handleAgentUpdated = async (agentInfo: any) => {
       if (agentInfo) {
         // Update the current agent with the new information
         currentAgent.value = agentInfo;
@@ -281,6 +307,31 @@ export default defineComponent({
         );
         if (personalChatOption && agentInfo.endpoint) {
           personalChatOption.value = agentInfo.endpoint;
+        }
+
+        console.log("✅ Agent updated in ChatPrompt:", agentInfo.name);
+        
+        // Fetch current agent data to get updated warning information
+        try {
+          const response = await fetch(`${API_BASE_URL}/current-agent`);
+          const data = await response.json();
+          
+          if (data.agent) {
+            // Update with fresh data from server (including warning)
+            currentAgent.value = data.agent;
+            
+            // Handle warnings from the API
+            if (data.warning) {
+              console.warn(data.warning);
+              agentWarning.value = data.warning;
+            } else {
+              agentWarning.value = "";
+            }
+          }
+        } catch (error) {
+          console.error("❌ Failed to fetch updated agent data:", error);
+          // Clear warning if fetch fails
+          agentWarning.value = "";
         }
       } else {
         currentAgent.value = null;
@@ -332,7 +383,13 @@ export default defineComponent({
 
     // Refresh agent data when user changes
     watch(currentUser, async () => {
-      await fetchCurrentAgent();
+      // Only fetch if we don't already have an agent to prevent overriding
+      // the agent that was just selected
+      if (!currentAgent.value) {
+        await fetchCurrentAgent();
+      } else {
+        // Agent already exists, skipping fetch
+      }
     });
 
     const editMessage = (idx: number) => {
@@ -416,7 +473,8 @@ export default defineComponent({
           appState.selectedAI,
           appState.chatHistory,
           appState,
-          currentUser.value // Pass the current user identity
+          currentUser.value, // Pass the current user identity
+          () => { showAgentSelectionModal.value = true; } // Callback for agent selection required
         );
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
@@ -591,6 +649,7 @@ export default defineComponent({
       triggerAgentManagement,
       handleAgentUpdated,
       showAgentManagementDialog,
+      showAgentSelectionModal,
       currentAgent,
       agentWarning,
       currentUser,
@@ -682,7 +741,7 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :currentUser="currentUser"
     :groupCount="groupCount"
-    :deepLink="currentDeepLink"
+    :deepLink="currentDeepLink || undefined"
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
     @chat-loaded="handleChatLoaded"
@@ -717,6 +776,29 @@ export default defineComponent({
     @refresh-agent-data="refreshAgentData"
     @user-authenticated="handleUserAuthenticated"
   />
+
+  <!-- Agent Selection Required Modal -->
+  <q-dialog v-model="showAgentSelectionModal" persistent>
+    <q-card style="min-width: 400px">
+      <q-card-section class="row items-center">
+        <q-avatar icon="psychology" color="primary" text-color="white" />
+        <span class="q-ml-sm text-h6">Agent Selection Required</span>
+      </q-card-section>
+
+      <q-card-section>
+        <p>You need to select an AI agent before you can start chatting. Please choose an agent from the Agent Management dialog.</p>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn flat label="Cancel" color="primary" @click="showAgentSelectionModal = false" />
+        <q-btn 
+          label="Select Agent" 
+          color="primary" 
+          @click="() => { showAgentSelectionModal = false; showAgentManagementDialog = true; }"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 
   <!-- Sign In Dialog -->
   <PasskeyAuthDialog
