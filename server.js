@@ -2241,7 +2241,15 @@ const isAgentAvailableToUnknownUser = async (agentId) => {
     const ownedAgentIds = new Set();
     usersResponse.docs.forEach(user => {
       if (user.ownedAgents) {
-        user.ownedAgents.forEach(id => ownedAgentIds.add(id));
+        user.ownedAgents.forEach(agent => {
+          if (typeof agent === 'string') {
+            // Legacy format - just UUID
+            ownedAgentIds.add(agent);
+          } else if (agent.id) {
+            // New format - object with id and name
+            ownedAgentIds.add(agent.id);
+          }
+        });
       }
     });
     
@@ -2278,28 +2286,61 @@ app.get('/api/agents', async (req, res) => {
     const currentUser = req.query.user || req.session?.userId || 'Unknown User';
     let filteredAgents = allAgents;
     
+    console.log(`🔍 [DEBUG] Filtering agents for user: ${currentUser}`);
+    console.log(`🔍 [DEBUG] Total agents available: ${allAgents.length}`);
+    
     if (currentUser === 'Unknown User') {
       // Unknown User should only see agents not owned by authenticated users
       // Agents without owners effectively belong to Unknown User
       try {
+        console.log(`🔍 [DEBUG] Getting all authenticated users and their owned agents...`);
         // Get all authenticated users and their owned agents
         const usersResponse = await couchDBClient.findDocuments('maia_users', {
           selector: {
             _id: { $ne: 'Unknown User' },
-            ownedAgents: { $exists: true }
+            $or: [
+              { ownedAgents: { $exists: true } },
+              { assignedAgentId: { $exists: true } }
+            ]
           }
         });
+        
+        console.log(`🔍 [DEBUG] Found ${usersResponse.docs.length} authenticated users with ownedAgents`);
         
         const ownedAgentIds = new Set();
         usersResponse.docs.forEach(user => {
+          console.log(`🔍 [DEBUG] User ${user._id} has ownedAgents:`, user.ownedAgents);
           if (user.ownedAgents) {
-            user.ownedAgents.forEach(agentId => ownedAgentIds.add(agentId));
+            user.ownedAgents.forEach(agent => {
+              if (typeof agent === 'string') {
+                // Legacy format - just UUID
+                console.log(`🔍 [DEBUG] Legacy format agent: ${agent}`);
+                ownedAgentIds.add(agent);
+              } else if (agent.id) {
+                // New format - object with id and name
+                console.log(`🔍 [DEBUG] New format agent: ${agent.name} (${agent.id})`);
+                ownedAgentIds.add(agent.id);
+              }
+            });
+          }
+          
+          // Also check for assignedAgentId (admin system)
+          if (user.assignedAgentId) {
+            console.log(`🔍 [DEBUG] User ${user._id} has assignedAgentId: ${user.assignedAgentId}`);
+            ownedAgentIds.add(user.assignedAgentId);
           }
         });
         
+        console.log(`🔍 [DEBUG] All owned agent IDs:`, Array.from(ownedAgentIds));
+        
         // Filter out agents owned by authenticated users
         // Unknown User gets all unowned agents
-        filteredAgents = allAgents.filter(agent => !ownedAgentIds.has(agent.uuid));
+        filteredAgents = allAgents.filter(agent => {
+          const isOwned = ownedAgentIds.has(agent.uuid);
+          console.log(`🔍 [DEBUG] Agent ${agent.name} (${agent.uuid}) - owned: ${isOwned}`);
+          return !isOwned;
+        });
+        
         console.log(`[*] Available agents for Unknown User: ${filteredAgents.length} (unowned agents, filtered out ${allAgents.length - filteredAgents.length} owned by authenticated users)`);
       } catch (error) {
         console.warn('Failed to filter agents for Unknown User, showing all:', error.message);
@@ -2308,10 +2349,42 @@ app.get('/api/agents', async (req, res) => {
     } else {
       // Authenticated user should only see their own agents
       try {
+        console.log(`🔍 [DEBUG] Getting owned agents for authenticated user: ${currentUser}`);
         const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        console.log(`🔍 [DEBUG] User document:`, userDoc);
+        
+        const ownedAgentIds = new Set();
+        
+        // Check ownedAgents array (new system)
         if (userDoc && userDoc.ownedAgents && userDoc.ownedAgents.length > 0) {
-          const ownedAgentIds = new Set(userDoc.ownedAgents);
-          filteredAgents = allAgents.filter(agent => ownedAgentIds.has(agent.uuid));
+          userDoc.ownedAgents.forEach(agent => {
+            if (typeof agent === 'string') {
+              // Legacy format - just UUID
+              console.log(`🔍 [DEBUG] Legacy format agent: ${agent}`);
+              ownedAgentIds.add(agent);
+            } else if (agent.id) {
+              // New format - object with id and name
+              console.log(`🔍 [DEBUG] New format agent: ${agent.name} (${agent.id})`);
+              ownedAgentIds.add(agent.id);
+            }
+          });
+        }
+        
+        // Check assignedAgentId (admin system)
+        if (userDoc && userDoc.assignedAgentId) {
+          console.log(`🔍 [DEBUG] User has assignedAgentId: ${userDoc.assignedAgentId}`);
+          ownedAgentIds.add(userDoc.assignedAgentId);
+        }
+        
+        console.log(`🔍 [DEBUG] User's owned agent IDs:`, Array.from(ownedAgentIds));
+        
+        if (ownedAgentIds.size > 0) {
+          filteredAgents = allAgents.filter(agent => {
+            const isOwned = ownedAgentIds.has(agent.uuid);
+            console.log(`🔍 [DEBUG] Agent ${agent.name} (${agent.uuid}) - owned by user: ${isOwned}`);
+            return isOwned;
+          });
+          
           console.log(`[*] Available agents for ${currentUser}: ${filteredAgents.length} (owned by user)`);
         } else {
           // User has no owned agents, show empty list
@@ -2405,24 +2478,41 @@ app.post('/api/agents/:agentId/assign', async (req, res) => {
       userDoc.ownedAgents = [];
     }
     
-    // Add agent to user's owned agents if not already present
-    if (!userDoc.ownedAgents.includes(agentId)) {
-      userDoc.ownedAgents.push(agentId);
+    // Get agent details to include both ID and name
+    const agents = await doRequest('/v2/gen-ai/agents');
+    const agentArray = agents.agents || [];
+    const selectedAgent = agentArray.find(agent => agent.uuid === agentId);
+    
+    if (!selectedAgent) {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+    
+    // Check if agent is already assigned (by UUID)
+    const isAlreadyAssigned = userDoc.ownedAgents.some(agent => agent.id === agentId);
+    
+    if (!isAlreadyAssigned) {
+      // Add agent with both ID and name
+      const agentInfo = {
+        id: selectedAgent.uuid,
+        name: selectedAgent.name,
+        assignedAt: new Date().toISOString()
+      };
+      userDoc.ownedAgents.push(agentInfo);
       userDoc.updatedAt = new Date().toISOString();
       
       // Save updated user document
       await couchDBClient.saveDocument('maia_users', userDoc);
       
-      console.log(`[*] Assigned agent ${agentId} to user ${userId}`);
+      console.log(`[*] Assigned agent ${selectedAgent.name} (${agentId}) to user ${userId}`);
       res.json({ 
         success: true, 
-        message: `Agent assigned to user ${userId}`,
+        message: `Agent ${selectedAgent.name} assigned to user ${userId}`,
         ownedAgents: userDoc.ownedAgents
       });
     } else {
       res.json({ 
         success: true, 
-        message: `Agent already assigned to user ${userId}`,
+        message: `Agent ${selectedAgent.name} already assigned to user ${userId}`,
         ownedAgents: userDoc.ownedAgents
       });
     }
@@ -2445,18 +2535,22 @@ app.delete('/api/agents/:agentId/assign', async (req, res) => {
     // Get user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
     
-    if (userDoc.ownedAgents && userDoc.ownedAgents.includes(agentId)) {
+    // Check if agent is assigned (by UUID)
+    const agentIndex = userDoc.ownedAgents.findIndex(agent => agent.id === agentId);
+    
+    if (agentIndex !== -1) {
+      const agentName = userDoc.ownedAgents[agentIndex].name;
       // Remove agent from user's owned agents
-      userDoc.ownedAgents = userDoc.ownedAgents.filter(id => id !== agentId);
+      userDoc.ownedAgents.splice(agentIndex, 1);
       userDoc.updatedAt = new Date().toISOString();
       
       // Save updated user document
       await couchDBClient.saveDocument('maia_users', userDoc);
       
-      console.log(`[*] Unassigned agent ${agentId} from user ${userId}`);
+      console.log(`[*] Unassigned agent ${agentName} (${agentId}) from user ${userId}`);
       res.json({ 
         success: true, 
-        message: `Agent unassigned from user ${userId}`,
+        message: `Agent ${agentName} unassigned from user ${userId}`,
         ownedAgents: userDoc.ownedAgents
       });
     } else {

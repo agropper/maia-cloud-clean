@@ -89,6 +89,16 @@ export class CouchDBClient {
     }
   }
 
+  async findDocuments(databaseName, query) {
+    try {
+      const db = this.db.use(databaseName)
+      return await db.find(query)
+    } catch (error) {
+      console.error('❌ Failed to find documents:', error)
+      throw error
+    }
+  }
+
   async getAllDocuments(databaseName) {
     try {
       const db = this.db.use(databaseName)
