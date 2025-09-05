@@ -33,6 +33,13 @@
             />
           </div>
 
+          <!-- Unknown User Text Prompt -->
+          <div v-if="!isAuthenticated" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
+              The Unknown User is a shared demo environment. You must sign-in to request a private agent and to create knowledge bases from real health records.
+            </div>
+          </div>
+
         <!-- Workflow Progress Section - Only for authenticated users -->
         <div v-if="isAuthenticated" class="q-mb-lg">
           <!-- Show detailed progress list only when no agent or no KBs -->
@@ -95,8 +102,8 @@
             />
           </div>
 
-          <!-- Choose Files Button (when agent is assigned) -->
-          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current" class="q-mt-md text-center">
+          <!-- Choose Files Button (when agent is assigned) - Only for authenticated users -->
+          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated" class="q-mt-md text-center">
             <q-btn
               label="CREATE KNOWLEDGE BASE"
               color="positive"
@@ -106,8 +113,8 @@
             />
           </div>
 
-          <!-- Cancel Indexing Button (when on Step 6) -->
-          <div v-if="workflowSteps[5].current" class="q-mt-md text-center">
+          <!-- Cancel Indexing Button (when on Step 6) - Only for authenticated users -->
+          <div v-if="workflowSteps[5].current && isAuthenticated" class="q-mt-md text-center">
             <q-btn
               label="CANCEL INDEXING"
               color="warning"
@@ -117,8 +124,8 @@
             />
         </div>
 
-          <!-- Start Indexing Button (when on Step 6 but no indexing job) -->
-          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started')" class="q-mt-md text-center">
+          <!-- Start Indexing Button (when on Step 6 but no indexing job) - Only for authenticated users -->
+          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started') && isAuthenticated" class="q-mt-md text-center">
             <q-btn
               label="START INDEXING"
               color="primary"
@@ -129,8 +136,8 @@
                   </div>
                 </div>
 
-          <!-- Show manage button when agent and KBs are ready -->
-          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0" class="q-mt-md text-center">
+          <!-- Show manage button when agent and KBs are ready - Only for authenticated users -->
+          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0 && isAuthenticated" class="q-mt-md text-center">
             <q-btn
               label="MANAGE HEALTH RECORDS KNOWLEDGE BASES"
               color="primary"
@@ -168,8 +175,8 @@
           </div>
         </div>
 
-        <!-- Agent Actions (if agent exists) -->
-        <div v-if="currentAgent" class="q-mb-md">
+        <!-- Agent Actions (if agent exists) - Only for authenticated users -->
+        <div v-if="currentAgent && isAuthenticated" class="q-mb-md">
           <div class="row q-gutter-md">
             <q-btn
               label="Update Agent"
@@ -252,15 +259,15 @@
           <!-- Knowledge Base Section - Always show for all users -->
             <q-card flat bordered class="q-mb-md">
               <q-card-section>
-                <div class="row items-center q-mb-sm">
+                <div v-if="isAuthenticated" class="row items-center q-mb-sm">
                   <q-icon name="library_books" color="secondary" />
                   <span class="text-subtitle2 q-ml-sm"
                     >Available Knowledge Bases</span
                   >
                 </div>
 
-                <!-- Create New Knowledge Base Button -->
-                <div class="q-mb-md">
+                <!-- Create New Knowledge Base Button - Only for authenticated users -->
+                <div v-if="isAuthenticated" class="q-mb-md">
                   <q-btn
                     label="Create New Knowledge Base"
                     color="primary"
@@ -284,7 +291,7 @@
 
                 <!-- Knowledge Base List -->
                 <div v-if="availableKnowledgeBases.length > 0" class="q-mb-md">
-                  <h6 class="q-mb-sm">Available Knowledge Bases:</h6>
+                  <h6 v-if="isAuthenticated" class="q-mb-sm">Available Knowledge Bases:</h6>
                   <div
                     v-for="kb in availableKnowledgeBases"
                     :key="kb.uuid"
