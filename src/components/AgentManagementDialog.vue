@@ -1576,24 +1576,14 @@ export default defineComponent({
           }
         }
 
-        // Load all agents for the agent list
+        // Load agents filtered by user ownership
         try {
-          // For authenticated users, only show agents if they have been approved
-          // For unauthenticated users (legacy), show all agents
-          if (!isAuthenticated.value) {
-            const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
+          const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Unknown User';
+          const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
             if (agentsResponse.ok) {
               const agents: DigitalOceanAgent[] = await agentsResponse.json();
               availableAgents.value = agents;
-            }
-          } else {
-            // Authenticated user - show all available agents for selection
-            const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
-            if (agentsResponse.ok) {
-              const agents: DigitalOceanAgent[] = await agentsResponse.json();
-              availableAgents.value = agents;
-              // Available agents loaded
-            }
+            console.log(`[*] Available agents: ${agents.length} for user ${currentUsername}`);
           }
         } catch (agentsError) {
           console.warn("Failed to load agents list:", agentsError);
@@ -1674,6 +1664,29 @@ export default defineComponent({
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
+      const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Unknown User';
+      
+      // For authenticated users, assign the agent to them
+      if (currentUsername !== 'Unknown User') {
+        try {
+          const assignResponse = await fetch(`${API_BASE_URL}/agents/${agentId}/assign`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userId: currentUsername }),
+          });
+          
+          if (assignResponse.ok) {
+            const result = await assignResponse.json();
+            console.log(`[*] Agent ${agentId} assigned to user ${currentUsername}`);
+          } else {
+            console.warn(`Failed to assign agent ${agentId} to user ${currentUsername}`);
+          }
+        } catch (error) {
+          console.warn(`Error assigning agent ${agentId} to user ${currentUsername}:`, error);
+        }
+      }
       try {
         const response = await fetch(`/api/current-agent`, {
           method: "POST",

@@ -1042,7 +1042,7 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 // Personal Chat endpoint (DigitalOcean Agent Platform)
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
-  
+
   try {
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
     
@@ -1257,7 +1257,7 @@ app.post('/api/personal-chat', async (req, res) => {
     let response;
     try {
       response = await agentClient.chat.completions.create(params);
-      const responseTime = Date.now() - startTime;
+    const responseTime = Date.now() - startTime;
       console.log(`[*] AI Response time: ${responseTime}ms`);
     } catch (agentError) {
       console.error(`❌ Agent-specific endpoint failed: ${agentError.message}`);
@@ -2234,7 +2234,7 @@ app.get('/api/agents', async (req, res) => {
     console.log(`🤖 Listed ${agents.agents?.length || 0} agents`);
     
     // Transform agents to match frontend expectations
-    const transformedAgents = (agents.agents || []).map(agent => ({
+    const allAgents = (agents.agents || []).map(agent => ({
       id: agent.uuid,
       name: agent.name,
       description: agent.instruction || '',
@@ -2247,7 +2247,55 @@ app.get('/api/agents', async (req, res) => {
       updated_at: agent.updated_at
     }));
     
-    res.json(transformedAgents);
+    // Filter agents based on user ownership
+    const currentUser = req.query.user || req.session?.userId || 'Unknown User';
+    let filteredAgents = allAgents;
+    
+    if (currentUser === 'Unknown User') {
+      // Unknown User should only see agents not owned by authenticated users
+      try {
+        // Get all authenticated users and their owned agents
+        const usersResponse = await couchDBClient.findDocuments('maia_users', {
+          selector: {
+            _id: { $ne: 'Unknown User' },
+            ownedAgents: { $exists: true }
+          }
+        });
+        
+        const ownedAgentIds = new Set();
+        usersResponse.docs.forEach(user => {
+          if (user.ownedAgents) {
+            user.ownedAgents.forEach(agentId => ownedAgentIds.add(agentId));
+          }
+        });
+        
+        // Filter out agents owned by authenticated users
+        filteredAgents = allAgents.filter(agent => !ownedAgentIds.has(agent.uuid));
+        console.log(`[*] Available agents for Unknown User: ${filteredAgents.length} (filtered out ${allAgents.length - filteredAgents.length} owned by authenticated users)`);
+      } catch (error) {
+        console.warn('Failed to filter agents for Unknown User, showing all:', error.message);
+        // If filtering fails, show all agents (fallback to current behavior)
+      }
+    } else {
+      // Authenticated user should only see their own agents
+      try {
+        const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        if (userDoc && userDoc.ownedAgents && userDoc.ownedAgents.length > 0) {
+          const ownedAgentIds = new Set(userDoc.ownedAgents);
+          filteredAgents = allAgents.filter(agent => ownedAgentIds.has(agent.uuid));
+          console.log(`[*] Available agents for ${currentUser}: ${filteredAgents.length} (owned by user)`);
+        } else {
+          // User has no owned agents, show empty list
+          filteredAgents = [];
+          console.log(`[*] Available agents for ${currentUser}: 0 (no owned agents)`);
+        }
+      } catch (error) {
+        console.warn(`Failed to get owned agents for ${currentUser}, showing empty list:`, error.message);
+        filteredAgents = [];
+      }
+    }
+    
+    res.json(filteredAgents);
   } catch (error) {
     console.error('❌ List agents error:', error);
     res.status(500).json({ message: `Failed to list agents: ${error.message}` });
@@ -2293,6 +2341,105 @@ app.get('/api/agents/:agentId', async (req, res) => {
   } catch (error) {
     console.error('❌ Get agent error:', error);
     res.status(500).json({ message: `Failed to get agent: ${error.message}` });
+  }
+});
+
+// Assign agent to user
+app.post('/api/agents/:agentId/assign', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // Get or create user document
+    let userDoc;
+    try {
+      userDoc = await couchDBClient.getDocument('maia_users', userId);
+    } catch (error) {
+      if (error.statusCode === 404) {
+        // Create new user document
+        userDoc = {
+          _id: userId,
+          ownedAgents: [],
+          createdAt: new Date().toISOString()
+        };
+      } else {
+        throw error;
+      }
+    }
+    
+    // Initialize ownedAgents array if it doesn't exist
+    if (!userDoc.ownedAgents) {
+      userDoc.ownedAgents = [];
+    }
+    
+    // Add agent to user's owned agents if not already present
+    if (!userDoc.ownedAgents.includes(agentId)) {
+      userDoc.ownedAgents.push(agentId);
+      userDoc.updatedAt = new Date().toISOString();
+      
+      // Save updated user document
+      await couchDBClient.saveDocument('maia_users', userDoc);
+      
+      console.log(`[*] Assigned agent ${agentId} to user ${userId}`);
+      res.json({ 
+        success: true, 
+        message: `Agent assigned to user ${userId}`,
+        ownedAgents: userDoc.ownedAgents
+      });
+    } else {
+      res.json({ 
+        success: true, 
+        message: `Agent already assigned to user ${userId}`,
+        ownedAgents: userDoc.ownedAgents
+      });
+    }
+  } catch (error) {
+    console.error('❌ Assign agent error:', error);
+    res.status(500).json({ message: `Failed to assign agent: ${error.message}` });
+  }
+});
+
+// Unassign agent from user
+app.delete('/api/agents/:agentId/assign', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    
+    if (userDoc.ownedAgents && userDoc.ownedAgents.includes(agentId)) {
+      // Remove agent from user's owned agents
+      userDoc.ownedAgents = userDoc.ownedAgents.filter(id => id !== agentId);
+      userDoc.updatedAt = new Date().toISOString();
+      
+      // Save updated user document
+      await couchDBClient.saveDocument('maia_users', userDoc);
+      
+      console.log(`[*] Unassigned agent ${agentId} from user ${userId}`);
+      res.json({ 
+        success: true, 
+        message: `Agent unassigned from user ${userId}`,
+        ownedAgents: userDoc.ownedAgents
+      });
+    } else {
+      res.json({ 
+        success: true, 
+        message: `Agent was not assigned to user ${userId}`,
+        ownedAgents: userDoc.ownedAgents || []
+      });
+    }
+  } catch (error) {
+    console.error('❌ Unassign agent error:', error);
+    res.status(500).json({ message: `Failed to unassign agent: ${error.message}` });
   }
 });
 
@@ -4466,7 +4613,7 @@ app.listen(PORT, () => {
   console.log(`🚀 MAIA Secure Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
-  console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
+      console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
   console.log(`📅 Server started at: ${new Date().toISOString()}`);
 }); 
