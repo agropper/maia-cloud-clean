@@ -61,6 +61,7 @@ This document defines which console messages are essential and should be preserv
 - `📚 Refreshed {count} knowledge bases` (when duplicated)
 - `🤖 Current agent loaded for authenticated user` (when duplicated)
 - `🔍 Backend Session: Active` (removed - not essential)
+- `📋 Check server logs for actual agent and knowledge base used` (not essential)
 
 ### Message Prefix Standards
 

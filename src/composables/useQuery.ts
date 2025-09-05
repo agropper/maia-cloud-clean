@@ -117,7 +117,6 @@ export const sendQuery = async (
     
     console.log(`🤖 ${aiProvider}: ${totalTokens} tokens, ${contextKB}KB context, ${appState.uploadedFiles?.length || 0} files`)
     console.log(`✅ ${aiProvider} response: ${responseTime}ms`)
-    console.log(`📋 Check server logs for actual agent and knowledge base used`)
 
     return response;
   } catch (error: any) {
