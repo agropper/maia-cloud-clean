@@ -2227,6 +2227,33 @@ const getAgentApiKey = async (agentId) => {
   return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
 };
 
+// Helper function to check if an agent is available to Unknown User
+const isAgentAvailableToUnknownUser = async (agentId) => {
+  try {
+    // Get all authenticated users and their owned agents
+    const usersResponse = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        _id: { $ne: 'Unknown User' },
+        ownedAgents: { $exists: true }
+      }
+    });
+    
+    const ownedAgentIds = new Set();
+    usersResponse.docs.forEach(user => {
+      if (user.ownedAgents) {
+        user.ownedAgents.forEach(id => ownedAgentIds.add(id));
+      }
+    });
+    
+    // Agent is available to Unknown User if it's not owned by any authenticated user
+    return !ownedAgentIds.has(agentId);
+  } catch (error) {
+    console.warn('Failed to check agent availability for Unknown User:', error.message);
+    // If we can't check, assume it's available (fallback to current behavior)
+    return true;
+  }
+};
+
 // List agents
 app.get('/api/agents', async (req, res) => {
   try {
@@ -2534,8 +2561,31 @@ app.get('/api/current-agent', async (req, res) => {
           const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
           console.log(`🔍 [current-agent] Retrieved Unknown User document:`, userDoc);
           if (userDoc && userDoc.currentAgentId) {
-            agentId = userDoc.currentAgentId;
-            console.log(`🔐 [current-agent] Using Unknown User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+            // Check if the selected agent is still available to Unknown User (not owned by authenticated users)
+            const isAgentAvailable = await isAgentAvailableToUnknownUser(userDoc.currentAgentId);
+            if (isAgentAvailable) {
+              agentId = userDoc.currentAgentId;
+              console.log(`🔐 [current-agent] Using Unknown User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+            } else {
+              // Agent is no longer available to Unknown User (now owned by authenticated user)
+              console.log(`🔍 [current-agent] Unknown User's selected agent ${userDoc.currentAgentName} is now owned by an authenticated user, clearing selection`);
+              // Clear the invalid agent selection
+              const updatedUserDoc = {
+                ...userDoc,
+                currentAgentId: null,
+                currentAgentName: null,
+                currentAgentEndpoint: null,
+                currentAgentSetAt: null,
+                updatedAt: new Date().toISOString()
+              };
+              await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+              
+              return res.json({ 
+                agent: null, 
+                message: 'Your previous agent selection is no longer available. Please choose a new agent via the Agent Management dialog.',
+                requiresAgentSelection: true
+              });
+            }
           } else {
             // Unknown User - no current agent selection available
             return res.json({ 
@@ -3260,6 +3310,17 @@ app.post('/api/current-agent', async (req, res) => {
     
     if (!selectedAgent) {
       return res.status(404).json({ message: 'Agent not found' });
+    }
+    
+    // For Unknown User, check if the agent is available to them
+    if (currentUser === 'Unknown User') {
+      const isAgentAvailable = await isAgentAvailableToUnknownUser(agentId);
+      if (!isAgentAvailable) {
+        return res.status(403).json({ 
+          message: 'This agent is not available for selection. It may be assigned to another user.',
+          requiresAgentSelection: true
+        });
+      }
     }
     
     // Store the current agent selection in Cloudant for the user
