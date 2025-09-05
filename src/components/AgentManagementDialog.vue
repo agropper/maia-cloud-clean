@@ -1664,29 +1664,9 @@ export default defineComponent({
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
-      const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Unknown User';
-      
-      // For authenticated users, assign the agent to them
-      if (currentUsername !== 'Unknown User') {
-        try {
-          const assignResponse = await fetch(`${API_BASE_URL}/agents/${agentId}/assign`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ userId: currentUsername }),
-          });
-          
-          if (assignResponse.ok) {
-            const result = await assignResponse.json();
-            console.log(`[*] Agent ${agentId} assigned to user ${currentUsername}`);
-          } else {
-            console.warn(`Failed to assign agent ${agentId} to user ${currentUsername}`);
-          }
-        } catch (error) {
-          console.warn(`Error assigning agent ${agentId} to user ${currentUsername}:`, error);
-        }
-      }
+      // Note: Agents are not automatically assigned to users
+      // Agents without owners belong to Unknown User
+      // Authenticated users can only select agents that are already assigned to them
       try {
         const response = await fetch(`/api/current-agent`, {
           method: "POST",

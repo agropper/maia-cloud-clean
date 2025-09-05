@@ -2253,6 +2253,7 @@ app.get('/api/agents', async (req, res) => {
     
     if (currentUser === 'Unknown User') {
       // Unknown User should only see agents not owned by authenticated users
+      // Agents without owners effectively belong to Unknown User
       try {
         // Get all authenticated users and their owned agents
         const usersResponse = await couchDBClient.findDocuments('maia_users', {
@@ -2270,8 +2271,9 @@ app.get('/api/agents', async (req, res) => {
         });
         
         // Filter out agents owned by authenticated users
+        // Unknown User gets all unowned agents
         filteredAgents = allAgents.filter(agent => !ownedAgentIds.has(agent.uuid));
-        console.log(`[*] Available agents for Unknown User: ${filteredAgents.length} (filtered out ${allAgents.length - filteredAgents.length} owned by authenticated users)`);
+        console.log(`[*] Available agents for Unknown User: ${filteredAgents.length} (unowned agents, filtered out ${allAgents.length - filteredAgents.length} owned by authenticated users)`);
       } catch (error) {
         console.warn('Failed to filter agents for Unknown User, showing all:', error.message);
         // If filtering fails, show all agents (fallback to current behavior)
@@ -2287,7 +2289,7 @@ app.get('/api/agents', async (req, res) => {
         } else {
           // User has no owned agents, show empty list
           filteredAgents = [];
-          console.log(`[*] Available agents for ${currentUser}: 0 (no owned agents)`);
+          console.log(`[*] Available agents for ${currentUser}: 0 (no owned agents - agents must be assigned by admin)`);
         }
       } catch (error) {
         console.warn(`Failed to get owned agents for ${currentUser}, showing empty list:`, error.message);
