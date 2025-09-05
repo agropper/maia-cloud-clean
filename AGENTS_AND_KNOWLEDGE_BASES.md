@@ -45,6 +45,43 @@ This document provides a comprehensive analysis of the current state of agents, 
   - Create KB: `POST /knowledge_bases`
   - Get KB details: `GET /knowledge_bases/{kb_id}`
 
+### 3. DigitalOcean Agent API Keys
+- **Endpoint**: `https://api.digitalocean.com/v2/gen-ai/agents/{agent_uuid}/api_keys`
+- **Purpose**: Manage agent-specific API keys for authentication
+- **Usage**:
+  - List API keys: `GET /agents/{agent_uuid}/api_keys` (returns metadata only)
+  - Create API key: `POST /agents/{agent_uuid}/api_keys` (returns actual key)
+- **Implementation**: 
+  - Each agent requires its own API key for authentication
+  - Keys are created via POST request and stored securely in server configuration
+  - Keys are retrieved using `getAgentApiKey(agentId)` function
+  - Fallback to global `DIGITALOCEAN_PERSONAL_API_KEY` if agent-specific key not found
+
+## Agent-Specific Authentication Implementation
+
+### Current Agent API Keys (Hardcoded in server.js)
+```javascript
+const agentApiKeys = {
+  '2960ae8d-8514-11f0-b074-4e013e2ddde4': 'fnCsOfehzcEemiTKdowBFbjAIf7jSFwz', // agent-08292025
+  '059fc237-7077-11f0-b056-36d958d30bcf': 'QDb19YdQi2adFlF76VLCg7qSk6BzS8sS', // agent-08032025
+  '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4': '6_LUNA_A-MVAxNkuaPbE3FnErmcBF7JK'  // agent-05102025
+};
+```
+
+### Authentication Flow
+1. **Agent Selection**: User selects agent via Agent Management dialog
+2. **Agent Storage**: Agent ID stored in Cloudant (`maia_users` database)
+3. **API Key Retrieval**: `getAgentApiKey(agentId)` function looks up agent-specific key
+4. **OpenAI Client Creation**: Agent-specific OpenAI client created with:
+   - `baseURL`: Agent's deployment URL (`https://{agent-id}.agents.do-ai.run/api/v1`)
+   - `apiKey`: Agent-specific API key from `agentApiKeys` map
+5. **Query Execution**: Chat completion request sent to agent-specific endpoint
+
+### Error Handling
+- **No API Key**: Returns 400 error with message "No API key available for the selected agent"
+- **Authentication Failed (401)**: Returns 400 error with message "Authentication failed for the selected agent"
+- **Access Denied (403)**: Returns 400 error with message "Access denied for the selected agent"
+
 ## Current State Analysis
 
 ### DigitalOcean Knowledge Bases (14 total)

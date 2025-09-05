@@ -39,6 +39,16 @@
             <div v-if="warning" class="text-caption text-warning q-mt-xs warning-text">
               <q-icon name="warning" size="1rem" class="q-mr-xs" />
               {{ warning }}
+              <q-btn
+                flat
+                round
+                dense
+                size="sm"
+                icon="close"
+                color="white"
+                @click="$emit('clear-warning')"
+                class="q-ml-sm"
+              />
             </div>
           </div>
           <q-btn
@@ -205,21 +215,9 @@ export default defineComponent({
       }
     })
 
-    // Watch for agent prop changes to display backend console message
-    watch(() => props.agent, (newAgent) => {
-      // If we have an agent, log the backend console message
-      if (newAgent && newAgent.consoleMessage) {
-        console.log(newAgent.consoleMessage);
-      }
-    }, { immediate: true });
+    // Note: Backend console messages removed - not essential for user experience
 
-    // Watch for currentUser changes to trigger agent refresh
-    watch(() => props.currentUser, (newUser, oldUser) => {
-      
-      // When user changes, we need to refresh the agent data to get updated console message
-      // This will trigger the parent component to re-fetch agent data
-      
-    }, { immediate: true });
+    // Note: Agent status updates are handled by parent component via props
 
     return {
       agentName,

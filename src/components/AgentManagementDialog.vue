@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="showDialog" persistent @show="onDialogOpen">
+  <q-dialog v-model="showDialog" persistent @before-show="onDialogBeforeShow" @show="onDialogOpen">
     <q-card style="min-width: 600px; max-width: 800px">
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🤖 Agent Management</div>
@@ -8,17 +8,30 @@
       </q-card-section>
 
       <q-card-section>
-        <!-- Agent Badge for All Users - Always show -->
-        <div class="q-mb-lg">
-          <AgentStatusIndicator
-            :agent="currentAgent"
-            :warning="warning"
-            :currentUser="localCurrentUser"
-            :currentWorkflowStep="currentWorkflowStep"
-            :showManageButton="false"
-            :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
+        <!-- Dialog Loading State -->
+        <div v-if="isDialogLoading" class="text-center q-pa-xl">
+          <q-spinner-dots
+            size="3rem"
+            color="primary"
           />
+          <div class="text-h6 q-mt-md">Loading Agent Management...</div>
+          <div class="text-caption q-mt-sm">Please wait while we load your agent and knowledge base information</div>
         </div>
+
+        <!-- Main Content (only show when not loading) -->
+        <div v-else>
+          <!-- Agent Badge for All Users - Always show -->
+          <div class="q-mb-lg">
+            <AgentStatusIndicator
+              :agent="currentAgent"
+              :warning="warning"
+              :currentUser="localCurrentUser"
+              @clear-warning="warning = ''"
+              :currentWorkflowStep="currentWorkflowStep"
+              :showManageButton="false"
+              :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
+            />
+          </div>
 
         <!-- Workflow Progress Section - Only for authenticated users -->
         <div v-if="isAuthenticated" class="q-mb-lg">
@@ -380,6 +393,7 @@
                 </div>
               </q-card-section>
             </q-card>
+          </div>
         </div>
       </q-card-section>
     </q-card>
@@ -919,6 +933,7 @@ import {
   QChip,
   QTooltip,
   QAvatar,
+  QSpinnerDots,
 } from "quasar";
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
@@ -973,6 +988,7 @@ export default defineComponent({
     QChip,
     QTooltip,
     QAvatar,
+    QSpinnerDots,
   },
   props: {
     modelValue: {
@@ -1017,7 +1033,8 @@ export default defineComponent({
     const knowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const availableKnowledgeBases = ref<DigitalOceanKnowledgeBase[]>([]);
     const documents = ref<any[]>([]);
-    const isLoading = ref(true); // Start with loading true
+    const isLoading = ref(false); // Start with loading false
+    const isDialogLoading = ref(false); // New loading state for dialog opening
     const isCreating = ref(false);
     const isUpdating = ref(false);
     const isDeleting = ref(false);
@@ -1441,6 +1458,12 @@ export default defineComponent({
 
     // Load current agent info
     const loadAgentInfo = async () => {
+      // Prevent multiple simultaneous calls
+      if (isLoading.value) {
+        console.log("Skipping duplicate loadAgentInfo request");
+        return;
+      }
+      
       isLoading.value = true;
       try {
         // For authenticated users, only load current agent if they have been approved
@@ -1569,7 +1592,7 @@ export default defineComponent({
             if (agentsResponse.ok) {
               const agents: DigitalOceanAgent[] = await agentsResponse.json();
               availableAgents.value = agents;
-              console.log(`[*] Available agents: ${agents.length}`);
+              // Available agents loaded
             }
           }
         } catch (agentsError) {
@@ -1605,7 +1628,7 @@ export default defineComponent({
               });
 
               availableKnowledgeBases.value = allKBs;
-              console.log(`[*] Available knowledge bases: ${userKnowledgeBases.length}`);
+              // Available knowledge bases loaded
             }
           } else {
             // Unauthenticated user - show all available KBs (legacy behavior)
@@ -1632,7 +1655,7 @@ export default defineComponent({
               });
 
               availableKnowledgeBases.value = allKBs;
-              console.log(`[*] Available knowledge bases: ${allKnowledgeBases.length}`);
+              // Available knowledge bases loaded
             }
           }
         } catch (kbError) {
@@ -1878,8 +1901,14 @@ export default defineComponent({
       }
     };
 
+    // Set loading state before dialog shows
+    const onDialogBeforeShow = () => {
+      isDialogLoading.value = true;
+    };
+
     // Load agent info when dialog opens
     const onDialogOpen = async () => {
+      try {
         console.log(`🔐 Dialog opening - checking authentication status...`);
       await checkAuthenticationStatus();
       await loadAgentInfo();
@@ -1888,21 +1917,15 @@ export default defineComponent({
           console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
         }
         await updateWorkflowProgress(); // Update workflow progress after loading data
+      } finally {
+        isDialogLoading.value = false;
+      }
     };
 
-    // Watch for changes in currentUser prop
-    watch(() => props.currentUser, async (newUser) => {
-      if (newUser) {
-        if (localCurrentUser.value?.userId !== newUser.userId) {
-          console.log(`[*] Current user: ${newUser.userId}`);
-        }
-        await checkAuthenticationStatus();
-        await updateWorkflowProgress(); // Update workflow progress when user changes
-        
-        // Refresh knowledge bases when user changes
-        if (newUser.userId) {
-          await refreshKnowledgeBases();
-        }
+    // Watch for user changes to log them (but don't make API calls)
+    watch(() => props.currentUser, (newUser) => {
+      if (newUser && localCurrentUser.value?.userId !== newUser.userId) {
+        console.log(`[*] Current user: ${newUser.userId}`);
       }
     }, { immediate: true });
 
@@ -1917,12 +1940,8 @@ export default defineComponent({
       emit("agent-updated", { agent: agent, knowledgeBase: null });
     };
 
-    // Watch for dialog opening to load agent info
-    watch(showDialog, (newVal) => {
-      if (newVal) {
-        loadAgentInfo();
-      }
-    });
+    // Note: Dialog opening is handled by onDialogOpen function
+    // No need for additional watcher as this causes duplicate API calls
 
     // Handle knowledge base selection
     const handleKnowledgeBaseClick = async (kb: DigitalOceanKnowledgeBase) => {
@@ -3293,6 +3312,7 @@ export default defineComponent({
       availableKnowledgeBases,
       documents,
       isLoading,
+      isDialogLoading,
       isCreating,
       isUpdating,
       isDeleting,
@@ -3315,6 +3335,7 @@ export default defineComponent({
       updateAgent,
       confirmDelete,
       deleteAgent,
+      onDialogBeforeShow,
       onDialogOpen,
       handleAgentCreated,
       handleKnowledgeBaseClick,

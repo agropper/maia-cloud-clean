@@ -191,8 +191,20 @@
       </div>
     </div>
 
-    <div :class="'message ' + appState.messageType">
-      <p v-if="appState.isMessage">{{ appState.message }}</p>
+    <div :class="'message ' + appState.messageType" v-if="appState.isMessage">
+      <div class="message-content">
+        <p>{{ appState.message }}</p>
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="close"
+          color="white"
+          @click="appState.isMessage = false"
+          class="q-ml-sm"
+        />
+      </div>
     </div>
 
     <!-- Group Management Modal -->
@@ -658,6 +670,12 @@ export default defineComponent({
   padding: 8px 16px;
   text-align: center;
   font-size: 14px;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .message.info {

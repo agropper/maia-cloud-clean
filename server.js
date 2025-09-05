@@ -1042,15 +1042,19 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 // Personal Chat endpoint (DigitalOcean Agent Platform)
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
+  console.log(`🔍 [personal-chat] ENDPOINT CALLED - Starting request processing`);
+  
   try {
-    if (!personalChatClient) {
-      return res.status(500).json({ message: 'DigitalOcean Personal API key not configured' });
-    }
+    console.log(`🔍 [personal-chat] Using agent-specific authentication (no global personalChatClient needed)`);
 
+    console.log(`🔍 [personal-chat] Parsing request body...`);
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
+    console.log(`🔍 [personal-chat] Request body parsed successfully`);
     
     // Filter out any existing system messages since the GenAI agent has its own system prompt
+    console.log(`🔍 [personal-chat] Filtering system messages...`);
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
+    console.log(`🔍 [personal-chat] System messages filtered`);
 
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
@@ -1171,10 +1175,16 @@ app.post('/api/personal-chat', async (req, res) => {
       } else {
         // For Unknown User, check if they have a current agent selection stored in Cloudant
         try {
+          console.log(`🔍 [personal-chat] Starting Unknown User agent lookup...`);
           const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          console.log(`🔍 [personal-chat] Retrieved user doc:`, userDoc ? 'Found' : 'Not found');
+          
           if (userDoc && userDoc.currentAgentId) {
+            console.log(`🔍 [personal-chat] User has currentAgentId: ${userDoc.currentAgentId}`);
             // Get the agent's deployment URL from DigitalOcean API
+            console.log(`🔍 [personal-chat] About to call doRequest for agent: ${userDoc.currentAgentId}`);
             const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+            console.log(`🔍 [personal-chat] doRequest completed successfully`);
             const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
             
             if (agentData && agentData.deployment?.url) {
@@ -1200,7 +1210,9 @@ app.post('/api/personal-chat', async (req, res) => {
             });
           }
         } catch (userError) {
-          console.warn(`Failed to get current agent selection for Unknown User:`, userError.message);
+          console.error(`❌ [personal-chat] Error in Unknown User agent lookup:`, userError);
+          console.error(`❌ [personal-chat] Error message:`, userError.message);
+          console.error(`❌ [personal-chat] Error stack:`, userError.stack);
           return res.status(400).json({ 
             message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
             requiresAgentSelection: true
@@ -1223,14 +1235,36 @@ app.post('/api/personal-chat', async (req, res) => {
     console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`);
     console.log(`[*] Current user: ${currentUser}, Agent: ${agentName}, Connected KBs: [${knowledgeBases.join(', ')}]`);
 
+    // Check if we have a valid agent configuration
+    if (!agentId || !agentEndpoint) {
+      console.error(`❌ No valid agent configuration found. AgentId: ${agentId}, Endpoint: ${agentEndpoint}`);
+      console.error(`❌ AgentName: ${agentName}, AgentModel: ${agentModel}`);
+      return res.status(400).json({ 
+        message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+        requiresAgentSelection: true
+      });
+    }
+
     // Get agent-specific API key
     let agentApiKey;
     try {
       agentApiKey = await getAgentApiKey(agentId);
       console.log(`🔑 Retrieved agent-specific API key for agent: ${agentId}`);
+      
+      // Check if we have a valid API key
+      if (!agentApiKey) {
+        console.error(`❌ No API key available for agent: ${agentId}`);
+        return res.status(400).json({ 
+          message: 'No API key available for the selected agent. Please contact support to configure agent authentication.',
+          requiresAgentSelection: true
+        });
+      }
     } catch (error) {
-      console.error(`❌ Failed to get agent-specific API key, falling back to global key:`, error.message);
-      agentApiKey = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+      console.error(`❌ Failed to get agent-specific API key:`, error.message);
+      return res.status(400).json({ 
+        message: 'Failed to retrieve API key for the selected agent. Please contact support to configure agent authentication.',
+        requiresAgentSelection: true
+      });
     }
 
     // Create agent-specific OpenAI client
@@ -1249,6 +1283,23 @@ app.post('/api/personal-chat', async (req, res) => {
       console.log(`[*] AI Response time: ${responseTime}ms`);
     } catch (agentError) {
       console.error(`❌ Agent-specific endpoint failed: ${agentError.message}`);
+      
+      // Check if it's an authentication error
+      if (agentError.status === 401 || agentError.message.includes('unauthorized') || agentError.message.includes('authentication')) {
+        return res.status(400).json({ 
+          message: 'Authentication failed for the selected agent. The API key may be invalid or expired. Please contact support.',
+          requiresAgentSelection: true
+        });
+      }
+      
+      // Check if it's a forbidden error
+      if (agentError.status === 403 || agentError.message.includes('forbidden')) {
+        return res.status(400).json({ 
+          message: 'Access denied for the selected agent. The API key may not have the required permissions. Please contact support.',
+          requiresAgentSelection: true
+        });
+      }
+      
       throw agentError; // Re-throw the error to be handled by the outer catch block
     }
     
@@ -2414,7 +2465,7 @@ app.get('/api/current-agent', async (req, res) => {
       deployment: agentData.deployment,
       knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
       knowledgeBases: connectedKnowledgeBases, // Add all connected KBs
-      consoleMessage: `🔍 Backend Session: ${req.session ? 'Active' : 'None'} | User: ${currentUser} | Chats: ${groupChatCount}`
+      // Backend session info removed - not essential for user experience
     };
 
     // Use the agent's deployment URL for the endpoint

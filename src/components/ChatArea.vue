@@ -10,6 +10,7 @@
         @manage="$emit('manage-agent')"
         @sign-in="$emit('sign-in')"
         @sign-out="$emit('sign-out')"
+        @clear-warning="$emit('clear-warning')"
         style="display: none;"
       />
       
@@ -346,7 +347,8 @@ export default defineComponent({
     'sign-in',
     'sign-out',
     'group-count-updated',
-    'deep-link-updated'
+    'deep-link-updated',
+    'clear-warning'
   ],
   methods: {
     editMessage(index: number) {

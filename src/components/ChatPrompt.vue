@@ -156,41 +156,61 @@ export default defineComponent({
       }
     };
 
+    // API call deduplication
+    const apiCallCache = new Map();
+    
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/current-agent`);
-        const data = await response.json();
+      // Check if we already have a pending request for this endpoint
+      const cacheKey = 'current-agent';
+      if (apiCallCache.has(cacheKey)) {
+        console.log(`Skipping duplicate current-agent request`);
+        return await apiCallCache.get(cacheKey);
+      }
+      
+      // Create a promise and cache it
+      const promise = (async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/current-agent`);
+          const data = await response.json();
 
-        if (data.agent) {
-          currentAgent.value = data.agent;
-          console.log("[*] Current agent:", data.agent.name);
+          if (data.agent) {
+            currentAgent.value = data.agent;
+            console.log("[*] Current agent:", data.agent.name);
 
-          if (data.agent.knowledgeBase) {
+            if (data.agent.knowledgeBase) {
+            } else {
+            }
+
+            // Handle warnings from the API
+            if (data.warning) {
+              console.warn(data.warning);
+              agentWarning.value = data.warning;
+            } else {
+              agentWarning.value = "";
+            }
           } else {
-          }
-
-          // Handle warnings from the API
-          if (data.warning) {
-            console.warn(data.warning);
-            agentWarning.value = data.warning;
-          } else {
-            agentWarning.value = "";
-          }
-        } else {
-          currentAgent.value = null;
-          console.log("[*] No agent selected");
-          
-          // Check if agent selection is required
-          if (data.requiresAgentSelection) {
-            // Show modal dialog to select agent
-            showAgentSelectionModal.value = true;
+            currentAgent.value = null;
+            console.log("[*] No agent selected");
+            
+            // Check if agent selection is required
+            if (data.requiresAgentSelection) {
+              // Show modal dialog to select agent
+              showAgentSelectionModal.value = true;
           }
         }
-      } catch (error) {
-        console.error("❌ Error fetching current agent:", error);
-        currentAgent.value = null;
-      }
+        } catch (error) {
+          console.error("❌ Error fetching current agent:", error);
+          currentAgent.value = null;
+        } finally {
+          // Remove from cache when done
+          apiCallCache.delete(cacheKey);
+        }
+      })();
+      
+      // Cache the promise
+      apiCallCache.set(cacheKey, promise);
+      return await promise;
     };
 
     // Check for existing session on component mount
@@ -365,10 +385,7 @@ export default defineComponent({
         const response = await fetch(`${API_BASE_URL}/passkey/logout`, { method: "POST" });
         const data = await response.json();
         
-        // Display backend console message if provided
-        if (data.consoleMessage) {
-          console.log(data.consoleMessage);
-        }
+        // Backend console messages removed - not essential for user experience
       } catch (error) {
         console.error('❌ Backend logout failed:', error);
       }
@@ -381,16 +398,8 @@ export default defineComponent({
       showPasskeyAuthDialog.value = false;
     };
 
-    // Refresh agent data when user changes
-    watch(currentUser, async () => {
-      // Only fetch if we don't already have an agent to prevent overriding
-      // the agent that was just selected
-      if (!currentAgent.value) {
-        await fetchCurrentAgent();
-      } else {
-        // Agent already exists, skipping fetch
-      }
-    });
+    // Note: Agent data is fetched on component mount and when explicitly updated
+    // No need to watch user changes as this causes duplicate API calls
 
     const editMessage = (idx: number) => {
       appState.editBox.push(idx);
@@ -482,6 +491,8 @@ export default defineComponent({
       } catch (error) {
         console.error("Query failed:", error);
         writeMessage("Failed to send query", "error");
+        // Also set agent warning to show error in AgentStatusIndicator
+        agentWarning.value = "Query failed. Please try again.";
         appState.isLoading = false;
       }
 
@@ -714,6 +725,7 @@ export default defineComponent({
     @save-to-file="saveToFile"
     @trigger-save-to-couchdb="triggerSaveToCouchDB"
     @close-no-save="closeNoSave"
+    @clear-warning="agentWarning = ''"
 
     :currentAgent="currentAgent"
     :warning="agentWarning"
