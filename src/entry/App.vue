@@ -2,7 +2,7 @@
 import ChatPrompt from '../components/ChatPrompt.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
-import { computed } from 'vue'
+import { computed, watch, ref } from 'vue'
 
 // Check if we're on the tooltip test route
 const isTooltipTest = computed(() => {
@@ -26,10 +26,46 @@ const hasAdminError = computed(() => {
   return error && error.startsWith('admin_');
 })
 
+// Check if we came from admin registration (should redirect back after passkey registration)
+const isAdminRegistration = computed(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('admin') === '1';
+})
+
 // Check if we should show a blank page (admin errors)
 const shouldShowBlankPage = computed(() => {
   return hasAdminError.value;
 })
+
+// Track authentication status for admin redirect
+const isAuthenticated = ref(false)
+
+// Check authentication status
+const checkAuthStatus = async () => {
+  try {
+    const response = await fetch('/api/passkey/auth-status')
+    if (response.ok) {
+      const data = await response.json()
+      isAuthenticated.value = data.authenticated
+    }
+  } catch (error) {
+    console.error('Auth check failed:', error)
+  }
+}
+
+// Watch for authentication changes and redirect admin users back to admin panel
+watch(isAuthenticated, (newValue) => {
+  if (newValue && isAdminRegistration.value) {
+    // User just authenticated and came from admin registration
+    // Redirect them back to admin panel
+    setTimeout(() => {
+      window.location.href = '/admin'
+    }, 1000)
+  }
+})
+
+// Check auth status on mount
+checkAuthStatus()
 
 // Get human-readable admin error message
 const getAdminErrorMessage = () => {

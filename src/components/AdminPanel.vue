@@ -623,10 +623,10 @@ export default defineComponent({
             timeout: 5000
           });
           
-          // Always redirect to main app for passkey registration
+          // Redirect to main app for passkey registration with admin context
           // The canProceedToPasskey flag indicates the admin is verified
           setTimeout(() => {
-            window.location.href = '/';
+            window.location.href = '/?admin=1';
           }, 2000);
           
           adminForm.value = { username: '', adminSecret: '' };
