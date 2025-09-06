@@ -26,46 +26,12 @@ const hasAdminError = computed(() => {
   return error && error.startsWith('admin_');
 })
 
-// Check if we came from admin registration (should redirect back after passkey registration)
-// This is no longer needed since admin passkey registration is handled in the admin panel
-const isAdminRegistration = computed(() => {
-  return false; // Disabled - admin passkey registration now handled in admin panel
-})
 
 // Check if we should show a blank page (admin errors)
 const shouldShowBlankPage = computed(() => {
   return hasAdminError.value;
 })
 
-// Track authentication status for admin redirect
-const isAuthenticated = ref(false)
-
-// Check authentication status
-const checkAuthStatus = async () => {
-  try {
-    const response = await fetch('/api/passkey/auth-status')
-    if (response.ok) {
-      const data = await response.json()
-      isAuthenticated.value = data.authenticated
-    }
-  } catch (error) {
-    console.error('Auth check failed:', error)
-  }
-}
-
-// Watch for authentication changes and redirect admin users back to admin panel
-watch(isAuthenticated, (newValue) => {
-  if (newValue && isAdminRegistration.value) {
-    // User just authenticated and came from admin registration
-    // Redirect them back to admin panel
-    setTimeout(() => {
-      window.location.href = '/admin'
-    }, 1000)
-  }
-})
-
-// Check auth status on mount
-checkAuthStatus()
 
 // Get human-readable admin error message
 const getAdminErrorMessage = () => {

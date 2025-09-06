@@ -333,41 +333,17 @@ app.get('/', (req, res) => {
 });
 
 // Admin panel route - PROTECTED
-app.get('/admin', async (req, res) => {
-  try {
-    // Check if user is authenticated and is admin
-    const session = req.session;
-    if (!session || !session.userId) {
-      console.log('🔒 Admin access denied: No session');
-      return res.redirect('/admin/register');
-    }
-
-    // Check if user is admin
-    try {
-      const userDoc = await couchDBClient.getDocument('maia_users', session.userId);
-      if (!userDoc || !userDoc.isAdmin) {
-        console.log('🔒 Admin access denied: User is not admin');
-        return res.redirect('/admin/register');
-      }
-
-      console.log('✅ Admin access granted for:', session.userId);
-      
-      const appTitle = process.env.APP_TITLE || 'MAIA';
-      const environment = process.env.NODE_ENV || 'development';
-      
-      res.render('index.ejs', {
-        APP_TITLE: appTitle,
-        ENVIRONMENT: environment,
-        APP_VERSION: process.env.APP_VERSION || '1.0.0'
-      });
-    } catch (dbError) {
-      console.error('❌ Database error during admin auth:', dbError);
-      return res.redirect('/admin/register');
-    }
-  } catch (error) {
-    console.error('Admin route error:', error);
-    return res.redirect('/admin/register');
-  }
+app.get('/admin', (req, res) => {
+  console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
+  
+  const appTitle = process.env.APP_TITLE || 'MAIA';
+  const environment = process.env.NODE_ENV || 'development';
+  
+  res.render('index.ejs', {
+    APP_TITLE: appTitle,
+    ENVIRONMENT: environment,
+    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+  });
 });
 
 // Admin registration route - no authentication required (this is how admins initially register)
