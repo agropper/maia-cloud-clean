@@ -28,6 +28,8 @@
               :currentUser="localCurrentUser"
               @clear-warning="warning = ''"
               :currentWorkflowStep="currentWorkflowStep"
+              :workflowSteps="workflowSteps"
+              :userEmail="userEmail"
               :showManageButton="false"
               :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
             />
@@ -113,6 +115,17 @@
             />
           </div>
 
+          <!-- Cancel Request Button (when on Step 3) - Only for authenticated users -->
+          <div v-if="workflowSteps[2].current && isAuthenticated" class="q-mt-md text-center">
+            <q-btn
+              label="CANCEL REQUEST"
+              color="warning"
+              @click="showCancelRequestModal = true"
+              icon="cancel"
+              class="q-px-lg"
+            />
+        </div>
+
           <!-- Cancel Indexing Button (when on Step 6) - Only for authenticated users -->
           <div v-if="workflowSteps[5].current && isAuthenticated" class="q-mt-md text-center">
             <q-btn
@@ -122,7 +135,7 @@
               icon="stop"
               class="q-px-lg"
             />
-        </div>
+                  </div>
 
           <!-- Start Indexing Button (when on Step 6 but no indexing job) - Only for authenticated users -->
           <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started') && isAuthenticated" class="q-mt-md text-center">
@@ -133,8 +146,8 @@
               icon="play_arrow"
               class="q-px-lg"
             />
-                  </div>
                 </div>
+              </div>
 
           <!-- Show manage button when agent and KBs are ready - Only for authenticated users -->
           <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0 && isAuthenticated" class="q-mt-md text-center">
@@ -209,21 +222,15 @@
         <div v-else>
 
 
-          <!-- No Agent Configured -->
-          <div v-if="!currentAgent" class="text-center q-pa-md">
+          <!-- No Agent Configured - Only for Unknown User -->
+          <div v-if="!currentAgent && !isAuthenticated" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
-              <span v-if="isAuthenticated">
-                You need administrator approval to access private AI agents and health record knowledge bases.
-              </span>
-              <span v-else>
                 Create a new agent to get started with AI assistance
-              </span>
             </div>
 
             <q-btn
-              v-if="!isAuthenticated"
               label="Create New Agent"
               color="primary"
               size="lg"
@@ -259,7 +266,7 @@
           <!-- Knowledge Base Section - Always show for all users -->
             <q-card flat bordered class="q-mb-md">
               <q-card-section>
-                <div v-if="isAuthenticated" class="row items-center q-mb-sm">
+                <div class="row items-center q-mb-sm">
                   <q-icon name="library_books" color="secondary" />
                   <span class="text-subtitle2 q-ml-sm"
                     >Available Knowledge Bases</span
@@ -291,7 +298,6 @@
 
                 <!-- Knowledge Base List -->
                 <div v-if="availableKnowledgeBases.length > 0" class="q-mb-md">
-                  <h6 v-if="isAuthenticated" class="q-mb-sm">Available Knowledge Bases:</h6>
                   <div
                     v-for="kb in availableKnowledgeBases"
                     :key="kb.uuid"
@@ -914,6 +920,36 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Cancel Request Confirmation Modal -->
+    <q-dialog v-model="showCancelRequestModal" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="q-pb-none">
+          <div class="text-h6">Cancel Request?</div>
+        </q-card-section>
+        
+        <q-card-section>
+          <p>Are you sure you want to cancel your private AI agent request?</p>
+          <p class="text-caption text-grey">
+            This will undo your request and you'll need to request approval again if you want a private agent.
+          </p>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn 
+            flat 
+            label="Cancel" 
+            @click="showCancelRequestModal = false"
+          />
+          <q-btn 
+            label="Yes, Cancel Request" 
+            color="warning" 
+            @click="cancelRequest"
+            :loading="isCancellingRequest"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-dialog>
 </template>
 
@@ -1123,6 +1159,10 @@ export default defineComponent({
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
     const isCancellingIndexing = ref(false);
+
+    // Cancel request modal state
+    const showCancelRequestModal = ref(false);
+    const isCancellingRequest = ref(false);
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -2773,6 +2813,41 @@ export default defineComponent({
       }
     };
 
+    // Cancel request process
+    const cancelRequest = async () => {
+      try {
+        isCancellingRequest.value = true;
+        console.log('🛑 Cancelling private AI agent request...');
+        
+        // Reset workflow steps to go back to Step 2 (request pending)
+        workflowSteps.value[2].completed = false;
+        workflowSteps.value[2].current = false;
+        workflowSteps.value[1].completed = false;
+        workflowSteps.value[1].current = true;
+        
+        // Reset approval request flag
+        hasRequestedApproval.value = false;
+        
+        // Show notification
+        $q.notify({
+          type: "warning",
+          message: "Request cancelled. You can request approval again when ready.",
+        });
+        
+        // Close modal
+        showCancelRequestModal.value = false;
+        
+      } catch (error) {
+        console.error('❌ Error cancelling request:', error);
+        $q.notify({
+          type: "negative",
+          message: "Failed to cancel request.",
+        });
+      } finally {
+        isCancellingRequest.value = false;
+      }
+    };
+
     // Check indexing status using DigitalOcean API
     const checkIndexingStatus = async (kbId: string) => {
       try {
@@ -3394,6 +3469,9 @@ export default defineComponent({
       cancelIndexing,
       showCancelIndexingModal,
       isCancellingIndexing,
+      cancelRequest,
+      showCancelRequestModal,
+      isCancellingRequest,
       attachKnowledgeBaseToAgent,
       refreshAgentData,
       currentWorkflowStep,

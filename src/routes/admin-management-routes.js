@@ -3,16 +3,23 @@ import maia2Client from '../utils/maia2-client.js';
 
 const router = express.Router();
 
+// CouchDB client for maia_users database
+let couchDBClient = null;
+
+// Function to set the client (called from main server)
+export const setCouchDBClient = (client) => {
+  couchDBClient = client;
+};
+
 // Health check endpoint
 router.get('/health', async (req, res) => {
   try {
-    // Check if MAIA2 client is initialized
-    if (!maia2Client.isInitialized) {
-      await maia2Client.initialize();
+    if (!couchDBClient) {
+      throw new Error('CouchDB client not initialized');
     }
     
-    // Try to access the maia2_users database through MAIA2 client
-    const users = await maia2Client.listUsers();
+    // Try to access the maia_users database
+    const users = await couchDBClient.getAllDocuments('maia_users');
     console.log('✅ Admin management health check - system ready, user count:', users.length);
     res.json({ 
       status: 'ready',
@@ -198,36 +205,77 @@ router.post('/register', checkMAIA2Ready, async (req, res) => {
 });
 
 // Get all private AI users and their workflow status - TEMPORARILY OPEN FOR TESTING
-router.get('/users', checkMAIA2Ready, async (req, res) => {
+router.get('/users', async (req, res) => {
   try {
-    // Get all users from MAIA2 system
-    const allUsers = await maia2Client.listUsers();
+    if (!couchDBClient) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+    
+    // Get all users from maia_users database
+    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    console.log(`🔍 [DEBUG] Total documents in maia_users: ${allUsers.length}`);
+    
+    // Log some sample documents to understand what we're getting
+    const sampleDocs = allUsers.slice(0, 5).map(doc => ({
+      _id: doc._id,
+      isAdmin: doc.isAdmin,
+      hasCredentialID: !!doc.credentialID,
+      type: doc.type || 'unknown'
+    }));
+    console.log('🔍 [DEBUG] Sample documents:', sampleDocs);
     
     const users = allUsers
       .filter(user => {
+        // Exclude design documents and Unknown User
+        if (user._id.startsWith('_design/') || user._id === 'Unknown User') {
+          console.log(`🔍 [DEBUG] Excluding: ${user._id} (design doc or Unknown User)`);
+          return false;
+        }
         // For wed271, allow it through even if it has isAdmin: true (special case)
         if (user._id === 'wed271') {
           console.log('🔍 [SPECIAL] Including wed271 despite admin status:', {
             userId: user._id,
             isAdmin: user.isAdmin
           });
-          return !user._id.startsWith('_design/');
+          return true;
         }
-        // For all other users, exclude admin users and design documents
-        return !user.isAdmin && !user._id.startsWith('_design/');
+        // For all other users, exclude admin users
+        const isAdmin = user.isAdmin;
+        if (isAdmin) {
+          console.log(`🔍 [DEBUG] Excluding admin user: ${user._id}`);
+        }
+        return !isAdmin;
       })
       .map(user => {
         return {
-          userId: user.username || user._id, // Fallback to _id if username is missing
-          displayName: user.displayName || user.username || user._id,
+          userId: user._id,
+          displayName: user.displayName || user._id,
           createdAt: user.createdAt,
           hasPasskey: !!user.credentialID,
           workflowStage: determineWorkflowStage(user),
           assignedAgentId: user.assignedAgentId || null,
-          assignedAgentName: user.assignedAgentName || null
+          assignedAgentName: user.assignedAgentName || null,
+          email: user.email || null
         };
       })
-      .filter(processedUser => processedUser.userId !== 'admin'); // Exclude admin user from final list
+      .filter(processedUser => processedUser.userId !== 'admin') // Exclude admin user from final list
+      .sort((a, b) => {
+        // Sort "awaiting_approval" to the top
+        if (a.workflowStage === 'awaiting_approval' && b.workflowStage !== 'awaiting_approval') {
+          return -1;
+        }
+        if (b.workflowStage === 'awaiting_approval' && a.workflowStage !== 'awaiting_approval') {
+          return 1;
+        }
+        // Then sort by creation date (newest first)
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    
+    console.log(`🔍 [DEBUG] Final filtered users count: ${users.length}`);
+    console.log(`🔍 [DEBUG] Users by workflow stage:`, users.reduce((acc, user) => {
+      acc[user.workflowStage] = (acc[user.workflowStage] || 0) + 1;
+      return acc;
+    }, {}));
     
     res.json({ users });
     

@@ -127,15 +127,24 @@ export default defineComponent({
     currentWorkflowStep: {
       type: String,
       default: ''
+    },
+    workflowSteps: {
+      type: Array as () => any[],
+      default: () => []
+    },
+    userEmail: {
+      type: String,
+      default: ''
     }
   },
   emits: ['manage', 'sign-in', 'sign-out'],
   setup(props) {
     const agentName = computed(() => {
       if (!props.agent) {
-        // For authenticated users, show "Agent: none" instead of "No Agent Configured"
+        // For authenticated users, show "Agent: none" with user info
         if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
-          return 'Agent: none'
+          const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
+          return `Agent: none • User: ${userName}`
         }
         return 'No Agent Configured'
       }
@@ -150,6 +159,16 @@ export default defineComponent({
       if (!props.agent) {
         // For authenticated users, show progress information
         if (props.currentUser && props.currentUser.userId !== 'Unknown User' && props.currentWorkflowStep) {
+          // Check if Step 2 is completed (not just current)
+          const step2 = props.workflowSteps.find(step => step.title === 'Private AI agent requested');
+          if (step2 && step2.completed) {
+            return `Progress: Private AI agent requested for email ${props.userEmail || 'unknown'}`
+          }
+          
+          // Special case for Step 2 (Private AI agent requested) when current
+          if (props.currentWorkflowStep === 'Private AI agent requested') {
+            return 'Progress: Send an administrator request.'
+          }
           return `Progress: ${props.currentWorkflowStep}`
         }
         return 'Create an agent to get started'

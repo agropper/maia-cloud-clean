@@ -4610,7 +4610,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient } from './src/routes/admin-management-routes.js';
 
 // Import MAIA2 routes
 import maia2Routes from './src/routes/maia2-api-routes.js';
@@ -4621,6 +4621,7 @@ import databaseMigration from './src/routes/database-migration.js';
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
 setAdminCouchDBClient(couchDBClient);
+setAdminManagementCouchDBClient(couchDBClient);
 
 // Mount KB protection routes
 app.use('/api/kb-protection', kbProtectionRoutes);
