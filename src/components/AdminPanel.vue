@@ -76,6 +76,44 @@
         </QCardSection>
       </QCard>
     </div>
+    
+    <!-- Passkey Registration Section -->
+    <div v-if="showPasskeyRegistration" class="passkey-registration q-mb-lg">
+      <QCard>
+        <QCardSection>
+          <h4>🔑 Admin Passkey Registration</h4>
+          <p>Complete your admin setup by registering a passkey for secure authentication.</p>
+          
+          <!-- Passkey Status Messages -->
+          <div v-if="passkeyStatus.message" class="q-mb-md">
+            <QBanner :class="passkeyStatus.isRegistering ? 'bg-info text-white' : 'bg-positive text-white'">
+              {{ passkeyStatus.message }}
+            </QBanner>
+          </div>
+          
+          <QForm @submit="registerPasskey" class="q-gutter-md">
+            <QInput
+              v-model="passkeyForm.displayName"
+              label="Display Name"
+              outlined
+              dense
+              :rules="[val => !!val || 'Display name is required']"
+              placeholder="Enter your display name"
+            />
+            
+            <div class="q-mt-md">
+              <QBtn
+                type="submit"
+                color="primary"
+                :loading="passkeyStatus.isRegistering"
+                label="Register Passkey"
+                icon="fingerprint"
+              />
+            </div>
+          </QForm>
+        </QCardSection>
+      </QCard>
+    </div>
 
     <!-- Admin Access Denied Section -->
     <div v-if="!isAdmin && !isRegistrationRoute" class="admin-access-denied q-mb-lg">
@@ -498,6 +536,16 @@ export default defineComponent({
       adminSecret: ''
     });
     
+    // Passkey registration
+    const showPasskeyRegistration = ref(false);
+    const passkeyForm = ref({
+      displayName: 'Admin User'
+    });
+    const passkeyStatus = ref({
+      isRegistering: false,
+      message: ''
+    });
+    
     // Table columns
     const userColumns = [
       {
@@ -623,11 +671,9 @@ export default defineComponent({
             timeout: 5000
           });
           
-          // Redirect to main app for passkey registration with admin context
+          // Show passkey registration UI directly in admin panel
           // The canProceedToPasskey flag indicates the admin is verified
-          setTimeout(() => {
-            window.location.href = '/?admin=1';
-          }, 2000);
+          showPasskeyRegistration.value = true;
           
           adminForm.value = { username: '', adminSecret: '' };
           await checkAdminStatus();
@@ -643,6 +689,99 @@ export default defineComponent({
         });
       } finally {
         isRegistering.value = false;
+      }
+    };
+    
+    const registerPasskey = async () => {
+      if (!passkeyForm.value.displayName) {
+        $q.notify({
+          type: 'negative',
+          message: 'Please enter a display name'
+        });
+        return;
+      }
+      
+      passkeyStatus.value.isRegistering = true;
+      passkeyStatus.value.message = 'Starting passkey registration...';
+      
+      try {
+        // Step 1: Get registration options
+        const optionsResponse = await fetch('/api/passkey/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: 'admin',
+            displayName: passkeyForm.value.displayName
+          })
+        });
+        
+        if (!optionsResponse.ok) {
+          const error = await optionsResponse.json();
+          throw new Error(error.error || 'Failed to get registration options');
+        }
+        
+        const options = await optionsResponse.json();
+        passkeyStatus.value.message = 'Registration options received. Please complete passkey registration in your browser...';
+        
+        // Step 2: Create credential using WebAuthn API
+        const credential = await navigator.credentials.create({
+          publicKey: options
+        });
+        
+        passkeyStatus.value.message = 'Passkey created. Verifying registration...';
+        
+        // Step 3: Verify registration
+        const verifyResponse = await fetch('/api/passkey/register-verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: 'admin',
+            response: {
+              id: credential.id,
+              rawId: Array.from(new Uint8Array(credential.rawId)),
+              response: {
+                attestationObject: Array.from(new Uint8Array(credential.response.attestationObject)),
+                clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON))
+              },
+              type: credential.type
+            }
+          })
+        });
+        
+        if (!verifyResponse.ok) {
+          const error = await verifyResponse.json();
+          throw new Error(error.error || 'Passkey verification failed');
+        }
+        
+        const result = await verifyResponse.json();
+        
+        passkeyStatus.value.message = 'Passkey registration successful! Redirecting to admin panel...';
+        
+        $q.notify({
+          type: 'positive',
+          message: 'Admin passkey registered successfully! You can now sign in.',
+          timeout: 3000
+        });
+        
+        // Redirect to admin sign-in after successful registration
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Passkey registration error:', error);
+        passkeyStatus.value.message = `Registration failed: ${error.message}`;
+        
+        $q.notify({
+          type: 'negative',
+          message: `Passkey registration failed: ${error.message}`
+        });
+      } finally {
+        passkeyStatus.value.isRegistering = false;
       }
     };
     

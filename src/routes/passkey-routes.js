@@ -181,8 +181,16 @@ router.post("/register", async (req, res) => {
     }
 
     if (existingUser) {
-      console.log("❌ User already exists:", userId);
-      return res.status(400).json({ error: "User ID already exists" });
+      console.log("🔍 User already exists, checking if they need passkey registration:", userId);
+      
+      // If user already has a passkey, reject registration
+      if (existingUser.credentialID) {
+        console.log("❌ User already has a passkey:", userId);
+        return res.status(400).json({ error: "User already has a registered passkey" });
+      }
+      
+      // If user exists but doesn't have a passkey, allow registration
+      console.log("✅ User exists but no passkey, allowing registration:", userId);
     }
 
     console.log("🔍 Generating registration options for:", userId);
@@ -206,7 +214,11 @@ router.post("/register", async (req, res) => {
 
     // Store challenge in session or temporary storage
     // For now, we'll store it in the user document
-    const userDoc = {
+    const userDoc = existingUser ? {
+      ...existingUser,
+      challenge: options.challenge,
+      updatedAt: new Date().toISOString(),
+    } : {
       _id: userId,
       userId,
       displayName,

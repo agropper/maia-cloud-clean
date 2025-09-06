@@ -27,9 +27,9 @@ const hasAdminError = computed(() => {
 })
 
 // Check if we came from admin registration (should redirect back after passkey registration)
+// This is no longer needed since admin passkey registration is handled in the admin panel
 const isAdminRegistration = computed(() => {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('admin') === '1';
+  return false; // Disabled - admin passkey registration now handled in admin panel
 })
 
 // Check if we should show a blank page (admin errors)
