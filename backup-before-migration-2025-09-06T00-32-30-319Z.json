@@ -1,0 +1,56 @@
+{
+  "sourceUsers": [
+    {
+      "userId": "fri95",
+      "displayName": "fri95",
+      "createdAt": "2025-09-05T22:09:41.224Z",
+      "hasPasskey": true,
+      "workflowStage": "awaiting_approval",
+      "assignedAgentId": null,
+      "assignedAgentName": null,
+      "email": null
+    },
+    {
+      "userId": "wed271",
+      "displayName": "wed271",
+      "createdAt": "2025-08-28T02:13:53.357Z",
+      "hasPasskey": true,
+      "workflowStage": "approved",
+      "assignedAgentId": "16c9edf6-2dee-11f0-bf8f-4e013e2ddde4",
+      "assignedAgentName": "agent-05102025",
+      "email": null
+    }
+  ],
+  "essentialUsers": [
+    {
+      "_id": "Unknown User",
+      "type": "user",
+      "createdAt": "2025-09-06T00:32:30.317Z",
+      "currentAgentId": null,
+      "currentAgentName": null
+    },
+    {
+      "_id": "admin",
+      "type": "admin",
+      "isAdmin": true,
+      "createdAt": "2025-09-06T00:32:30.318Z"
+    },
+    {
+      "_id": "wed271",
+      "type": "user",
+      "displayName": "wed271",
+      "createdAt": "2025-09-06T00:32:30.318Z",
+      "credentialID": "test-credential-id-wed271",
+      "approvalStatus": "approved"
+    },
+    {
+      "_id": "fri95",
+      "type": "user",
+      "displayName": "fri95",
+      "createdAt": "2025-09-06T00:32:30.318Z",
+      "credentialID": "test-credential-id-fri95",
+      "approvalStatus": "pending"
+    }
+  ],
+  "timestamp": "2025-09-06T00:32:30.319Z"
+}

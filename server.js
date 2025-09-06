@@ -4630,6 +4630,260 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin-management', adminManagementRoutes);
 
+// =============================================================================
+// DATABASE CLEANUP ENDPOINT
+// =============================================================================
+
+// Cleanup endpoint to replace maia_users with clean data
+app.post('/api/cleanup-database', async (req, res) => {
+  try {
+    console.log('🧹 Starting database cleanup via API...');
+    
+    // Essential users to keep
+    const essentialUsers = [
+      {
+        _id: 'Unknown User',
+        type: 'user',
+        createdAt: new Date().toISOString(),
+        currentAgentId: null,
+        currentAgentName: null
+      },
+      {
+        _id: 'admin',
+        type: 'admin',
+        isAdmin: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        _id: 'wed271',
+        type: 'user',
+        displayName: 'wed271',
+        createdAt: new Date().toISOString(),
+        credentialID: 'test-credential-id-wed271',
+        approvalStatus: 'approved'
+      },
+      {
+        _id: 'fri95',
+        type: 'user', 
+        displayName: 'fri95',
+        createdAt: new Date().toISOString(),
+        credentialID: 'test-credential-id-fri95',
+        approvalStatus: 'pending'
+      }
+    ];
+    
+    // Get all current documents
+    const allDocs = await couchDBClient.getAllDocuments('maia_users');
+    console.log(`📊 Current documents: ${allDocs.length}`);
+    
+    // Delete all current documents
+    console.log('🗑️  Deleting all current documents...');
+    for (const doc of allDocs) {
+      try {
+        await couchDBClient.deleteDocument('maia_users', doc._id, doc._rev);
+        console.log(`  ✅ Deleted: ${doc._id}`);
+      } catch (error) {
+        console.log(`  ⚠️  Error deleting ${doc._id}: ${error.message}`);
+      }
+    }
+    
+    // Insert essential users
+    console.log('📤 Inserting essential users...');
+    for (const user of essentialUsers) {
+      try {
+        await couchDBClient.saveDocument('maia_users', user);
+        console.log(`  ✅ Inserted: ${user._id}`);
+      } catch (error) {
+        console.log(`  ❌ Error inserting ${user._id}: ${error.message}`);
+      }
+    }
+    
+    // Verify cleanup
+    const finalDocs = await couchDBClient.getAllDocuments('maia_users');
+    console.log(`✅ Cleanup complete! Final count: ${finalDocs.length} documents`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Database cleanup completed',
+      beforeCount: allDocs.length,
+      afterCount: finalDocs.length,
+      essentialUsers: essentialUsers.map(u => u._id)
+    });
+    
+  } catch (error) {
+    console.error('❌ Cleanup failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Cleanup failed', 
+      details: error.message 
+    });
+  }
+});
+
+// Fix agent ownership endpoint
+app.post('/api/fix-agent-ownership', async (req, res) => {
+  try {
+    console.log('🔧 Starting agent ownership fix via API...');
+    
+    // Define the correct agent ownership relationships
+    const agentOwnership = {
+      'Unknown User': {
+        currentAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
+        currentAgentName: 'agent-08032025',
+        ownedAgents: [
+          { id: '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4', name: 'agent-05102025', assignedAt: new Date().toISOString() },
+          { id: '059fc237-7077-11f0-b056-36d958d30bcf', name: 'agent-08032025', assignedAt: new Date().toISOString() }
+        ]
+      },
+      'wed271': {
+        currentAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
+        currentAgentName: 'agent-08292025',
+        ownedAgents: [
+          { id: '2960ae8d-8514-11f0-b074-4e013e2ddde4', name: 'agent-08292025', assignedAt: new Date().toISOString() }
+        ]
+      }
+    };
+    
+    const results = [];
+    
+    for (const [userId, agentData] of Object.entries(agentOwnership)) {
+      console.log(`📝 Updating ${userId}...`);
+      
+      try {
+        // Get current user document
+        let userDoc;
+        try {
+          userDoc = await couchDBClient.getDocument('maia_users', userId);
+        } catch (error) {
+          if (error.statusCode === 404) {
+            console.log(`  ❌ User ${userId} not found, skipping...`);
+            results.push({ userId, status: 'not_found' });
+            continue;
+          }
+          throw error;
+        }
+        
+        // Update with agent ownership data
+        const updatedUserDoc = {
+          ...userDoc,
+          currentAgentId: agentData.currentAgentId,
+          currentAgentName: agentData.currentAgentName,
+          ownedAgents: agentData.ownedAgents,
+          currentAgentSetAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Save updated document
+        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+        console.log(`  ✅ Updated ${userId} with agent ownership`);
+        results.push({ userId, status: 'updated', agents: agentData.ownedAgents.map(a => a.name) });
+        
+      } catch (error) {
+        console.log(`  ❌ Error updating ${userId}: ${error.message}`);
+        results.push({ userId, status: 'error', error: error.message });
+      }
+    }
+    
+    console.log('✅ Agent ownership fix completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'Agent ownership fix completed',
+      results
+    });
+    
+  } catch (error) {
+    console.error('❌ Agent ownership fix failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Agent ownership fix failed', 
+      details: error.message 
+    });
+  }
+});
+
+// Simple GET endpoint to fix agent ownership
+app.get('/api/fix-agent-ownership', async (req, res) => {
+  try {
+    console.log('🔧 Starting agent ownership fix via GET...');
+    
+    // Define the correct agent ownership relationships
+    const agentOwnership = {
+      'Unknown User': {
+        currentAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
+        currentAgentName: 'agent-08032025',
+        ownedAgents: [
+          { id: '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4', name: 'agent-05102025', assignedAt: new Date().toISOString() },
+          { id: '059fc237-7077-11f0-b056-36d958d30bcf', name: 'agent-08032025', assignedAt: new Date().toISOString() }
+        ]
+      },
+      'wed271': {
+        currentAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
+        currentAgentName: 'agent-08292025',
+        ownedAgents: [
+          { id: '2960ae8d-8514-11f0-b074-4e013e2ddde4', name: 'agent-08292025', assignedAt: new Date().toISOString() }
+        ]
+      }
+    };
+    
+    const results = [];
+    
+    for (const [userId, agentData] of Object.entries(agentOwnership)) {
+      console.log(`📝 Updating ${userId}...`);
+      
+      try {
+        // Get current user document
+        let userDoc;
+        try {
+          userDoc = await couchDBClient.getDocument('maia_users', userId);
+        } catch (error) {
+          if (error.statusCode === 404) {
+            console.log(`  ❌ User ${userId} not found, skipping...`);
+            results.push({ userId, status: 'not_found' });
+            continue;
+          }
+          throw error;
+        }
+        
+        // Update with agent ownership data
+        const updatedUserDoc = {
+          ...userDoc,
+          currentAgentId: agentData.currentAgentId,
+          currentAgentName: agentData.currentAgentName,
+          ownedAgents: agentData.ownedAgents,
+          currentAgentSetAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Save updated document
+        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+        console.log(`  ✅ Updated ${userId} with agent ownership`);
+        results.push({ userId, status: 'updated', agents: agentData.ownedAgents.map(a => a.name) });
+        
+      } catch (error) {
+        console.log(`  ❌ Error updating ${userId}: ${error.message}`);
+        results.push({ userId, status: 'error', error: error.message });
+      }
+    }
+    
+    console.log('✅ Agent ownership fix completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'Agent ownership fix completed',
+      results
+    });
+    
+  } catch (error) {
+    console.error('❌ Agent ownership fix failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Agent ownership fix failed', 
+      details: error.message 
+    });
+  }
+});
+
 // Mount MAIA2 routes
 app.use('/api/maia2', maia2Routes);
 

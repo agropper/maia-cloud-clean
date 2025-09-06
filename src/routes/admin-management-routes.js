@@ -3,7 +3,7 @@ import maia2Client from '../utils/maia2-client.js';
 
 const router = express.Router();
 
-// CouchDB client for maia_users database
+// CouchDB client for maia2_users database
 let couchDBClient = null;
 
 // Function to set the client (called from main server)
@@ -211,9 +211,9 @@ router.get('/users', async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    // Get all users from maia_users database
-    const allUsers = await couchDBClient.getAllDocuments('maia_users');
-    console.log(`🔍 [DEBUG] Total documents in maia_users: ${allUsers.length}`);
+    // Get all users from maia2_users database
+    const allUsers = await couchDBClient.getAllDocuments('maia2_users');
+    console.log(`🔍 [DEBUG] Total documents in maia2_users: ${allUsers.length}`);
     
     // Log some sample documents to understand what we're getting
     const sampleDocs = allUsers.slice(0, 5).map(doc => ({
