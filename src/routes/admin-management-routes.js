@@ -1,5 +1,5 @@
 import express from 'express';
-import maia2Client from '../utils/maia2-client.js';
+// Removed maia2Client import - using couchDBClient instead
 
 const router = express.Router();
 
@@ -11,8 +11,8 @@ export const setCouchDBClient = (client) => {
   couchDBClient = client;
 };
 
-// Health check endpoint
-router.get('/health', async (req, res) => {
+// Health check endpoint - PROTECTED
+router.get('/health', requireAdminAuth, async (req, res) => {
   try {
     if (!couchDBClient) {
       throw new Error('CouchDB client not initialized');
@@ -55,20 +55,23 @@ router.get('/health', async (req, res) => {
   }
 });
 
-// MAIA2 system readiness check
-const checkMAIA2Ready = async (req, res, next) => {
+// Database system readiness check
+const checkDatabaseReady = async (req, res, next) => {
   try {
-    // Check if MAIA2 client is initialized and can access users
-    if (!maia2Client.isInitialized) {
-      await maia2Client.initialize();
+    // Check if CouchDB client is initialized
+    if (!couchDBClient) {
+      return res.status(503).json({ 
+        error: 'Database not initialized',
+        suggestion: 'Please try again later'
+      });
     }
     
     // Try to get a small sample of users to verify system is ready
-    const users = await maia2Client.listUsers({ limit: 1 });
-    console.log('✅ MAIA2 system ready, can access users');
+    const users = await couchDBClient.getAllDocuments('maia_users');
+    console.log('✅ Database system ready, can access users');
     next();
   } catch (error) {
-    console.log('⏳ MAIA2 system readiness check failed:', error.message);
+    console.log('⏳ Database system readiness check failed:', error.message);
     
     // Handle Cloudant rate limiting specifically - this is NOT a system readiness issue
     if (error.statusCode === 429 || error.error === 'too_many_requests') {
@@ -80,7 +83,7 @@ const checkMAIA2Ready = async (req, res, next) => {
     
     // For other errors, system might not be ready
     return res.status(503).json({ 
-      error: 'MAIA2 system is initializing. Please wait a moment and try again.',
+      error: 'Database system is initializing. Please wait a moment and try again.',
       retryAfter: 5,
       details: error.message
     });
@@ -97,7 +100,7 @@ const requireAdminAuth = async (req, res, next) => {
 
     // Check if user is admin
     try {
-      const userDoc = await maia2Client.getUserByUsername(session.userId);
+      const userDoc = await couchDBClient.getDocument('maia_users', session.userId);
       if (!userDoc || !userDoc.isAdmin) {
         return res.status(403).json({ error: 'Admin privileges required' });
       }
@@ -132,7 +135,7 @@ const requireAdminAuth = async (req, res, next) => {
 };
 
 // Admin registration endpoint - simplified to just check admin secret
-router.post('/register', checkMAIA2Ready, async (req, res) => {
+router.post('/register', checkDatabaseReady, async (req, res) => {
   try {
     const { username, adminSecret } = req.body;
     
@@ -148,14 +151,14 @@ router.post('/register', checkMAIA2Ready, async (req, res) => {
     
         // Check if admin user already exists
     try {
-      const existingUser = await maia2Client.getUserByUsername(username);
+      const existingUser = await couchDBClient.getDocument('maia_users', username);
       if (existingUser) {
         if (existingUser.isAdmin) {
           // Admin user exists - allow new passkey registration (replaces old one)
           console.log('✅ Admin user exists, allowing new passkey registration:', username);
           return res.json({ 
             message: 'Admin user verified. You can now register a new passkey (this will replace your existing one).',
-            username: existingUser.username,
+            username: existingUser._id,
             isAdmin: existingUser.isAdmin,
             canProceedToPasskey: true,
             existingUser: true
@@ -163,10 +166,15 @@ router.post('/register', checkMAIA2Ready, async (req, res) => {
         } else {
           // User exists but isn't admin - upgrade them to admin
           console.log('✅ Upgrading existing user to admin:', username);
-          const updatedUser = await maia2Client.updateUser(username, { isAdmin: true });
+          const updatedUser = {
+            ...existingUser,
+            isAdmin: true,
+            updatedAt: new Date().toISOString()
+          };
+          await couchDBClient.saveDocument('maia_users', updatedUser);
           return res.json({ 
             message: 'Existing user upgraded to admin successfully. You can now register your passkey.',
-            username: updatedUser.username,
+            username: updatedUser._id,
             isAdmin: updatedUser.isAdmin,
             canProceedToPasskey: true,
             upgraded: true
@@ -177,13 +185,13 @@ router.post('/register', checkMAIA2Ready, async (req, res) => {
       // User doesn't exist - create new admin user
       console.log('✅ Creating new admin user:', username);
       const adminUser = {
-        username: username,
-        displayName: username,
+        _id: username,
+        type: 'admin',
         isAdmin: true,
         createdAt: new Date().toISOString()
       };
       
-      await maia2Client.createUser(adminUser);
+      await couchDBClient.saveDocument('maia_users', adminUser);
       console.log('✅ New admin user created successfully');
       
       return res.json({
@@ -204,8 +212,8 @@ router.post('/register', checkMAIA2Ready, async (req, res) => {
   }
 });
 
-// Get all private AI users and their workflow status - TEMPORARILY OPEN FOR TESTING
-router.get('/users', async (req, res) => {
+// Get all private AI users and their workflow status - PROTECTED
+router.get('/users', requireAdminAuth, async (req, res) => {
   try {
     if (!couchDBClient) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -301,8 +309,8 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// Get detailed user information and workflow status - TEMPORARILY OPEN FOR TESTING
-router.get('/users/:userId', checkMAIA2Ready, async (req, res) => {
+// Get detailed user information and workflow status
+router.get('/users/:userId', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -339,7 +347,7 @@ router.get('/users/:userId', checkMAIA2Ready, async (req, res) => {
 });
 
 // Approve, reject, or suspend user for private AI access
-router.post('/users/:userId/approve', checkMAIA2Ready, async (req, res) => {
+router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { action, notes } = req.body;
@@ -396,8 +404,8 @@ router.post('/users/:userId/approve', checkMAIA2Ready, async (req, res) => {
   }
 });
 
-// Save admin notes for a user - TEMPORARILY OPEN FOR TESTING
-router.post('/users/:userId/notes', checkMAIA2Ready, async (req, res) => {
+// Save admin notes for a user
+router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { notes } = req.body;
@@ -429,7 +437,7 @@ router.post('/users/:userId/notes', checkMAIA2Ready, async (req, res) => {
 });
 
 // Assign agent to a user
-router.post('/users/:userId/assign-agent', checkMAIA2Ready, async (req, res) => {
+router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const { agentId, agentName } = req.body;
@@ -471,7 +479,7 @@ router.post('/users/:userId/assign-agent', checkMAIA2Ready, async (req, res) => 
 });
 
 // Get user's assigned agent
-router.get('/users/:userId/assigned-agent', checkMAIA2Ready, async (req, res) => {
+router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     
