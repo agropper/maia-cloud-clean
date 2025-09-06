@@ -464,12 +464,12 @@ router.post("/authenticate-verify", async (req, res) => {
       await couchDBClient.saveDocument("maia_users", updatedUser);
 
       // Set session data for authenticated user
-      req.session.userId = updatedUser.userId;
-      req.session.username = updatedUser.userId;
-      req.session.displayName = updatedUser.displayName;
+      req.session.userId = updatedUser._id;
+      req.session.username = updatedUser._id;
+      req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
 
-      console.log(`✅ Session created for user: ${updatedUser.userId}`);
+      console.log(`✅ Session created for user: ${updatedUser._id}`);
       
       // GroupFilter: Log user sign in and group chat count
       try {
