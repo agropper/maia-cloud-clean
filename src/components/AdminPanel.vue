@@ -726,13 +726,16 @@ export default defineComponent({
         passkeyStatus.value.message = 'Registration options received. Please complete passkey registration in your browser...';
         
         // Step 2: Create credential using WebAuthn API
+        console.log('🔑 Creating passkey credential...');
         const credential = await navigator.credentials.create({
           publicKey: options
         });
         
+        console.log('✅ Passkey credential created:', credential);
         passkeyStatus.value.message = 'Passkey created. Verifying registration...';
         
         // Step 3: Verify registration
+        console.log('🔍 Verifying passkey registration...');
         const verifyResponse = await fetch('/api/passkey/register-verify', {
           method: 'POST',
           headers: {
@@ -751,6 +754,8 @@ export default defineComponent({
             }
           })
         });
+        
+        console.log('🔍 Verification response status:', verifyResponse.status);
         
         if (!verifyResponse.ok) {
           const error = await verifyResponse.json();
@@ -1141,7 +1146,11 @@ export default defineComponent({
       goToAdminRegistration,
       goToAdminSignIn,
       goToMainApp,
-      signOut
+      signOut,
+      showPasskeyRegistration,
+      passkeyForm,
+      passkeyStatus,
+      registerPasskey
     };
   }
 });
