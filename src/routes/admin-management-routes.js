@@ -11,6 +11,50 @@ export const setCouchDBClient = (client) => {
   couchDBClient = client;
 };
 
+// Admin authentication middleware
+const requireAdminAuth = async (req, res, next) => {
+  try {
+    const session = req.session;
+    if (!session || !session.userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Check if user is admin
+    try {
+      const userDoc = await couchDBClient.getDocument('maia_users', session.userId);
+      if (!userDoc || !userDoc.isAdmin) {
+        return res.status(403).json({ error: 'Admin privileges required' });
+      }
+
+      req.adminUser = userDoc;
+      next();
+    } catch (dbError) {
+      console.error('❌ Database error during admin auth:', dbError);
+      
+      // Handle Cloudant rate limiting specifically
+      if (dbError.statusCode === 429 || dbError.error === 'too_many_requests') {
+        return res.status(429).json({ 
+          error: 'Cloudant rate limit exceeded. Please wait a moment and try again.',
+          retryAfter: '30 seconds',
+          statusCode: 429,
+          suggestion: 'Try refreshing the page in 30 seconds'
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: 'Database connection failed during authentication',
+        details: dbError.message 
+      });
+    }
+  } catch (error) {
+    console.error('Admin auth error:', error);
+    res.status(500).json({ 
+      error: 'Authentication failed',
+      details: error.message 
+    });
+  }
+};
+
 // Health check endpoint - PROTECTED
 router.get('/health', requireAdminAuth, async (req, res) => {
   try {
@@ -86,50 +130,6 @@ const checkDatabaseReady = async (req, res, next) => {
       error: 'Database system is initializing. Please wait a moment and try again.',
       retryAfter: 5,
       details: error.message
-    });
-  }
-};
-
-// Admin authentication middleware
-const requireAdminAuth = async (req, res, next) => {
-  try {
-    const session = req.session;
-    if (!session || !session.userId) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    // Check if user is admin
-    try {
-      const userDoc = await couchDBClient.getDocument('maia_users', session.userId);
-      if (!userDoc || !userDoc.isAdmin) {
-        return res.status(403).json({ error: 'Admin privileges required' });
-      }
-
-      req.adminUser = userDoc;
-      next();
-    } catch (dbError) {
-      console.error('❌ Database error during admin auth:', dbError);
-      
-      // Handle Cloudant rate limiting specifically
-      if (dbError.statusCode === 429 || dbError.error === 'too_many_requests') {
-        return res.status(429).json({ 
-          error: 'Cloudant rate limit exceeded. Please wait a moment and try again.',
-          retryAfter: '30 seconds',
-          statusCode: 429,
-          suggestion: 'Try refreshing the page in 30 seconds'
-        });
-      }
-      
-      return res.status(500).json({ 
-        error: 'Database connection failed during authentication',
-        details: dbError.message 
-      });
-    }
-  } catch (error) {
-    console.error('Admin auth error:', error);
-    res.status(500).json({ 
-      error: 'Authentication failed',
-      details: error.message 
     });
   }
 };
