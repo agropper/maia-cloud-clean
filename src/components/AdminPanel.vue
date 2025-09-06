@@ -896,7 +896,7 @@ export default defineComponent({
     };
     
     const goToAdminSignIn = () => {
-      window.location.href = '/';
+      window.location.href = '/admin';
     };
     
     const goToMainApp = () => {
