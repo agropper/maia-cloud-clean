@@ -158,7 +158,7 @@ router.post("/register", async (req, res) => {
   try {
     logPasskeyConfig(); // Log config on each request
     console.log("🔍 Registration request received");
-    const { userId, displayName } = req.body;
+    const { userId, displayName, adminSecret } = req.body;
 
     if (!userId || !displayName) {
       console.log("❌ Missing userId or displayName in request");
@@ -183,14 +183,20 @@ router.post("/register", async (req, res) => {
     if (existingUser) {
       console.log("🔍 User already exists, checking if they need passkey registration:", userId);
       
-      // If user already has a passkey, reject registration
+      // If user already has a passkey, check for admin replacement
       if (existingUser.credentialID) {
-        console.log("❌ User already has a passkey:", userId);
-        return res.status(400).json({ error: "User already has a registered passkey" });
+        // Special case: Allow admin to replace passkey (admin has already been verified in admin panel)
+        if (userId === 'admin') {
+          console.log("✅ Admin passkey replacement allowed (admin already verified)");
+          // Continue with registration (replace existing passkey)
+        } else {
+          console.log("❌ User already has a passkey:", userId);
+          return res.status(400).json({ error: "User already has a registered passkey" });
+        }
+      } else {
+        // If user exists but doesn't have a passkey, allow registration
+        console.log("✅ User exists but no passkey, allowing registration:", userId);
       }
-      
-      // If user exists but doesn't have a passkey, allow registration
-      console.log("✅ User exists but no passkey, allowing registration:", userId);
     }
 
     console.log("🔍 Generating registration options for:", userId);
