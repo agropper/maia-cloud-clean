@@ -1719,7 +1719,7 @@ app.post('/api/save-group-chat', async (req, res) => {
         originalFileKeys: groupChatDoc.uploadedFiles[0].originalFile ? Object.keys(groupChatDoc.uploadedFiles[0].originalFile) : 'none'
       } : 'no files'
     });
-    
+
     // Use Cloudant client
     const result = await couchDBClient.saveChat(groupChatDoc);
     console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);

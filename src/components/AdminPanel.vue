@@ -348,6 +348,15 @@
                 @click="showAssignAgentDialog = true"
                 :loading="isLoadingAgents"
               />
+              
+              <QBtn
+                v-if="selectedUser.hasPasskey"
+                color="warning"
+                icon="key_off"
+                label="Reset Passkey"
+                @click="resetUserPasskey"
+                :loading="isResettingPasskey"
+              />
             </div>
           </div>
 
@@ -519,6 +528,7 @@ export default defineComponent({
     const isSavingNotes = ref(false);
     const isAssigningAgent = ref(false);
     const isLoadingAgents = ref(false);
+    const isResettingPasskey = ref(false);
     const users = ref([]);
     const agents = ref([]);
     const selectedAgent = ref(null);
@@ -871,6 +881,58 @@ export default defineComponent({
       }
     };
     
+    const resetUserPasskey = async () => {
+      if (!selectedUser.value) return;
+      
+      // Show confirmation dialog
+      $q.dialog({
+        title: 'Reset User Passkey',
+        message: `Are you sure you want to reset the passkey for user "${selectedUser.value.displayName}"? This will require them to register a new passkey.`,
+        cancel: true,
+        persistent: true,
+        ok: {
+          label: 'Reset Passkey',
+          color: 'warning'
+        }
+      }).onOk(async () => {
+        isResettingPasskey.value = true;
+        try {
+          const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/reset-passkey`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              adminSecret: 'admin' // TODO: Get this from admin session or prompt
+            })
+          });
+          
+          if (response.ok) {
+            $q.notify({
+              type: 'positive',
+              message: `Passkey reset successfully for user "${selectedUser.value.displayName}". They can now register a new passkey.`
+            });
+            
+            // Refresh user details to show updated status
+            await viewUserDetails(selectedUser.value);
+            
+            // Refresh users list
+            await loadUsers();
+          } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to reset passkey');
+          }
+        } catch (error) {
+          $q.notify({
+            type: 'negative',
+            message: `Failed to reset passkey: ${error.message}`
+          });
+        } finally {
+          isResettingPasskey.value = false;
+        }
+      });
+    };
+    
     const saveNotes = async () => {
       if (!selectedUser.value || !adminNotes.value.trim()) return;
       
@@ -1095,6 +1157,7 @@ export default defineComponent({
       isSavingNotes,
       isAssigningAgent,
       isLoadingAgents,
+      isResettingPasskey,
       users,
       agents,
       selectedAgent,
@@ -1116,6 +1179,7 @@ export default defineComponent({
       loadAgents,
       viewUserDetails,
       approveUser,
+      resetUserPasskey,
       saveNotes,
       selectAgent,
       assignAgent,

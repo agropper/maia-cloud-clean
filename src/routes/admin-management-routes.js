@@ -260,14 +260,32 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return !isAdmin;
       })
       .map(user => {
+        // Extract current agent information from ownedAgents if available
+        let assignedAgentId = user.assignedAgentId || null;
+        let assignedAgentName = user.assignedAgentName || null;
+        
+        // If we have ownedAgents but no assignedAgentId, use the first owned agent
+        if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+          const firstAgent = user.ownedAgents[0];
+          assignedAgentId = firstAgent.id;
+          assignedAgentName = firstAgent.name;
+        }
+        
+        // Check if passkey is valid (not a test credential)
+        const hasValidPasskey = !!(user.credentialID && 
+          user.credentialID !== 'test-credential-id-wed271' && 
+          user.credentialPublicKey && 
+          user.counter !== undefined);
+        
         return {
           userId: user._id,
           displayName: user.displayName || user._id,
           createdAt: user.createdAt,
           hasPasskey: !!user.credentialID,
+          hasValidPasskey: hasValidPasskey,
           workflowStage: determineWorkflowStage(user),
-          assignedAgentId: user.assignedAgentId || null,
-          assignedAgentName: user.assignedAgentName || null,
+          assignedAgentId: assignedAgentId,
+          assignedAgentName: assignedAgentName,
           email: user.email || null
         };
       })
@@ -325,6 +343,44 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    // DEBUG: Log the full user document to see what we're working with
+    console.log(`🔍 [DEBUG] User details for ${userId}:`, {
+      _id: userDoc._id,
+      ownedAgents: userDoc.ownedAgents,
+      currentAgentId: userDoc.currentAgentId,
+      currentAgentName: userDoc.currentAgentName,
+      agentAssignedAt: userDoc.agentAssignedAt,
+      approvalStatus: userDoc.approvalStatus,
+      workflowStage: determineWorkflowStage(userDoc)
+    });
+    
+    // Extract current agent information from ownedAgents if available
+    let currentAgentId = userDoc.currentAgentId || null;
+    let currentAgentName = userDoc.currentAgentName || null;
+    let agentAssignedAt = userDoc.agentAssignedAt || null;
+    
+    // If we have ownedAgents but no currentAgentId, use the first owned agent
+    if (userDoc.ownedAgents && userDoc.ownedAgents.length > 0 && !currentAgentId) {
+      const firstAgent = userDoc.ownedAgents[0];
+      currentAgentId = firstAgent.id;
+      currentAgentName = firstAgent.name;
+      agentAssignedAt = firstAgent.assignedAt;
+      console.log(`🔍 [DEBUG] Extracted current agent from ownedAgents:`, {
+        currentAgentId,
+        currentAgentName,
+        agentAssignedAt
+      });
+    }
+    
+    // If we have currentAgentId but no agentAssignedAt, try to get it from ownedAgents
+    if (currentAgentId && !agentAssignedAt && userDoc.ownedAgents && userDoc.ownedAgents.length > 0) {
+      const matchingAgent = userDoc.ownedAgents.find(agent => agent.id === currentAgentId);
+      if (matchingAgent && matchingAgent.assignedAt) {
+        agentAssignedAt = matchingAgent.assignedAt;
+        console.log(`🔍 [DEBUG] Extracted agentAssignedAt from ownedAgents:`, agentAssignedAt);
+      }
+    }
+    
     // Get user's approval requests, agents, and knowledge bases
     const userInfo = {
       userId: userDoc._id || userDoc.userId,
@@ -332,7 +388,10 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       createdAt: userDoc.createdAt,
       updatedAt: userDoc.updatedAt,
       hasPasskey: !!userDoc.credentialID,
-      hasValidPasskey: !!(userDoc.credentialID && userDoc.credentialPublicKey && userDoc.counter !== undefined),
+      hasValidPasskey: !!(userDoc.credentialID && 
+        userDoc.credentialID !== 'test-credential-id-wed271' && 
+        userDoc.credentialPublicKey && 
+        userDoc.counter !== undefined),
       credentialID: userDoc.credentialID,
       credentialPublicKey: userDoc.credentialPublicKey ? 'Present' : 'Missing',
       counter: userDoc.counter,
@@ -342,16 +401,26 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       workflowStage: determineWorkflowStage(userDoc),
       adminNotes: userDoc.adminNotes || '',
       approvalStatus: userDoc.approvalStatus,
-      currentAgentId: userDoc.currentAgentId || null,
-      currentAgentName: userDoc.currentAgentName || null,
+      // Agent information - provide both old and new field names for compatibility
+      currentAgentId: currentAgentId,
+      currentAgentName: currentAgentName,
+      assignedAgentId: currentAgentId, // Frontend compatibility
+      assignedAgentName: currentAgentName, // Frontend compatibility
       ownedAgents: userDoc.ownedAgents || [],
       currentAgentSetAt: userDoc.currentAgentSetAt,
       challenge: userDoc.challenge,
-      agentAssignedAt: userDoc.agentAssignedAt || null,
+      agentAssignedAt: agentAssignedAt,
       approvalRequests: [], // TODO: Implement when Maia2Client has these methods
       agents: [], // TODO: Implement when Maia2Client has these methods
       knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
     };
+    
+    console.log(`🔍 [DEBUG] Final user info for ${userId}:`, {
+      currentAgentId: userInfo.currentAgentId,
+      currentAgentName: userInfo.currentAgentName,
+      agentAssignedAt: userInfo.agentAssignedAt,
+      ownedAgents: userInfo.ownedAgents
+    });
     
     res.json(userInfo);
     
@@ -375,7 +444,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     }
     
     // Get user document
-    const userDoc = await maia2Client.getUserByUsername(userId);
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -395,7 +464,13 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     }
     
     // Update user approval status
-    const updatedUser = await maia2Client.updateUserApprovalStatus(userId, approvalStatus, notes);
+    const updatedUser = {
+      ...userDoc,
+      approvalStatus: approvalStatus,
+      adminNotes: notes,
+      updatedAt: new Date().toISOString()
+    };
+    await couchDBClient.saveDocument('maia_users', updatedUser);
     
     // If approved, trigger resource creation workflow
     if (action === 'approve') {
@@ -426,18 +501,19 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
     const { notes } = req.body;
     
     // Get user document
-    const userDoc = await maia2Client.getUserByUsername(userId);
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
     
     // Update user notes
-    const updates = {
+    const updatedUser = {
+      ...userDoc,
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
     
-    await maia2Client.updateUser(userId, updates);
+    await couchDBClient.saveDocument('maia_users', updatedUser);
     
     res.json({ 
       message: 'Notes saved successfully',
@@ -464,20 +540,21 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     }
     
     // Get user document
-    const userDoc = await maia2Client.getUserByUsername(userId);
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
     
     // Update user with assigned agent information
-    const updates = {
+    const updatedUser = {
+      ...userDoc,
       assignedAgentId: agentId,
       assignedAgentName: agentName,
       agentAssignedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     
-    await maia2Client.updateUser(userId, updates);
+    await couchDBClient.saveDocument('maia_users', updatedUser);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -505,7 +582,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     
     while (retries < maxRetries && !userDoc) {
       try {
-        userDoc = await maia2Client.getUserByUsername(userId);
+        userDoc = await couchDBClient.getDocument('maia_users', userId);
         break;
       } catch (error) {
         if (error.statusCode === 429 && retries < maxRetries - 1) {
@@ -572,5 +649,51 @@ function determineWorkflowStage(user) {
   
   return 'unknown';
 }
+
+// Admin endpoint to reset a user's passkey
+router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { adminSecret } = req.body;
+    
+    // Verify admin secret
+    if (adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(400).json({ error: 'Invalid admin secret' });
+    }
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Clear the passkey information
+    const updatedUser = {
+      ...userDoc,
+      credentialID: undefined,
+      credentialPublicKey: undefined,
+      counter: undefined,
+      transports: undefined,
+      challenge: undefined,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save the updated user document
+    await couchDBClient.saveDocument('maia_users', updatedUser);
+    
+    console.log(`✅ Admin reset passkey for user: ${userId}`);
+    
+    res.json({
+      success: true,
+      message: `Passkey reset successfully for user ${userId}`,
+      userId: userId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error resetting user passkey:', error);
+    res.status(500).json({ error: 'Failed to reset user passkey' });
+  }
+});
 
 export default router;

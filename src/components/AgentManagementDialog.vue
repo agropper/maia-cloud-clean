@@ -227,7 +227,7 @@
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
-                Create a new agent to get started with AI assistance
+              Create a new agent to get started with AI assistance
             </div>
 
             <q-btn
@@ -599,19 +599,19 @@
               </div>
               <div class="text-caption text-positive q-mt-sm">
                 ✅ These files are already stored in your DigitalOcean Spaces folder and ready for knowledge base creation.
+                </div>
               </div>
-            </div>
 
-            <div class="row q-gutter-sm q-mt-md">
-              <q-btn
+              <div class="row q-gutter-sm q-mt-md">
+                <q-btn
                 label="Create Knowledge Base from Bucket Files"
-                color="primary"
-                type="submit"
-                :loading="isCreatingKb"
-              />
-              <q-btn label="Cancel" flat v-close-popup />
-            </div>
-          </q-form>
+                  color="primary"
+                  type="submit"
+                  :loading="isCreatingKb"
+                />
+                <q-btn label="Cancel" flat v-close-popup />
+              </div>
+            </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -1517,38 +1517,38 @@ export default defineComponent({
         // For unauthenticated users (legacy), load current agent from legacy system
         if (!isAuthenticated.value) {
           // Load current agent info from legacy system
-          const currentAgentResponse = await fetch(
+        const currentAgentResponse = await fetch(
             `${API_BASE_URL}/current-agent`,
             { credentials: 'include' }
+        );
+        if (!currentAgentResponse.ok) {
+          throw new Error("Failed to load current agent");
+        }
+
+        const currentAgentData = await currentAgentResponse.json();
+
+        if (currentAgentData.agent) {
+          currentAgent.value = currentAgentData.agent;
+          console.log(
+            `🤖 Current agent loaded: ${currentAgentData.agent.name}`
           );
-          if (!currentAgentResponse.ok) {
-            throw new Error("Failed to load current agent");
-          }
 
-          const currentAgentData = await currentAgentResponse.json();
-
-          if (currentAgentData.agent) {
-            currentAgent.value = currentAgentData.agent;
+          if (currentAgentData.agent.knowledgeBase) {
             console.log(
-              `🤖 Current agent loaded: ${currentAgentData.agent.name}`
+              `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
             );
-
-            if (currentAgentData.agent.knowledgeBase) {
-              console.log(
-                `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
-              );
-            } else {
-              console.log(`📚 No KB assigned`);
-            }
-
-            // Handle warnings from the API
-            if (currentAgentData.warning) {
-              console.warn(currentAgentData.warning);
-            }
           } else {
-            currentAgent.value = null;
-            console.log("🤖 No agent configured");
+            console.log(`📚 No KB assigned`);
           }
+
+          // Handle warnings from the API
+          if (currentAgentData.warning) {
+            console.warn(currentAgentData.warning);
+          }
+        } else {
+          currentAgent.value = null;
+          console.log("🤖 No agent configured");
+        }
         } else {
           // Authenticated user - check if they have an assigned agent
           if (localCurrentUser.value?.userId) {
@@ -1627,9 +1627,9 @@ export default defineComponent({
         try {
           const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Unknown User';
           const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
-            if (agentsResponse.ok) {
-              const agents: DigitalOceanAgent[] = await agentsResponse.json();
-              availableAgents.value = agents;
+          if (agentsResponse.ok) {
+            const agents: DigitalOceanAgent[] = await agentsResponse.json();
+            availableAgents.value = agents;
             console.log(`[*] Available agents: ${agents.length} for user ${currentUsername}`);
           }
         } catch (agentsError) {
@@ -1642,29 +1642,29 @@ export default defineComponent({
           // For unauthenticated users (legacy), show all available KBs
           if (isAuthenticated.value) {
             const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId;
-            const knowledgeBasesResponse = await fetch(
+          const knowledgeBasesResponse = await fetch(
               `${API_BASE_URL}/knowledge-bases?user=${currentUsername}`
-            );
-            if (knowledgeBasesResponse.ok) {
+          );
+          if (knowledgeBasesResponse.ok) {
               const userKnowledgeBases: DigitalOceanKnowledgeBase[] =
-                await knowledgeBasesResponse.json();
+              await knowledgeBasesResponse.json();
 
-              // Get all connected KBs from the current agent
-              const connectedKBs =
-                currentAgent.value?.knowledgeBases ||
-                (currentAgent.value?.knowledgeBase
-                  ? [currentAgent.value.knowledgeBase]
-                  : []);
+            // Get all connected KBs from the current agent
+            const connectedKBs =
+              currentAgent.value?.knowledgeBases ||
+              (currentAgent.value?.knowledgeBase
+                ? [currentAgent.value.knowledgeBase]
+                : []);
 
               // Combine user KBs with connected KBs, avoiding duplicates
               const allKBs = [...userKnowledgeBases];
-              connectedKBs.forEach((connectedKB) => {
-                if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
-                  allKBs.push(connectedKB);
-                }
-              });
+            connectedKBs.forEach((connectedKB) => {
+              if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
+                allKBs.push(connectedKB);
+              }
+            });
 
-              availableKnowledgeBases.value = allKBs;
+            availableKnowledgeBases.value = allKBs;
               // Available knowledge bases loaded
             }
           } else {
@@ -2542,8 +2542,8 @@ export default defineComponent({
         }
         
         const requestBody = {
-          name: newKbName.value,
-          description: newKbDescription.value,
+            name: newKbName.value,
+            description: newKbDescription.value,
           username: username || 'unknown',
           documents: userBucketFiles.value.map(file => ({
             id: file.key,
@@ -2744,7 +2744,7 @@ export default defineComponent({
             kbName: knowledgeBase.value?.name || 'Unknown KB'
           }),
         });
-        
+
         if (response.ok) {
           const result = await response.json();
           
@@ -2866,7 +2866,7 @@ export default defineComponent({
             
             // Hide the CREATE KNOWLEDGE BASE button once indexing starts
             if (status === 'INDEX_JOB_STATUS_IN_PROGRESS' || status === 'INDEX_JOB_STATUS_PENDING') {
-              showCreateKbDialog.value = false;
+        showCreateKbDialog.value = false;
             }
             
             console.log(`📊 Indexing status: ${status}, Phase: ${phase} - Updated monitoring logic`);
@@ -2893,8 +2893,8 @@ export default defineComponent({
               showCancelIndexingModal.value = false;
               
               // Show success notification
-              $q.notify({
-                type: "positive",
+        $q.notify({
+          type: "positive",
                 message: `Knowledge base indexing completed successfully in ${indexingDuration} seconds!`,
               });
               
@@ -2910,8 +2910,8 @@ export default defineComponent({
               stopIndexingMonitor();
               
               // Show error notification
-              $q.notify({
-                type: "negative",
+        $q.notify({
+          type: "negative",
                 message: "Knowledge base indexing failed. Please contact support.",
               });
             }

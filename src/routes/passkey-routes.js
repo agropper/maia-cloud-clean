@@ -125,12 +125,33 @@ router.post("/check-user", async (req, res) => {
         "maia_users",
         userId
       );
-      res.json({
-        available: !existingUser,
-        message: existingUser
-          ? "User ID already exists"
-          : "User ID is available",
-      });
+      
+      if (existingUser) {
+        // User exists - check if they have a valid passkey
+        const hasValidPasskey = !!(existingUser.credentialID && 
+          existingUser.credentialID !== 'test-credential-id-wed271' && 
+          existingUser.credentialPublicKey && 
+          existingUser.counter !== undefined);
+        
+        console.log(`🔍 [check-user] User ${userId} exists, hasValidPasskey: ${hasValidPasskey}`);
+        
+        res.json({
+          available: !hasValidPasskey, // Available if no valid passkey
+          message: hasValidPasskey 
+            ? "User ID already exists with valid passkey"
+            : "User ID exists but can register new passkey",
+          hasValidPasskey: hasValidPasskey,
+          canRegister: !hasValidPasskey
+        });
+      } else {
+        // User doesn't exist - available for new registration
+        res.json({
+          available: true,
+          message: "User ID is available",
+          hasValidPasskey: false,
+          canRegister: true
+        });
+      }
     } catch (error) {
       console.log("🔍 Database error:", error.message);
       // If database doesn't exist or document not found, user ID is available
@@ -142,6 +163,8 @@ router.post("/check-user", async (req, res) => {
         res.json({
           available: true,
           message: "User ID is available (database not initialized)",
+          hasValidPasskey: false,
+          canRegister: true
         });
       } else {
         throw error;
@@ -189,9 +212,18 @@ router.post("/register", async (req, res) => {
         if (userId === 'admin') {
           console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
+        } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
+          // Admin override: Allow admin to reset any user's passkey
+          console.log("✅ Admin override: Allowing passkey reset for user:", userId);
+          console.log("🔍 Admin secret verified, proceeding with passkey replacement");
+          // Continue with registration (replace existing passkey)
         } else {
           console.log("❌ User already has a passkey:", userId);
-          return res.status(400).json({ error: "User already has a registered passkey" });
+          return res.status(400).json({ 
+            error: "User already has a registered passkey. Contact admin to reset it.",
+            hasExistingPasskey: true,
+            userId: userId
+          });
         }
       } else {
         // If user exists but doesn't have a passkey, allow registration
@@ -550,8 +582,8 @@ router.get("/user/:userId", async (req, res) => {
 
     // Don't return sensitive credential data
     res.json({
-      userId: userDoc.userId,
-      displayName: userDoc.displayName,
+      userId: userDoc._id, // Use _id instead of userId
+      displayName: userDoc.displayName || userDoc._id,
       domain: userDoc.domain,
       createdAt: userDoc.createdAt,
       updatedAt: userDoc.updatedAt,
@@ -570,13 +602,13 @@ router.get("/auth-status", async (req, res) => {
       const userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
       if (userDoc) {
         // Echo current user to backend console
-        console.log(`Current user: ${userDoc.userId}`);
+        console.log(`Current user: ${userDoc._id}`);
         
         res.json({
           authenticated: true,
           user: {
-            userId: userDoc.userId,
-            displayName: userDoc.displayName,
+            userId: userDoc._id, // Use _id instead of userId
+            displayName: userDoc.displayName || userDoc._id,
           },
         });
       } else {
