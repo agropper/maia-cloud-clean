@@ -169,27 +169,17 @@ This suggests the protection document lookup is failing or the logic is incorrec
 4. ✅ **Verified migration** - maia_users now contains all user data with proper structure
 
 ### **CURRENT DATABASE STATUS**
-**PRIMARY DATABASES (Active):**
-- `maia_users` - ✅ **ACTIVE** - 69 users with design document
+**ACTIVE DATABASES:**
+- `maia_users` - ✅ **ACTIVE** - User authentication and management
 - `maia_knowledge_bases` - ✅ **ACTIVE** - KB protection metadata
-- `maia_chats` - ✅ **ACTIVE** - Chat history
+- `maia3_chats` - ✅ **ACTIVE** - Chat history and conversations
 
-**LEGACY DATABASES (To be cleaned up):**
-- `maia2_users` - ⚠️ **LEGACY** - Data migrated to maia_users
-- `maia2_agents` - ⚠️ **LEGACY** - Agent management
-- `maia2_knowledge_bases` - ⚠️ **LEGACY** - KB protection
-- `maia2_user_resources` - ⚠️ **LEGACY** - User resources
-- `maia2_admin_approvals` - ⚠️ **LEGACY** - Admin approvals
-- `maia2_audit_logs` - ⚠️ **LEGACY** - Audit logs
-- `maia3_users` - ⚠️ **LEGACY** - 2 users (superseded by maia_users)
-- `maia3_knowledge_bases` - ⚠️ **LEGACY** - 11 KBs
-- `maia3_chats` - ⚠️ **LEGACY** - 13 chats
-
-### **NEXT STEPS**
-1. 🔄 **Update code references** - Change maia2Client to use maia_users instead of maia2_users
-2. 🔄 **Migrate KB data** - Ensure KB protection data is consistent
-3. 🔄 **Update .env file** - Ensure CLOUDANT_DATABASE points to maia_chats
-4. 🔄 **Clean up legacy databases** - Delete maia2_* and maia3_* databases after migration
+**CLEANUP COMPLETED:**
+- ✅ **Removed legacy database setup files** - maia2-database-setup.js, maia3-database-setup.js
+- ✅ **Removed legacy migration files** - database-migration.js, maia2-api-routes.js
+- ✅ **Removed legacy scripts** - All migration and inspection scripts
+- ✅ **Updated code references** - maia2Client now uses maia_users database
+- ✅ **Updated documentation** - Removed references to legacy databases
 
 ### **BENEFITS**
 - ✅ **Avoids database limit** - Only 3 databases instead of 9+

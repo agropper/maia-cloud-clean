@@ -4612,11 +4612,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
 import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient } from './src/routes/admin-management-routes.js';
 
-// Import MAIA2 routes
-import maia2Routes from './src/routes/maia2-api-routes.js';
-import maia2DatabaseSetup from './src/routes/maia2-database-setup.js';
-import maia3DatabaseSetup from './src/routes/maia3-database-setup.js';
-import databaseMigration from './src/routes/database-migration.js';
+// MAIA2 routes removed - using consolidated maia_users database
 
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
@@ -4942,13 +4938,7 @@ app.get('/api/fix-agent-ownership', async (req, res) => {
   }
 });
 
-// Mount MAIA2 routes
-app.use('/api/maia2', maia2Routes);
-
-// Mount MAIA2 database setup routes
-app.use('/api/maia2-setup', maia2DatabaseSetup);
-app.use('/api/maia3-setup', maia3DatabaseSetup);
-app.use('/api/database-migration', databaseMigration);
+// MAIA2 routes removed - using consolidated maia_users database
 
 // =============================================================================
 // DEEP LINK USER MANAGEMENT

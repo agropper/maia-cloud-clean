@@ -27,8 +27,8 @@
 ## Files Created/Modified
 
 ### New Files Created
-1. **`src/routes/maia2-database-setup.js`** - Database creation and setup
-2. **`src/routes/maia2-api-routes.js`** - Complete API endpoints
+1. **`src/routes/admin-management-routes.js`** - User management and admin functions
+2. **`src/routes/passkey-routes.js`** - Passkey authentication
 3. **`src/utils/maia2-client.js`** - Database client with access control
 4. **`src/types/maia2-types.ts`** - TypeScript type definitions
 5. **`MAIA2_SYSTEM_DESIGN.md`** - Comprehensive system documentation
@@ -40,15 +40,16 @@
 
 ## Database Structure
 
-### New Databases Created
+### Current Database Structure
 | Database | Purpose | Document Types |
 |----------|---------|----------------|
-| `maia2_users` | User management | user, passkey credentials |
-| `maia2_agents` | AI agents | agent, configuration |
-| `maia2_knowledge_bases` | Knowledge bases | knowledge_base, metadata |
-| `maia2_user_resources` | Resource allocation | user_resource, quotas |
-| `maia2_admin_approvals` | Approval workflow | admin_approval, requests |
-| `maia2_audit_logs` | Audit trail | audit_log, events |
+| `maia_users` | User management | user, passkey credentials |
+| `maia3_chats` | Group conversations | chat, message |
+| `maia_knowledge_bases` | Knowledge bases | knowledge_base, metadata |
+| `maia_agents` | AI agents | agent, configuration |
+| `maia_user_resources` | Resource allocation | user_resource, quotas |
+| `maia_admin_approvals` | Approval workflow | admin_approval, requests |
+| `maia_audit_logs` | Audit trail | audit_log, events |
 
 ### Design Documents
 Each database includes optimized CouchDB views for:

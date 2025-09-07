@@ -14,24 +14,17 @@ The MAIA2 system is a comprehensive redesign of the MAIA cloud application to su
 
 ## Database Architecture
 
-### New Databases (maia2_*)
+### Current Database Architecture
 
 | Database | Purpose | Key Features |
 |----------|---------|--------------|
-| `maia2_users` | User management and authentication | Passkey credentials, approval status, resource limits |
-| `maia2_agents` | User-specific AI agents | Ownership, DigitalOcean integration, cost tracking |
-| `maia2_knowledge_bases` | User-specific knowledge bases | Document storage, indexing, sharing controls |
-| `maia2_user_resources` | Resource allocation tracking | Request/approval workflow, usage monitoring |
-| `maia2_admin_approvals` | Administrative approval workflow | Request tracking, decision logging |
-| `maia2_audit_logs` | Comprehensive audit trail | Security events, compliance tracking |
-
-### Existing Databases (Unchanged)
-
-- `maia_users` - Legacy user authentication
-- `maia_chats` - Group chats and shared conversations
-- `maia_knowledge_bases` - Legacy knowledge base protection
-- `maia_user_knowledge_bases` - Legacy user-KB relationships
-- `maia_kb_transfers` - Legacy ownership transfer logs
+| `maia_users` | User management and authentication | Passkey credentials, approval status, resource limits |
+| `maia3_chats` | Group chats and shared conversations | Multi-user conversations, sharing controls |
+| `maia_knowledge_bases` | Knowledge base management | Document storage, indexing, user ownership |
+| `maia_agents` | AI agent management | DigitalOcean integration, cost tracking |
+| `maia_user_resources` | Resource allocation tracking | Request/approval workflow, usage monitoring |
+| `maia_admin_approvals` | Administrative approval workflow | Request tracking, decision logging |
+| `maia_audit_logs` | Comprehensive audit trail | Security events, compliance tracking |
 
 ## User Privacy Levels
 
@@ -55,7 +48,7 @@ The MAIA2 system is a comprehensive redesign of the MAIA cloud application to su
 
 ### 1. User Registration
 ```
-User creates passkey → System creates maia2_users entry → Status: pending
+User creates passkey → System creates maia_users entry → Status: pending
 ```
 
 ### 2. Resource Request
