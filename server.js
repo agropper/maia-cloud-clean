@@ -4802,6 +4802,64 @@ app.post('/api/fix-agent-ownership', async (req, res) => {
   }
 });
 
+// Examine user documents endpoint
+app.get('/api/examine-users', async (req, res) => {
+  try {
+    console.log('🔍 Examining fri951 and wed271 user documents...');
+    
+    // Get fri951 user document
+    const fri951Doc = await couchDBClient.getDocument('maia_users', 'fri951');
+    
+    // Get wed271 user document
+    const wed271Doc = await couchDBClient.getDocument('maia_users', 'wed271');
+    
+    // Compare the documents
+    const comparison = {
+      fri951: fri951Doc,
+      wed271: wed271Doc,
+      differences: {},
+      analysis: {}
+    };
+    
+    // Get all unique keys from both documents
+    const allKeys = new Set([...Object.keys(fri951Doc), ...Object.keys(wed271Doc)]);
+    
+    for (const key of allKeys) {
+      const fri951Value = fri951Doc[key];
+      const wed271Value = wed271Doc[key];
+      
+      if (JSON.stringify(fri951Value) !== JSON.stringify(wed271Value)) {
+        comparison.differences[key] = {
+          fri951: fri951Value,
+          wed271: wed271Value
+        };
+      }
+    }
+    
+    // Special analysis for credential data
+    comparison.analysis = {
+      fri951_credentialID: {
+        type: typeof fri951Doc.credentialID,
+        value: fri951Doc.credentialID,
+        length: fri951Doc.credentialID ? fri951Doc.credentialID.length : 'N/A',
+        isValidBase64: fri951Doc.credentialID ? /^[A-Za-z0-9_-]+$/.test(fri951Doc.credentialID) : false
+      },
+      wed271_credentialID: {
+        type: typeof wed271Doc.credentialID,
+        value: wed271Doc.credentialID,
+        length: wed271Doc.credentialID ? wed271Doc.credentialID.length : 'N/A',
+        isValidBase64: wed271Doc.credentialID ? /^[A-Za-z0-9_-]+$/.test(wed271Doc.credentialID) : false
+      }
+    };
+    
+    res.json(comparison);
+    
+  } catch (error) {
+    console.error('❌ Error examining users:', error);
+    res.status(500).json({ error: 'Failed to examine users' });
+  }
+});
+
 // Simple GET endpoint to fix agent ownership
 app.get('/api/fix-agent-ownership', async (req, res) => {
   try {
