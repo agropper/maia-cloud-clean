@@ -1240,6 +1240,7 @@ export default defineComponent({
       // Skip admin check since admin auth is bypassed for testing
       // In production, uncomment: if (!isAdmin.value) return;
       
+      console.log('[*] [Admin Panel] Refreshing sessions list from database');
       isLoadingSessions.value = true;
       try {
         const response = await fetch('/api/admin-management/sessions');

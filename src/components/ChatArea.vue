@@ -706,19 +706,19 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
-                        console.log(`🔍 [ChatArea] loadGroupCount called - isUserReady: ${this.isUserReady}`);
+                        // console.log(`🔍 [ChatArea] loadGroupCount called - isUserReady: ${this.isUserReady}`);
                         
                         // Only proceed if user is ready
                         if (!this.isUserReady) {
-                          console.log(`⏸️ [ChatArea] Skipping loadGroupCount - user not ready`);
+                          // console.log(`⏸️ [ChatArea] Skipping loadGroupCount - user not ready`);
                           return
                         }
                         
-                        console.log(`🔍 [ChatArea] Getting all group chats from backend...`);
+                        // console.log(`🔍 [ChatArea] Getting all group chats from backend...`);
                         // Get all chats from backend
                         const { getAllGroupChats } = useGroupChat()
                         const allGroups = await getAllGroupChats()
-                        console.log(`🔍 [ChatArea] Retrieved ${allGroups.length} group chats from backend`);
+                        // console.log(`🔍 [ChatArea] Retrieved ${allGroups.length} group chats from backend`);
                         
                         // Apply the same filtering logic as GroupManagementModal
                         // Filter groups by current user (including "Unknown User")

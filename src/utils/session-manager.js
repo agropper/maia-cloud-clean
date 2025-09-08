@@ -36,7 +36,7 @@ class SessionManager {
 
     try {
       console.log(`🔍 [SessionManager] Attempting to save session:`, sessionDoc);
-      await this.couchDBClient.saveDocument('maia_chats', sessionDoc);
+      await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
       console.log(`✅ Session created: ${sessionType} for ${userId}`);
       return sessionDoc;
     } catch (error) {
@@ -48,7 +48,7 @@ class SessionManager {
   // Get a session by ID
   async getSession(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_chats', `session_${sessionId}`);
+      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
       return sessionDoc;
     } catch (error) {
       // Session doesn't exist - this is normal for new sessions
@@ -59,7 +59,7 @@ class SessionManager {
   // Update last activity for a session
   async updateLastActivity(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_chats', `session_${sessionId}`);
+      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
       if (sessionDoc && sessionDoc.isActive) {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + this.INACTIVITY_TIMEOUT);
@@ -69,7 +69,7 @@ class SessionManager {
         sessionDoc.warningShown = false;
         sessionDoc.warningShownAt = null;
 
-        await this.couchDBClient.saveDocument('maia_chats', sessionDoc);
+        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
         return sessionDoc;
       }
     } catch (error) {
@@ -81,7 +81,7 @@ class SessionManager {
   // Check if session is valid and handle inactivity
   async validateSession(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_chats', `session_${sessionId}`);
+      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
       
       if (!sessionDoc || !sessionDoc.isActive) {
         return { valid: false, reason: 'Session not found or inactive' };
@@ -101,7 +101,7 @@ class SessionManager {
       if (inactiveMinutes > 9.5 && !sessionDoc.warningShown) {
         sessionDoc.warningShown = true;
         sessionDoc.warningShownAt = now.toISOString();
-        await this.couchDBClient.saveDocument('maia_chats', sessionDoc);
+        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
         
         return { 
           valid: true, 
@@ -125,24 +125,29 @@ class SessionManager {
   }
 
   // Deactivate a session
-  async deactivateSession(sessionId) {
+  async deactivateSession(sessionId, deactivatedBy = 'admin') {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_chats', `session_${sessionId}`);
+      const sessionDocId = `session_${sessionId}`;
+      console.log('[*] [Session Delete] Admin deleting session from maia_sessions database:', sessionDocId);
+      
+      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);
       if (sessionDoc) {
-        sessionDoc.isActive = false;
-        sessionDoc.deactivatedAt = new Date().toISOString();
-        await this.couchDBClient.saveDocument('maia_chats', sessionDoc);
-        console.log(`✅ Session deactivated: ${sessionId}`);
+        // Physically delete the session document to prevent database growth
+        await this.couchDBClient.deleteDocument('maia_sessions', sessionDocId);
+        console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');
+        console.log(`✅ Session deleted: ${sessionId}`);
+      } else {
+        console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');
       }
     } catch (error) {
-      console.error('❌ Error deactivating session:', error);
+      console.error('❌ [Session Delete] Error deactivating session from maia_sessions database:', error);
     }
   }
 
   // Check for active authenticated sessions (single-user enforcement)
   async hasActiveAuthenticatedSession() {
     try {
-      const allSessions = await this.couchDBClient.getAllDocuments('maia_chats');
+      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
       const activeSessions = allSessions.filter(doc => 
         doc.type === 'session' && 
         doc.isActive && 
@@ -159,6 +164,18 @@ class SessionManager {
   // Get all active sessions for admin dashboard
   async getAllActiveSessions() {
     try {
+      // First, let's see ALL sessions in the database for debugging
+      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
+      console.log(`🔍 [SessionManager] DEBUG: Total sessions in database: ${allSessions.length}`);
+      console.log(`🔍 [SessionManager] DEBUG: All sessions:`, allSessions.map(s => ({
+        _id: s._id,
+        sessionType: s.sessionType,
+        userId: s.userId,
+        isActive: s.isActive,
+        deactivatedBy: s.deactivatedBy,
+        deactivatedAt: s.deactivatedAt
+      })));
+      
       // Use findDocuments instead of getAllDocuments to avoid connection issues
       const query = {
         selector: {
@@ -167,7 +184,7 @@ class SessionManager {
         }
       };
       
-      const result = await this.couchDBClient.findDocuments('maia_chats', query);
+      const result = await this.couchDBClient.findDocuments('maia_sessions', query);
       const activeSessions = result.docs;
       console.log(`🔍 [SessionManager] Active sessions found: ${activeSessions.length}`);
       
@@ -214,7 +231,7 @@ class SessionManager {
   // Cleanup expired deep links
   async cleanupExpiredDeepLinks() {
     try {
-      const allSessions = await this.couchDBClient.getAllDocuments('maia_chats');
+      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
       const now = new Date();
       
       const expiredDeepLinks = allSessions.filter(doc => 

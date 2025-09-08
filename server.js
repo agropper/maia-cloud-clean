@@ -73,6 +73,18 @@ const initializeDatabase = async () => {
         }
       }
       
+      // Create sessions database
+      try {
+        await couchDBClient.createDatabase('maia_sessions');
+        console.log('✅ Created maia_sessions database');
+      } catch (error) {
+        if (error.statusCode === 412) {
+          console.log('✅ maia_sessions database already exists');
+        } else {
+          console.warn('⚠️ Could not create maia_sessions database:', error.message);
+        }
+      }
+      
       // Get service info
       const serviceInfo = couchDBClient.getServiceInfo();
       console.log(`✅ Connected to ${serviceInfo.isCloudant ? 'Cloudant' : 'CouchDB'}`);
@@ -171,28 +183,180 @@ const sessionConfig = {
   }
 };
 
-// Use CouchDB session store for both development and production
-import { CouchDBSessionStore } from './src/utils/couchdb-session-store.js';
+// TEMPORARILY DISABLED: Use CouchDB session store for both development and production
+// import { CouchDBSessionStore } from './src/utils/couchdb-session-store.js';
 
-const couchDBSessionStore = new CouchDBSessionStore({
-  couchDBClient: couchDBClient,
-  dbName: 'maia_chats',
-  ttl: 24 * 60 * 60 * 1000, // 24 hours
-  inactivityTimeout: 10 * 60 * 1000, // 10 minutes
-  warningDuration: 30 * 1000 // 30 seconds
-});
+// Create a separate CouchDB client for sessions with the correct database
+// const sessionCouchDBClient = createCouchDBClient({ database: 'maia_sessions' });
 
-sessionConfig.store = couchDBSessionStore;
-console.log('🔧 Using CouchDB session store with 10-minute inactivity timeout');
+// Essential: Session client configuration
+// console.log('[*] [Session] Using separate CouchDB client for maia_sessions database');
+
+// const couchDBSessionStore = new CouchDBSessionStore({
+//   couchDBClient: sessionCouchDBClient,
+//   dbName: 'maia_sessions',
+//   ttl: 24 * 60 * 60 * 1000, // 24 hours
+//   inactivityTimeout: 10 * 60 * 1000, // 10 minutes
+//   warningDuration: 30 * 1000 // 30 seconds
+// });
+
+// Essential: Session store configuration
+// console.log('[*] [Session] Session store configured with database:', couchDBSessionStore.dbName);
+
+// sessionConfig.store = couchDBSessionStore;
+console.log('[*] [Session] Using default memory session store (maia_sessions disabled)');
+
+// Memory cache to track session creation events
+const sessionEventCache = new Map();
+const writtenSessions = new Set(); // Track which sessions have been written to database
+console.log('[*] [Session] Memory cache initialized for session event tracking');
 
 app.use(session(sessionConfig));
+
+// Middleware to capture session creation events
+app.use((req, res, next) => {
+  const sessionId = req.sessionID;
+  const userId = req.session?.userId;
+  const route = req.path;
+  const method = req.method;
+  const timestamp = new Date().toISOString();
+  
+  // Only capture events for authenticated users on API routes (not static assets)
+  if (userId && userId !== 'undefined' && route.startsWith('/api/')) {
+    // Create event key
+    const eventKey = `${sessionId}_${timestamp}`;
+    
+    // Capture session event
+    const sessionEvent = {
+      sessionId,
+      userId,
+      route,
+      method,
+      timestamp,
+      sessionData: req.session ? {
+        userId: req.session.userId,
+        username: req.session.username,
+        displayName: req.session.displayName,
+        authenticatedAt: req.session.authenticatedAt,
+        lastActivity: req.session.lastActivity
+      } : null
+    };
+    
+    // Add to memory cache
+    sessionEventCache.set(eventKey, sessionEvent);
+    
+    // Debug message for relevant session events only
+    console.log('[*] [Session Event] Captured authenticated event:', {
+      eventKey,
+      sessionId,
+      userId,
+      route,
+      method,
+      timestamp,
+      hasSessionData: !!req.session,
+      sessionKeys: req.session ? Object.keys(req.session) : []
+    });
+    
+    // Log cache size
+    console.log('[*] [Session Event] Cache size:', sessionEventCache.size);
+    
+    // Database writes are now handled in the route handlers themselves
+    // This ensures proper timing - writes happen after authentication is confirmed
+  }
+  
+  next();
+});
 
 // Initialize session management with shared database client
 const sessionManager = new SessionManager(couchDBClient);
 const sessionMiddleware = new SessionMiddleware(sessionManager);
 
-// Session activity tracking is now handled automatically by CouchDBSessionStore
-// The store's touch() method is called automatically by express-session on each request
+// Function to write session to maia_sessions database
+const writeSessionToDatabase = async (sessionEvent) => {
+  try {
+    console.log('[*] [Session Write] Writing session to maia_sessions database:', {
+      sessionId: sessionEvent.sessionId,
+      userId: sessionEvent.userId,
+      route: sessionEvent.route,
+      timestamp: sessionEvent.timestamp
+    });
+    
+    // Create session document for database
+    const sessionDoc = {
+      _id: `session_${sessionEvent.sessionId}`,
+      type: 'session',
+      sessionType: 'authenticated',
+      userId: sessionEvent.userId,
+      isActive: true,
+      lastActivity: sessionEvent.timestamp,
+      createdAt: sessionEvent.timestamp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
+      warningShown: false,
+      warningShownAt: null,
+      deepLinkId: null,
+      ownedBy: null
+    };
+    
+    // Write to database
+    console.log('[*] [Session Write] Writing to maia_sessions:', JSON.stringify(sessionDoc, null, 2));
+    
+    await couchDBClient.saveDocument('maia_sessions', sessionDoc);
+    
+    console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');
+    
+  } catch (error) {
+    console.error('❌ [Session Write] Error writing session to database:', error);
+  }
+};
+
+// Endpoint to view session events in cache
+app.get('/api/debug/session-events', (req, res) => {
+  const events = Array.from(sessionEventCache.values());
+  console.log('[*] [Session Event] Retrieved', events.length, 'events from cache');
+  
+  res.json({
+    totalEvents: events.length,
+    events: events.map(event => ({
+      sessionId: event.sessionId,
+      userId: event.userId,
+      route: event.route,
+      method: event.method,
+      timestamp: event.timestamp,
+      hasSessionData: !!event.sessionData,
+      sessionData: event.sessionData
+    }))
+  });
+});
+
+// Endpoint to write the first authenticated session to database
+app.post('/api/debug/write-session', async (req, res) => {
+  const events = Array.from(sessionEventCache.values());
+  const authenticatedEvents = events.filter(event => event.userId && event.userId !== 'undefined');
+  
+  if (authenticatedEvents.length > 0) {
+    const firstAuthenticatedEvent = authenticatedEvents[0];
+    await writeSessionToDatabase(firstAuthenticatedEvent);
+    res.json({ success: true, message: 'Session written to database', event: firstAuthenticatedEvent });
+  } else {
+    res.json({ success: false, message: 'No authenticated events found' });
+  }
+});
+
+// Session activity tracking middleware for API routes only
+app.use('/api', (req, res, next) => {
+  if (req.session && req.sessionID) {
+    // Force a session update to trigger touch() for API requests
+    req.session.lastActivity = new Date().toISOString();
+    req.session.save((err) => {
+      if (err) {
+        console.error('❌ Error saving session for activity tracking:', err);
+      }
+      next();
+    });
+  } else {
+  next();
+  }
+});
 
 // Session middleware will be applied to specific protected routes only
 // No global session validation for API routes

@@ -621,6 +621,67 @@ router.get("/auth-status", async (req, res) => {
         // Echo current user to backend console
         console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
         
+        // Write session to database AFTER authentication is confirmed
+        if (!global.writtenSessions || !global.writtenSessions.has(req.sessionID)) {
+          if (!global.writtenSessions) global.writtenSessions = new Set();
+          global.writtenSessions.add(req.sessionID);
+          
+          console.log('[*] [Session Write] Writing session to maia_sessions database after auth confirmation');
+          
+          // Import the writeSessionToDatabase function
+          const { writeSessionToDatabase } = await import('../utils/session-write-helper.js');
+          
+          const sessionEvent = {
+            sessionId: req.sessionID,
+            userId: userDoc._id,
+            route: '/api/passkey/auth-status',
+            method: 'GET',
+            timestamp: new Date().toISOString(),
+            sessionData: req.session
+          };
+          
+          try {
+            await writeSessionToDatabase(sessionEvent);
+            console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');
+            
+            // VERIFY: Read from database to confirm session exists
+            const sessionDocId = `session_${req.sessionID}`;
+            const verifySession = await couchDBClient.getDocument('maia_sessions', sessionDocId);
+            
+            if (verifySession && verifySession.isActive) {
+              console.log('[*] [Session Verify] Session confirmed in database:', {
+                sessionId: req.sessionID,
+                userId: verifySession.userId,
+                isActive: verifySession.isActive,
+                createdAt: verifySession.createdAt
+              });
+
+              // Store verification data for later retrieval
+              global.sessionVerification = {
+                sessionId: req.sessionID,
+                userId: verifySession.userId,
+                isActive: verifySession.isActive,
+                createdAt: verifySession.createdAt,
+                timestamp: new Date().toISOString()
+              };
+            } else {
+              console.error('❌ [Session Verify] Session not found in database after write');
+              global.sessionVerification = {
+                error: 'Session write failed - not found in database',
+                sessionId: req.sessionID,
+                timestamp: new Date().toISOString()
+              };
+            }
+          } catch (error) {
+            console.error('❌ [Session Write] Error writing to database:', error);
+            res.setHeader('X-Session-Error', JSON.stringify({
+              message: '❌ [Browser] Error writing session to database',
+              error: error.message,
+              timestamp: new Date().toISOString()
+            }));
+          }
+        }
+        
         res.json({
           authenticated: true,
           user: {
@@ -641,6 +702,40 @@ router.get("/auth-status", async (req, res) => {
   } catch (error) {
     console.error("❌ [auth-status] Error checking auth status:", error);
     res.status(500).json({ error: "Failed to check authentication status" });
+  }
+});
+
+// Get session verification data
+router.get("/session-verification", async (req, res) => {
+  try {
+    if (global.sessionVerification) {
+      const verification = global.sessionVerification;
+      
+      if (verification.error) {
+        res.setHeader('X-Session-Error', JSON.stringify({
+          message: '❌ [Browser] Session write failed - not found in database',
+          sessionId: verification.sessionId,
+          timestamp: verification.timestamp
+        }));
+      } else {
+        res.setHeader('X-Session-Verified', JSON.stringify({
+          message: '[*] [Browser] Session verified in maia_sessions database',
+          sessionId: verification.sessionId,
+          userId: verification.userId,
+          isActive: verification.isActive,
+          createdAt: verification.createdAt,
+          timestamp: verification.timestamp
+        }));
+      }
+      
+      // Clear the verification data after sending
+      global.sessionVerification = null;
+    }
+    
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error("❌ [session-verification] Error:", error);
+    res.status(500).json({ error: "Failed to get session verification" });
   }
 });
 
@@ -669,12 +764,31 @@ router.post("/logout", async (req, res) => {
         console.error("GroupFilter: Error getting group chats:", error);
       }
       
-      req.session.destroy((err) => {
+      req.session.destroy(async (err) => {
         if (err) {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
+        
+        // Delete session from maia_sessions database
+        try {
+          const sessionDocId = `session_${req.sessionID}`;
+          console.log('[*] [Session Delete] Deleting session from maia_sessions database:', sessionDocId);
+          
+          // Try to get the session document first to check if it exists
+          const existingSession = await couchDBClient.getDocument('maia_sessions', sessionDocId);
+          if (existingSession) {
+            // Physically delete the session document to prevent database growth
+            await couchDBClient.deleteDocument('maia_sessions', sessionDocId);
+            console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');
+          } else {
+            console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');
+          }
+        } catch (error) {
+          console.error('❌ [Session Delete] Error deleting session from maia_sessions database:', error);
+          // Don't fail the logout if session deletion fails
+        }
         
         // Send a message to the browser console after session destruction
         res.json({ 

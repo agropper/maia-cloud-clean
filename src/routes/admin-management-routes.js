@@ -786,7 +786,8 @@ router.post('/sessions/:sessionId/signout', requireAdminAuth, async (req, res) =
   try {
     const { sessionId } = req.params;
     
-    await sessionManager.deactivateSession(sessionId);
+    console.log(`🔓 [Admin] Signing out session: ${sessionId}`);
+    await sessionManager.deactivateSession(sessionId, 'admin_signout');
     
     res.json({
       success: true,

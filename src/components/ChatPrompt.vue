@@ -216,12 +216,12 @@ export default defineComponent({
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
-        console.log(`🔍 [ChatPrompt] Checking existing session...`);
-        console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
+        // console.log(`🔍 [ChatPrompt] Checking existing session...`);
+        // console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
         
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
-        console.log(`🔍 [ChatPrompt] Response status:`, response.status);
-        console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
+        // console.log(`🔍 [ChatPrompt] Response status:`, response.status);
+        // console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
         
         if (!response.ok) {
           console.error(`❌ [ChatPrompt] HTTP error! status: ${response.status}`);
@@ -231,13 +231,21 @@ export default defineComponent({
         }
         
         const data = await response.json();
-        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
+        // console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
           console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
+          
+          // Now that user is authenticated, get session verification
+          try {
+            const verificationResponse = await fetch(`${API_BASE_URL}/passkey/session-verification`);
+            // The fetch interceptor will handle the session verification headers
+          } catch (error) {
+            console.error('❌ [ChatPrompt] Failed to get session verification:', error);
+          }
         } else {
-          console.log(`❌ [ChatPrompt] No authenticated user found`);
+          // console.log(`❌ [ChatPrompt] No authenticated user found`);
           // currentUser.value is already set to Unknown User by default
         }
       } catch (error) {
@@ -384,7 +392,7 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
+      // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = userData;
       
       // Refresh the session status to ensure we have the latest data
