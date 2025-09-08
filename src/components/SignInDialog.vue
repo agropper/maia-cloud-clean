@@ -257,6 +257,7 @@ export default defineComponent({
         );
 
         const result = await verifyResponse.json();
+        console.log(`🔍 [SignInDialog] Authentication result:`, result);
 
         if (result.success) {
           const userInfo = {
@@ -264,6 +265,8 @@ export default defineComponent({
             displayName: userId.value,
           };
 
+          console.log(`✅ [SignInDialog] Authentication successful for user:`, userInfo);
+          
           // Emit the authenticated user
           emit("user-authenticated", userInfo);
 
@@ -275,7 +278,9 @@ export default defineComponent({
           throw new Error(result.error || "Authentication failed");
         }
       } catch (error: any) {
-        console.error("Authentication error:", error);
+        console.error("❌ [SignInDialog] Authentication error:", error);
+        console.log(`❌ [SignInDialog] Error message:`, error.message);
+        console.log(`❌ [SignInDialog] Error stack:`, error.stack);
         currentStep.value = "error";
         errorMessage.value =
           error.message || "Authentication failed. Please try again.";

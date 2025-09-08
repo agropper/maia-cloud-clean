@@ -520,6 +520,16 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.authenticatedAt = new Date().toISOString();
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
+      console.log(`🔍 [passkey] Session data after setting:`, req.session);
+      
+      // Explicitly save the session
+      req.session.save((err) => {
+        if (err) {
+          console.error('❌ [passkey] Error saving session:', err);
+        } else {
+          console.log(`✅ [passkey] Session saved for user: ${updatedUser._id}`);
+        }
+      });
       
       // GroupFilter: Log user sign in and group chat count
       try {
@@ -553,14 +563,17 @@ router.post("/authenticate-verify", async (req, res) => {
         }
       });
 
-      res.json({
+      const responseData = {
         success: true,
         message: "Authentication successful",
         user: {
           userId: updatedUser.userId,
           displayName: updatedUser.displayName,
         },
-      });
+      };
+      
+      console.log(`🔍 [passkey] Sending response:`, responseData);
+      res.json(responseData);
     } else {
       res.status(400).json({ error: "Authentication verification failed" });
     }
@@ -597,12 +610,16 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
+    console.log(`🔍 [auth-status] Session ID: ${req.sessionID}`);
+    console.log(`🔍 [auth-status] Session data:`, req.session);
+    console.log(`🔍 [auth-status] Session userId: ${req.session?.userId}`);
+    
     if (req.session && req.session.userId) {
       // User is authenticated, get current user info
       const userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
       if (userDoc) {
         // Echo current user to backend console
-        console.log(`Current user: ${userDoc._id}`);
+        console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
         
         res.json({
           authenticated: true,
@@ -612,15 +629,17 @@ router.get("/auth-status", async (req, res) => {
           },
         });
       } else {
+        console.log(`❌ [auth-status] User document not found for userId: ${req.session.userId}`);
         // Session exists but user document not found, clear session
         req.session.destroy();
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
+      console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
-    console.error("❌ Error checking auth status:", error);
+    console.error("❌ [auth-status] Error checking auth status:", error);
     res.status(500).json({ error: "Failed to check authentication status" });
   }
 });

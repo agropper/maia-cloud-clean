@@ -216,16 +216,21 @@ export default defineComponent({
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
+        console.log(`🔍 [ChatPrompt] Checking existing session...`);
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
         const data = await response.json();
         
+        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
+        
         if (data.authenticated && data.user) {
+          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
         } else {
+          console.log(`❌ [ChatPrompt] No authenticated user found`);
           // currentUser.value is already set to Unknown User by default
         }
       } catch (error) {
-        console.error('❌ Failed to check existing session:', error);
+        console.error('❌ [ChatPrompt] Failed to check existing session:', error);
         // currentUser.value is already set to Unknown User by default
         // No need to change it - it's already valid
       }
@@ -362,11 +367,13 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
-    const handleUserAuthenticated = (userData: any) => {
+    const handleUserAuthenticated = async (userData: any) => {
+      console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = userData;
-      // Show clean user authentication info
       
-
+      // Refresh the session status to ensure we have the latest data
+      await checkExistingSession();
+      
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
       setTimeout(() => {

@@ -196,6 +196,111 @@
         </div>
       </div>
 
+      <!-- Session Status Overview -->
+      <div class="session-status q-mb-lg">
+        <QCard>
+          <QCardSection>
+            <div class="row items-center q-mb-md">
+              <h4 class="q-ma-none">🔐 Active Sessions</h4>
+              <QSpace />
+              <QBtn
+                color="primary"
+                icon="refresh"
+                label="Refresh Sessions"
+                @click="loadSessionStatus"
+                :loading="isLoadingSessions"
+                size="sm"
+              />
+            </div>
+
+            <!-- Authenticated Users -->
+            <div v-if="sessionStatus.authenticatedUsers.length > 0" class="q-mb-md">
+              <h6 class="q-ma-none q-mb-sm">👤 Authenticated Users</h6>
+              <div v-for="user in sessionStatus.authenticatedUsers" :key="user.sessionId" class="session-item q-mb-sm">
+                <QCard flat bordered>
+                  <QCardSection class="q-pa-sm">
+                    <div class="row items-center justify-between">
+                      <div class="col">
+                        <div class="text-subtitle2">{{ user.displayName }}</div>
+                        <div class="text-caption text-grey-6">
+                          Inactive: {{ user.inactiveMinutes }} minutes
+                        </div>
+                      </div>
+                      <div class="col-auto">
+                        <QBtn
+                          color="negative"
+                          icon="logout"
+                          label="Sign Out"
+                          size="sm"
+                          @click="signOutUser(user.sessionId)"
+                          :loading="isSigningOutUser === user.sessionId"
+                        />
+                      </div>
+                    </div>
+                  </QCardSection>
+                </QCard>
+              </div>
+            </div>
+
+            <!-- Deep Link Users -->
+            <div v-if="sessionStatus.deepLinkUsers.length > 0" class="q-mb-md">
+              <h6 class="q-ma-none q-mb-sm">🔗 Deep Link Sessions</h6>
+              <div v-for="session in sessionStatus.deepLinkUsers" :key="session.sessionId" class="session-item q-mb-sm">
+                <QCard flat bordered>
+                  <QCardSection class="q-pa-sm">
+                    <div class="row items-center justify-between">
+                      <div class="col">
+                        <div class="text-subtitle2">Deep Link: {{ session.deepLinkId }}</div>
+                        <div class="text-caption text-grey-6">
+                          Owned by: {{ session.ownedBy }} | 
+                          Inactive: {{ session.inactiveMinutes }} minutes | 
+                          Cleanup in: {{ session.cleanupInHours }} hours
+                        </div>
+                      </div>
+                      <div class="col-auto">
+                        <QChip
+                          :color="session.cleanupInHours < 24 ? 'warning' : 'info'"
+                          size="sm"
+                          :label="`${session.cleanupInHours}h left`"
+                        />
+                      </div>
+                    </div>
+                  </QCardSection>
+                </QCard>
+              </div>
+            </div>
+
+            <!-- Unknown User Sessions -->
+            <div v-if="sessionStatus.unknownUserSessions.length > 0" class="q-mb-md">
+              <h6 class="q-ma-none q-mb-sm">❓ Unknown User Sessions</h6>
+              <div v-for="session in sessionStatus.unknownUserSessions" :key="session.sessionId" class="session-item q-mb-sm">
+                <QCard flat bordered>
+                  <QCardSection class="q-pa-sm">
+                    <div class="row items-center justify-between">
+                      <div class="col">
+                        <div class="text-subtitle2">Unknown User Session</div>
+                        <div class="text-caption text-grey-6">
+                          Inactive: {{ session.inactiveMinutes }} minutes
+                        </div>
+                      </div>
+                      <div class="col-auto">
+                        <QChip color="grey" size="sm" label="Testing Mode" />
+                      </div>
+                    </div>
+                  </QCardSection>
+                </QCard>
+              </div>
+            </div>
+
+            <!-- No Active Sessions -->
+            <div v-if="sessionStatus.authenticatedUsers.length === 0 && sessionStatus.deepLinkUsers.length === 0 && sessionStatus.unknownUserSessions.length === 0" class="text-center q-pa-md">
+              <QIcon name="check_circle" size="2rem" color="positive" class="q-mb-md" />
+              <div class="text-grey-6">No active sessions</div>
+            </div>
+          </QCardSection>
+        </QCard>
+      </div>
+
       <!-- Users List -->
       <QCard>
         <QCardSection>
@@ -529,6 +634,8 @@ export default defineComponent({
     const isAssigningAgent = ref(false);
     const isLoadingAgents = ref(false);
     const isResettingPasskey = ref(false);
+    const isLoadingSessions = ref(false);
+    const isSigningOutUser = ref(null);
     const users = ref([]);
     const agents = ref([]);
     const selectedAgent = ref(null);
@@ -537,6 +644,13 @@ export default defineComponent({
     const selectedUser = ref(null);
     const adminNotes = ref('');
     const errorMessage = ref('');
+    
+    // Session status
+    const sessionStatus = ref({
+      authenticatedUsers: [],
+      deepLinkUsers: [],
+      unknownUserSessions: []
+    });
     
     // Admin registration form
     const adminForm = ref({
@@ -1117,11 +1231,69 @@ export default defineComponent({
         }, 2000);
       }
     };
+
+    // Session management methods
+    const loadSessionStatus = async () => {
+      // Skip admin check since admin auth is bypassed for testing
+      // In production, uncomment: if (!isAdmin.value) return;
+      
+      isLoadingSessions.value = true;
+      try {
+        const response = await fetch('/api/admin-management/sessions');
+        if (response.ok) {
+          const data = await response.json();
+          sessionStatus.value = data;
+        } else {
+          throw new Error('Failed to load session status');
+        }
+      } catch (error) {
+        console.error('Error loading session status:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to load session status: ${error.message}`
+        });
+      } finally {
+        isLoadingSessions.value = false;
+      }
+    };
+
+    const signOutUser = async (sessionId) => {
+      isSigningOutUser.value = sessionId;
+      try {
+        const response = await fetch(`/api/admin-management/sessions/${sessionId}/signout`, {
+          method: 'POST'
+        });
+        
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: 'User signed out successfully'
+          });
+          
+          // Refresh session status
+          await loadSessionStatus();
+        } else {
+          throw new Error('Failed to sign out user');
+        }
+      } catch (error) {
+        console.error('Error signing out user:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to sign out user: ${error.message}`
+        });
+      } finally {
+        isSigningOutUser.value = null;
+      }
+    };
     
     // Lifecycle
     onMounted(async () => {
       checkUrlParameters();
       checkAdminStatus();
+      
+      // Always load session status since admin auth is bypassed for testing
+      // In production, this should be conditional on isAdmin.value
+      await loadSessionStatus();
     });
     
     // Check URL parameters for error messages
@@ -1158,6 +1330,8 @@ export default defineComponent({
       isAssigningAgent,
       isLoadingAgents,
       isResettingPasskey,
+      isLoadingSessions,
+      isSigningOutUser,
       users,
       agents,
       selectedAgent,
@@ -1169,6 +1343,7 @@ export default defineComponent({
       showPasskeyRegistration,
       isRegisteringPasskey,
       passkeyStatus,
+      sessionStatus,
       userColumns,
       stats,
       errorMessage,
@@ -1177,6 +1352,8 @@ export default defineComponent({
       skipPasskeyRegistration,
       loadUsers,
       loadAgents,
+      loadSessionStatus,
+      signOutUser,
       viewUserDetails,
       approveUser,
       resetUserPasskey,
@@ -1288,5 +1465,18 @@ export default defineComponent({
 .agent-option .q-card.selected {
   border-color: #4caf50;
   background-color: #f1f8e9;
+}
+
+.session-status {
+  margin-bottom: 30px;
+}
+
+.session-item {
+  transition: all 0.2s ease;
+}
+
+.session-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 </style>

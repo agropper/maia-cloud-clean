@@ -3,6 +3,10 @@ dotenv.config()
 
 console.log('🚨 SERVER.JS IS LOADING - LINE 3');
 
+// Import session management utilities
+import { SessionManager } from './src/utils/session-manager.js';
+import { SessionMiddleware } from './src/middleware/session-middleware.js';
+
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
@@ -229,6 +233,10 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(session(sessionConfig));
 
+// Initialize session management with shared database client
+const sessionManager = new SessionManager(couchDBClient);
+const sessionMiddleware = new SessionMiddleware(sessionManager);
+
 // Session activity tracking middleware
 app.use((req, res, next) => {
   if (req.session && req.session.userId) {
@@ -247,6 +255,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Session middleware will be applied to specific protected routes only
+// No global session validation for API routes
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
@@ -402,6 +413,37 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     singlePatientMode: false
   });
+});
+
+// Debug endpoint to test session manager connection
+app.get('/debug/sessions', async (req, res) => {
+  try {
+    console.log('🔍 [DEBUG] Testing session manager database connection...');
+    
+    // Test the session manager's database connection
+    const sessions = await sessionManager.getAllActiveSessions();
+    console.log(`🔍 [DEBUG] Found ${sessions.length} sessions via sessionManager`);
+    
+    // Test direct database connection
+    const query = {
+      selector: {
+        type: 'session',
+        isActive: true
+      }
+    };
+    const result = await couchDBClient.findDocuments('maia_chats', query);
+    console.log(`🔍 [DEBUG] Found ${result.docs.length} sessions via direct couchDBClient`);
+    
+    res.json({
+      sessionManagerSessions: sessions.length,
+      directDatabaseSessions: result.docs.length,
+      sessionManagerResults: sessions,
+      directDatabaseResults: result.docs
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Error testing sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Session status endpoint
@@ -1788,12 +1830,12 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
 });
 
 // Public shared chat route - anyone with the link can access
-app.get('/shared/:shareId', (req, res) => {
+app.get('/shared/:shareId', sessionMiddleware.createDeepLinkSession, (req, res) => {
   res.render('index');
 });
 
 // API endpoint to load shared chat by share ID
-app.get('/api/shared/:shareId', async (req, res) => {
+app.get('/api/shared/:shareId', sessionMiddleware.createDeepLinkSession, async (req, res) => {
   try {
     const { shareId } = req.params;
     
@@ -4561,8 +4603,8 @@ import passkeyRoutes, { setCouchDBClient as setPasskeyCouchDBClient } from './sr
 // Pass the CouchDB client to the passkey routes
 setPasskeyCouchDBClient(couchDBClient);
 
-// Mount passkey routes
-app.use('/api/passkey', passkeyRoutes);
+// Mount passkey routes with session creation middleware
+app.use('/api/passkey', sessionMiddleware.createSessionOnAuth, passkeyRoutes);
 
 // Add KB protection check middleware
 app.use('/api/connect-kb/:kbId', async (req, res, next) => {
@@ -4610,7 +4652,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager } from './src/routes/admin-management-routes.js';
 
 // MAIA2 routes removed - using consolidated maia_users database
 
@@ -4618,6 +4660,9 @@ import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBCli
 setCouchDBClient(couchDBClient);
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
+
+// Pass the shared session manager to admin routes
+setSessionManager(sessionManager);
 
 // Mount KB protection routes
 app.use('/api/kb-protection', kbProtectionRoutes);
@@ -5076,6 +5121,18 @@ app.listen(PORT, () => {
       console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
   console.log(`📅 Server started at: ${new Date().toISOString()}`);
+  
+  // Start cleanup job for expired deep links
+  setInterval(async () => {
+    try {
+      const cleanedCount = await sessionManager.cleanupExpiredDeepLinks();
+      if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} expired deep links`);
+      }
+    } catch (error) {
+      console.error('❌ Error in deep link cleanup job:', error);
+    }
+  }, 60 * 60 * 1000); // Run every hour
 }); 
 
 // Test endpoint for knowledge base creation debugging

@@ -696,4 +696,117 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
   }
 });
 
+// Session management endpoints
+import { SessionManager } from '../utils/session-manager.js';
+
+// Session manager instance (will be set from main server)
+let sessionManager = null;
+
+// Function to set the session manager (called from main server)
+export const setSessionManager = (manager) => {
+  sessionManager = manager;
+};
+
+// Get all active sessions for admin dashboard
+router.get('/sessions', requireAdminAuth, async (req, res) => {
+  try {
+    const activeSessions = await sessionManager.getAllActiveSessions();
+    
+    // Group sessions by type
+    const sessionGroups = {
+      authenticatedUsers: [],
+      deepLinkUsers: [],
+      unknownUserSessions: []
+    };
+
+    activeSessions.forEach(session => {
+      if (session.sessionType === 'authenticated') {
+        sessionGroups.authenticatedUsers.push({
+          userId: session.userId,
+          displayName: session.userId, // TODO: Get display name from user document
+          lastActivity: session.lastActivity,
+          inactiveMinutes: session.inactiveMinutes,
+          sessionId: session.sessionId,
+          canSignOut: true
+        });
+      } else if (session.sessionType === 'deeplink') {
+        sessionGroups.deepLinkUsers.push({
+          deepLinkId: session.deepLinkId,
+          ownedBy: session.ownedBy,
+          lastActivity: session.lastActivity,
+          inactiveMinutes: session.inactiveMinutes,
+          cleanupInHours: session.cleanupInHours,
+          sessionId: session.sessionId
+        });
+      } else if (session.sessionType === 'unknown_user') {
+        sessionGroups.unknownUserSessions.push({
+          sessionId: session.sessionId,
+          lastActivity: session.lastActivity,
+          inactiveMinutes: session.inactiveMinutes
+        });
+      }
+    });
+
+    res.json(sessionGroups);
+  } catch (error) {
+    console.error('Error fetching active sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch active sessions' });
+  }
+});
+
+// Sign out a specific user session
+router.post('/sessions/:sessionId/signout', requireAdminAuth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    await sessionManager.deactivateSession(sessionId);
+    
+    res.json({
+      success: true,
+      message: `Session ${sessionId} signed out successfully`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error signing out session:', error);
+    res.status(500).json({ error: 'Failed to sign out session' });
+  }
+});
+
+// Get session status for a specific user
+router.get('/sessions/user/:userId', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const activeSessions = await sessionManager.getAllActiveSessions();
+    
+    const userSessions = activeSessions.filter(session => session.userId === userId);
+    
+    res.json({
+      userId: userId,
+      activeSessions: userSessions,
+      sessionCount: userSessions.length
+    });
+  } catch (error) {
+    console.error('Error fetching user sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch user sessions' });
+  }
+});
+
+// Check if there are active authenticated sessions (single-user enforcement)
+router.get('/sessions/active-check', requireAdminAuth, async (req, res) => {
+  try {
+    const hasActiveSession = await sessionManager.hasActiveAuthenticatedSession();
+    
+    res.json({
+      hasActiveAuthenticatedSession: hasActiveSession,
+      singleUserMode: true,
+      message: hasActiveSession 
+        ? 'An authenticated user is currently active' 
+        : 'No authenticated users are currently active'
+    });
+  } catch (error) {
+    console.error('Error checking active sessions:', error);
+    res.status(500).json({ error: 'Failed to check active sessions' });
+  }
+});
+
 export default router;
