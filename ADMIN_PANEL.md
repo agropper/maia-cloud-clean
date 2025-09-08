@@ -202,13 +202,11 @@ Added `loadSessionStatus()` to the component's `onMounted` lifecycle hook to aut
 - Agent assignment is working
 
 ### Known Issues
-1. **Session Auto-Load**: Sessions don't load automatically on page load
+1. ~~**Session Auto-Load**: Sessions don't load automatically on page load~~ ✅ **Fixed**
 2. **Authentication Bypass**: No real authentication for admin functions
 3. **Session Cleanup**: Expired sessions may not be cleaned up automatically
-4. **Admin Secret**: Hardcoded admin secret in some places
 
 ### Recommendations
-1. **Add Auto-Load**: Call `loadSessionStatus()` in `onMounted`
+1. ~~**Add Auto-Load**: Call `loadSessionStatus()` in `onMounted`~~ ✅ **Completed**
 2. **Implement Real Auth**: Remove authentication bypass for production
 3. **Add Session Cleanup**: Implement automatic cleanup of expired sessions
-4. **Secure Admin Secret**: Use environment variables for admin secrets

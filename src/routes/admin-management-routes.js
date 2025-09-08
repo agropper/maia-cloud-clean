@@ -719,6 +719,14 @@ router.get('/sessions', requireAdminAuth, async (req, res) => {
       unknownUserSessions: []
     };
 
+    // Get all users once to avoid multiple database calls
+    let allUsers = [];
+    try {
+      allUsers = await couchDBClient.getAllDocuments('maia_users');
+    } catch (error) {
+      console.error('Error fetching users for session info:', error);
+    }
+
     activeSessions.forEach(session => {
       if (session.sessionType === 'authenticated') {
         sessionGroups.authenticatedUsers.push({
@@ -730,13 +738,32 @@ router.get('/sessions', requireAdminAuth, async (req, res) => {
           canSignOut: true
         });
       } else if (session.sessionType === 'deeplink') {
+        // Try to get deep link user information
+        let userInfo = null;
+        try {
+          if (session.deepLinkId) {
+            const deepLinkUser = allUsers.find(user => 
+              user.isDeepLinkUser && user.shareId === session.deepLinkId
+            );
+            if (deepLinkUser) {
+              userInfo = {
+                name: deepLinkUser.displayName,
+                email: deepLinkUser.email
+              };
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching deep link user info:', error);
+        }
+
         sessionGroups.deepLinkUsers.push({
           deepLinkId: session.deepLinkId,
           ownedBy: session.ownedBy,
           lastActivity: session.lastActivity,
           inactiveMinutes: session.inactiveMinutes,
           cleanupInHours: session.cleanupInHours,
-          sessionId: session.sessionId
+          sessionId: session.sessionId,
+          userInfo: userInfo
         });
       } else if (session.sessionType === 'unknown_user') {
         sessionGroups.unknownUserSessions.push({

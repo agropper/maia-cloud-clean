@@ -23,6 +23,7 @@ class SessionMiddleware {
       
       if (publicEndpoints.includes(req.path)) {
         console.log(`🔓 Skipping session validation for public endpoint: ${req.path}`);
+        // Session activity is now handled automatically by CouchDBSessionStore
         return next();
       }
 
@@ -33,28 +34,36 @@ class SessionMiddleware {
         return res.status(401).json({ error: 'No session ID found' });
       }
 
-      const validation = await this.sessionManager.validateSession(sessionId);
-      
-      if (!validation.valid) {
-        // Clear the session
-        req.session.destroy();
+      // Check if session exists and is active (CouchDBSessionStore handles expiration automatically)
+      if (!req.session || !req.session.userId) {
         return res.status(401).json({ 
-          error: validation.reason,
+          error: 'No valid session found',
           sessionExpired: true 
         });
       }
 
-      // Update last activity
-      await this.sessionManager.updateLastActivity(sessionId);
+      // Calculate inactivity time for warnings
+      const now = new Date();
+      const lastActivity = new Date(req.session.lastActivity);
+      const inactiveMinutes = (now - lastActivity) / (1000 * 60);
+
+      // Check if warning should be shown (9.5 minutes of inactivity)
+      let warning = false;
+      let warningMessage = null;
+      
+      if (inactiveMinutes > 9.5) {
+        warning = true;
+        warningMessage = 'Session will expire in 30 seconds due to inactivity';
+      }
 
       // Add session info to request
       req.sessionInfo = {
         sessionId,
-        sessionType: validation.sessionType,
-        userId: validation.userId,
-        inactiveMinutes: validation.inactiveMinutes,
-        warning: validation.warning || false,
-        warningMessage: validation.warningMessage
+        sessionType: req.session.sessionType,
+        userId: req.session.userId,
+        inactiveMinutes: Math.round(inactiveMinutes),
+        warning: warning,
+        warningMessage: warningMessage
       };
 
       next();
@@ -127,21 +136,9 @@ class SessionMiddleware {
       
       if (userId && sessionId) {
         try {
-          // Check if session already exists to avoid duplicates
-          const existingSession = await this.sessionManager.getSession(sessionId);
-          if (!existingSession) {
-            // Determine session type
-            let sessionType = 'unknown_user';
-            if (userId !== 'unknown_user') {
-              sessionType = 'authenticated';
-            }
-
-            // Create session document
-            await this.sessionManager.createSession(sessionId, sessionType, userId);
-            console.log(`✅ [createSessionOnAuth] Session created for user: ${userId} (type: ${sessionType})`);
-          } else {
-            console.log(`🔍 [createSessionOnAuth] Session already exists for user: ${userId}`);
-          }
+          // Session creation is now handled automatically by CouchDBSessionStore
+          // when req.session is saved with userId. The store will create the session document.
+          console.log(`✅ [createSessionOnAuth] Session will be created automatically by CouchDBSessionStore for user: ${userId}`);
         } catch (error) {
           console.error('❌ [createSessionOnAuth] Error in session creation logic:', error);
           // Don't throw - let the response continue

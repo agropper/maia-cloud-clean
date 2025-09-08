@@ -171,65 +171,19 @@ const sessionConfig = {
   }
 };
 
-// Use enhanced session store for production
-if (process.env.NODE_ENV === 'production') {
-  // For now, use a more robust memory store with cleanup
-  const MemoryStore = session.MemoryStore;
-  const store = new MemoryStore();
-  
-  // Clean up expired sessions and check activity every 5 minutes
-  setInterval(() => {
-    store.all((err, sessions) => {
-      if (err) return;
-      const now = Date.now();
-      const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes
-      
-      Object.keys(sessions).forEach(sessionId => {
-        const session = sessions[sessionId];
-        
-        // Check for expired cookies
-        if (session.cookie && session.cookie.expires && session.cookie.expires < now) {
-          store.destroy(sessionId);
-          console.log(`🔒 Session ${sessionId} expired and destroyed`);
-        }
-        
-        // Check for 5-minute inactivity timeout
-        if (session.lastActivity && session.lastActivity < fiveMinutesAgo) {
-          store.destroy(sessionId);
-          console.log(`🔒 Session ${sessionId} timed out due to inactivity (5 minutes)`);
-        }
-      });
-    });
-  }, 5 * 60 * 1000); // Check every 5 minutes
-  
-  sessionConfig.store = store;
-  console.log('🔧 Using enhanced MemoryStore for production with 5-minute activity timeout');
-} else {
-  // In development, use default MemoryStore without aggressive timeout
-  const MemoryStore = session.MemoryStore;
-  const store = new MemoryStore();
-  
-  // Only clean up expired cookies in development, not inactivity timeout
-  setInterval(() => {
-    store.all((err, sessions) => {
-      if (err) return;
-      const now = Date.now();
-      
-      Object.keys(sessions).forEach(sessionId => {
-        const session = sessions[sessionId];
-        
-        // Check for expired cookies only
-        if (session.cookie && session.cookie.expires && session.cookie.expires < now) {
-          store.destroy(sessionId);
-          console.log(`🔒 Session ${sessionId} expired and destroyed`);
-        }
-      });
-    });
-  }, 5 * 60 * 1000); // Check every 5 minutes
-  
-  sessionConfig.store = store;
-  console.log('🔧 Using default MemoryStore for development (no inactivity timeout)');
-}
+// Use CouchDB session store for both development and production
+import { CouchDBSessionStore } from './src/utils/couchdb-session-store.js';
+
+const couchDBSessionStore = new CouchDBSessionStore({
+  couchDBClient: couchDBClient,
+  dbName: 'maia_chats',
+  ttl: 24 * 60 * 60 * 1000, // 24 hours
+  inactivityTimeout: 10 * 60 * 1000, // 10 minutes
+  warningDuration: 30 * 1000 // 30 seconds
+});
+
+sessionConfig.store = couchDBSessionStore;
+console.log('🔧 Using CouchDB session store with 10-minute inactivity timeout');
 
 app.use(session(sessionConfig));
 
@@ -237,24 +191,8 @@ app.use(session(sessionConfig));
 const sessionManager = new SessionManager(couchDBClient);
 const sessionMiddleware = new SessionMiddleware(sessionManager);
 
-// Session activity tracking middleware
-app.use((req, res, next) => {
-  if (req.session && req.session.userId) {
-    // Update last activity timestamp for authenticated users
-    req.session.lastActivity = Date.now();
-    
-    // Extend session timeout on activity (rolling window)
-    req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 24 hours from now
-    
-    // Save session to persist changes
-    req.session.save((err) => {
-      if (err) {
-        console.log(`⚠️ Session save error: ${err.message}`);
-      }
-    });
-  }
-  next();
-});
+// Session activity tracking is now handled automatically by CouchDBSessionStore
+// The store's touch() method is called automatically by express-session on each request
 
 // Session middleware will be applied to specific protected routes only
 // No global session validation for API routes
@@ -1835,7 +1773,7 @@ app.get('/shared/:shareId', sessionMiddleware.createDeepLinkSession, (req, res) 
 });
 
 // API endpoint to load shared chat by share ID
-app.get('/api/shared/:shareId', sessionMiddleware.createDeepLinkSession, async (req, res) => {
+app.get('/api/shared/:shareId', async (req, res) => {
   try {
     const { shareId } = req.params;
     
@@ -1871,13 +1809,30 @@ app.get('/api/group-chats', async (req, res) => {
     const allChats = await couchDBClient.getAllChats();
     
     // Transform the response to match the frontend GroupChat interface
+    // Exclude large file content to prevent response size issues
     const transformedChats = allChats.map(chat => ({
       id: chat._id, // Map _id to id for frontend
       shareId: chat.shareId,
       currentUser: chat.currentUser,
       connectedKB: chat.connectedKB,
       chatHistory: chat.chatHistory,
-      uploadedFiles: chat.uploadedFiles || [],
+      uploadedFiles: (chat.uploadedFiles || []).map(file => ({
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        // Exclude large base64 content from list view
+        // Full content will be loaded when individual chat is accessed
+        content: file.type === 'pdf' ? '[PDF content excluded from list]' : file.content,
+        originalFile: file.originalFile ? {
+          name: file.originalFile.name,
+          size: file.originalFile.size,
+          type: file.originalFile.type,
+          // Exclude base64 content
+          base64: '[Base64 content excluded from list]'
+        } : undefined,
+        uploadedAt: file.uploadedAt
+      })),
       createdAt: chat.createdAt,
       updatedAt: chat.updatedAt,
       participantCount: chat.participantCount,
@@ -1885,7 +1840,7 @@ app.get('/api/group-chats', async (req, res) => {
       isShared: chat.isShared
     }));
     
-    console.log(`📋 Returning ${transformedChats.length} total chats to frontend`);
+    console.log(`📋 Returning ${transformedChats.length} total chats to frontend (file content excluded)`);
     res.json(transformedChats);
   } catch (error) {
     console.error('❌ Get chats error:', error);

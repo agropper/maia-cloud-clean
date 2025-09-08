@@ -217,9 +217,20 @@ export default defineComponent({
     const checkExistingSession = async () => {
       try {
         console.log(`🔍 [ChatPrompt] Checking existing session...`);
-        const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
-        const data = await response.json();
+        console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
         
+        const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+        console.log(`🔍 [ChatPrompt] Response status:`, response.status);
+        console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
+        
+        if (!response.ok) {
+          console.error(`❌ [ChatPrompt] HTTP error! status: ${response.status}`);
+          const errorText = await response.text();
+          console.error(`❌ [ChatPrompt] Error response body:`, errorText);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
         console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
@@ -231,6 +242,11 @@ export default defineComponent({
         }
       } catch (error) {
         console.error('❌ [ChatPrompt] Failed to check existing session:', error);
+        console.error('❌ [ChatPrompt] Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
         // currentUser.value is already set to Unknown User by default
         // No need to change it - it's already valid
       }

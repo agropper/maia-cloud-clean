@@ -143,15 +143,29 @@ export const useGroupChat = () => {
 
   const getAllGroupChats = async (): Promise<GroupChat[]> => {
     try {
+      console.log(`🔍 [useGroupChat] getAllGroupChats called - making request to: ${API_BASE_URL}/group-chats`);
+      
       const response = await fetch(`${API_BASE_URL}/group-chats`)
+      console.log(`🔍 [useGroupChat] Response status:`, response.status);
+      console.log(`🔍 [useGroupChat] Response headers:`, Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
+        console.error(`❌ [useGroupChat] HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ [useGroupChat] Error response body:`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return await response.json()
+      const data = await response.json();
+      console.log(`🔍 [useGroupChat] Successfully retrieved ${data.length} group chats`);
+      return data;
     } catch (error) {
-      console.error('Failed to load all group chats:', error)
+      console.error('❌ [useGroupChat] Failed to load all group chats:', error);
+      console.error('❌ [useGroupChat] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       throw error
     }
   }

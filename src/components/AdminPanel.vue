@@ -252,8 +252,11 @@
                       <div class="col">
                         <div class="text-subtitle2">Deep Link: {{ session.deepLinkId }}</div>
                         <div class="text-caption text-grey-6">
-                          Owned by: {{ session.ownedBy }} | 
-                          Inactive: {{ session.inactiveMinutes }} minutes | 
+                          Owned by: {{ session.ownedBy }}
+                          <span v-if="session.userInfo">
+                            | By: {{ session.userInfo.name }} ({{ session.userInfo.email }})
+                          </span>
+                          | Inactive: {{ session.inactiveMinutes }} minutes | 
                           Cleanup in: {{ session.cleanupInHours }} hours
                         </div>
                       </div>
