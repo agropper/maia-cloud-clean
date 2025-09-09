@@ -9,10 +9,29 @@ import { Quasar } from 'quasar'
 import { createApp } from 'vue'
 import quasarUserOptions from '@/quasar-user-options'
 
-// Global fetch interceptor to check for session verification headers
+// Global fetch interceptor to check for session verification headers and Cloudant errors
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const response = await originalFetch(...args);
+  
+  // Check for Cloudant rate limiting (429 errors)
+  if (response.status === 429) {
+    try {
+      const errorData = await response.clone().json();
+      console.warn('🚨 [Browser] Cloudant Rate Limit Exceeded (429):', {
+        error: errorData.error || 'Too many requests',
+        retryAfter: errorData.retryAfter || '30 seconds',
+        suggestion: errorData.suggestion || 'Please wait and try again',
+        url: args[0],
+        timestamp: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn('🚨 [Browser] Cloudant Rate Limit Exceeded (429): Too many requests - please wait and try again', {
+        url: args[0],
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
   
   // Check for session verification headers (based on actual database reads)
   const sessionVerifiedHeader = response.headers.get('X-Session-Verified');

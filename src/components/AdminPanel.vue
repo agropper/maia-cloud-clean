@@ -905,6 +905,14 @@ export default defineComponent({
           
           // Handle rate limiting specifically
           if (response.status === 429) {
+            console.warn('🚨 [Browser] Admin Panel: Cloudant Rate Limit Exceeded (429)', {
+              endpoint: '/api/admin-management/users',
+              error: errorData.error || 'Rate limit exceeded',
+              retryAfter: errorData.retryAfter || '30 seconds',
+              suggestion: errorData.suggestion || 'Please wait and try again',
+              timestamp: new Date().toISOString()
+            });
+            
             $q.notify({
               type: 'warning',
               message: errorData.error || 'Rate limit exceeded. Please wait and try again.',
@@ -1248,6 +1256,27 @@ export default defineComponent({
           const data = await response.json();
           sessionStatus.value = data;
         } else {
+          // Check for 429 rate limiting specifically
+          if (response.status === 429) {
+            const errorData = await response.json().catch(() => ({}));
+            console.warn('🚨 [Browser] Admin Panel Sessions: Cloudant Rate Limit Exceeded (429)', {
+              endpoint: '/api/admin-management/sessions',
+              error: errorData.error || 'Rate limit exceeded',
+              retryAfter: errorData.retryAfter || '30 seconds',
+              suggestion: errorData.suggestion || 'Please wait and try again',
+              timestamp: new Date().toISOString()
+            });
+            
+            $q.notify({
+              type: 'warning',
+              message: 'Rate limit exceeded while loading sessions. Please wait and try again.',
+              timeout: 8000,
+              actions: [
+                { label: 'Retry in 30s', handler: () => setTimeout(loadSessionStatus, 30000) }
+              ]
+            });
+            return;
+          }
           throw new Error('Failed to load session status');
         }
       } catch (error) {
