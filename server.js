@@ -1976,7 +1976,20 @@ app.post('/api/deep-link-session', async (req, res) => {
     
     await couchDBClient.saveDocument('maia_sessions', sessionDoc);
     
+    // Update the express-session with user information
+    req.session.userId = userId;
+    req.session.userName = userName;
+    req.session.userEmail = userEmail;
+    req.session.sessionType = 'deeplink';
+    req.session.deepLinkId = shareId;
+    
     console.log('✅ [Deep Link Session] Session created successfully for user:', userName);
+    console.log('✅ [Deep Link Session] Express session updated with user info:', {
+      userId: req.session.userId,
+      userName: req.session.userName,
+      sessionType: req.session.sessionType
+    });
+    
     res.json({ success: true, message: 'Session created successfully' });
     
   } catch (error) {

@@ -620,6 +620,12 @@ router.get("/auth-status", async (req, res) => {
       if (userDoc) {
         // Echo current user to backend console
         console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
+        console.log('🔍 [auth-status] Session details:', {
+          userId: req.session.userId,
+          userName: req.session.userName,
+          sessionType: req.session.sessionType,
+          deepLinkId: req.session.deepLinkId
+        });
         
         // Write session to database AFTER authentication is confirmed
         if (!global.writtenSessions || !global.writtenSessions.has(req.sessionID)) {
