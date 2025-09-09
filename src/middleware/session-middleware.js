@@ -159,14 +159,24 @@ class SessionMiddleware {
       const deepLinkId = req.params.shareId || req.query.shareId;
       const ownedBy = req.session.userId || 'unknown_user';
 
-      if (deepLinkId && sessionId) {
-        await this.sessionManager.createSession(
-          sessionId, 
-          'deeplink', 
-          'anonymous', 
-          deepLinkId, 
-          ownedBy
-        );
+      // Only create session if this is the initial page load (not API calls)
+      // and we don't already have a session for this deep link
+      if (deepLinkId && sessionId && req.path === `/shared/${deepLinkId}`) {
+        // Check if session already exists
+        const existingSession = await this.sessionManager.getSession(sessionId);
+        
+        if (!existingSession) {
+          console.log(`🔗 [Deep Link] Creating session for initial access to: ${deepLinkId}`);
+          await this.sessionManager.createSession(
+            sessionId, 
+            'deeplink', 
+            'anonymous', 
+            deepLinkId, 
+            ownedBy
+          );
+        } else {
+          console.log(`🔗 [Deep Link] Session already exists for: ${deepLinkId}`);
+        }
       }
 
       next();
@@ -176,7 +186,7 @@ class SessionMiddleware {
     }
   };
 
-  // Middleware to check for inactivity warnings
+  // Middleware to check for inactivity warnings and cleanup expired sessions
   checkInactivityWarning = async (req, res, next) => {
     try {
       const sessionId = req.sessionID;
@@ -184,11 +194,20 @@ class SessionMiddleware {
       if (sessionId) {
         const validation = await this.sessionManager.validateSession(sessionId);
         
-        if (validation.warning) {
+        if (!validation.valid) {
+          // Session is invalid or expired, add headers to inform frontend
+          res.set('X-Session-Expired', 'true');
+          res.set('X-Session-Expired-Reason', validation.reason);
+          console.log('🔗 [Session] Session expired:', sessionId, validation.reason);
+        } else if (validation.warning) {
           // Add warning to response headers
           res.set('X-Session-Warning', 'true');
           res.set('X-Session-Warning-Message', validation.warningMessage);
           res.set('X-Session-Inactive-Minutes', validation.inactiveMinutes.toString());
+          console.log('⚠️ [Session] Inactivity warning for session:', sessionId, validation.inactiveMinutes, 'minutes');
+        } else {
+          // Update last activity for valid sessions
+          await this.sessionManager.updateLastActivity(sessionId);
         }
       }
 

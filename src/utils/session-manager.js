@@ -124,12 +124,32 @@ class SessionManager {
     }
   }
 
+  // Update last activity for a session
+  async updateLastActivity(sessionId) {
+    try {
+      const sessionDocId = `session_${sessionId}`;
+      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);
+      
+      if (sessionDoc && sessionDoc.isActive) {
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + this.INACTIVITY_TIMEOUT);
+        
+        sessionDoc.lastActivity = now.toISOString();
+        sessionDoc.expiresAt = expiresAt.toISOString();
+        
+        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
+      }
+    } catch (error) {
+      console.error('❌ Error updating last activity:', error);
+    }
+  }
+
   // Deactivate a session
   async deactivateSession(sessionId, deactivatedBy = 'admin') {
     try {
       const sessionDocId = `session_${sessionId}`;
       console.log('[*] [Session Delete] Admin deleting session from maia_sessions database:', sessionDocId);
-      
+
       const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);
       if (sessionDoc) {
         // Physically delete the session document to prevent database growth

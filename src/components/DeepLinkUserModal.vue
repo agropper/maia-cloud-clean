@@ -164,6 +164,28 @@ export default defineComponent({
 
         const result = await response.json()
 
+        // Create actual session now that user has identified themselves
+        try {
+          const sessionResponse = await fetch(`${API_BASE_URL}/deep-link-session`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              shareId: props.shareId,
+              userId: result.userId,
+              userName: userName.value,
+              userEmail: userEmail.value
+            })
+          })
+
+          if (sessionResponse.ok) {
+            console.log('✅ [Deep Link] Session created for identified user:', userName.value)
+          }
+        } catch (sessionError) {
+          console.error('❌ [Deep Link] Error creating session for identified user:', sessionError)
+        }
+
         // Emit user identified event with user data
         emit('user-identified', {
           name: userName.value,

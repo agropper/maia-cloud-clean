@@ -1932,8 +1932,90 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
 });
 
 // Public shared chat route - anyone with the link can access
-app.get('/shared/:shareId', sessionMiddleware.createDeepLinkSession, (req, res) => {
+app.get('/shared/:shareId', sessionMiddleware.createDeepLinkSession, sessionMiddleware.checkInactivityWarning, (req, res) => {
   res.render('index');
+});
+
+// API endpoint to create deep link session when user identifies themselves
+app.post('/api/deep-link-session', async (req, res) => {
+  try {
+    const { shareId, userId, userName, userEmail } = req.body;
+    const sessionId = req.sessionID;
+    
+    if (!shareId || !userId || !sessionId) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    
+    // Update existing session or create new one with user information
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes
+    
+    const sessionDoc = {
+      _id: `session_${sessionId}`,
+      type: 'session',
+      sessionType: 'deeplink',
+      userId: userId,
+      userName: userName,
+      userEmail: userEmail,
+      isActive: true,
+      lastActivity: now.toISOString(),
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      warningShown: false,
+      warningShownAt: null,
+      deepLinkId: shareId,
+      ownedBy: 'unknown_user'
+    };
+    
+    console.log('🔗 [Deep Link Session] Creating session for identified user:', {
+      sessionId,
+      userId,
+      userName,
+      shareId
+    });
+    
+    await couchDBClient.saveDocument('maia_sessions', sessionDoc);
+    
+    console.log('✅ [Deep Link Session] Session created successfully for user:', userName);
+    res.json({ success: true, message: 'Session created successfully' });
+    
+  } catch (error) {
+    console.error('❌ [Deep Link Session] Error creating session:', error);
+    res.status(500).json({ message: `Failed to create session: ${error.message}` });
+  }
+});
+
+// API endpoint to cleanup deep link session when user closes window
+app.post('/api/deep-link-session/cleanup', async (req, res) => {
+  try {
+    const { shareId, action } = req.body;
+    const sessionId = req.sessionID;
+    
+    if (!shareId || !sessionId) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    
+    console.log('🔗 [Deep Link Cleanup] Cleaning up session:', {
+      sessionId,
+      shareId,
+      action
+    });
+    
+    // Delete the session from database
+    try {
+      await couchDBClient.deleteDocument('maia_sessions', `session_${sessionId}`);
+      console.log('✅ [Deep Link Cleanup] Session deleted successfully:', sessionId);
+    } catch (deleteError) {
+      // Session might not exist, which is fine
+      console.log('🔗 [Deep Link Cleanup] Session not found (may have been cleaned up):', sessionId);
+    }
+    
+    res.json({ success: true, message: 'Session cleaned up successfully' });
+    
+  } catch (error) {
+    console.error('❌ [Deep Link Cleanup] Error cleaning up session:', error);
+    res.status(500).json({ message: `Failed to cleanup session: ${error.message}` });
+  }
 });
 
 // API endpoint to load shared chat by share ID

@@ -1,7 +1,7 @@
 # Admin Panel Documentation
 
 ## Overview
-The Admin Panel is a comprehensive interface for managing MAIA users, agents, and sessions. It provides workflow management, user approval, agent assignment, and session monitoring capabilities.
+The Admin Panel is a comprehensive interface for managing MAIA users, agents, and sessions. It provides workflow management, user approval, agent assignment, and session monitoring capabilities. The session management system now uses a dedicated `maia_sessions` database with physical deletion to prevent database growth and ensure accurate session tracking.
 
 ## Components
 
@@ -27,8 +27,8 @@ The Admin Panel is a comprehensive interface for managing MAIA users, agents, an
 - `saveNotes()` - Saves admin notes for a user
 
 ### Session Management Functions
-- `loadSessionStatus()` - Loads current active sessions
-- `signOutUser(sessionId)` - Signs out a specific user session
+- `loadSessionStatus()` - Loads current active sessions from `maia_sessions` database
+- `signOutUser(sessionId)` - Physically deletes a specific user session from database
 - `refreshSessions()` - Refreshes the session list
 
 ### Agent Management Functions
@@ -52,8 +52,8 @@ The Admin Panel is a comprehensive interface for managing MAIA users, agents, an
 - `POST /api/admin-management/users/:userId/notes` - Save admin notes
 
 ### Session Management Endpoints
-- `GET /api/admin-management/sessions` - Get all active sessions
-- `POST /api/admin-management/sessions/:sessionId/signout` - Sign out a session
+- `GET /api/admin-management/sessions` - Get all active sessions from `maia_sessions` database
+- `POST /api/admin-management/sessions/:sessionId/signout` - Physically delete a session from database
 - `GET /api/admin-management/sessions/user/:userId` - Get sessions for a user
 - `GET /api/admin-management/sessions/active-check` - Check for active sessions
 
@@ -162,7 +162,7 @@ Added `loadSessionStatus()` to the component's `onMounted` lifecycle hook to aut
 - `credentialID`: Passkey credential ID
 - `credentialPublicKey`: Passkey public key
 
-### Sessions Collection (`maia_chats`)
+### Sessions Collection (`maia_sessions`)
 - `_id`: Session ID (prefixed with 'session_')
 - `type`: 'session'
 - `sessionType`: 'authenticated' | 'deeplink' | 'unknown_user'
@@ -175,6 +175,8 @@ Added `loadSessionStatus()` to the component's `onMounted` lifecycle hook to aut
 - `deepLinkId`: Deep link ID for deeplink sessions
 - `ownedBy`: Owner of deeplink session
 - `cleanupDate`: Cleanup date for deeplink sessions
+- `deactivatedBy`: Who deactivated the session ('user_logout' | 'admin_signout')
+- `deactivatedAt`: When the session was deactivated
 
 ## Workflow Stages
 
@@ -197,16 +199,91 @@ Added `loadSessionStatus()` to the component's `onMounted` lifecycle hook to aut
 ### Current Test Setup
 - Admin authentication is completely bypassed
 - All admin functions are accessible without credentials
-- Session management works but requires manual refresh
+- Session management works with automatic loading and physical deletion
 - User approval workflow is functional
 - Agent assignment is working
+- Session database uses `maia_sessions` with physical deletion
 
 ### Known Issues
 1. ~~**Session Auto-Load**: Sessions don't load automatically on page load~~ ✅ **Fixed**
 2. **Authentication Bypass**: No real authentication for admin functions
-3. **Session Cleanup**: Expired sessions may not be cleaned up automatically
+3. ~~**Session Cleanup**: Expired sessions may not be cleaned up automatically~~ ✅ **Fixed**
 
 ### Recommendations
 1. ~~**Add Auto-Load**: Call `loadSessionStatus()` in `onMounted`~~ ✅ **Completed**
 2. **Implement Real Auth**: Remove authentication bypass for production
-3. **Add Session Cleanup**: Implement automatic cleanup of expired sessions
+3. ~~**Add Session Cleanup**: Implement automatic cleanup of expired sessions~~ ✅ **Completed**
+
+## Session Management Implementation
+
+### Physical Session Deletion ✅
+**Status**: Implemented and working correctly
+
+**Key Changes**:
+1. **Database Migration**: Sessions moved from `maia_chats` to dedicated `maia_sessions` database
+2. **Physical Deletion**: Sessions are now completely removed from database instead of soft deletion
+3. **Database Growth Prevention**: Prevents accumulation of inactive sessions over time
+
+**Implementation Details**:
+- **User Logout**: `POST /api/passkey/logout` physically deletes session document
+- **Admin Signout**: `POST /api/admin-management/sessions/:sessionId/signout` physically deletes session document
+- **Console Logging**: All session deletion events are logged with `[*] [Session Delete]` prefix
+- **Error Handling**: Graceful handling if session document doesn't exist
+
+**Console Messages**:
+- `[*] [Session Delete] Deleting session from maia_sessions database: session_<ID>`
+- `[*] [Session Delete] Successfully deleted session from maia_sessions database`
+- `[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)`
+
+### Session Creation and Verification ✅
+**Status**: Implemented with database verification
+
+**Key Features**:
+1. **Database-Verified Console Messages**: Browser console messages are based on actual database reads
+2. **Proper Timing**: Session verification messages appear after user authentication
+3. **Response Headers**: Custom headers (`X-Session-Verified`, `X-Session-Error`) communicate server events to frontend
+4. **Session Write Helper**: Dedicated utility for writing sessions to database
+
+**Console Messages**:
+- `[*] [Session Write] Writing session to maia_sessions database after auth confirmation`
+- `[*] [Session Verify] Session confirmed in database: {sessionId, userId, isActive, createdAt}`
+- `[*] [Browser] Session verified in maia_sessions database` (in browser console)
+
+### Session Event Tracking ✅
+**Status**: Implemented for debugging and analysis
+
+**Features**:
+1. **Memory Cache**: Captures session events before database writes
+2. **Event Analysis**: Tracks session creation, authentication, and activity events
+3. **Debug Logging**: Comprehensive logging of session lifecycle events
+
+**Console Messages**:
+- `[*] [Session Event] Captured authenticated event: {eventKey, sessionId, userId, route, timestamp}`
+- `[*] [Session Event] Cache size: <number>`
+
+## Session Management Architecture
+
+### Database Structure
+- **Primary Database**: `maia_sessions` (dedicated session storage)
+- **Legacy Database**: `maia_chats` (no longer used for sessions)
+- **Session Store**: Default memory store (CouchDB store disabled for stability)
+
+### Session Lifecycle
+1. **Creation**: Session created in memory store during authentication
+2. **Database Write**: Session document written to `maia_sessions` after auth confirmation
+3. **Verification**: Database read confirms session exists and is active
+4. **Activity Tracking**: Session activity updates `lastActivity` timestamp
+5. **Deletion**: Session physically removed from database on logout/signout
+
+### Key Files
+- `src/routes/passkey-routes.js` - User logout and session verification
+- `src/utils/session-manager.js` - Admin session management
+- `src/utils/session-write-helper.js` - Session database operations
+- `src/entry/main.ts` - Frontend session verification interceptor
+
+### Console Debugging
+All session operations include comprehensive console logging with `[*]` prefix for essential messages:
+- Session creation and database writes
+- Session verification and confirmation
+- Session deletion and cleanup
+- Error handling and edge cases
