@@ -3681,6 +3681,14 @@ app.post('/api/current-agent', async (req, res) => {
         // Save updated user document
         await couchDBClient.updateDocument('maia_users', updatedUserDoc);
         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
+        
+        // Debug: Verify the document was saved correctly
+        const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        console.log(`🔍 [DEBUG] Verification - user document after save:`, {
+          currentAgentId: verifyDoc.currentAgentId,
+          currentAgentName: verifyDoc.currentAgentName,
+          currentAgentSetAt: verifyDoc.currentAgentSetAt
+        });
       } catch (userError) {
         console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
       }

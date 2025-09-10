@@ -1559,6 +1559,7 @@ export default defineComponent({
               );
               if (assignedAgentResponse.ok) {
                 const assignedAgentData = await assignedAgentResponse.json();
+                console.log(`🔍 [DEBUG] assigned-agent response for ${localCurrentUser.value.userId}:`, assignedAgentData);
                 if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
                   // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
                   const currentAgentResponse = await fetch(
@@ -1607,6 +1608,7 @@ export default defineComponent({
                 }
               } else {
                 currentAgent.value = null;
+                console.log(`🔍 [DEBUG] assigned-agent response NOT ok for ${localCurrentUser.value.userId}:`, assignedAgentResponse.status, assignedAgentResponse.statusText);
                 if (assignedAgentResponse.status === 429) {
                   console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
                 } else {

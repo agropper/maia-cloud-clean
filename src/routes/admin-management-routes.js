@@ -626,12 +626,26 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Return assigned agent information
+    // Return assigned agent information - check both assignedAgentId and currentAgentId
+    const assignedAgentId = userDoc.assignedAgentId || userDoc.currentAgentId || null;
+    const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
+    const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
+    
+    // Debug logging
+    console.log(`🔍 [DEBUG] assigned-agent endpoint for ${userId}:`, {
+      assignedAgentId: userDoc.assignedAgentId,
+      currentAgentId: userDoc.currentAgentId,
+      assignedAgentName: userDoc.assignedAgentName,
+      currentAgentName: userDoc.currentAgentName,
+      finalAssignedAgentId: assignedAgentId,
+      finalAssignedAgentName: assignedAgentName
+    });
+    
     res.json({
       userId: userId,
-      assignedAgentId: userDoc.assignedAgentId || null,
-      assignedAgentName: userDoc.assignedAgentName || null,
-      agentAssignedAt: userDoc.agentAssignedAt || null
+      assignedAgentId: assignedAgentId,
+      assignedAgentName: assignedAgentName,
+      agentAssignedAt: agentAssignedAt
     });
     
   } catch (error) {
