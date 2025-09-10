@@ -2255,9 +2255,10 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     });
 
     // Update the chat document
+    // For existing chats, preserve the original currentUser (owner) and only update content
     const updatedChatDoc = {
       ...existingChat,
-      currentUser: chatDisplayName, // Update to use display name for better readability
+      // Don't change currentUser - preserve original ownership
       chatHistory,
       uploadedFiles: processedUploadedFiles,
       updatedAt: new Date().toISOString(),
