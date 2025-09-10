@@ -222,7 +222,23 @@
                          <strong>{{ agent.name }}</strong> |
                          Patient: <strong>{{ agent.patientName }}</strong> |
                          Owner: {{ agent.owner }} |
-                         Chats: {{ agent.chatCount }} |
+                         
+                         <!-- Chats Button - Same style as Bottom Toolbar -->
+                         <div class="tooltip-wrapper" style="display: inline-block; margin: 0 8px;">
+                           <q-btn
+                             flat
+                             round
+                             dense
+                             size="sm"
+                             color="primary"
+                             class="group-count-btn"
+                             @click="openGroupModalForAgent(agent)"
+                           >
+                             <div class="group-count">{{ agent.chatCount }}</div>
+                           </q-btn>
+                           <div class="tooltip-text">View saved chats for this agent</div>
+                         </div>
+                         
                          Last Activity: {{ agent.lastActivity }}
                        </div>
                   </div>
@@ -520,6 +536,14 @@
         </QCardActions>
       </QCard>
     </QDialog>
+
+    <!-- Group Management Modal for Agent Chats -->
+    <GroupManagementModal
+      v-model="showGroupModal"
+      :currentUser="selectedAgentForChats"
+      :onGroupDeleted="handleGroupDeleted"
+      @chatLoaded="handleChatLoaded"
+    />
   </div>
 </template>
 
@@ -541,6 +565,8 @@ import {
   QTd,
   QIcon
 } from 'quasar';
+import { useGroupChat } from '../composables/useGroupChat';
+import GroupManagementModal from './GroupManagementModal.vue';
 
 export default defineComponent({
   name: 'AdminPanel',
@@ -557,7 +583,8 @@ export default defineComponent({
     QChip,
     QBanner,
     QTd,
-    QIcon
+    QIcon,
+    GroupManagementModal
   },
   
   props: {
@@ -591,6 +618,8 @@ export default defineComponent({
     
     // Agents and Patients
     const agentsAndPatients = ref([]);
+    const showGroupModal = ref(false);
+    const selectedAgentForChats = ref(null);
     
     // Admin registration form
     const adminForm = ref({
@@ -1180,6 +1209,59 @@ export default defineComponent({
       }
     };
 
+    // Chat count loading function
+    const loadChatCountsForAgents = async (agents, usersData) => {
+      try {
+        const { getAllGroupChats } = useGroupChat();
+        const allGroups = await getAllGroupChats();
+        
+        // Update chat counts for each agent
+        for (const agent of agents) {
+          // Find the user who owns this agent by checking assignedAgentId/assignedAgentName
+          const userWithAgent = usersData.find(user => 
+            user.assignedAgentId === agent.id || 
+            (user.assignedAgentName && user.assignedAgentName === agent.name)
+          );
+          
+          if (userWithAgent) {
+            // Filter groups by the owner's currentUser
+            const ownerName = userWithAgent.displayName || userWithAgent.userId;
+            const filteredGroups = allGroups.filter(group => group.currentUser === ownerName);
+            agent.chatCount = filteredGroups.length;
+          } else {
+            // No owner found - this means it's a "Public Agent" (Unknown User)
+            // Show all chats for Unknown User
+            const filteredGroups = allGroups.filter(group => group.currentUser === 'Unknown User');
+            agent.chatCount = filteredGroups.length;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading chat counts:', error);
+        // Set all chat counts to 0 on error
+        agents.forEach(agent => agent.chatCount = 0);
+      }
+    };
+    
+    // Open group modal for specific agent
+    const openGroupModalForAgent = (agent) => {
+      selectedAgentForChats.value = agent;
+      showGroupModal.value = true;
+    };
+    
+    // Handle chat loaded from group modal
+    const handleChatLoaded = (groupChat) => {
+      // For now, just close the modal
+      // In the future, we could navigate to the chat or show it in a new window
+      showGroupModal.value = false;
+      selectedAgentForChats.value = null;
+    };
+    
+    // Handle group deletion
+    const handleGroupDeleted = () => {
+      // Refresh the agents and patients list to update chat counts
+      loadAgentsAndPatients();
+    };
+
     // Agents and Patients methods
     const loadAgentsAndPatients = async () => {
       console.log('[*] [Admin Panel] loadAgentsAndPatients called, isAdmin:', isAdmin.value);
@@ -1232,6 +1314,15 @@ export default defineComponent({
           }
           
           // Determine owner: Use Display Name if there's an assigned agent, otherwise "Public Agent"
+          console.log(`[*] [Admin Panel] Looking for owner of agent ${agent.name} (${agent.id})`);
+          console.log(`[*] [Admin Panel] Available users:`, JSON.stringify(usersData.map(u => ({ 
+            id: u._id, 
+            displayName: u.displayName,
+            ownedAgents: u.ownedAgents,
+            assignedAgentId: u.assignedAgentId,
+            assignedAgentName: u.assignedAgentName
+          })), null, 2));
+          
           const userWithAgent = usersData.find(user => 
             user.assignedAgentId === agent.id || 
             (user.assignedAgentName && user.assignedAgentName === agent.name)
@@ -1239,6 +1330,9 @@ export default defineComponent({
           
           if (userWithAgent) {
             owner = userWithAgent.displayName || userWithAgent.userId;
+            console.log(`[*] [Admin Panel] Found owner for ${agent.name}: ${owner}`);
+          } else {
+            console.log(`[*] [Admin Panel] No owner found for ${agent.name}, using Public Agent`);
           }
           
           return {
@@ -1246,12 +1340,15 @@ export default defineComponent({
             name: agent.name,
             patientName: patientName,
             owner: owner,
-            chatCount: 0, // Placeholder - will be updated later
+            chatCount: 0, // Will be updated with actual count
             lastActivity: 'Unknown', // Placeholder - will be updated later
             status: agent.status,
             knowledgeBases: agent.knowledgeBases || []
           };
         });
+        
+        // Load chat counts for each agent
+        await loadChatCountsForAgents(processedAgents, usersData);
         
         agentsAndPatients.value = processedAgents;
         
@@ -1329,6 +1426,8 @@ export default defineComponent({
       isRegisteringPasskey,
       passkeyStatus,
       agentsAndPatients,
+      showGroupModal,
+      selectedAgentForChats,
       userColumns,
       stats,
       errorMessage,
@@ -1338,6 +1437,10 @@ export default defineComponent({
       loadUsers,
       loadAgents,
       loadAgentsAndPatients,
+      loadChatCountsForAgents,
+      openGroupModalForAgent,
+      handleChatLoaded,
+      handleGroupDeleted,
       viewUserDetails,
       approveUser,
       resetUserPasskey,
@@ -1466,5 +1569,71 @@ export default defineComponent({
 .agent-patient-item:hover {
   background-color: #f0f0f0;
   border-color: #d0d0d0;
+}
+
+/* Chat count button styles - matching Bottom Toolbar */
+.group-count-btn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.group-count {
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  background-color: #1976d2;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Tooltip styles - matching Bottom Toolbar */
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px 12px;
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -125px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
+}
+
+.tooltip-wrapper:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
 }
 </style>
