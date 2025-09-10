@@ -1169,7 +1169,13 @@ app.post('/api/personal-chat', async (req, res) => {
     const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
 
     // Get current user from request body (frontend) or fall back to session
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
+    let currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
+    
+    // Handle deep link users - they should use Unknown User's agent
+    if (currentUser && currentUser.startsWith('deep_link_')) {
+      console.log(`🔗 [personal-chat] Deep link user detected: ${currentUser}, using Unknown User's agent`);
+      currentUser = 'Unknown User';
+    }
     
     const newChatHistory = [
       ...chatHistory,
