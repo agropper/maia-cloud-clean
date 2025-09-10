@@ -483,6 +483,20 @@ export default defineComponent({
     };
 
     const triggerSendQuery = async () => {
+      // Prevent multiple simultaneous calls
+      if (appState.isLoading) {
+        console.log('🔍 [DEBUG] triggerSendQuery called but already loading, ignoring');
+        return;
+      }
+      
+      // Prevent sending empty messages
+      if (!appState.currentQuery || appState.currentQuery.trim() === '') {
+        console.log('🔍 [DEBUG] triggerSendQuery called with empty query, ignoring');
+        return;
+      }
+      
+      console.log('🔍 [DEBUG] triggerSendQuery called with query:', appState.currentQuery);
+      
       // If Private AI is selected and chatHistory is empty, only use the default if the input is empty or matches the default
       const privateAIValue = AIoptions.find(
         (option) => option.label === "Private AI"
