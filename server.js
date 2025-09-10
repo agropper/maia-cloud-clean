@@ -1171,10 +1171,74 @@ app.post('/api/personal-chat', async (req, res) => {
     // Get current user from request body (frontend) or fall back to session
     let currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
     
-    // Handle deep link users - they should use Unknown User's agent
+    // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
     if (currentUser && currentUser.startsWith('deep_link_')) {
-      console.log(`🔗 [personal-chat] Deep link user detected: ${currentUser}, using Unknown User's agent`);
-      currentUser = 'Unknown User';
+      console.log(`🔗 [personal-chat] Deep link user detected: ${currentUser}, finding patient's agent`);
+      
+      try {
+        // Get the deep link user's session to find the shareId
+        const deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        if (deepLinkUserDoc && deepLinkUserDoc.shareId) {
+          console.log(`🔗 [personal-chat] Found shareId for deep link user: ${deepLinkUserDoc.shareId}`);
+          
+          // Find the chat document with this shareId to get the patient
+          const allChats = await couchDBClient.getAllChats();
+          const sharedChat = allChats.find(chat => chat.shareId === deepLinkUserDoc.shareId);
+          
+          if (sharedChat && sharedChat.currentUser) {
+            const patientUser = typeof sharedChat.currentUser === 'string' 
+              ? sharedChat.currentUser 
+              : sharedChat.currentUser.userId || sharedChat.currentUser.displayName;
+            
+            console.log(`🔗 [personal-chat] Found patient for deep link: ${patientUser}`);
+            
+            // Get the assigned agent for this patient
+            const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${patientUser}/assigned-agent`);
+            if (assignedAgentResponse.ok) {
+              const assignedAgentData = await assignedAgentResponse.json();
+              if (assignedAgentData.assignedAgentId) {
+                console.log(`🔗 [personal-chat] Using patient's assigned agent: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId})`);
+                
+                // Get the agent's deployment URL from DigitalOcean API
+                const agentResponse = await doRequest(`/v2/gen-ai/agents/${assignedAgentData.assignedAgentId}`);
+                const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+                
+                if (agentData && agentData.deployment?.url) {
+                  agentModel = agentData.name;
+                  agentName = agentData.name;
+                  agentId = assignedAgentData.assignedAgentId;
+                  agentEndpoint = `${agentData.deployment.url}/api/v1`;
+                  
+                  // Get knowledge base info for this agent
+                  if (agentData.knowledge_bases) {
+                    knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+                  }
+                  
+                  console.log(`🔗 [personal-chat] Deep link user using patient's agent: ${agentData.name} (${agentEndpoint})`);
+                } else {
+                  console.log(`🔗 [personal-chat] Patient's agent ${assignedAgentData.assignedAgentName} has no deployment URL`);
+                }
+              } else {
+                console.log(`🔗 [personal-chat] Patient ${patientUser} has no assigned agent`);
+              }
+            } else {
+              console.log(`🔗 [personal-chat] Failed to get assigned agent for patient ${patientUser}: ${assignedAgentResponse.status}`);
+            }
+          } else {
+            console.log(`🔗 [personal-chat] No chat found for shareId: ${deepLinkUserDoc.shareId}`);
+          }
+        } else {
+          console.log(`🔗 [personal-chat] No shareId found for deep link user: ${currentUser}`);
+        }
+      } catch (error) {
+        console.warn(`🔗 [personal-chat] Error finding patient's agent for deep link user:`, error.message);
+      }
+      
+      // If we couldn't find the patient's agent, fall back to Unknown User's agent
+      if (!agentModel) {
+        console.log(`🔗 [personal-chat] Falling back to Unknown User's agent for deep link user`);
+        currentUser = 'Unknown User';
+      }
     }
     
     const newChatHistory = [
