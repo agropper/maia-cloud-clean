@@ -1242,6 +1242,102 @@ export default defineComponent({
       }
     };
     
+    // Load last activity for agents
+    const loadLastActivityForAgents = async (agents, usersData) => {
+      try {
+        // Get long-term activity from saved chats (this works reliably)
+        const { getAllGroupChats } = useGroupChat();
+        const allGroups = await getAllGroupChats();
+        
+        for (const agent of agents) {
+          // Find the user who owns this agent
+          const userWithAgent = usersData.find(user => 
+            user.assignedAgentId === agent.id || 
+            (user.assignedAgentName && user.assignedAgentName === agent.name)
+          );
+          
+          let ownerName = 'Unknown User';
+          if (userWithAgent) {
+            ownerName = userWithAgent.displayName || userWithAgent.userId;
+          }
+          
+          // Get chats for this owner
+          const ownerChats = allGroups.filter(group => group.currentUser === ownerName);
+          
+          let lastActivity = null;
+          
+          // Check long-term activity from saved chats
+          if (ownerChats.length > 0) {
+            const mostRecentChat = ownerChats.reduce((latest, chat) => {
+              const chatTime = new Date(chat.updatedAt || chat.createdAt);
+              const latestTime = new Date(latest.updatedAt || latest.createdAt);
+              return chatTime > latestTime ? chat : latest;
+            });
+            
+            lastActivity = new Date(mostRecentChat.updatedAt || mostRecentChat.createdAt);
+          }
+          
+          // Format the result
+          if (lastActivity) {
+            const now = new Date();
+            const diffMs = now - lastActivity;
+            agent.lastActivity = formatTimeAgo(diffMs);
+          } else {
+            agent.lastActivity = 'Never';
+          }
+        }
+        
+        // Try to get in-memory activity data (optional, don't fail if it doesn't work)
+        try {
+          const response = await fetch('/api/admin-management/agent-activities');
+          if (response.ok) {
+            const data = await response.json();
+            const inMemoryActivities = data.activities || [];
+            
+            // Update with in-memory activity if more recent
+            for (const agent of agents) {
+              const inMemoryActivity = inMemoryActivities.find(activity => activity.agentId === agent.id);
+              if (inMemoryActivity) {
+                const inMemoryTime = new Date(inMemoryActivity.lastActivity);
+                const currentTime = agent.lastActivity === 'Never' ? null : new Date();
+                
+                if (currentTime && inMemoryTime > currentTime) {
+                  const now = new Date();
+                  const diffMs = now - inMemoryTime;
+                  agent.lastActivity = formatTimeAgo(diffMs);
+                }
+              }
+            }
+          }
+        } catch (inMemoryError) {
+          // Silently ignore in-memory activity errors
+          console.log('In-memory activity not available, using chat data only');
+        }
+        
+      } catch (error) {
+        console.error('Error loading last activity:', error);
+        // Set fallback
+        agents.forEach(agent => {
+          agent.lastActivity = 'Unknown';
+        });
+      }
+    };
+    
+    // Helper function to format time difference
+    const formatTimeAgo = (diffMs) => {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMinutes < 60) {
+        return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+      } else if (diffHours < 24) {
+        return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+      } else {
+        return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+      }
+    };
+    
     // Open group modal for specific agent
     const openGroupModalForAgent = (agent) => {
       selectedAgentForChats.value = agent;
@@ -1264,13 +1360,10 @@ export default defineComponent({
 
     // Agents and Patients methods
     const loadAgentsAndPatients = async () => {
-      console.log('[*] [Admin Panel] loadAgentsAndPatients called, isAdmin:', isAdmin.value);
       if (!isAdmin.value) {
-        console.log('[*] [Admin Panel] Not admin, skipping loadAgentsAndPatients');
         return;
       }
       
-      console.log('[*] [Admin Panel] Loading agents and patients');
       isLoadingAgentsPatients.value = true;
       try {
         // Use the same API call as Agent Badge - get ALL agents without filtering
@@ -1280,7 +1373,6 @@ export default defineComponent({
         }
         const agentsData = await agentsResponse.json();
         
-        console.log(`[*] [Admin Panel] Fetched ${agentsData.length} agents from DigitalOcean API`);
         
         // Get user data to determine ownership
         let usersData = [];
@@ -1289,10 +1381,9 @@ export default defineComponent({
           if (usersResponse.ok) {
             const usersResult = await usersResponse.json();
             usersData = usersResult.users || [];
-            console.log(`[*] [Admin Panel] Fetched ${usersData.length} users for ownership mapping`);
           }
         } catch (error) {
-          console.error('[*] [Admin Panel] Error fetching users for ownership:', error);
+          console.error('Error fetching users for ownership:', error);
         }
         
         // Process each agent - knowledge bases are already included from DigitalOcean API
@@ -1314,15 +1405,6 @@ export default defineComponent({
           }
           
           // Determine owner: Use Display Name if there's an assigned agent, otherwise "Public Agent"
-          console.log(`[*] [Admin Panel] Looking for owner of agent ${agent.name} (${agent.id})`);
-          console.log(`[*] [Admin Panel] Available users:`, JSON.stringify(usersData.map(u => ({ 
-            id: u._id, 
-            displayName: u.displayName,
-            ownedAgents: u.ownedAgents,
-            assignedAgentId: u.assignedAgentId,
-            assignedAgentName: u.assignedAgentName
-          })), null, 2));
-          
           const userWithAgent = usersData.find(user => 
             user.assignedAgentId === agent.id || 
             (user.assignedAgentName && user.assignedAgentName === agent.name)
@@ -1330,10 +1412,8 @@ export default defineComponent({
           
           if (userWithAgent) {
             owner = userWithAgent.displayName || userWithAgent.userId;
-            console.log(`[*] [Admin Panel] Found owner for ${agent.name}: ${owner}`);
           } else {
             owner = 'Unknown User';
-            console.log(`[*] [Admin Panel] No owner found for ${agent.name}, using Unknown User`);
           }
           
           return {
@@ -1351,6 +1431,9 @@ export default defineComponent({
         // Load chat counts for each agent
         await loadChatCountsForAgents(processedAgents, usersData);
         
+        // Load last activity for each agent
+        await loadLastActivityForAgents(processedAgents, usersData);
+        
         agentsAndPatients.value = processedAgents;
         
       } catch (error) {
@@ -1366,17 +1449,12 @@ export default defineComponent({
     
     // Lifecycle
     onMounted(async () => {
-      console.log('[*] [Admin Panel] onMounted called');
       checkUrlParameters();
       await checkAdminStatus();
-      console.log('[*] [Admin Panel] checkAdminStatus completed, isAdmin:', isAdmin.value);
       
       // Load agents and patients when admin is available
       if (isAdmin.value) {
-        console.log('[*] [Admin Panel] isAdmin is true, calling loadAgentsAndPatients');
         await loadAgentsAndPatients();
-      } else {
-        console.log('[*] [Admin Panel] isAdmin is false, not calling loadAgentsAndPatients');
       }
     });
     
@@ -1439,6 +1517,7 @@ export default defineComponent({
       loadAgents,
       loadAgentsAndPatients,
       loadChatCountsForAgents,
+      loadLastActivityForAgents,
       openGroupModalForAgent,
       handleChatLoaded,
       handleGroupDeleted,

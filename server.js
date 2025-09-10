@@ -73,17 +73,8 @@ const initializeDatabase = async () => {
         }
       }
       
-      // Create sessions database
-      try {
-        await couchDBClient.createDatabase('maia_sessions');
-        console.log('✅ Created maia_sessions database');
-      } catch (error) {
-        if (error.statusCode === 412) {
-          console.log('✅ maia_sessions database already exists');
-        } else {
-          console.warn('⚠️ Could not create maia_sessions database:', error.message);
-        }
-      }
+      // Sessions are now handled in-memory only
+      console.log('✅ Using in-memory session management');
       
       // Get service info
       const serviceInfo = couchDBClient.getServiceInfo();
@@ -271,43 +262,9 @@ app.use((req, res, next) => {
 const sessionManager = new SessionManager(couchDBClient);
 const sessionMiddleware = new SessionMiddleware(sessionManager);
 
-// Function to write session to maia_sessions database
-const writeSessionToDatabase = async (sessionEvent) => {
-  try {
-    console.log('[*] [Session Write] Writing session to maia_sessions database:', {
-      sessionId: sessionEvent.sessionId,
-      userId: sessionEvent.userId,
-      route: sessionEvent.route,
-      timestamp: sessionEvent.timestamp
-    });
-    
-    // Create session document for database
-    const sessionDoc = {
-      _id: `session_${sessionEvent.sessionId}`,
-      type: 'session',
-      sessionType: 'authenticated',
-      userId: sessionEvent.userId,
-      isActive: true,
-      lastActivity: sessionEvent.timestamp,
-      createdAt: sessionEvent.timestamp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
-      warningShown: false,
-      warningShownAt: null,
-      deepLinkId: null,
-      ownedBy: null
-    };
-    
-    // Write to database
-    console.log('[*] [Session Write] Writing to maia_sessions:', JSON.stringify(sessionDoc, null, 2));
-    
-    await couchDBClient.saveDocument('maia_sessions', sessionDoc);
-    
-    console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');
-    
-  } catch (error) {
-    console.error('❌ [Session Write] Error writing session to database:', error);
-  }
-};
+// In-memory session tracking (no database writes needed)
+
+// Agent activity tracking is now handled in admin-management routes
 
 // Endpoint to view session events in cache
 app.get('/api/debug/session-events', (req, res) => {
@@ -335,8 +292,7 @@ app.post('/api/debug/write-session', async (req, res) => {
   
   if (authenticatedEvents.length > 0) {
     const firstAuthenticatedEvent = authenticatedEvents[0];
-    await writeSessionToDatabase(firstAuthenticatedEvent);
-    res.json({ success: true, message: 'Session written to database', event: firstAuthenticatedEvent });
+    res.json({ success: true, message: 'Session events available in memory', event: firstAuthenticatedEvent });
   } else {
     res.json({ success: false, message: 'No authenticated events found' });
   }
@@ -1431,6 +1387,9 @@ app.post('/api/personal-chat', async (req, res) => {
       name: 'Personal AI'
     });
 
+    // Update agent activity
+    updateAgentActivity(agentId, currentUser);
+
     res.json(newChatHistory);
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -1974,7 +1933,7 @@ app.post('/api/deep-link-session', async (req, res) => {
       shareId
     });
     
-    await couchDBClient.saveDocument('maia_sessions', sessionDoc);
+    // Session stored in memory only
     
     // Update the express-session with user information
     req.session.userId = userId;
@@ -2014,14 +1973,8 @@ app.post('/api/deep-link-session/cleanup', async (req, res) => {
       action
     });
     
-    // Delete the session from database
-    try {
-      await couchDBClient.deleteDocument('maia_sessions', `session_${sessionId}`);
-      console.log('✅ [Deep Link Cleanup] Session deleted successfully:', sessionId);
-    } catch (deleteError) {
-      // Session might not exist, which is fine
-      console.log('🔗 [Deep Link Cleanup] Session not found (may have been cleaned up):', sessionId);
-    }
+    // Session cleanup handled in memory only
+    console.log('✅ [Deep Link Cleanup] Session cleaned up from memory:', sessionId);
     
     res.json({ success: true, message: 'Session cleaned up successfully' });
     
@@ -2553,18 +2506,18 @@ app.get('/api/agents', async (req, res) => {
       }
 
       return {
-        id: agent.uuid,
-        name: agent.name,
-        description: agent.instruction || '',
-        model: agent.model?.name || 'Unknown',
-        status: agent.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
-        instructions: agent.instruction || '',
-        uuid: agent.uuid,
-        deployment: agent.deployment,
+      id: agent.uuid,
+      name: agent.name,
+      description: agent.instruction || '',
+      model: agent.model?.name || 'Unknown',
+      status: agent.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
+      instructions: agent.instruction || '',
+      uuid: agent.uuid,
+      deployment: agent.deployment,
         knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
         knowledgeBases: connectedKnowledgeBases, // Add all connected KBs
-        created_at: agent.created_at,
-        updated_at: agent.updated_at
+      created_at: agent.created_at,
+      updated_at: agent.updated_at
       };
     }));
     
@@ -4903,7 +4856,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateAgentActivity } from './src/routes/admin-management-routes.js';
 
 // MAIA2 routes removed - using consolidated maia_users database
 

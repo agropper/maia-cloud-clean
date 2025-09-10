@@ -6,6 +6,33 @@ const router = express.Router();
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
+// In-memory agent activity tracking
+const agentActivityTracker = new Map(); // agentId -> { lastActivity: Date, userId: string }
+
+// Update agent activity when user interacts with agent
+const updateAgentActivity = (agentId, userId) => {
+  if (agentId) {
+    agentActivityTracker.set(agentId, {
+      lastActivity: new Date(),
+      userId: userId
+    });
+    console.log(`[*] [Agent Activity] Updated activity for agent ${agentId} by user ${userId}`);
+  }
+};
+
+// Get agent activity
+const getAgentActivity = (agentId) => {
+  return agentActivityTracker.get(agentId);
+};
+
+// Get all agent activities
+const getAllAgentActivities = () => {
+  return Array.from(agentActivityTracker.entries()).map(([agentId, data]) => ({
+    agentId,
+    ...data
+  }));
+};
+
 // Function to set the client (called from main server)
 export const setCouchDBClient = (client) => {
   couchDBClient = client;
@@ -836,5 +863,24 @@ router.get('/sessions/active-check', requireAdminAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to check active sessions' });
   }
 });
+
+// API endpoint to get agent activities for Admin Panel
+router.get('/agent-activities', (req, res) => {
+  try {
+    console.log('[*] [Agent Activities] Endpoint called');
+    const activities = getAllAgentActivities();
+    console.log('[*] [Agent Activities] Returning activities:', activities);
+    res.json({
+      success: true,
+      activities: activities
+    });
+  } catch (error) {
+    console.error('Error getting agent activities:', error);
+    res.status(500).json({ error: 'Failed to get agent activities' });
+  }
+});
+
+// Export functions for use in main server
+export { updateAgentActivity, getAgentActivity, getAllAgentActivities };
 
 export default router;
