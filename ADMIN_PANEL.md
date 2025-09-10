@@ -287,3 +287,110 @@ All session operations include comprehensive console logging with `[*]` prefix f
 - Session verification and confirmation
 - Session deletion and cleanup
 - Error handling and edge cases
+
+### 429 Error Monitoring Status
+**Current State**: Partial 429 error monitoring is implemented but NOT comprehensive.
+
+**What IS monitored**:
+- Global fetch interceptor (`src/entry/main.ts`) - Catches ALL 429 responses from any fetch call and logs them to browser console
+- Admin Panel specific handlers (`src/components/AdminPanel.vue`) - Handles 429s for `/api/admin-management/users` and `/api/admin-management/sessions` endpoints
+- Backend route handlers (`src/routes/admin-management-routes.js`) - Handles 429s for admin routes and returns proper error responses
+
+**What is NOT monitored**:
+- Direct Cloudant calls - Many `couchDBClient.*` calls throughout the codebase don't have 429 error handling
+- Session management calls - `session-manager.js` and `couchdb-session-store.js` make direct Cloudant calls without 429 monitoring
+- Passkey routes - `passkey-routes.js` makes many Cloudant calls without 429 error handling
+- Other utility functions - Various utility functions make Cloudant calls without monitoring
+
+**The Problem**: The global fetch interceptor only catches HTTP responses, but many Cloudant calls are made directly through the `couchDBClient` which uses the `nano` library. These direct calls bypass the fetch interceptor and their 429 errors are only logged to the server console, not the browser console.
+
+**Conclusion**: We have partial 429 monitoring, but it does NOT monitor all Cloudant database calls. Many direct `couchDBClient` calls are not monitored for 429 errors in the browser console.
+
+## Remaining maia_sessions References
+
+**Status**: These references exist outside the Admin Panel and are used by core application functionality. They should be removed in a future cleanup phase to avoid regressions to the main app.
+
+### Files with maia_sessions References:
+
+#### 1. `src/entry/main.ts`
+- **Line 53**: `console.log('[*] [Browser] Session verified in maia_sessions database');`
+- **Purpose**: Browser console logging for session verification
+
+#### 2. `src/routes/passkey-routes.js`
+- **Line 635**: `console.log('[*] [Session Write] Writing session to maia_sessions database after auth confirmation');`
+- **Line 651**: `console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');`
+- **Line 655**: `const verifySession = await couchDBClient.getDocument('maia_sessions', sessionDocId);`
+- **Line 728**: `message: '[*] [Browser] Session verified in maia_sessions database',`
+- **Line 781**: `console.log('[*] [Session Delete] Deleting session from maia_sessions database:', sessionDocId);`
+- **Line 786**: `const existingSession = await couchDBClient.getDocument('maia_sessions', sessionDocId);`
+- **Line 789**: `await couchDBClient.deleteDocument('maia_sessions', sessionDocId);`
+- **Line 790**: `console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');`
+- **Line 792**: `console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');`
+- **Line 795**: `console.error('❌ [Session Delete] Error deleting session from maia_sessions database:', error);`
+- **Purpose**: User authentication, session creation, verification, and logout
+
+#### 3. `src/utils/session-manager.js`
+- **Line 39**: `await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 51**: `const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', \`session_${sessionId}\`);`
+- **Line 62**: `const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', \`session_${sessionId}\`);`
+- **Line 72**: `await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 84**: `const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', \`session_${sessionId}\`);`
+- **Line 104**: `await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 131**: `const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);`
+- **Line 140**: `await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 151**: `console.log('[*] [Session Delete] Admin deleting session from maia_sessions database:', sessionDocId);`
+- **Line 153**: `const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);`
+- **Line 156**: `await this.couchDBClient.deleteDocument('maia_sessions', sessionDocId);`
+- **Line 157**: `console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');`
+- **Line 160**: `console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');`
+- **Line 163**: `console.error('❌ [Session Delete] Error deactivating session from maia_sessions database:', error);`
+- **Line 170**: `const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');`
+- **Line 188**: `const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');`
+- **Line 207**: `const result = await this.couchDBClient.findDocuments('maia_sessions', query);`
+- **Line 254**: `const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');`
+- **Purpose**: Core session management functionality
+
+#### 4. `src/utils/session-write-helper.js`
+- **Line 3**: `// Function to write session to maia_sessions database`
+- **Line 6**: `console.log('[*] [Session Write] Writing session to maia_sessions database:', {`
+- **Line 14**: `const couchDBClient = createCouchDBClient({ database: 'maia_sessions' });`
+- **Line 35**: `console.log('[*] [Session Write] Writing to maia_sessions:', JSON.stringify(sessionDoc, null, 2));`
+- **Line 37**: `await couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 39**: `console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');`
+- **Line 41**: `console.error('❌ [Session Write] Error writing session to CouchDB:', error);`
+- **Purpose**: Session database write operations
+
+#### 5. `src/utils/couchdb-session-store.js`
+- **Line 14**: `this.dbName = options.dbName || 'maia_sessions';`
+- **Line 27**: `console.log('[*] [CouchDB Session] GET: Reading session from maia_sessions database');`
+- **Line 86**: `console.log('[*] [CouchDB Session] SET: Starting session write to maia_sessions database');`
+- **Line 168**: `console.log('[*] [CouchDB Session] SET: Writing session document to maia_sessions database');`
+- **Line 174**: `console.log('[*] [CouchDB Session] SET: Successfully wrote session to maia_sessions database');`
+- **Purpose**: CouchDB session store implementation (currently disabled)
+
+#### 6. `server.js`
+- **Line 78**: `await couchDBClient.createDatabase('maia_sessions');`
+- **Line 79**: `console.log('✅ Created maia_sessions database');`
+- **Line 82**: `console.log('✅ maia_sessions database already exists');`
+- **Line 84**: `console.warn('⚠️ Could not create maia_sessions database:', error.message);`
+- **Line 190**: `// const sessionCouchDBClient = createCouchDBClient({ database: 'maia_sessions' });`
+- **Line 197**: `//   dbName: 'maia_sessions',`
+- **Line 207**: `console.log('[*] [Session] Using default memory session store (maia_sessions disabled)');`
+- **Line 275**: `// Function to write session to maia_sessions database`
+- **Line 277**: `console.log('[*] [Session Write] Writing session to maia_sessions database:', {`
+- **Line 301**: `console.log('[*] [Session Write] Writing to maia_sessions:', JSON.stringify(sessionDoc, null, 2));`
+- **Line 303**: `await couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 305**: `console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');`
+- **Line 1977**: `await couchDBClient.saveDocument('maia_sessions', sessionDoc);`
+- **Line 2019**: `await couchDBClient.deleteDocument('maia_sessions', \`session_${sessionId}\`);`
+- **Purpose**: Database creation, session middleware, and deep link session management
+
+### Summary
+- **Total Files**: 6 files contain `maia_sessions` references
+- **Total References**: 41+ individual references
+- **Core Functionality**: These references are used for user authentication, session management, and deep link functionality
+- **Risk Level**: HIGH - Removing these would break core application functionality
+- **Recommendation**: Remove in a future cleanup phase after implementing alternative session management or when migrating away from the `maia_sessions` database entirely
+
+-----------
+

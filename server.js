@@ -2524,18 +2524,48 @@ app.get('/api/agents', async (req, res) => {
     const agents = await doRequest('/v2/gen-ai/agents');
     console.log(`🤖 Listed ${agents.agents?.length || 0} agents`);
     
-    // Transform agents to match frontend expectations
-    const allAgents = (agents.agents || []).map(agent => ({
-      id: agent.uuid,
-      name: agent.name,
-      description: agent.instruction || '',
-      model: agent.model?.name || 'Unknown',
-      status: agent.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
-      instructions: agent.instruction || '',
-      uuid: agent.uuid,
-      deployment: agent.deployment,
-      created_at: agent.created_at,
-      updated_at: agent.updated_at
+    // Transform agents to match frontend expectations and include knowledge bases
+    // Note: The /v2/gen-ai/agents endpoint doesn't include knowledge base details
+    // We need to fetch each agent individually to get knowledge base information
+    const allAgents = await Promise.all((agents.agents || []).map(async (agent) => {
+      // Debug: Log the raw agent data from DigitalOcean API
+      console.log(`🔍 [DEBUG] Raw agent data from DigitalOcean API:`, {
+        id: agent.uuid,
+        name: agent.name,
+        knowledge_bases: agent.knowledge_bases
+      });
+      
+      // Fetch detailed agent data including knowledge bases
+      let connectedKnowledgeBases = [];
+      try {
+        const agentDetails = await doRequest(`/v2/gen-ai/agents/${agent.uuid}`);
+        const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
+        
+        if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
+          connectedKnowledgeBases = agentData.knowledge_bases;
+          console.log(`🔍 [DEBUG] Found ${connectedKnowledgeBases.length} knowledge bases for agent ${agent.name}`);
+        } else {
+          console.log(`🔍 [DEBUG] No knowledge bases found for agent ${agent.name}`);
+        }
+      } catch (error) {
+        console.log(`🔍 [DEBUG] Error fetching knowledge bases for agent ${agent.name}:`, error.message);
+        connectedKnowledgeBases = [];
+      }
+
+      return {
+        id: agent.uuid,
+        name: agent.name,
+        description: agent.instruction || '',
+        model: agent.model?.name || 'Unknown',
+        status: agent.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
+        instructions: agent.instruction || '',
+        uuid: agent.uuid,
+        deployment: agent.deployment,
+        knowledgeBase: connectedKnowledgeBases[0], // Keep first KB for backward compatibility
+        knowledgeBases: connectedKnowledgeBases, // Add all connected KBs
+        created_at: agent.created_at,
+        updated_at: agent.updated_at
+      };
     }));
     
     // Filter agents based on user ownership
@@ -2544,6 +2574,12 @@ app.get('/api/agents', async (req, res) => {
     
     console.log(`🔍 [DEBUG] Filtering agents for user: ${currentUser}`);
     console.log(`🔍 [DEBUG] Total agents available: ${allAgents.length}`);
+    
+    // Special case: if user=admin, return all agents without filtering
+    if (currentUser === 'admin') {
+      console.log(`🔍 [DEBUG] Admin user - returning all agents without filtering`);
+      filteredAgents = allAgents;
+    } else {
     
     if (currentUser === 'Unknown User') {
       // Unknown User should only see agents not owned by authenticated users
@@ -2651,6 +2687,7 @@ app.get('/api/agents', async (req, res) => {
         console.warn(`Failed to get owned agents for ${currentUser}, showing empty list:`, error.message);
         filteredAgents = [];
       }
+    }
     }
     
     res.json(filteredAgents);

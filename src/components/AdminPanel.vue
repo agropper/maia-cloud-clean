@@ -196,109 +196,51 @@
         </div>
       </div>
 
-      <!-- Session Status Overview -->
-      <div class="session-status q-mb-lg">
+      <!-- Agents and Patients Overview -->
+      <div class="agents-patients q-mb-lg">
         <QCard>
           <QCardSection>
             <div class="row items-center q-mb-md">
-              <h4 class="q-ma-none">🔐 Active Sessions</h4>
+              <h4 class="q-ma-none">🤖 Agents and Patients</h4>
               <QSpace />
               <QBtn
                 color="primary"
                 icon="refresh"
-                label="Refresh Sessions"
-                @click="loadSessionStatus"
-                :loading="isLoadingSessions"
+                label="Refresh"
+                @click="loadAgentsAndPatients"
+                :loading="isLoadingAgentsPatients"
                 size="sm"
               />
             </div>
 
-            <!-- Authenticated Users -->
-            <div v-if="sessionStatus.authenticatedUsers.length > 0" class="q-mb-md">
-              <h6 class="q-ma-none q-mb-sm">👤 Authenticated Users</h6>
-              <div v-for="user in sessionStatus.authenticatedUsers" :key="user.sessionId" class="session-item q-mb-sm">
-                <QCard flat bordered>
-                  <QCardSection class="q-pa-sm">
-                    <div class="row items-center justify-between">
-                      <div class="col">
-                        <div class="text-subtitle2">{{ user.displayName }}</div>
-                        <div class="text-caption text-grey-6">
-                          Inactive: {{ user.inactiveMinutes }} minutes
-                        </div>
-                      </div>
-                      <div class="col-auto">
-                        <QBtn
-                          color="negative"
-                          icon="logout"
-                          label="Sign Out"
-                          size="sm"
-                          @click="signOutUser(user.sessionId)"
-                          :loading="isSigningOutUser === user.sessionId"
-                        />
-                      </div>
-                    </div>
-                  </QCardSection>
-                </QCard>
+            <!-- Agents and Patients List -->
+            <div v-if="agentsAndPatients.length > 0" class="q-mb-md">
+              <div v-for="agent in agentsAndPatients" :key="agent.id" class="agent-patient-item q-mb-sm">
+                <div class="row items-center justify-between">
+                  <div class="col">
+                       <div class="text-body2">
+                         <strong>{{ agent.name }}</strong> |
+                         Patient: <strong>{{ agent.patientName }}</strong> |
+                         Owner: {{ agent.owner }} |
+                         Chats: {{ agent.chatCount }} |
+                         Last Activity: {{ agent.lastActivity }}
+                       </div>
+                  </div>
+                  <div class="col-auto">
+                    <QChip
+                      :color="agent.status === 'running' ? 'positive' : 'warning'"
+                      size="sm"
+                      :label="agent.status"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Deep Link Users -->
-            <div v-if="sessionStatus.deepLinkUsers.length > 0" class="q-mb-md">
-              <h6 class="q-ma-none q-mb-sm">🔗 Deep Link Sessions</h6>
-              <div v-for="session in sessionStatus.deepLinkUsers" :key="session.sessionId" class="session-item q-mb-sm">
-                <QCard flat bordered>
-                  <QCardSection class="q-pa-sm">
-                    <div class="row items-center justify-between">
-                      <div class="col">
-                        <div class="text-subtitle2">Deep Link: {{ session.deepLinkId }}</div>
-                        <div class="text-caption text-grey-6">
-                          Owned by: {{ session.ownedBy }}
-                          <span v-if="session.userInfo">
-                            | By: {{ session.userInfo.name }} ({{ session.userInfo.email }})
-                          </span>
-                          | Inactive: {{ session.inactiveMinutes }} minutes | 
-                          Cleanup in: {{ session.cleanupInHours }} hours
-                        </div>
-                      </div>
-                      <div class="col-auto">
-                        <QChip
-                          :color="session.cleanupInHours < 24 ? 'warning' : 'info'"
-                          size="sm"
-                          :label="`${session.cleanupInHours}h left`"
-                        />
-                      </div>
-                    </div>
-                  </QCardSection>
-                </QCard>
-              </div>
-            </div>
-
-            <!-- Unknown User Sessions -->
-            <div v-if="sessionStatus.unknownUserSessions.length > 0" class="q-mb-md">
-              <h6 class="q-ma-none q-mb-sm">❓ Unknown User Sessions</h6>
-              <div v-for="session in sessionStatus.unknownUserSessions" :key="session.sessionId" class="session-item q-mb-sm">
-                <QCard flat bordered>
-                  <QCardSection class="q-pa-sm">
-                    <div class="row items-center justify-between">
-                      <div class="col">
-                        <div class="text-subtitle2">Unknown User Session</div>
-                        <div class="text-caption text-grey-6">
-                          Inactive: {{ session.inactiveMinutes }} minutes
-                        </div>
-                      </div>
-                      <div class="col-auto">
-                        <QChip color="grey" size="sm" label="Testing Mode" />
-                      </div>
-                    </div>
-                  </QCardSection>
-                </QCard>
-              </div>
-            </div>
-
-            <!-- No Active Sessions -->
-            <div v-if="sessionStatus.authenticatedUsers.length === 0 && sessionStatus.deepLinkUsers.length === 0 && sessionStatus.unknownUserSessions.length === 0" class="text-center q-pa-md">
-              <QIcon name="check_circle" size="2rem" color="positive" class="q-mb-md" />
-              <div class="text-grey-6">No active sessions</div>
+            <!-- No Agents -->
+            <div v-if="agentsAndPatients.length === 0" class="text-center q-pa-md">
+              <QIcon name="smart_toy" size="2rem" color="grey" class="q-mb-md" />
+              <div class="text-grey-6">No agents found</div>
             </div>
           </QCardSection>
         </QCard>
@@ -637,8 +579,7 @@ export default defineComponent({
     const isAssigningAgent = ref(false);
     const isLoadingAgents = ref(false);
     const isResettingPasskey = ref(false);
-    const isLoadingSessions = ref(false);
-    const isSigningOutUser = ref(null);
+    const isLoadingAgentsPatients = ref(false);
     const users = ref([]);
     const agents = ref([]);
     const selectedAgent = ref(null);
@@ -648,12 +589,8 @@ export default defineComponent({
     const adminNotes = ref('');
     const errorMessage = ref('');
     
-    // Session status
-    const sessionStatus = ref({
-      authenticatedUsers: [],
-      deepLinkUsers: [],
-      unknownUserSessions: []
-    });
+    // Agents and Patients
+    const agentsAndPatients = ref([]);
     
     // Admin registration form
     const adminForm = ref({
@@ -1243,90 +1180,106 @@ export default defineComponent({
       }
     };
 
-    // Session management methods
-    const loadSessionStatus = async () => {
-      // Skip admin check since admin auth is bypassed for testing
-      // In production, uncomment: if (!isAdmin.value) return;
-      
-      console.log('[*] [Admin Panel] Refreshing sessions list from database');
-      isLoadingSessions.value = true;
-      try {
-        const response = await fetch('/api/admin-management/sessions');
-        if (response.ok) {
-          const data = await response.json();
-          sessionStatus.value = data;
-        } else {
-          // Check for 429 rate limiting specifically
-          if (response.status === 429) {
-            const errorData = await response.json().catch(() => ({}));
-            console.warn('🚨 [Browser] Admin Panel Sessions: Cloudant Rate Limit Exceeded (429)', {
-              endpoint: '/api/admin-management/sessions',
-              error: errorData.error || 'Rate limit exceeded',
-              retryAfter: errorData.retryAfter || '30 seconds',
-              suggestion: errorData.suggestion || 'Please wait and try again',
-              timestamp: new Date().toISOString()
-            });
-            
-            $q.notify({
-              type: 'warning',
-              message: 'Rate limit exceeded while loading sessions. Please wait and try again.',
-              timeout: 8000,
-              actions: [
-                { label: 'Retry in 30s', handler: () => setTimeout(loadSessionStatus, 30000) }
-              ]
-            });
-            return;
-          }
-          throw new Error('Failed to load session status');
-        }
-      } catch (error) {
-        console.error('Error loading session status:', error);
-        $q.notify({
-          type: 'negative',
-          message: `Failed to load session status: ${error.message}`
-        });
-      } finally {
-        isLoadingSessions.value = false;
+    // Agents and Patients methods
+    const loadAgentsAndPatients = async () => {
+      console.log('[*] [Admin Panel] loadAgentsAndPatients called, isAdmin:', isAdmin.value);
+      if (!isAdmin.value) {
+        console.log('[*] [Admin Panel] Not admin, skipping loadAgentsAndPatients');
+        return;
       }
-    };
-
-    const signOutUser = async (sessionId) => {
-      isSigningOutUser.value = sessionId;
+      
+      console.log('[*] [Admin Panel] Loading agents and patients');
+      isLoadingAgentsPatients.value = true;
       try {
-        const response = await fetch(`/api/admin-management/sessions/${sessionId}/signout`, {
-          method: 'POST'
+        // Use the same API call as Agent Badge - get ALL agents without filtering
+        const agentsResponse = await fetch('/api/agents?user=admin');
+        if (!agentsResponse.ok) {
+          throw new Error('Failed to load agents');
+        }
+        const agentsData = await agentsResponse.json();
+        
+        console.log(`[*] [Admin Panel] Fetched ${agentsData.length} agents from DigitalOcean API`);
+        
+        // Get user data to determine ownership
+        let usersData = [];
+        try {
+          const usersResponse = await fetch('/api/admin-management/users');
+          if (usersResponse.ok) {
+            const usersResult = await usersResponse.json();
+            usersData = usersResult.users || [];
+            console.log(`[*] [Admin Panel] Fetched ${usersData.length} users for ownership mapping`);
+          }
+        } catch (error) {
+          console.error('[*] [Admin Panel] Error fetching users for ownership:', error);
+        }
+        
+        // Process each agent - knowledge bases are already included from DigitalOcean API
+        const processedAgents = agentsData.map((agent) => {
+          let patientName = 'No Knowledge Base';
+          let owner = 'Public Agent'; // Default for agents without assigned users
+          
+          // Knowledge bases are already included in the agent data from DigitalOcean API
+          if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
+            // Use first word of first KB name as patient name
+            const firstKB = agent.knowledgeBases[0];
+            const firstWord = firstKB.name.split('-')[0];
+            
+            if (agent.knowledgeBases.length === 1) {
+              patientName = firstWord;
+            } else {
+              patientName = `${firstWord}+${agent.knowledgeBases.length - 1}`;
+            }
+          }
+          
+          // Determine owner: Use Display Name if there's an assigned agent, otherwise "Public Agent"
+          const userWithAgent = usersData.find(user => 
+            user.assignedAgentId === agent.id || 
+            (user.assignedAgentName && user.assignedAgentName === agent.name)
+          );
+          
+          if (userWithAgent) {
+            owner = userWithAgent.displayName || userWithAgent.userId;
+          }
+          
+          return {
+            id: agent.id,
+            name: agent.name,
+            patientName: patientName,
+            owner: owner,
+            chatCount: 0, // Placeholder - will be updated later
+            lastActivity: 'Unknown', // Placeholder - will be updated later
+            status: agent.status,
+            knowledgeBases: agent.knowledgeBases || []
+          };
         });
         
-        if (response.ok) {
-          $q.notify({
-            type: 'positive',
-            message: 'User signed out successfully'
-          });
-          
-          // Refresh session status
-          await loadSessionStatus();
-        } else {
-          throw new Error('Failed to sign out user');
-        }
+        agentsAndPatients.value = processedAgents;
+        
       } catch (error) {
-        console.error('Error signing out user:', error);
+        console.error('Error loading agents and patients:', error);
         $q.notify({
           type: 'negative',
-          message: `Failed to sign out user: ${error.message}`
+          message: `Failed to load agents and patients: ${error.message}`
         });
       } finally {
-        isSigningOutUser.value = null;
+        isLoadingAgentsPatients.value = false;
       }
     };
     
     // Lifecycle
     onMounted(async () => {
+      console.log('[*] [Admin Panel] onMounted called');
       checkUrlParameters();
-      checkAdminStatus();
+      await checkAdminStatus();
+      console.log('[*] [Admin Panel] checkAdminStatus completed, isAdmin:', isAdmin.value);
       
-      // Always load session status since admin auth is bypassed for testing
-      // In production, this should be conditional on isAdmin.value
-      await loadSessionStatus();
+      // Load agents and patients when admin is available
+      if (isAdmin.value) {
+        console.log('[*] [Admin Panel] isAdmin is true, calling loadAgentsAndPatients');
+        await loadAgentsAndPatients();
+      } else {
+        console.log('[*] [Admin Panel] isAdmin is false, not calling loadAgentsAndPatients');
+      }
     });
     
     // Check URL parameters for error messages
@@ -1363,8 +1316,7 @@ export default defineComponent({
       isAssigningAgent,
       isLoadingAgents,
       isResettingPasskey,
-      isLoadingSessions,
-      isSigningOutUser,
+      isLoadingAgentsPatients,
       users,
       agents,
       selectedAgent,
@@ -1376,7 +1328,7 @@ export default defineComponent({
       showPasskeyRegistration,
       isRegisteringPasskey,
       passkeyStatus,
-      sessionStatus,
+      agentsAndPatients,
       userColumns,
       stats,
       errorMessage,
@@ -1385,8 +1337,7 @@ export default defineComponent({
       skipPasskeyRegistration,
       loadUsers,
       loadAgents,
-      loadSessionStatus,
-      signOutUser,
+      loadAgentsAndPatients,
       viewUserDetails,
       approveUser,
       resetUserPasskey,
@@ -1500,16 +1451,20 @@ export default defineComponent({
   background-color: #f1f8e9;
 }
 
-.session-status {
+.agents-patients {
   margin-bottom: 30px;
 }
 
-.session-item {
+.agent-patient-item {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: #fafafa;
   transition: all 0.2s ease;
 }
 
-.session-item:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.agent-patient-item:hover {
+  background-color: #f0f0f0;
+  border-color: #d0d0d0;
 }
 </style>
