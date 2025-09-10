@@ -1512,6 +1512,9 @@ export default defineComponent({
       }
       
       isLoading.value = true;
+      console.log(`🔍 [AgentManagementDialog] loadAgentInfo called for user: ${localCurrentUser.value.userId}`);
+      console.log(`🔍 [AgentManagementDialog] User type: ${localCurrentUser.value.userId?.startsWith('deep_link_') ? 'Deep Link User' : 'Regular User'}`);
+      
       try {
         // For authenticated users, only load current agent if they have been approved
         // For unauthenticated users (legacy), load current agent from legacy system
@@ -1552,47 +1555,81 @@ export default defineComponent({
         } else {
           // Authenticated user - check if they have an assigned agent
           if (localCurrentUser.value?.userId) {
-            try {
-              const assignedAgentResponse = await fetch(
-                `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
-                { credentials: 'include' }
-              );
-              if (assignedAgentResponse.ok) {
-                const assignedAgentData = await assignedAgentResponse.json();
-                console.log(`🔍 [DEBUG] assigned-agent response for ${localCurrentUser.value.userId}:`, assignedAgentData);
-                if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
-                  // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
-                  const currentAgentResponse = await fetch(
-                    `${API_BASE_URL}/current-agent`,
-                    { credentials: 'include' }
-                  );
-                  if (currentAgentResponse.ok) {
-                    const currentAgentData = await currentAgentResponse.json();
-                    if (currentAgentData.agent) {
-                      currentAgent.value = currentAgentData.agent;
-                      console.log(
-                        `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
-                      );
-                      
-                      // Handle warnings from the API
-                      if (currentAgentData.warning) {
-                        console.warn(currentAgentData.warning);
-                      }
-                    } else {
-                      currentAgent.value = null;
-                      console.log("🤖 No agent configured for authenticated user");
+            // For deep link users, get the current agent directly (which will return the patient's agent)
+            if (localCurrentUser.value.userId.startsWith('deep_link_')) {
+              console.log(`🔍 [AgentManagementDialog] Deep link user detected: ${localCurrentUser.value.userId}`);
+              console.log(`🔍 [AgentManagementDialog] Getting patient's agent from /api/current-agent`);
+              
+              try {
+                const currentAgentResponse = await fetch(
+                  `${API_BASE_URL}/current-agent`,
+                  { credentials: 'include' }
+                );
+                if (currentAgentResponse.ok) {
+                  const currentAgentData = await currentAgentResponse.json();
+                  console.log(`🔍 [AgentManagementDialog] Current agent response for deep link user:`, currentAgentData);
+                  
+                  if (currentAgentData.agent) {
+                    currentAgent.value = currentAgentData.agent;
+                    console.log(`🤖 Current agent loaded for deep link user: ${currentAgentData.agent.name}`);
+                    
+                    // Handle warnings from the API
+                    if (currentAgentData.warning) {
+                      console.warn(currentAgentData.warning);
                     }
                   } else {
-                    // Fallback to mock agent if API fails
-                  currentAgent.value = {
-                    id: assignedAgentData.assignedAgentId,
-                    name: assignedAgentData.assignedAgentName,
-                    status: 'active',
-                    type: 'assigned',
-                    assignedAt: assignedAgentData.agentAssignedAt
-                  };
-                    console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
+                    currentAgent.value = null;
+                    console.log("🤖 No agent configured for deep link user");
                   }
+                } else {
+                  console.log(`🔍 [AgentManagementDialog] Failed to get current agent for deep link user: ${currentAgentResponse.status}`);
+                }
+              } catch (error) {
+                console.error(`🔍 [AgentManagementDialog] Error getting current agent for deep link user:`, error);
+              }
+            } else {
+              // Regular authenticated user - check assigned agent first
+              try {
+                const assignedAgentResponse = await fetch(
+                  `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
+                  { credentials: 'include' }
+                );
+                if (assignedAgentResponse.ok) {
+                  const assignedAgentData = await assignedAgentResponse.json();
+                  console.log(`🔍 [DEBUG] assigned-agent response for ${localCurrentUser.value.userId}:`, assignedAgentData);
+                  if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
+                    // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
+                    const currentAgentResponse = await fetch(
+                      `${API_BASE_URL}/current-agent`,
+                      { credentials: 'include' }
+                    );
+                    if (currentAgentResponse.ok) {
+                      const currentAgentData = await currentAgentResponse.json();
+                      if (currentAgentData.agent) {
+                        currentAgent.value = currentAgentData.agent;
+                        console.log(
+                          `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
+                        );
+                        
+                        // Handle warnings from the API
+                        if (currentAgentData.warning) {
+                          console.warn(currentAgentData.warning);
+                        }
+                      } else {
+                        currentAgent.value = null;
+                        console.log("🤖 No agent configured for authenticated user");
+                      }
+                    } else {
+                      // Fallback to mock agent if API fails
+                    currentAgent.value = {
+                      id: assignedAgentData.assignedAgentId,
+                      name: assignedAgentData.assignedAgentName,
+                      status: 'active',
+                      type: 'assigned',
+                      assignedAt: assignedAgentData.agentAssignedAt
+                    };
+                      console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
+                    }
                   
                   // Only log once per session to prevent duplicates
                   if (!hasLoggedAgentAssignment.value) {
@@ -1618,6 +1655,7 @@ export default defineComponent({
             } catch (error) {
               console.warn("🔐 Failed to check assigned agent:", error);
               currentAgent.value = null;
+            }
             }
           } else {
             currentAgent.value = null;

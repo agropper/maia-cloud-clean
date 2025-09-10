@@ -327,12 +327,8 @@ export default defineComponent({
         await nextTick();
         
         // Trigger agent refresh to ensure the Agent badge updates with new user
-        // Only fetch if we don't already have an agent to prevent overriding
-        if (!currentAgent.value) {
-          await fetchCurrentAgent();
-        } else {
-          // Agent already exists, skipping fetch
-        }
+        // Always fetch for deep link users to get the patient's assigned agent
+        await fetchCurrentAgent();
         
         writeMessage(`Welcome ${userData.name}! Loaded shared group chat from ${groupChat.currentUser}`, "success");
         
