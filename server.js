@@ -1144,10 +1144,27 @@ app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
 
   try {
+    console.log('🔍 [DEBUG] /api/personal-chat received request:');
+    console.log('  - chatHistory length:', req.body.chatHistory?.length);
+    console.log('  - newValue:', req.body.newValue);
+    console.log('  - currentUser:', req.body.currentUser);
+
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
+    
+    console.log('🔍 [DEBUG] chatHistory before filtering:');
+    console.log('  - length:', chatHistory?.length);
+    if (chatHistory?.length > 0) {
+      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
+    }
     
     // Filter out any existing system messages since the GenAI agent has its own system prompt
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
+
+    console.log('🔍 [DEBUG] chatHistory after filtering system messages:');
+    console.log('  - length:', chatHistory?.length);
+    if (chatHistory?.length > 0) {
+      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
+    }
 
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
@@ -1174,7 +1191,18 @@ app.post('/api/personal-chat', async (req, res) => {
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
-    const newChatHistory = chatHistory;
+    console.log('🔍 [DEBUG] chatHistory received from frontend:');
+    console.log('  - length:', chatHistory.length);
+    if (chatHistory.length > 0) {
+      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
+    }
+    
+    // Create a copy of chatHistory to avoid modifying the original
+    const newChatHistory = [...chatHistory];
+    
+    console.log('🔍 [DEBUG] newChatHistory created as copy:');
+    console.log('  - length:', newChatHistory.length);
+    console.log('  - is same reference as chatHistory:', newChatHistory === chatHistory);
 
     // Determine which agent to use based on user assignment
     // Initialize with defaults (will be overridden by deep link logic or regular user logic)
@@ -1510,10 +1538,18 @@ app.post('/api/personal-chat', async (req, res) => {
     }
     
     // Add the response with proper name field
+    console.log('🔍 [DEBUG] About to add AI response to newChatHistory:');
+    console.log('  - current length:', newChatHistory.length);
+    console.log('  - AI response:', response.choices[0].message);
+    
     newChatHistory.push({
       ...response.choices[0].message,
       name: 'Personal AI'
     });
+    
+    console.log('🔍 [DEBUG] After adding AI response:');
+    console.log('  - new length:', newChatHistory.length);
+    console.log('  - last message:', newChatHistory[newChatHistory.length - 1]);
 
     // Update agent activity
     updateAgentActivity(agentId, currentUser);

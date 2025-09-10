@@ -52,8 +52,16 @@ export const sendQuery = async (
   const startTime = Date.now()
   
   try {
+    console.log('🔍 [DEBUG] sendQuery called with:');
+    console.log('  - uri:', uri);
+    console.log('  - chatHistory length:', chatHistory.length);
+    console.log('  - currentUser:', currentUser);
+    console.log('  - appState.currentQuery:', appState.currentQuery);
+    
     // Add the user's message to chat history with correct display name
     const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Unknown User'
+    console.log('🔍 [DEBUG] userDisplayName determined as:', userDisplayName);
+    
     const updatedChatHistory = [
       ...chatHistory,
       {
@@ -62,12 +70,20 @@ export const sendQuery = async (
         name: userDisplayName
       }
     ]
+    
+    console.log('🔍 [DEBUG] updatedChatHistory after adding user message:');
+    console.log('  - length:', updatedChatHistory.length);
+    console.log('  - last message:', updatedChatHistory[updatedChatHistory.length - 1]);
 
     const chatHistoryToSend = updatedChatHistory.map(msg => ({
       role: msg.role,
       content: msg.content,
       ...(msg as any).name && { name: (msg as any).name }
     }));
+    
+    console.log('🔍 [DEBUG] chatHistoryToSend prepared for backend:');
+    console.log('  - length:', chatHistoryToSend.length);
+    console.log('  - last message:', chatHistoryToSend[chatHistoryToSend.length - 1]);
 
     // Calculate context size and tokens for frontend logging
     let contextSize = 0
