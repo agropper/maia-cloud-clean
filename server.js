@@ -1432,7 +1432,10 @@ app.post('/api/personal-chat', async (req, res) => {
     }
 
     const params = {
-      messages: chatHistory, // Frontend already includes the user message
+      messages: [
+        ...chatHistory,
+        { role: 'user', content: aiUserMessage }
+      ],
       model: agentModel
     };
 
@@ -1621,7 +1624,10 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1000,
-      messages: cleanChatHistory // Frontend already includes the user message
+      messages: [
+        ...cleanChatHistory,
+        { role: 'user', content: aiUserMessage }
+      ]
     });
 
     const responseTime = Date.now() - startTime;
@@ -1632,6 +1638,7 @@ app.post('/api/anthropic-chat', async (req, res) => {
     
     const newChatHistory = [
       ...chatHistory,
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.content[0].text, name: 'Anthropic' }
     ];
 
@@ -1737,6 +1744,7 @@ app.post('/api/gemini-chat', async (req, res) => {
     
     const newChatHistory = [
       ...chatHistory,
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: text, name: 'Gemini' }
     ];
 
@@ -1783,7 +1791,10 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     
     const response = await deepseek.chat.completions.create({
       model: 'deepseek-chat',
-      messages: cleanChatHistory // Frontend already includes the user message
+      messages: [
+        ...cleanChatHistory,
+        { role: 'user', content: aiUserMessage }
+      ]
     });
 
     const responseTime = Date.now() - startTime;
@@ -1794,6 +1805,7 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     
     const newChatHistory = [
       ...chatHistory,
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.choices[0].message.content, name: 'DeepSeek' }
     ];
 
@@ -1847,7 +1859,10 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     
     const response = await chatgpt.chat.completions.create({
       model: 'gpt-4o',
-      messages: formattedMessages // Frontend already includes the user message
+      messages: [
+        ...formattedMessages,
+        { role: 'user', content: aiUserMessage }
+      ]
     });
 
     const responseTime = Date.now() - startTime;
@@ -1858,6 +1873,7 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     
     const newChatHistory = [
       ...chatHistory,
+      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.choices[0].message.content, name: 'ChatGPT' }
     ];
 
