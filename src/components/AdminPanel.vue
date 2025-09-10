@@ -540,7 +540,7 @@
     <!-- Group Management Modal for Agent Chats -->
     <GroupManagementModal
       v-model="showGroupModal"
-      :currentUser="selectedAgentForChats"
+      :currentUser="selectedAgentForChats?.owner || 'Unknown User'"
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
     />
@@ -1332,7 +1332,8 @@ export default defineComponent({
             owner = userWithAgent.displayName || userWithAgent.userId;
             console.log(`[*] [Admin Panel] Found owner for ${agent.name}: ${owner}`);
           } else {
-            console.log(`[*] [Admin Panel] No owner found for ${agent.name}, using Public Agent`);
+            owner = 'Unknown User';
+            console.log(`[*] [Admin Panel] No owner found for ${agent.name}, using Unknown User`);
           }
           
           return {
