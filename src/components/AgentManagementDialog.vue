@@ -35,15 +35,28 @@
             />
           </div>
 
+          <!-- Deep Link User Text Prompt -->
+          <div v-if="isDeepLinkUser" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #4caf50;">
+              <div class="row items-center">
+                <q-icon name="link" color="positive" size="1.2rem" class="q-mr-sm" />
+                <div>
+                  <strong>Shared Chat Access</strong><br>
+                  The Private AI is controlled by the patient. You are viewing a shared chat with access to the patient's knowledge base and AI agent.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Unknown User Text Prompt -->
-          <div v-if="!isAuthenticated" class="q-mb-lg">
+          <div v-else-if="!isAuthenticated" class="q-mb-lg">
             <div class="text-caption text-grey-7 q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
               The Unknown User is a shared demo environment. You must sign-in to request a private agent and to create knowledge bases from real health records.
             </div>
           </div>
 
         <!-- Workflow Progress Section - Only for authenticated users -->
-        <div v-if="isAuthenticated" class="q-mb-lg">
+        <div v-else-if="isAuthenticated" class="q-mb-lg">
           <!-- Show detailed progress list only when no agent or no KBs -->
           <div v-if="!currentAgent || !currentAgent.knowledgeBases || currentAgent.knowledgeBases.length === 0">
           <h6 class="q-mb-sm">🔐 Private AI Setup Progress</h6>
@@ -104,8 +117,8 @@
             />
           </div>
 
-          <!-- Choose Files Button (when agent is assigned) - Only for authenticated users -->
-          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated" class="q-mt-md text-center">
+          <!-- Choose Files Button (when agent is assigned) - Only for authenticated users (not deep link users) -->
+          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CREATE KNOWLEDGE BASE"
               color="positive"
@@ -115,8 +128,8 @@
             />
           </div>
 
-          <!-- Cancel Request Button (when on Step 3) - Only for authenticated users -->
-          <div v-if="workflowSteps[2].current && isAuthenticated" class="q-mt-md text-center">
+          <!-- Cancel Request Button (when on Step 3) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[2].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CANCEL REQUEST"
               color="warning"
@@ -126,8 +139,8 @@
             />
         </div>
 
-          <!-- Cancel Indexing Button (when on Step 6) - Only for authenticated users -->
-          <div v-if="workflowSteps[5].current && isAuthenticated" class="q-mt-md text-center">
+          <!-- Cancel Indexing Button (when on Step 6) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CANCEL INDEXING"
               color="warning"
@@ -137,8 +150,8 @@
             />
                   </div>
 
-          <!-- Start Indexing Button (when on Step 6 but no indexing job) - Only for authenticated users -->
-          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started') && isAuthenticated" class="q-mt-md text-center">
+          <!-- Start Indexing Button (when on Step 6 but no indexing job) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started') && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="START INDEXING"
               color="primary"
@@ -149,8 +162,8 @@
                 </div>
               </div>
 
-          <!-- Show manage button when agent and KBs are ready - Only for authenticated users -->
-          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0 && isAuthenticated" class="q-mt-md text-center">
+          <!-- Show manage button when agent and KBs are ready - Only for authenticated users (not deep link users) -->
+          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0 && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="MANAGE HEALTH RECORDS KNOWLEDGE BASES"
               color="primary"
@@ -188,8 +201,8 @@
           </div>
         </div>
 
-        <!-- Agent Actions (if agent exists) - Only for authenticated users -->
-        <div v-if="currentAgent && isAuthenticated" class="q-mb-md">
+        <!-- Agent Actions (if agent exists) - Only for authenticated users (not deep link users) -->
+        <div v-if="currentAgent && isAuthenticated && !isDeepLinkUser" class="q-mb-md">
           <div class="row q-gutter-md">
             <q-btn
               label="Update Agent"
@@ -222,8 +235,8 @@
         <div v-else>
 
 
-          <!-- No Agent Configured - Only for Unknown User -->
-          <div v-if="!currentAgent && !isAuthenticated" class="text-center q-pa-md">
+          <!-- No Agent Configured - Only for Unknown User (not deep link users) -->
+          <div v-if="!currentAgent && !isAuthenticated && !isDeepLinkUser" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
@@ -239,8 +252,8 @@
             />
           </div>
 
-          <!-- Assigned Agent Display (for authenticated users) -->
-          <div v-if="isAuthenticated && currentAgent && currentAgent.type === 'assigned'" class="text-center q-pa-md">
+          <!-- Assigned Agent Display (for authenticated users, not deep link users) -->
+          <div v-if="isAuthenticated && !isDeepLinkUser && currentAgent && currentAgent.type === 'assigned'" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="positive" />
             <div class="text-h6 q-mt-md text-positive">Agent Assigned!</div>
             <div class="text-subtitle1 q-mb-sm">{{ currentAgent.name }}</div>
@@ -263,8 +276,8 @@
           <div v-if="currentAgent">
           </div>
 
-          <!-- Knowledge Base Section - Always show for all users -->
-            <q-card flat bordered class="q-mb-md">
+          <!-- Knowledge Base Section - Only show for authenticated users (not deep link users) -->
+            <q-card v-if="!isDeepLinkUser" flat bordered class="q-mb-md">
               <q-card-section>
                 <div class="row items-center q-mb-sm">
                   <q-icon name="library_books" color="secondary" />
@@ -273,8 +286,8 @@
                   >
                 </div>
 
-                <!-- Create New Knowledge Base Button - Only for authenticated users -->
-                <div v-if="isAuthenticated" class="q-mb-md">
+                <!-- Create New Knowledge Base Button - Only for authenticated users (not deep link users) -->
+                <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
                   <q-btn
                     label="Create New Knowledge Base"
                     color="primary"
@@ -1220,6 +1233,11 @@ export default defineComponent({
     const currentWorkflowStep = computed(() => {
       const currentStep = workflowSteps.value.find(step => step.current);
       return currentStep ? currentStep.title : '';
+    });
+
+    // Check if current user is a deep link user
+    const isDeepLinkUser = computed(() => {
+      return localCurrentUser.value?.userId?.startsWith('deep_link_') || false;
     });
 
     // Check if user is already authenticated from passkey system
@@ -3516,6 +3534,7 @@ export default defineComponent({
       refreshAgentData,
       currentWorkflowStep,
       handleManageKnowledgeBases,
+      isDeepLinkUser,
     };
 
 

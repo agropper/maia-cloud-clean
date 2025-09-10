@@ -81,7 +81,8 @@ export const useGroupChat = () => {
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
     currentUser: string,
-    connectedKB: string
+    connectedKB: string,
+    displayName?: string
   ): Promise<SaveGroupChatResponse> => {
     try {
       // Process files before sending to server
@@ -96,7 +97,8 @@ export const useGroupChat = () => {
           chatHistory,
           uploadedFiles: processedFiles,
           currentUser,
-          connectedKB
+          connectedKB,
+          displayName
         }),
       })
 
@@ -175,7 +177,8 @@ export const useGroupChat = () => {
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
     currentUser: string,
-    connectedKB: string
+    connectedKB: string,
+    displayName?: string
   ): Promise<SaveGroupChatResponse> => {
     try {
       // Process files before sending to server
@@ -190,7 +193,8 @@ export const useGroupChat = () => {
           chatHistory,
           uploadedFiles: processedFiles,
           currentUser,
-          connectedKB
+          connectedKB,
+          displayName
         }),
       })
 

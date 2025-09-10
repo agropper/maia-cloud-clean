@@ -52,7 +52,18 @@ export const sendQuery = async (
   const startTime = Date.now()
   
   try {
-    const chatHistoryToSend = chatHistory.map(msg => ({
+    // Add the user's message to chat history with correct display name
+    const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Unknown User'
+    const updatedChatHistory = [
+      ...chatHistory,
+      {
+        role: 'user' as const,
+        content: appState.currentQuery || '',
+        name: userDisplayName
+      }
+    ]
+
+    const chatHistoryToSend = updatedChatHistory.map(msg => ({
       role: msg.role,
       content: msg.content,
       ...(msg as any).name && { name: (msg as any).name }

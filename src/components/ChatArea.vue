@@ -492,25 +492,29 @@ export default defineComponent({
           // Update existing group chat
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+          const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
           console.log('🔄 Updating existing group chat:', this.appState.currentChatId)
           result = await updateGroupChat(
             this.appState.currentChatId,
             this.appState.chatHistory,
             this.appState.uploadedFiles,
             userId,
-            connectedKB
+            connectedKB,
+            displayName
           )
         } else {
           // Create new group chat for signed-in user (not deep link users)
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+          const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
           console.log('🆕 Creating new group chat for user:', userId)
   
           result = await saveGroupChat(
             this.appState.chatHistory,
             this.appState.uploadedFiles,
             userId,
-            connectedKB
+            connectedKB,
+            displayName
           )
           
           // Store the new chat ID for future updates
@@ -596,6 +600,7 @@ export default defineComponent({
         
         // Extract user ID string for consistent filtering
         const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+        const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
         
         // Get connected KB info
         const connectedKB = this.appState.selectedAI || 'No KB connected'
@@ -606,7 +611,8 @@ export default defineComponent({
           this.appState.chatHistory,
           this.appState.uploadedFiles,
           userId,
-          connectedKB
+          connectedKB,
+          displayName
         )
         
         // Store the new chat ID for future updates

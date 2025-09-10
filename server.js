@@ -1172,10 +1172,9 @@ app.post('/api/personal-chat', async (req, res) => {
     // Prioritize userId over displayName to ensure deep link users are detected correctly
     let currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || req.session?.userId || 'Unknown User';
     
-    const newChatHistory = [
-      ...chatHistory,
-      { role: 'user', content: cleanUserMessage, name: currentUser }
-    ];
+    // Frontend now adds the user's message to chat history, so we don't need to add it here
+    // The chatHistory already contains the user's message with the correct display name
+    const newChatHistory = chatHistory;
 
     // Determine which agent to use based on user assignment
     // Initialize with defaults (will be overridden by deep link logic or regular user logic)
@@ -1525,16 +1524,12 @@ app.post('/api/personal-chat', async (req, res) => {
     console.error(`❌ Personal AI error (${responseTime}ms):`, error.message);
     
     // Fallback to mock response on error
-    let { chatHistory, newValue } = req.body;
+    let { chatHistory } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
     
-    // Get current user for error response
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
-    
-    const mockResponse = mockAIResponses['personal-chat'](newValue);
+    const mockResponse = mockAIResponses['personal-chat'](req.body.newValue || '');
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: newValue, name: currentUser },
       { role: 'assistant', content: mockResponse, name: 'Personal AI (Fallback)' }
     ];
     
@@ -1897,6 +1892,9 @@ app.post('/api/save-group-chat', async (req, res) => {
   try {
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
+    // For deep link users, use displayName for better readability in chat history
+    const chatDisplayName = req.body.displayName || currentUser || 'Unknown User';
+    
     if (!chatHistory || chatHistory.length === 0) {
       return res.status(400).json({ message: 'No chat history to save' });
     }
@@ -1928,7 +1926,7 @@ app.post('/api/save-group-chat', async (req, res) => {
       _id: `group_chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'group_chat',
       shareId: shareId,
-      currentUser: currentUser || 'Unknown User',
+      currentUser: chatDisplayName,
       connectedKB: connectedKB || 'No KB connected',
       chatHistory,
       uploadedFiles: processedUploadedFiles,
@@ -2195,6 +2193,9 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     const { chatId } = req.params;
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
+    // For deep link users, use displayName for better readability in chat history
+    const chatDisplayName = req.body.displayName || currentUser || 'Unknown User';
+    
     if (!chatHistory || chatHistory.length === 0) {
       return res.status(400).json({ message: 'No chat history to update' });
     }
@@ -2220,6 +2221,7 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     // Update the chat document
     const updatedChatDoc = {
       ...existingChat,
+      currentUser: chatDisplayName, // Update to use display name for better readability
       chatHistory,
       uploadedFiles: processedUploadedFiles,
       updatedAt: new Date().toISOString(),
