@@ -221,7 +221,7 @@
                        <div class="text-body2">
                          <strong>{{ agent.name }}</strong> |
                          Patient: <strong>{{ agent.patientName }}</strong> |
-                         Owner: {{ agent.owner }} |
+                         Current User: {{ agent.owner }} |
                          
                          <!-- Chats Button - Same style as Bottom Toolbar -->
                          <div class="tooltip-wrapper" style="display: inline-block; margin: 0 8px;">
@@ -1223,17 +1223,26 @@ export default defineComponent({
             (user.assignedAgentName && user.assignedAgentName === agent.name)
           );
           
+          let ownerName = 'Unknown User';
           if (userWithAgent) {
-            // Filter groups by the owner's currentUser
-            const ownerName = userWithAgent.displayName || userWithAgent.userId;
-            const filteredGroups = allGroups.filter(group => group.currentUser === ownerName);
-            agent.chatCount = filteredGroups.length;
-          } else {
-            // No owner found - this means it's a "Public Agent" (Unknown User)
-            // Show all chats for Unknown User
-            const filteredGroups = allGroups.filter(group => group.currentUser === 'Unknown User');
-            agent.chatCount = filteredGroups.length;
+            ownerName = userWithAgent.displayName || userWithAgent.userId;
           }
+          
+          // Filter groups by the owner - use same logic as patient view for consistency
+          const filteredGroups = allGroups.filter(group => {
+            // Use the same filtering logic as GroupManagementModal and ChatArea
+            // This ensures consistency between patient and admin views
+            
+            // Check if this chat belongs to the owner (patient)
+            const isOwner = group.currentUser === ownerName;
+            
+            // Also check patientOwner field for backward compatibility
+            const isPatientOwner = group.patientOwner === ownerName;
+            
+            return isOwner || isPatientOwner;
+          });
+          
+          agent.chatCount = filteredGroups.length;
         }
       } catch (error) {
         console.error('Error loading chat counts:', error);
@@ -1261,8 +1270,19 @@ export default defineComponent({
             ownerName = userWithAgent.displayName || userWithAgent.userId;
           }
           
-          // Get chats for this owner
-          const ownerChats = allGroups.filter(group => group.currentUser === ownerName);
+          // Get chats for this owner - use same logic as patient view for consistency
+          const ownerChats = allGroups.filter(group => {
+            // Use the same filtering logic as GroupManagementModal and ChatArea
+            // This ensures consistency between patient and admin views
+            
+            // Check if this chat belongs to the owner (patient)
+            const isOwner = group.currentUser === ownerName;
+            
+            // Also check patientOwner field for backward compatibility
+            const isPatientOwner = group.patientOwner === ownerName;
+            
+            return isOwner || isPatientOwner;
+          });
           
           let lastActivity = null;
           

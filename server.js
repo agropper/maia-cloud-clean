@@ -1144,27 +1144,11 @@ app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    console.log('🔍 [DEBUG] /api/personal-chat received request:');
-    console.log('  - chatHistory length:', req.body.chatHistory?.length);
-    console.log('  - newValue:', req.body.newValue);
-    console.log('  - currentUser:', req.body.currentUser);
-
+    // Process personal chat request
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
-    
-    console.log('🔍 [DEBUG] chatHistory before filtering:');
-    console.log('  - length:', chatHistory?.length);
-    if (chatHistory?.length > 0) {
-      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
-    }
     
     // Filter out any existing system messages since the GenAI agent has its own system prompt
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
-
-    console.log('🔍 [DEBUG] chatHistory after filtering system messages:');
-    console.log('  - length:', chatHistory?.length);
-    if (chatHistory?.length > 0) {
-      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
-    }
 
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
@@ -1191,18 +1175,9 @@ app.post('/api/personal-chat', async (req, res) => {
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
-    console.log('🔍 [DEBUG] chatHistory received from frontend:');
-    console.log('  - length:', chatHistory.length);
-    if (chatHistory.length > 0) {
-      console.log('  - last message:', chatHistory[chatHistory.length - 1]);
-    }
     
     // Create a copy of chatHistory to avoid modifying the original
     const newChatHistory = [...chatHistory];
-    
-    console.log('🔍 [DEBUG] newChatHistory created as copy:');
-    console.log('  - length:', newChatHistory.length);
-    console.log('  - is same reference as chatHistory:', newChatHistory === chatHistory);
 
     // Determine which agent to use based on user assignment
     // Initialize with defaults (will be overridden by deep link logic or regular user logic)
@@ -1963,6 +1938,7 @@ app.post('/api/save-group-chat', async (req, res) => {
       type: 'group_chat',
       shareId: shareId,
       currentUser: chatDisplayName,
+      patientOwner: currentUser, // The patient who owns this chat (never changes)
       connectedKB: connectedKB || 'No KB connected',
       chatHistory,
       uploadedFiles: processedUploadedFiles,
@@ -2255,10 +2231,10 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     });
 
     // Update the chat document
-    // For existing chats, preserve the original currentUser (owner) and only update content
+    // For existing chats, preserve the original currentUser (owner) and patientOwner, only update content
     const updatedChatDoc = {
       ...existingChat,
-      // Don't change currentUser - preserve original ownership
+      // Don't change currentUser or patientOwner - preserve original ownership
       chatHistory,
       uploadedFiles: processedUploadedFiles,
       updatedAt: new Date().toISOString(),
