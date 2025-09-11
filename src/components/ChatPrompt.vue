@@ -489,12 +489,6 @@ export default defineComponent({
         return;
       }
       
-      // Prevent sending empty messages
-      if (!appState.currentQuery || appState.currentQuery.trim() === '') {
-        console.log('🔍 [DEBUG] triggerSendQuery called with empty query, ignoring');
-        return;
-      }
-      
       console.log('🔍 [DEBUG] triggerSendQuery called with query:', appState.currentQuery);
       
       // If Private AI is selected and chatHistory is empty, only use the default if the input is empty or matches the default
@@ -515,6 +509,12 @@ export default defineComponent({
           appState.currentQuery = defaultPrompt;
         }
         // Otherwise, use what the user typed (do nothing)
+      }
+      
+      // Prevent sending empty messages (after default prompt logic)
+      if (!appState.currentQuery || appState.currentQuery.trim() === '') {
+        console.log('🔍 [DEBUG] triggerSendQuery called with empty query, ignoring');
+        return;
       }
 
       try {
