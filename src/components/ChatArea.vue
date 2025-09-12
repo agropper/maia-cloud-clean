@@ -273,8 +273,10 @@ export default defineComponent({
                         
                         // Always refresh group count when user changes (for sign-in/sign-out)
                         if (this.isUserReady) {
-                  
-                          this.loadGroupCount()
+                          // Add delay to avoid 429 errors during rapid user changes
+                          setTimeout(() => {
+                            this.loadGroupCount()
+                          }, 300);
                         }
                       }
                     },
@@ -284,8 +286,10 @@ export default defineComponent({
                         
                         // Only load data when user becomes ready (not when becoming unready)
                         if (isReady && !wasReady) {
-                  
-                          this.loadInitialData()
+                          // Delay loading to avoid 429 errors during app initialization
+                          setTimeout(() => {
+                            this.loadInitialData()
+                          }, 500);
                         }
                       },
                       immediate: true

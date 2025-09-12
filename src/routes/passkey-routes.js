@@ -17,6 +17,12 @@ export const setCouchDBClient = (client) => {
   couchDBClient = client;
 };
 
+// Pass cache functions to the routes
+let cacheFunctions = null;
+export const setCacheFunctions = (functions) => {
+  cacheFunctions = functions;
+};
+
 // Relying party configuration
 const rpName = "HIEofOne.org";
 
@@ -616,7 +622,18 @@ router.get("/auth-status", async (req, res) => {
     
     if (req.session && req.session.userId) {
       // User is authenticated, get current user info
-      const userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+      let userDoc = null;
+      if (cacheFunctions) {
+        userDoc = cacheFunctions.getCache('users', req.session.userId);
+        if (!cacheFunctions.isCacheValid('users', req.session.userId)) {
+          userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+          if (userDoc) {
+            cacheFunctions.setCache('users', req.session.userId, userDoc);
+          }
+        }
+      } else {
+        userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+      }
       if (userDoc) {
         // Echo current user to backend console
         console.log(`✅ [auth-status] Current user: ${userDoc._id}`);

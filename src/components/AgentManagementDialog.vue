@@ -1529,6 +1529,9 @@ export default defineComponent({
         return;
       }
       
+      // Add delay to avoid 429 errors during app initialization
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       isLoading.value = true;
       console.log(`🔍 [AgentManagementDialog] loadAgentInfo called for user: ${localCurrentUser.value.userId}`);
       console.log(`🔍 [AgentManagementDialog] User type: ${localCurrentUser.value.userId?.startsWith('deep_link_') ? 'Deep Link User' : 'Regular User'}`);

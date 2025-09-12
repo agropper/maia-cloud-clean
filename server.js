@@ -1529,6 +1529,9 @@ app.post('/api/personal-chat', async (req, res) => {
     // Update agent activity
     updateAgentActivity(agentId, currentUser);
 
+    // Invalidate chat cache since we may have modified chat data
+    invalidateCache('chats');
+
     res.json(newChatHistory);
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -1966,6 +1969,9 @@ app.post('/api/save-group-chat', async (req, res) => {
     const result = await couchDBClient.saveChat(groupChatDoc);
     console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
     
+    // Invalidate chat cache since we added new chat data
+    invalidateCache('chats');
+    
     res.json({ 
       success: true, 
       chatId: result.id,
@@ -2157,7 +2163,11 @@ app.get('/api/shared/:shareId', async (req, res) => {
 app.get('/api/group-chats', async (req, res) => {
   try {
     // Get all chats - frontend will handle filtering based on authentication
-    const allChats = await couchDBClient.getAllChats();
+    let allChats = getCache('chats');
+    if (!isCacheValid('chats')) {
+      allChats = await couchDBClient.getAllChats();
+      setCache('chats', null, allChats);
+    }
     
     // Transform the response to match the frontend GroupChat interface
     // Exclude large file content to prevent response size issues
@@ -2246,6 +2256,9 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     const result = await couchDBClient.saveChat(updatedChatDoc);
     console.log(`🔄 Group chat updated: ${chatId}`);
     
+    // Invalidate chat cache since we modified chat data
+    invalidateCache('chats');
+    
     res.json({ 
       success: true, 
       chatId: result.id,
@@ -2319,6 +2332,10 @@ app.delete('/api/group-chats/:chatId', async (req, res) => {
     await couchDBClient.deleteChat(chatId);
     
     console.log(`🗑️ Deleted chat: ${chatId}`);
+    
+    // Invalidate chat cache since we deleted chat data
+    invalidateCache('chats');
+    
     res.json({ success: true, message: 'Group chat deleted successfully' });
   } catch (error) {
     console.error('❌ Delete group chat error:', error);
@@ -2981,7 +2998,13 @@ app.get('/api/current-agent', async (req, res) => {
         try {
           // Get the deep link user's session to find the shareId
           console.log(`🔗 [DEBUG] Step 2: Looking up deep link user document in maia_users...`);
-          const deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          let deepLinkUserDoc = getCache('users', currentUser);
+          if (!isCacheValid('users', currentUser)) {
+            deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
+            if (deepLinkUserDoc) {
+              setCache('users', currentUser, deepLinkUserDoc);
+            }
+          }
           console.log(`🔗 [DEBUG] Step 2 Result:`, deepLinkUserDoc ? {
             userId: deepLinkUserDoc.userId,
             shareId: deepLinkUserDoc.shareId,
@@ -2993,7 +3016,11 @@ app.get('/api/current-agent', async (req, res) => {
             console.log(`🔗 [DEBUG] Step 3: Looking for chat with shareId: ${deepLinkUserDoc.shareId}`);
             
             // Find the chat document with this shareId to get the patient
-      const allChats = await couchDBClient.getAllChats();
+            let allChats = getCache('chats');
+            if (!isCacheValid('chats')) {
+              allChats = await couchDBClient.getAllChats();
+              setCache('chats', null, allChats);
+            }
             console.log(`🔗 [DEBUG] Step 3a: Found ${allChats.length} total chats`);
             
             // Debug: Show all shareIds in chats
@@ -3083,7 +3110,11 @@ app.get('/api/current-agent', async (req, res) => {
     // Get group chat count for current user
     let groupChatCount = 0;
     try {
-      const allChats = await couchDBClient.getAllChats();
+      let allChats = getCache('chats');
+      if (!isCacheValid('chats')) {
+        allChats = await couchDBClient.getAllChats();
+        setCache('chats', null, allChats);
+      }
       // Get all chats for the current user
       const userChats = allChats.filter(chat => {
         if (typeof chat.currentUser === 'string') {
@@ -3105,7 +3136,13 @@ app.get('/api/current-agent', async (req, res) => {
       if (currentUser !== 'Unknown User') {
         // Check if user has a current agent selection stored in Cloudant
         try {
-          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          let userDoc = getCache('users', currentUser);
+          if (!isCacheValid('users', currentUser)) {
+            userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+            if (userDoc) {
+              setCache('users', currentUser, userDoc);
+            }
+          }
           if (userDoc && userDoc.currentAgentId) {
             agentId = userDoc.currentAgentId;
             console.log(`🔐 [current-agent] Using user's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
@@ -3128,7 +3165,13 @@ app.get('/api/current-agent', async (req, res) => {
       } else {
         // For Unknown User, check if they have a current agent selection stored in Cloudant
         try {
-          const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          let userDoc = getCache('users', 'Unknown User');
+          if (!isCacheValid('users', 'Unknown User')) {
+            userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+            if (userDoc) {
+              setCache('users', 'Unknown User', userDoc);
+            }
+          }
           console.log(`🔍 [current-agent] Retrieved Unknown User document:`, userDoc);
           if (userDoc && userDoc.currentAgentId) {
             // Check if the selected agent is still available to Unknown User (not owned by authenticated users)
@@ -5096,10 +5139,83 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
 import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateAgentActivity } from './src/routes/admin-management-routes.js';
 
+// In-memory caching system to prevent redundant Cloudant calls
+const dataCache = {
+  users: new Map(), // userId -> userDocument
+  chats: new Map(), // 'all' -> allChatsArray
+  agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
+  lastUpdated: {
+    users: new Map(), // userId -> timestamp
+    chats: 0, // timestamp
+    agentAssignments: new Map() // userId -> timestamp
+  },
+  
+  // Cache TTL (Time To Live) in milliseconds
+  TTL: {
+    users: 5 * 60 * 1000, // 5 minutes
+    chats: 2 * 60 * 1000, // 2 minutes  
+    agentAssignments: 5 * 60 * 1000 // 5 minutes
+  }
+};
+
+// Cache helper functions
+const isCacheValid = (cacheType, key = null) => {
+  const now = Date.now();
+  if (cacheType === 'chats') {
+    return dataCache.lastUpdated.chats > 0 && (now - dataCache.lastUpdated.chats) < dataCache.TTL.chats;
+  }
+  if (key) {
+    const lastUpdate = dataCache.lastUpdated[cacheType].get(key);
+    return lastUpdate && (now - lastUpdate) < dataCache.TTL[cacheType];
+  }
+  return false;
+};
+
+const setCache = (cacheType, key, data) => {
+  const now = Date.now();
+  if (cacheType === 'chats') {
+    dataCache.chats.set('all', data);
+    dataCache.lastUpdated.chats = now;
+  } else {
+    dataCache[cacheType].set(key, data);
+    dataCache.lastUpdated[cacheType].set(key, now);
+  }
+};
+
+const getCache = (cacheType, key = null) => {
+  if (cacheType === 'chats') {
+    return dataCache.chats.get('all');
+  }
+  return dataCache[cacheType].get(key);
+};
+
+const invalidateCache = (cacheType, key = null) => {
+  if (cacheType === 'chats') {
+    dataCache.chats.clear();
+    dataCache.lastUpdated.chats = 0;
+  } else if (key) {
+    dataCache[cacheType].delete(key);
+    dataCache.lastUpdated[cacheType].delete(key);
+  } else {
+    dataCache[cacheType].clear();
+    dataCache.lastUpdated[cacheType].clear();
+  }
+};
+
 // MAIA2 routes removed - using consolidated maia_users database
 
 // Pass the CouchDB client to the routes
 setCouchDBClient(couchDBClient);
+
+// Pass cache functions to routes that need them
+const setCacheFunctions = (routeModule) => {
+  if (routeModule.setCacheFunctions) {
+    routeModule.setCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
+  }
+};
+
+// Set cache functions for passkey routes
+setCacheFunctions(passkeyRoutes);
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
 
