@@ -621,6 +621,9 @@ router.get("/auth-status", async (req, res) => {
     console.log(`🔍 [auth-status] Session userId: ${req.session?.userId}`);
     
     if (req.session && req.session.userId) {
+      console.log(`🔍 [auth-status] Session found with userId: ${req.session.userId}`);
+      console.log(`🔍 [auth-status] Session type: ${req.session.sessionType}`);
+      
       // Check if this is a deep link user - they should not be authenticated on main app
       if (req.session.userId.startsWith('deep_link_')) {
         console.log(`🔗 [auth-status] Deep link user detected on main app: ${req.session.userId}`);
@@ -631,12 +634,16 @@ router.get("/auth-status", async (req, res) => {
           deepLinkId: req.session.deepLinkId
         });
         
+        // Store deepLinkId before destroying session
+        const deepLinkId = req.session.deepLinkId;
+        
         // Clear the session for deep link users on main app
         req.session.destroy();
+        console.log(`🔗 [auth-status] Session destroyed, returning redirect to: ${deepLinkId ? `/shared/${deepLinkId}` : '/'}`);
         res.json({ 
           authenticated: false, 
           message: "Deep link users should only access shared pages",
-          redirectTo: req.session.deepLinkId ? `/shared/${req.session.deepLinkId}` : '/'
+          redirectTo: deepLinkId ? `/shared/${deepLinkId}` : '/'
         });
         return;
       }

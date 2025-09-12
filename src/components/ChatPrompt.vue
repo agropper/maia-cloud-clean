@@ -231,7 +231,7 @@ export default defineComponent({
         }
         
         const data = await response.json();
-        // console.log(`🔍 [ChatPrompt] Auth status response:`, data);
+        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
           console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
