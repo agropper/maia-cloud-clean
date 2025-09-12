@@ -1657,7 +1657,21 @@ app.post('/api/anthropic-chat', async (req, res) => {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Anthropic error (${responseTime}ms):`, error.message);
-    res.status(500).json({ message: `Server error: ${error.message}` });
+    
+    // Check for specific error types
+    if (error.message && error.message.includes('429')) {
+      res.status(429).json({ 
+        message: 'Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.',
+        errorType: 'RATE_LIMIT'
+      });
+    } else if (error.message && error.message.includes('Request too large')) {
+      res.status(413).json({ 
+        message: 'Document too large for Anthropic. Please use Personal AI for large documents.',
+        errorType: 'TOO_LARGE'
+      });
+    } else {
+      res.status(500).json({ message: `Server error: ${error.message}` });
+    }
   }
 });
 
@@ -1759,7 +1773,21 @@ app.post('/api/gemini-chat', async (req, res) => {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Gemini error (${responseTime}ms):`, error.message);
-    res.status(500).json({ message: `Server error: ${error.message}` });
+    
+    // Check for specific error types
+    if (error.message && error.message.includes('429')) {
+      res.status(429).json({ 
+        message: 'Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.',
+        errorType: 'RATE_LIMIT'
+      });
+    } else if (error.message && error.message.includes('Request too large')) {
+      res.status(413).json({ 
+        message: 'Document too large for Gemini. Please use Personal AI for large documents.',
+        errorType: 'TOO_LARGE'
+      });
+    } else {
+      res.status(500).json({ message: `Server error: ${error.message}` });
+    }
   }
 });
 
@@ -1817,7 +1845,21 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ DeepSeek error (${responseTime}ms):`, error.message);
-    res.status(500).json({ message: `Server error: ${error.message}` });
+    
+    // Check for specific error types
+    if (error.message && error.message.includes('429')) {
+      res.status(429).json({ 
+        message: 'Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.',
+        errorType: 'RATE_LIMIT'
+      });
+    } else if (error.message && error.message.includes('Request too large')) {
+      res.status(413).json({ 
+        message: 'Document too large for DeepSeek. Please use Personal AI for large documents.',
+        errorType: 'TOO_LARGE'
+      });
+    } else {
+      res.status(500).json({ message: `Server error: ${error.message}` });
+    }
   }
 });
 
@@ -1896,7 +1938,21 @@ app.post('/api/chatgpt-chat', async (req, res) => {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ ChatGPT error (${responseTime}ms):`, error.message);
-    res.status(500).json({ message: `Server error: ${error.message}` });
+    
+    // Check for specific error types
+    if (error.message && error.message.includes('429')) {
+      res.status(429).json({ 
+        message: 'Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.',
+        errorType: 'RATE_LIMIT'
+      });
+    } else if (error.message && error.message.includes('Request too large')) {
+      res.status(413).json({ 
+        message: 'Document too large for ChatGPT. Please use Personal AI for large documents.',
+        errorType: 'TOO_LARGE'
+      });
+    } else {
+      res.status(500).json({ message: `Server error: ${error.message}` });
+    }
   }
 });
 

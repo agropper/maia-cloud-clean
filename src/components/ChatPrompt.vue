@@ -550,11 +550,30 @@ export default defineComponent({
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
         appState.isLoading = false;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Query failed:", error);
-        writeMessage("Failed to send query", "error");
+        
+        // Show specific error messages based on error type
+        let errorMessage = "Failed to send query";
+        let warningMessage = "Query failed. Please try again.";
+        
+        if (error.message) {
+          errorMessage = error.message;
+          warningMessage = error.message;
+        }
+        
+        // Add specific handling for rate limits and size limits
+        if (error.status === 429 || (error.errorType === 'RATE_LIMIT')) {
+          errorMessage = "Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.";
+          warningMessage = "Rate limit exceeded. Try Personal AI for large documents.";
+        } else if (error.status === 413 || (error.errorType === 'TOO_LARGE')) {
+          errorMessage = "Document too large. Please use Personal AI for large documents.";
+          warningMessage = "Document too large. Use Personal AI instead.";
+        }
+        
+        writeMessage(errorMessage, "error");
         // Also set agent warning to show error in AgentStatusIndicator
-        agentWarning.value = "Query failed. Please try again.";
+        agentWarning.value = warningMessage;
         appState.isLoading = false;
       }
 
