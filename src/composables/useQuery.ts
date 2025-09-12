@@ -120,7 +120,7 @@ export const sendQuery = async (
     // Add uploaded files context
     if (appState.uploadedFiles && appState.uploadedFiles.length > 0) {
       const filesContext = appState.uploadedFiles.map(file => 
-        `File: ${file.name} (${file.type})\nContent:\n${file.content}`
+        `File: ${file.name} (${file.type})\nContent:\n${file.type === 'pdf' && file.transcript ? file.transcript : file.content}`
       ).join('\n\n')
       const filesBytes = new TextEncoder().encode(filesContext).length
       const filesTokens = estimateTokenCount(filesContext)
