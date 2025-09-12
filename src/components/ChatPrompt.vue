@@ -139,26 +139,18 @@ export default defineComponent({
     // Handle deep link loading - only for actual deep link URLs
     const handleDeepLink = async () => {
       const path = window.location.pathname;
-      console.log('🔗 [ChatPrompt] handleDeepLink called with path:', path);
       
       // Only process if this is a deep link path (not root, not other paths)
       if (path.startsWith('/shared/')) {
         const shareIdMatch = path.match(/^\/shared\/([a-zA-Z0-9]{12})$/);
-        console.log('🔗 [ChatPrompt] Share ID match result:', shareIdMatch);
         
         if (shareIdMatch) {
           const shareId = shareIdMatch[1];
-          console.log('🔗 [ChatPrompt] Valid share ID found:', shareId);
           
           // Store the share ID and show the user identification modal
           pendingShareId.value = shareId;
           showDeepLinkUserModal.value = true;
-          console.log('🔗 [ChatPrompt] Modal should be shown now. showDeepLinkUserModal:', showDeepLinkUserModal.value);
-        } else {
-          console.log('❌ [ChatPrompt] Invalid share ID format');
         }
-      } else {
-        console.log('🔍 [ChatPrompt] Not a deep link path, skipping');
       }
     };
 

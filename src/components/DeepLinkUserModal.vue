@@ -187,19 +187,10 @@ export default defineComponent({
     const isSubmitting = ref(false)
     const showEmailChoiceModal = ref(false)
     const emailChoiceData = ref(null)
-    
-    // Debug logging for email choice modal
-    console.log('🔗 [DeepLinkUserModal] Component initialized, showEmailChoiceModal:', showEmailChoiceModal.value)
 
     const showModal = computed({
-      get: () => {
-        console.log('🔗 [DeepLinkUserModal] showModal getter called, value:', props.modelValue)
-        return props.modelValue
-      },
-      set: (value) => {
-        console.log('🔗 [DeepLinkUserModal] showModal setter called with value:', value)
-        emit('update:modelValue', value)
-      }
+      get: () => props.modelValue,
+      set: (value) => emit('update:modelValue', value)
     })
 
     const isValidEmail = (email: string): boolean => {
@@ -240,16 +231,9 @@ export default defineComponent({
         }
 
         const result = await response.json()
-        console.log('🔗 [Deep Link] User creation result:', result)
 
         // Check if email choice is required
         if (result.requiresEmailChoice) {
-          console.log('⚠️ [Deep Link] Email mismatch detected, showing choice modal')
-          console.log('⚠️ [Deep Link] Email choice data:', {
-            existingUser: result.existingUser,
-            newUser: result.newUser,
-            shareId: props.shareId
-          })
           showEmailChoiceModal.value = true
           emailChoiceData.value = {
             existingUser: result.existingUser,
@@ -257,7 +241,6 @@ export default defineComponent({
             shareId: props.shareId
           }
           isSubmitting.value = false
-          console.log('⚠️ [Deep Link] Email choice modal should be visible now')
           return
         }
 
@@ -277,14 +260,6 @@ export default defineComponent({
 
     const proceedWithUser = async (result) => {
       try {
-        console.log('🔗 [Deep Link] Proceeding with user result:', result)
-        console.log('🔗 [Deep Link] Session data to send:', {
-          shareId: props.shareId,
-          userId: result.userId,
-          userName: userName.value,
-          userEmail: userEmail.value
-        })
-        
         // Create actual session now that user has identified themselves
         const sessionResponse = await fetch(`${API_BASE_URL}/deep-link-session`, {
           method: 'POST',
@@ -299,15 +274,8 @@ export default defineComponent({
           })
         })
 
-        if (sessionResponse.ok) {
-          console.log('✅ [Deep Link] Session created for identified user:', userName.value)
-        } else {
+        if (!sessionResponse.ok) {
           const errorText = await sessionResponse.text()
-          console.error('❌ [Deep Link] Session creation failed:', {
-            status: sessionResponse.status,
-            statusText: sessionResponse.statusText,
-            error: errorText
-          })
           throw new Error(`Session creation failed: ${sessionResponse.status} ${sessionResponse.statusText}`)
         }
 
@@ -368,7 +336,6 @@ export default defineComponent({
         }
 
         const result = await response.json()
-        console.log('🔗 [Deep Link] Email choice result:', result)
 
         // Update the form with the chosen email
         if (choice === 'existing') {
