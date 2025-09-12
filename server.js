@@ -3147,12 +3147,12 @@ app.get('/api/current-agent', async (req, res) => {
   
   try {
     // Get current user from session if available
-    let currentUser = req.session?.userId || 'Unknown User';
+    let currentUser = req.session?.userId || 'Public User';
     console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
-    if (currentUser !== 'Unknown User') {
+    if (currentUser !== 'Public User') {
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
       if (currentUser.startsWith('deep_link_')) {
         console.log(`🔗 [current-agent] Deep link user detected: ${currentUser}, finding patient's agent`);
@@ -4147,7 +4147,7 @@ app.post('/api/current-agent', async (req, res) => {
         // Update user document with current agent selection
         const updatedUserDoc = {
           ...userDoc,
-          _id: 'Unknown User', // Ensure _id is always set
+          _id: 'Public User', // Ensure _id is always set
           currentAgentId: selectedAgent.uuid,
           currentAgentName: selectedAgent.name,
           currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
@@ -4156,11 +4156,11 @@ app.post('/api/current-agent', async (req, res) => {
         };
         
         // Save updated user document
-        console.log(`🔍 Saving Unknown User document:`, updatedUserDoc);
+        console.log(`🔍 Saving Public User document:`, updatedUserDoc);
         await couchDBClient.saveDocument('maia_users', updatedUserDoc);
-        console.log(`✅ Stored current agent selection for Unknown User: ${selectedAgent.name} (${agentId})`);
+        console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
       } catch (userError) {
-        console.error(`❌ Failed to store current agent selection for Unknown User:`, userError);
+        console.error(`❌ Failed to store current agent selection for Public User:`, userError);
       }
     }
     
