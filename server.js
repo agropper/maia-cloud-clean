@@ -2199,7 +2199,21 @@ app.post('/api/deep-link-session', async (req, res) => {
     const { shareId, userId, userName, userEmail } = req.body;
     const sessionId = req.sessionID;
     
+    console.log('🔗 [Deep Link Session] Request data:', {
+      shareId,
+      userId,
+      userName,
+      userEmail,
+      sessionId,
+      hasSession: !!req.session
+    });
+    
     if (!shareId || !userId || !sessionId) {
+      console.log('❌ [Deep Link Session] Missing required fields:', {
+        shareId: !!shareId,
+        userId: !!userId,
+        sessionId: !!sessionId
+      });
       return res.status(400).json({ message: 'Missing required fields' });
     }
     

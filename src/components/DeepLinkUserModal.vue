@@ -231,6 +231,7 @@ export default defineComponent({
         }
 
         const result = await response.json()
+        console.log('🔗 [Deep Link] User creation result:', result)
 
         // Check if email choice is required
         if (result.requiresEmailChoice) {
@@ -261,6 +262,14 @@ export default defineComponent({
 
     const proceedWithUser = async (result) => {
       try {
+        console.log('🔗 [Deep Link] Proceeding with user result:', result)
+        console.log('🔗 [Deep Link] Session data to send:', {
+          shareId: props.shareId,
+          userId: result.userId,
+          userName: userName.value,
+          userEmail: userEmail.value
+        })
+        
         // Create actual session now that user has identified themselves
         const sessionResponse = await fetch(`${API_BASE_URL}/deep-link-session`, {
           method: 'POST',
@@ -277,6 +286,14 @@ export default defineComponent({
 
         if (sessionResponse.ok) {
           console.log('✅ [Deep Link] Session created for identified user:', userName.value)
+        } else {
+          const errorText = await sessionResponse.text()
+          console.error('❌ [Deep Link] Session creation failed:', {
+            status: sessionResponse.status,
+            statusText: sessionResponse.statusText,
+            error: errorText
+          })
+          throw new Error(`Session creation failed: ${sessionResponse.status} ${sessionResponse.statusText}`)
         }
 
         // Emit user identified event with user data
@@ -336,6 +353,7 @@ export default defineComponent({
         }
 
         const result = await response.json()
+        console.log('🔗 [Deep Link] Email choice result:', result)
 
         // Update the form with the chosen email
         if (choice === 'existing') {
