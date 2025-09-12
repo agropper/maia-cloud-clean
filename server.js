@@ -1661,7 +1661,20 @@ app.post('/api/anthropic-chat', async (req, res) => {
     // Calculate token count for error messages (fallback if not available)
     let tokenCount = 0;
     try {
-      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      // Reconstruct the message that would have been sent to AI
+      const { chatHistory, newValue, uploadedFiles } = req.body;
+      let aiUserMessage = newValue || '';
+      
+      // Add uploaded file content if present
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        const fileContent = uploadedFiles.map(file => 
+          file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
+        ).join('\n\n');
+        if (fileContent) {
+          aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+        }
+      }
+      
       tokenCount = estimateTokenCount(aiUserMessage);
     } catch (tokenError) {
       console.warn('Could not calculate token count for error message:', tokenError);
@@ -1681,7 +1694,7 @@ app.post('/api/anthropic-chat', async (req, res) => {
         tokenCount: tokenCount
       });
     } else {
-      res.status(500).json({ message: `Server error: ${error.message}` });
+    res.status(500).json({ message: `Server error: ${error.message}` });
     }
   }
 });
@@ -1788,7 +1801,20 @@ app.post('/api/gemini-chat', async (req, res) => {
     // Calculate token count for error messages (fallback if not available)
     let tokenCount = 0;
     try {
-      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      // Reconstruct the message that would have been sent to AI
+      const { chatHistory, newValue, uploadedFiles } = req.body;
+      let aiUserMessage = newValue || '';
+      
+      // Add uploaded file content if present
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        const fileContent = uploadedFiles.map(file => 
+          file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
+        ).join('\n\n');
+        if (fileContent) {
+          aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+        }
+      }
+      
       tokenCount = estimateTokenCount(aiUserMessage);
     } catch (tokenError) {
       console.warn('Could not calculate token count for error message:', tokenError);
@@ -1808,7 +1834,7 @@ app.post('/api/gemini-chat', async (req, res) => {
         tokenCount: tokenCount
       });
     } else {
-      res.status(500).json({ message: `Server error: ${error.message}` });
+    res.status(500).json({ message: `Server error: ${error.message}` });
     }
   }
 });
@@ -1871,7 +1897,20 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     // Calculate token count for error messages (fallback if not available)
     let tokenCount = 0;
     try {
-      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      // Reconstruct the message that would have been sent to AI
+      const { chatHistory, newValue, uploadedFiles } = req.body;
+      let aiUserMessage = newValue || '';
+      
+      // Add uploaded file content if present
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        const fileContent = uploadedFiles.map(file => 
+          file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
+        ).join('\n\n');
+        if (fileContent) {
+          aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+        }
+      }
+      
       tokenCount = estimateTokenCount(aiUserMessage);
     } catch (tokenError) {
       console.warn('Could not calculate token count for error message:', tokenError);
@@ -1891,7 +1930,7 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
         tokenCount: tokenCount
       });
     } else {
-      res.status(500).json({ message: `Server error: ${error.message}` });
+    res.status(500).json({ message: `Server error: ${error.message}` });
     }
   }
 });
@@ -1975,7 +2014,20 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     // Calculate token count for error messages (fallback if not available)
     let tokenCount = 0;
     try {
-      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      // Reconstruct the message that would have been sent to AI
+      const { chatHistory, newValue, uploadedFiles } = req.body;
+      let aiUserMessage = newValue || '';
+      
+      // Add uploaded file content if present
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        const fileContent = uploadedFiles.map(file => 
+          file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
+        ).join('\n\n');
+        if (fileContent) {
+          aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+        }
+      }
+      
       tokenCount = estimateTokenCount(aiUserMessage);
     } catch (tokenError) {
       console.warn('Could not calculate token count for error message:', tokenError);
@@ -1995,7 +2047,7 @@ app.post('/api/chatgpt-chat', async (req, res) => {
         tokenCount: tokenCount
       });
     } else {
-      res.status(500).json({ message: `Server error: ${error.message}` });
+    res.status(500).json({ message: `Server error: ${error.message}` });
     }
   }
 });
