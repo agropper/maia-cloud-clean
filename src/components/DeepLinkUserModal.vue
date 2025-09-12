@@ -189,8 +189,14 @@ export default defineComponent({
     const emailChoiceData = ref(null)
 
     const showModal = computed({
-      get: () => props.modelValue,
-      set: (value) => emit('update:modelValue', value)
+      get: () => {
+        console.log('🔗 [DeepLinkUserModal] showModal getter called, value:', props.modelValue)
+        return props.modelValue
+      },
+      set: (value) => {
+        console.log('🔗 [DeepLinkUserModal] showModal setter called with value:', value)
+        emit('update:modelValue', value)
+      }
     })
 
     const isValidEmail = (email: string): boolean => {
