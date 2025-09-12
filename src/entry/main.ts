@@ -50,7 +50,7 @@ window.fetch = async (...args) => {
         timestamp: data.timestamp
       });
     } catch (e) {
-      console.log('[*] [Browser] Session verified in maia_sessions database');
+      console.log('[*] [Browser] Session verified (in-memory only)');
     }
   }
   

@@ -742,24 +742,8 @@ router.post("/logout", async (req, res) => {
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
         
-        // Delete session from maia_sessions database
-        try {
-          const sessionDocId = `session_${req.sessionID}`;
-          console.log('[*] [Session Delete] Deleting session from maia_sessions database:', sessionDocId);
-          
-          // Try to get the session document first to check if it exists
-          const existingSession = await couchDBClient.getDocument('maia_sessions', sessionDocId);
-          if (existingSession) {
-            // Physically delete the session document to prevent database growth
-            await couchDBClient.deleteDocument('maia_sessions', sessionDocId);
-            console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');
-          } else {
-            console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');
-          }
-        } catch (error) {
-          console.error('❌ [Session Delete] Error deleting session from maia_sessions database:', error);
-          // Don't fail the logout if session deletion fails
-        }
+        // Session management is now in-memory only (maia_sessions database removed)
+        console.log('[*] [Session Delete] Session destroyed (in-memory only)');
         
         // Send a message to the browser console after session destruction
         res.json({ 

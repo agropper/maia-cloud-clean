@@ -35,8 +35,8 @@ class SessionManager {
     }
 
     try {
-      console.log(`🔍 [SessionManager] Attempting to save session:`, sessionDoc);
-      await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
+      console.log(`🔍 [SessionManager] Session created in-memory only:`, sessionDoc);
+      // Note: maia_sessions database removed - sessions are now in-memory only
       console.log(`✅ Session created: ${sessionType} for ${userId}`);
       return sessionDoc;
     } catch (error) {
@@ -45,33 +45,24 @@ class SessionManager {
     }
   }
 
-  // Get a session by ID
+  // Get a session by ID (in-memory only)
   async getSession(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
-      return sessionDoc;
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      console.log(`🔍 [SessionManager] Session lookup in-memory only: session_${sessionId}`);
+      return null; // Sessions are now managed by express-session middleware
     } catch (error) {
       // Session doesn't exist - this is normal for new sessions
       return null;
     }
   }
 
-  // Update last activity for a session
+  // Update last activity for a session (in-memory only)
   async updateLastActivity(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
-      if (sessionDoc && sessionDoc.isActive) {
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + this.INACTIVITY_TIMEOUT);
-        
-        sessionDoc.lastActivity = now.toISOString();
-        sessionDoc.expiresAt = expiresAt.toISOString();
-        sessionDoc.warningShown = false;
-        sessionDoc.warningShownAt = null;
-
-        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
-        return sessionDoc;
-      }
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      console.log(`🔍 [SessionManager] Session activity update in-memory only: session_${sessionId}`);
+      return null; // Sessions are now managed by express-session middleware
     } catch (error) {
       console.error('❌ Error updating last activity:', error);
     }
@@ -81,7 +72,8 @@ class SessionManager {
   // Check if session is valid and handle inactivity
   async validateSession(sessionId) {
     try {
-      const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', `session_${sessionId}`);
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      const sessionDoc = null;
       
       if (!sessionDoc || !sessionDoc.isActive) {
         return { valid: false, reason: 'Session not found or inactive' };
@@ -101,7 +93,8 @@ class SessionManager {
       if (inactiveMinutes > 9.5 && !sessionDoc.warningShown) {
         sessionDoc.warningShown = true;
         sessionDoc.warningShownAt = now.toISOString();
-        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
+        // Note: maia_sessions database removed - sessions are now in-memory only
+        console.log('🔍 [SessionManager] Session update in-memory only');
         
         return { 
           valid: true, 
@@ -137,7 +130,8 @@ class SessionManager {
         sessionDoc.lastActivity = now.toISOString();
         sessionDoc.expiresAt = expiresAt.toISOString();
         
-        await this.couchDBClient.saveDocument('maia_sessions', sessionDoc);
+        // Note: maia_sessions database removed - sessions are now in-memory only
+        console.log('🔍 [SessionManager] Session update in-memory only');
       }
     } catch (error) {
       console.error('❌ Error updating last activity:', error);
@@ -153,7 +147,8 @@ class SessionManager {
       const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);
       if (sessionDoc) {
         // Physically delete the session document to prevent database growth
-        await this.couchDBClient.deleteDocument('maia_sessions', sessionDocId);
+        // Note: maia_sessions database removed - sessions are now in-memory only
+        console.log('🔍 [SessionManager] Session deletion in-memory only');
         console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');
         console.log(`✅ Session deleted: ${sessionId}`);
       } else {
@@ -167,7 +162,8 @@ class SessionManager {
   // Check for active authenticated sessions (single-user enforcement)
   async hasActiveAuthenticatedSession() {
     try {
-      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      const allSessions = [];
       const activeSessions = allSessions.filter(doc => 
         doc.type === 'session' && 
         doc.isActive && 
@@ -185,7 +181,8 @@ class SessionManager {
   async getAllActiveSessions() {
     try {
       // First, let's see ALL sessions in the database for debugging
-      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      const allSessions = [];
       console.log(`🔍 [SessionManager] DEBUG: Total sessions in database: ${allSessions.length}`);
       console.log(`🔍 [SessionManager] DEBUG: All sessions:`, allSessions.map(s => ({
         _id: s._id,
@@ -204,7 +201,8 @@ class SessionManager {
         }
       };
       
-      const result = await this.couchDBClient.findDocuments('maia_sessions', query);
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      const result = { docs: [] };
       const activeSessions = result.docs;
       console.log(`🔍 [SessionManager] Active sessions found: ${activeSessions.length}`);
       
@@ -251,7 +249,8 @@ class SessionManager {
   // Cleanup expired deep links
   async cleanupExpiredDeepLinks() {
     try {
-      const allSessions = await this.couchDBClient.getAllDocuments('maia_sessions');
+      // Note: maia_sessions database removed - sessions are now in-memory only
+      const allSessions = [];
       const now = new Date();
       
       const expiredDeepLinks = allSessions.filter(doc => 
