@@ -1250,6 +1250,11 @@ export default defineComponent({
             localCurrentUser.value = authData.user;
             isAuthenticated.value = true;
             // User authenticated
+          } else if (authData.redirectTo) {
+            // Deep link user detected on main app - redirect them to their deep link page
+            console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: ${authData.redirectTo}`);
+            window.location.href = authData.redirectTo;
+            return;
           } else {
             // Check if we have a currentUser prop and it's not "Unknown User"
             if (props.currentUser && props.currentUser.userId !== 'Unknown User') {

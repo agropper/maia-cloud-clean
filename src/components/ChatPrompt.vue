@@ -244,6 +244,11 @@ export default defineComponent({
           } catch (error) {
             console.error('❌ [ChatPrompt] Failed to get session verification:', error);
           }
+        } else if (data.redirectTo) {
+          // Deep link user detected on main app - redirect them to their deep link page
+          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
+          window.location.href = data.redirectTo;
+          return;
         } else {
           // console.log(`❌ [ChatPrompt] No authenticated user found`);
           // currentUser.value is already set to Unknown User by default
