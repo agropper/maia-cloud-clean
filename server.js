@@ -5729,6 +5729,71 @@ app.post('/api/deep-link-users', async (req, res) => {
       });
     }
 
+    console.log(`🔍 [Deep Link] Checking for existing user with name: ${name}`);
+
+    // Check if a user with this name already exists
+    const existingUsers = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        displayName: name,
+        isDeepLinkUser: true
+      }
+    });
+
+    if (existingUsers.docs && existingUsers.docs.length > 0) {
+      const existingUser = existingUsers.docs[0];
+      console.log(`🔍 [Deep Link] Found existing user: ${existingUser.displayName} with email: ${existingUser.email}`);
+      
+      // Check if emails match
+      if (existingUser.email.toLowerCase() === email.toLowerCase()) {
+        console.log(`✅ [Deep Link] Email matches existing user, continuing with existing user`);
+        
+        // Update the existing user's access time and shareId
+        const updatedUser = {
+          ...existingUser,
+          shareId,
+          accessTime: accessTime || new Date().toISOString(),
+          userAgent: userAgent || req.get('User-Agent'),
+          ipAddress: ipAddress || req.ip || 'unknown',
+          updatedAt: new Date().toISOString()
+        };
+        
+        await couchDBClient.saveDocument('maia_users', updatedUser);
+        
+        return res.json({
+          success: true,
+          message: 'Using existing user account',
+          userId: existingUser.userId,
+          user: {
+            name: existingUser.displayName,
+            email: existingUser.email,
+            shareId
+          },
+          isExistingUser: true
+        });
+      } else {
+        console.log(`⚠️ [Deep Link] Email mismatch - existing: ${existingUser.email}, new: ${email}`);
+        
+        // Return both emails for user choice
+        return res.json({
+          success: false,
+          requiresEmailChoice: true,
+          message: 'A user with this name already exists with a different email address',
+          existingUser: {
+            name: existingUser.displayName,
+            email: existingUser.email,
+            userId: existingUser.userId
+          },
+          newUser: {
+            name,
+            email
+          }
+        });
+      }
+    }
+
+    // No existing user found, create new one
+    console.log(`🆕 [Deep Link] No existing user found, creating new user: ${name}`);
+
     // Create unique user ID for deep link users
     const userId = `deep_link_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -5762,13 +5827,99 @@ app.post('/api/deep-link-users', async (req, res) => {
         name,
         email,
         shareId
-      }
+      },
+      isExistingUser: false
     });
 
   } catch (error) {
     console.error('❌ Error saving deep link user:', error);
     res.status(500).json({ 
       error: 'Failed to save user information',
+      details: error.message 
+    });
+  }
+});
+
+// Handle user email choice when there's a mismatch
+app.post('/api/deep-link-users/choose-email', async (req, res) => {
+  try {
+    const { choice, existingUserId, newEmail, shareId, accessTime, userAgent, ipAddress } = req.body;
+    
+    if (!choice || !existingUserId || !shareId) {
+      return res.status(400).json({ 
+        error: 'Choice, existingUserId, and shareId are required' 
+      });
+    }
+
+    console.log(`🔍 [Deep Link] User chose: ${choice} for existing user: ${existingUserId}`);
+
+    // Get the existing user
+    const existingUser = await couchDBClient.getDocument('maia_users', existingUserId);
+    
+    if (!existingUser) {
+      return res.status(404).json({ 
+        error: 'Existing user not found' 
+      });
+    }
+
+    let finalUser = existingUser;
+    let message = 'Using existing user account';
+
+    if (choice === 'new') {
+      // User chose to use the new email - update the existing user
+      console.log(`🔄 [Deep Link] Updating existing user email from ${existingUser.email} to ${newEmail}`);
+      
+      finalUser = {
+        ...existingUser,
+        email: newEmail,
+        shareId,
+        accessTime: accessTime || new Date().toISOString(),
+        userAgent: userAgent || req.get('User-Agent'),
+        ipAddress: ipAddress || req.ip || 'unknown',
+        updatedAt: new Date().toISOString()
+      };
+      
+      await couchDBClient.saveDocument('maia_users', finalUser);
+      message = 'Updated existing user with new email address';
+    } else if (choice === 'existing') {
+      // User chose to use the existing email - just update access info
+      console.log(`✅ [Deep Link] Using existing user email: ${existingUser.email}`);
+      
+      finalUser = {
+        ...existingUser,
+        shareId,
+        accessTime: accessTime || new Date().toISOString(),
+        userAgent: userAgent || req.get('User-Agent'),
+        ipAddress: ipAddress || req.ip || 'unknown',
+        updatedAt: new Date().toISOString()
+      };
+      
+      await couchDBClient.saveDocument('maia_users', finalUser);
+      message = 'Using existing user account';
+    } else {
+      return res.status(400).json({ 
+        error: 'Invalid choice. Must be "existing" or "new"' 
+      });
+    }
+
+    console.log(`✅ [Deep Link] Email choice processed: ${message}`);
+    
+    res.json({
+      success: true,
+      message,
+      userId: finalUser.userId,
+      user: {
+        name: finalUser.displayName,
+        email: finalUser.email,
+        shareId
+      },
+      isExistingUser: true
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing email choice:', error);
+    res.status(500).json({ 
+      error: 'Failed to process email choice',
       details: error.message 
     });
   }
