@@ -623,6 +623,7 @@ router.get("/auth-status", async (req, res) => {
     if (req.session && req.session.userId) {
       console.log(`🔍 [auth-status] Session found with userId: ${req.session.userId}`);
       console.log(`🔍 [auth-status] Session type: ${req.session.sessionType}`);
+      console.log(`🔍 [auth-status] Checking if userId starts with 'deep_link_': ${req.session.userId.startsWith('deep_link_')}`);
       
       // Check if this is a deep link user - they should not be authenticated on main app
       if (req.session.userId.startsWith('deep_link_')) {
