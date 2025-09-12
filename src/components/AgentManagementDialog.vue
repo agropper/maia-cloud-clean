@@ -1243,6 +1243,14 @@ export default defineComponent({
     // Check if user is already authenticated from passkey system
     const checkAuthenticationStatus = async () => {
       try {
+        // For deep link users, skip the auth-status API call and use props directly
+        if (props.currentUser && props.currentUser.userId?.startsWith('deep_link_')) {
+          localCurrentUser.value = props.currentUser;
+          isAuthenticated.value = true;
+          console.log(`🔗 [AgentManagementDialog] Deep link user authenticated via props: ${props.currentUser.userId}`);
+          return;
+        }
+        
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
         if (response.ok) {
           const authData = await response.json();
