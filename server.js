@@ -1831,6 +1831,17 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     let { chatHistory = [], newValue, uploadedFiles = [] } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
+    // Debug: Log what we received
+    console.log('🔍 [ChatGPT] Received request:');
+    console.log('  - chatHistory length:', chatHistory.length);
+    console.log('  - newValue:', newValue);
+    console.log('  - uploadedFiles count:', uploadedFiles?.length || 0);
+    console.log('  - uploadedFiles details:', uploadedFiles?.map(f => ({
+      name: f.name,
+      type: f.type,
+      contentLength: f.content?.length || 0
+    })));
+
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
     
@@ -1841,6 +1852,9 @@ app.post('/api/chatgpt-chat', async (req, res) => {
         `File: ${file.name} (${file.type})\nContent:\n${file.content}`
       ).join('\n\n');
       aiContext = `Uploaded files context:\n${filesContext}\n\n`;
+      console.log('🔍 [ChatGPT] Generated aiContext length:', aiContext.length);
+    } else {
+      console.log('🔍 [ChatGPT] No uploaded files to process');
     }
     
     // Combine context with user message for AI

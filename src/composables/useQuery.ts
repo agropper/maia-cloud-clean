@@ -130,6 +130,12 @@ export const sendQuery = async (
     console.log('  - uri:', uri);
     console.log('  - chatHistoryToSend length:', chatHistoryToSend.length);
     console.log('  - currentUser:', currentUser);
+    console.log('  - uploadedFiles count:', appState.uploadedFiles?.length || 0);
+    console.log('  - uploadedFiles details:', appState.uploadedFiles?.map(f => ({
+      name: f.name,
+      type: f.type,
+      contentLength: f.content?.length || 0
+    })));
     
     const response = await postData(uri, {
       chatHistory: chatHistoryToSend,
