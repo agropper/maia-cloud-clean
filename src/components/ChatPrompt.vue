@@ -268,19 +268,28 @@ export default defineComponent({
     // Initialize components sequentially to avoid 429 errors
     const initializeApp = async () => {
       try {
-        // Step 1: Check existing session first
+        // Step 1: Check if this is a deep link page first
+        const path = window.location.pathname;
+        if (path.startsWith('/shared/')) {
+          console.log('🔗 [ChatPrompt] Deep link page detected, skipping authentication');
+          // Skip authentication for deep link pages
+          await handleDeepLink();
+          return;
+        }
+        
+        // Step 2: Check existing session for main app pages
         await checkExistingSession();
         
-        // Step 2: Wait a moment to avoid rate limiting
+        // Step 3: Wait a moment to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Step 3: Fetch current agent
+        // Step 4: Fetch current agent
         await fetchCurrentAgent();
         
-        // Step 4: Wait a moment to avoid rate limiting
+        // Step 5: Wait a moment to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Step 5: Handle deep link loading
+        // Step 6: Handle deep link loading (for main app pages)
         await handleDeepLink();
       } catch (error) {
         console.error('❌ [ChatPrompt] Error during app initialization:', error);
