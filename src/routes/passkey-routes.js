@@ -113,7 +113,6 @@ if (isCloud && rpID === 'localhost') {
 
 // Add a function to log config on each request for debugging
 const logPasskeyConfig = () => {
-  console.log("🔍 [REQUEST] Passkey Config - rpID:", rpID, "origin:", origin, "NODE_ENV:", process.env.NODE_ENV);
 };
 
 // Check if user ID is available
@@ -139,7 +138,6 @@ router.post("/check-user", async (req, res) => {
           existingUser.credentialPublicKey && 
           existingUser.counter !== undefined);
         
-        console.log(`🔍 [check-user] User ${userId} exists, hasValidPasskey: ${hasValidPasskey}`);
         
         res.json({
           available: !hasValidPasskey, // Available if no valid passkey
@@ -186,7 +184,6 @@ router.post("/check-user", async (req, res) => {
 router.post("/register", async (req, res) => {
   try {
     logPasskeyConfig(); // Log config on each request
-    console.log("🔍 Registration request received");
     const { userId, displayName, adminSecret } = req.body;
 
     if (!userId || !displayName) {
@@ -194,7 +191,6 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "User ID and display name are required" });
     }
 
-    console.log("🔍 Checking if user exists:", userId);
 
     // Check if user already exists
     let existingUser;
@@ -210,7 +206,6 @@ router.post("/register", async (req, res) => {
     }
 
     if (existingUser) {
-      console.log("🔍 User already exists, checking if they need passkey registration:", userId);
       
       // If user already has a passkey, check for admin replacement
       if (existingUser.credentialID) {
@@ -221,7 +216,6 @@ router.post("/register", async (req, res) => {
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
           // Admin override: Allow admin to reset any user's passkey
           console.log("✅ Admin override: Allowing passkey reset for user:", userId);
-          console.log("🔍 Admin secret verified, proceeding with passkey replacement");
           // Continue with registration (replace existing passkey)
         } else {
           console.log("❌ User already has a passkey:", userId);
@@ -237,7 +231,6 @@ router.post("/register", async (req, res) => {
       }
     }
 
-    console.log("🔍 Generating registration options for:", userId);
 
     // Generate registration options
     const options = await generateRegistrationOptions({
@@ -254,7 +247,6 @@ router.post("/register", async (req, res) => {
       },
     });
 
-    console.log("🔍 Registration options generated successfully");
 
     // Store challenge in session or temporary storage
     // For now, we'll store it in the user document
@@ -273,7 +265,6 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    console.log("🔍 Attempting to save user document");
 
     // Store user document with challenge for verification
     try {
@@ -284,7 +275,6 @@ router.post("/register", async (req, res) => {
       // If database doesn't exist, create it first
       if (error.message.includes("error happened in your connection")) {
         try {
-                console.log("🔍 Creating maia_users database...");
       await couchDBClient.createDatabase("maia_users");
           await couchDBClient.saveDocument("maia_users", userDoc);
           console.log("✅ Database created and user document saved");

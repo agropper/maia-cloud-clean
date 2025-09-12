@@ -1538,8 +1538,6 @@ export default defineComponent({
       await new Promise(resolve => setTimeout(resolve, 200));
       
       isLoading.value = true;
-      console.log(`🔍 [AgentManagementDialog] loadAgentInfo called for user: ${localCurrentUser.value.userId}`);
-      console.log(`🔍 [AgentManagementDialog] User type: ${localCurrentUser.value.userId?.startsWith('deep_link_') ? 'Deep Link User' : 'Regular User'}`);
       
       try {
         // For authenticated users, only load current agent if they have been approved
@@ -1583,8 +1581,6 @@ export default defineComponent({
           if (localCurrentUser.value?.userId) {
             // For deep link users, get the current agent directly (which will return the patient's agent)
             if (localCurrentUser.value.userId.startsWith('deep_link_')) {
-              console.log(`🔍 [AgentManagementDialog] Deep link user detected: ${localCurrentUser.value.userId}`);
-              console.log(`🔍 [AgentManagementDialog] Getting patient's agent from /api/current-agent`);
               
               try {
                 const currentAgentResponse = await fetch(
@@ -1593,7 +1589,6 @@ export default defineComponent({
                 );
                 if (currentAgentResponse.ok) {
                   const currentAgentData = await currentAgentResponse.json();
-                  console.log(`🔍 [AgentManagementDialog] Current agent response for deep link user:`, currentAgentData);
                   
                   if (currentAgentData.agent) {
                     currentAgent.value = currentAgentData.agent;
@@ -1608,7 +1603,6 @@ export default defineComponent({
                     console.log("🤖 No agent configured for deep link user");
                   }
                 } else {
-                  console.log(`🔍 [AgentManagementDialog] Failed to get current agent for deep link user: ${currentAgentResponse.status}`);
                 }
               } catch (error) {
                 console.error(`🔍 [AgentManagementDialog] Error getting current agent for deep link user:`, error);
@@ -1622,7 +1616,6 @@ export default defineComponent({
                 );
                 if (assignedAgentResponse.ok) {
                   const assignedAgentData = await assignedAgentResponse.json();
-                  console.log(`🔍 [DEBUG] assigned-agent response for ${localCurrentUser.value.userId}:`, assignedAgentData);
                   if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
                     // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
                     const currentAgentResponse = await fetch(
@@ -1671,7 +1664,6 @@ export default defineComponent({
                 }
               } else {
                 currentAgent.value = null;
-                console.log(`🔍 [DEBUG] assigned-agent response NOT ok for ${localCurrentUser.value.userId}:`, assignedAgentResponse.status, assignedAgentResponse.statusText);
                 if (assignedAgentResponse.status === 429) {
                   console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
                 } else {

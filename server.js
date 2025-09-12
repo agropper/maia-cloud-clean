@@ -476,11 +476,8 @@ app.get('/health', (req, res) => {
 // Debug endpoint to test session manager connection
 app.get('/debug/sessions', async (req, res) => {
   try {
-    console.log('🔍 [DEBUG] Testing session manager database connection...');
-    
     // Test the session manager's database connection
     const sessions = await sessionManager.getAllActiveSessions();
-    console.log(`🔍 [DEBUG] Found ${sessions.length} sessions via sessionManager`);
     
     // Test direct database connection
     const query = {
@@ -490,7 +487,6 @@ app.get('/debug/sessions', async (req, res) => {
       }
     };
     const result = await couchDBClient.findDocuments('maia_chats', query);
-    console.log(`🔍 [DEBUG] Found ${result.docs.length} sessions via direct couchDBClient`);
     
     res.json({
       sessionManagerSessions: sessions.length,
@@ -1311,12 +1307,10 @@ app.post('/api/personal-chat', async (req, res) => {
       }
     }
     
-    console.log(`🔍 [personal-chat] After deep link logic - currentUser: ${currentUser}, agentModel: ${agentModel}, agentId: ${agentId}`);
     
     // Skip this for deep link users since we already resolved their patient's agent above
     if (currentUser !== 'Unknown User' && !currentUser.startsWith('deep_link_')) {
       try {
-        console.log(`🔍 [personal-chat] Checking assigned agent for user: ${currentUser}`);
         const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
@@ -1339,20 +1333,16 @@ app.post('/api/personal-chat', async (req, res) => {
                   knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
                 }
               } else {
-                console.log(`🔍 [personal-chat] Agent ${assignedAgentData.assignedAgentName} has no deployment URL`);
               }
             } catch (agentError) {
               console.warn(`Failed to get agent details for ${assignedAgentData.assignedAgentId}:`, agentError.message);
             }
           } else {
-            console.log(`🔍 [personal-chat] No assigned agent for user ${currentUser}, checking current agent selection`);
           }
         } else {
-          console.log(`🔍 [personal-chat] Failed to get assigned agent for user ${currentUser}: ${assignedAgentResponse.status}, using Unknown User's current agent`);
         }
       } catch (error) {
         console.warn(`Failed to check assigned agent for user ${currentUser}:`, error.message);
-        console.log(`🔍 [personal-chat] Using Unknown User's current agent due to error`);
       }
     }
     

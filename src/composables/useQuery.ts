@@ -72,15 +72,8 @@ export const sendQuery = async (
   const startTime = Date.now()
   
   try {
-    console.log('🔍 [DEBUG] sendQuery called with:');
-    console.log('  - uri:', uri);
-    console.log('  - chatHistory length:', chatHistory.length);
-    console.log('  - currentUser:', currentUser);
-    console.log('  - appState.currentQuery:', appState.currentQuery);
-    
     // Add the user's message to chat history with correct display name
     const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Unknown User'
-    console.log('🔍 [DEBUG] userDisplayName determined as:', userDisplayName);
     
     const updatedChatHistory = [
       ...chatHistory,
@@ -91,9 +84,6 @@ export const sendQuery = async (
       }
     ]
     
-    console.log('🔍 [DEBUG] updatedChatHistory after adding user message:');
-    console.log('  - length:', updatedChatHistory.length);
-    console.log('  - last message:', updatedChatHistory[updatedChatHistory.length - 1]);
 
     const chatHistoryToSend = updatedChatHistory.map(msg => ({
       role: msg.role,
@@ -101,9 +91,6 @@ export const sendQuery = async (
       ...(msg as any).name && { name: (msg as any).name }
     }));
     
-    console.log('🔍 [DEBUG] chatHistoryToSend prepared for backend:');
-    console.log('  - length:', chatHistoryToSend.length);
-    console.log('  - last message:', chatHistoryToSend[chatHistoryToSend.length - 1]);
 
     // Calculate context size and tokens for frontend logging
     let contextSize = 0
@@ -146,18 +133,6 @@ export const sendQuery = async (
     const userInfo = currentUser?.displayName || currentUser?.userId || 'Unknown User'
     console.log(`🎯 QUERY DETAILS: User: ${userInfo} | AI: ${aiProvider} | Endpoint: ${uri}`)
     
-    console.log('🔍 [DEBUG] About to send request to backend:');
-    console.log('  - uri:', uri);
-    console.log('  - chatHistoryToSend length:', chatHistoryToSend.length);
-    console.log('  - currentUser:', currentUser);
-    console.log('  - uploadedFiles count:', appState.uploadedFiles?.length || 0);
-    console.log('  - uploadedFiles details:', appState.uploadedFiles?.map(f => ({
-      name: f.name,
-      type: f.type,
-      contentLength: f.content?.length || 0,
-      transcriptLength: f.transcript?.length || 0,
-      willSendContent: f.type === 'pdf' && f.transcript ? f.transcript.length : f.content?.length || 0
-    })));
     
     const response = await postData(uri, {
       chatHistory: chatHistoryToSend,
@@ -172,11 +147,6 @@ export const sendQuery = async (
       currentUser: currentUser // Pass the current user identity to the backend
     });
     
-    console.log('🔍 [DEBUG] Received response from backend:');
-    console.log('  - response length:', response?.length);
-    console.log('  - response type:', typeof response);
-    console.log('  - last message:', response?.[response.length - 1]);
-    console.log('  - full response:', response);
 
     const responseTime = Date.now() - startTime
     const contextKB = Math.round(contextSize / 1024 * 100) / 100
@@ -193,11 +163,6 @@ export const sendQuery = async (
                       uri.includes('chatgpt-chat') ? 'ChatGPT' :
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
-    console.log('🔍 [DEBUG] Error in sendQuery:');
-    console.log('  - error:', error);
-    console.log('  - error.message:', error.message);
-    console.log('  - error.status:', error.status);
-    console.log('  - error.response:', error.response);
     
     // Check if this is an agent selection required error
     if (error.requiresAgentSelection && onAgentSelectionRequired) {
