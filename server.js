@@ -1658,18 +1658,27 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Anthropic error (${responseTime}ms):`, error.message);
     
+    // Calculate token count for error messages (fallback if not available)
+    let tokenCount = 0;
+    try {
+      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      tokenCount = estimateTokenCount(aiUserMessage);
+    } catch (tokenError) {
+      console.warn('Could not calculate token count for error message:', tokenError);
+    }
+    
     // Check for specific error types
     if (error.message && error.message.includes('429')) {
       res.status(429).json({ 
-        message: `Rate limit exceeded (${totalTokens} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
+        message: `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
         errorType: 'RATE_LIMIT',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else if (error.message && error.message.includes('Request too large')) {
       res.status(413).json({ 
-        message: `Document too large for Anthropic (${totalTokens} tokens sent). Please use Personal AI for large documents.`,
+        message: `Document too large for Anthropic (${tokenCount} tokens sent). Please use Personal AI for large documents.`,
         errorType: 'TOO_LARGE',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else {
       res.status(500).json({ message: `Server error: ${error.message}` });
@@ -1776,18 +1785,27 @@ app.post('/api/gemini-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Gemini error (${responseTime}ms):`, error.message);
     
+    // Calculate token count for error messages (fallback if not available)
+    let tokenCount = 0;
+    try {
+      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      tokenCount = estimateTokenCount(aiUserMessage);
+    } catch (tokenError) {
+      console.warn('Could not calculate token count for error message:', tokenError);
+    }
+    
     // Check for specific error types
     if (error.message && error.message.includes('429')) {
       res.status(429).json({ 
-        message: `Rate limit exceeded (${totalTokens} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
+        message: `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
         errorType: 'RATE_LIMIT',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else if (error.message && error.message.includes('Request too large')) {
       res.status(413).json({ 
-        message: `Document too large for Gemini (${totalTokens} tokens sent). Please use Personal AI for large documents.`,
+        message: `Document too large for Gemini (${tokenCount} tokens sent). Please use Personal AI for large documents.`,
         errorType: 'TOO_LARGE',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else {
       res.status(500).json({ message: `Server error: ${error.message}` });
@@ -1850,18 +1868,27 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.error(`❌ DeepSeek error (${responseTime}ms):`, error.message);
     
+    // Calculate token count for error messages (fallback if not available)
+    let tokenCount = 0;
+    try {
+      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      tokenCount = estimateTokenCount(aiUserMessage);
+    } catch (tokenError) {
+      console.warn('Could not calculate token count for error message:', tokenError);
+    }
+    
     // Check for specific error types
     if (error.message && error.message.includes('429')) {
       res.status(429).json({ 
-        message: `Rate limit exceeded (${totalTokens} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
+        message: `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
         errorType: 'RATE_LIMIT',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else if (error.message && error.message.includes('Request too large')) {
       res.status(413).json({ 
-        message: `Document too large for DeepSeek (${totalTokens} tokens sent). Please use Personal AI for large documents.`,
+        message: `Document too large for DeepSeek (${tokenCount} tokens sent). Please use Personal AI for large documents.`,
         errorType: 'TOO_LARGE',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else {
       res.status(500).json({ message: `Server error: ${error.message}` });
@@ -1945,18 +1972,27 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.error(`❌ ChatGPT error (${responseTime}ms):`, error.message);
     
+    // Calculate token count for error messages (fallback if not available)
+    let tokenCount = 0;
+    try {
+      const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+      tokenCount = estimateTokenCount(aiUserMessage);
+    } catch (tokenError) {
+      console.warn('Could not calculate token count for error message:', tokenError);
+    }
+    
     // Check for specific error types
     if (error.message && error.message.includes('429')) {
       res.status(429).json({ 
-        message: `Rate limit exceeded (${totalTokens} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
+        message: `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`,
         errorType: 'RATE_LIMIT',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else if (error.message && error.message.includes('Request too large')) {
       res.status(413).json({ 
-        message: `Document too large for ChatGPT (${totalTokens} tokens sent). Please use Personal AI for large documents.`,
+        message: `Document too large for ChatGPT (${tokenCount} tokens sent). Please use Personal AI for large documents.`,
         errorType: 'TOO_LARGE',
-        tokenCount: totalTokens
+        tokenCount: tokenCount
       });
     } else {
       res.status(500).json({ message: `Server error: ${error.message}` });
