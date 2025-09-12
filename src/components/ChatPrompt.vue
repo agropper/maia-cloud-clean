@@ -308,11 +308,6 @@ export default defineComponent({
     };
 
     const triggerAgentManagement = () => {
-      // Don't allow deep link users to access agent management
-      if (currentUser.value?.userId?.startsWith('deep_link_')) {
-        console.log('🔗 [ChatPrompt] Deep link users cannot access agent management');
-        return;
-      }
       showAgentManagementDialog.value = true;
     };
 
@@ -410,11 +405,6 @@ export default defineComponent({
     };
 
     const handleManageAgent = () => {
-      // Don't allow deep link users to access agent management
-      if (currentUser.value?.userId?.startsWith('deep_link_')) {
-        console.log('🔗 [ChatPrompt] Deep link users cannot access agent management');
-        return;
-      }
       showAgentManagementDialog.value = true;
     };
 
