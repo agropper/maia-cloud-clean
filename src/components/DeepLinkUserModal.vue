@@ -187,6 +187,9 @@ export default defineComponent({
     const isSubmitting = ref(false)
     const showEmailChoiceModal = ref(false)
     const emailChoiceData = ref(null)
+    
+    // Debug logging for email choice modal
+    console.log('🔗 [DeepLinkUserModal] Component initialized, showEmailChoiceModal:', showEmailChoiceModal.value)
 
     const showModal = computed({
       get: () => {
@@ -242,6 +245,11 @@ export default defineComponent({
         // Check if email choice is required
         if (result.requiresEmailChoice) {
           console.log('⚠️ [Deep Link] Email mismatch detected, showing choice modal')
+          console.log('⚠️ [Deep Link] Email choice data:', {
+            existingUser: result.existingUser,
+            newUser: result.newUser,
+            shareId: props.shareId
+          })
           showEmailChoiceModal.value = true
           emailChoiceData.value = {
             existingUser: result.existingUser,
@@ -249,6 +257,7 @@ export default defineComponent({
             shareId: props.shareId
           }
           isSubmitting.value = false
+          console.log('⚠️ [Deep Link] Email choice modal should be visible now')
           return
         }
 
