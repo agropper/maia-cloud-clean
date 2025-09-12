@@ -473,6 +473,101 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Temporary migration endpoint to create Public User document
+app.post('/api/migrate-to-public-user', async (req, res) => {
+  try {
+    console.log('🔧 Starting migration to Public User...');
+    
+    // Step 1: Get Unknown User data
+    const unknownUserDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+    console.log('✅ Found Unknown User (full document):', JSON.stringify(unknownUserDoc, null, 2));
+    
+    // Step 2: Create or update Public User document with same agent assignment
+    let publicUserDoc;
+    try {
+      // Try to get existing Public User document
+      publicUserDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+      console.log('📝 Public User document already exists, updating...');
+      
+      // Update existing document with agent assignment
+      publicUserDoc.assignedAgentId = unknownUserDoc.currentAgentId || unknownUserDoc.assignedAgentId;
+      publicUserDoc.assignedAgentName = unknownUserDoc.currentAgentName || unknownUserDoc.assignedAgentName;
+      publicUserDoc.currentAgentId = unknownUserDoc.currentAgentId || unknownUserDoc.assignedAgentId;
+      publicUserDoc.currentAgentName = unknownUserDoc.currentAgentName || unknownUserDoc.assignedAgentName;
+      publicUserDoc.isPublicUser = true;
+      publicUserDoc.description = 'Shared demo environment for unauthenticated users';
+      
+    } catch (error) {
+      if (error.statusCode === 404) {
+        // Create new document
+        publicUserDoc = {
+          _id: 'Public User',
+          type: 'user',
+          displayName: 'Public User',
+          createdAt: new Date().toISOString(),
+          isPublicUser: true,
+          description: 'Shared demo environment for unauthenticated users',
+          assignedAgentId: unknownUserDoc.currentAgentId || unknownUserDoc.assignedAgentId,
+          assignedAgentName: unknownUserDoc.currentAgentName || unknownUserDoc.assignedAgentName,
+          currentAgentId: unknownUserDoc.currentAgentId || unknownUserDoc.assignedAgentId,
+          currentAgentName: unknownUserDoc.currentAgentName || unknownUserDoc.assignedAgentName
+        };
+        console.log('📝 Creating new Public User document...');
+      } else {
+        throw error;
+      }
+    }
+    
+    await couchDBClient.saveDocument('maia_users', publicUserDoc);
+    console.log('✅ Public User document saved');
+    
+    // Step 3: Update chat references
+    const allChats = await couchDBClient.getAllChats();
+    let updatedCount = 0;
+    
+    for (const chat of allChats) {
+      let needsUpdate = false;
+      const updatedChat = { ...chat };
+      
+      if (chat.currentUser === 'Unknown User') {
+        updatedChat.currentUser = 'Public User';
+        needsUpdate = true;
+      }
+      
+      if (chat.patientOwner === 'Unknown User') {
+        updatedChat.patientOwner = 'Public User';
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        await couchDBClient.saveDocument('maia_chats', updatedChat);
+        updatedCount++;
+        console.log(`✅ Updated chat ${chat._id}: Unknown User → Public User`);
+      }
+    }
+    
+    console.log(`✅ Updated ${updatedCount} chat documents`);
+    
+    res.json({
+      success: true,
+      message: 'Migration completed successfully',
+      publicUserCreated: true,
+      agentAssignment: {
+        assignedAgentId: unknownUserDoc.assignedAgentId,
+        assignedAgentName: unknownUserDoc.assignedAgentName
+      },
+      chatsUpdated: updatedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Debug endpoint to test session manager connection
 app.get('/debug/sessions', async (req, res) => {
   try {
@@ -2761,10 +2856,10 @@ const getAgentApiKey = async (agentId) => {
 // Helper function to check if an agent is available to Public User
 const isAgentAvailableToPublicUser = async (agentId) => {
   try {
-    // Get all authenticated users and their owned agents
+    // Get all authenticated users and their owned agents (exclude both Public User and Unknown User)
     const usersResponse = await couchDBClient.findDocuments('maia_users', {
       selector: {
-        _id: { $ne: 'Public User' },
+        _id: { $nin: ['Public User', 'Unknown User'] },
         ownedAgents: { $exists: true }
       }
     });
@@ -2861,10 +2956,10 @@ app.get('/api/agents', async (req, res) => {
       // Agents without owners effectively belong to Public User
       try {
         console.log(`🔍 [DEBUG] Getting all authenticated users and their owned agents...`);
-        // Get all authenticated users and their owned agents
+        // Get all authenticated users and their owned agents (exclude both Public User and Unknown User)
         const usersResponse = await couchDBClient.findDocuments('maia_users', {
           selector: {
-            _id: { $ne: 'Public User' },
+            _id: { $nin: ['Public User', 'Unknown User'] },
             $or: [
               { ownedAgents: { $exists: true } },
               { assignedAgentId: { $exists: true } }
