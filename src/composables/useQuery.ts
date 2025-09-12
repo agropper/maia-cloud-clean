@@ -134,7 +134,9 @@ export const sendQuery = async (
     console.log('  - uploadedFiles details:', appState.uploadedFiles?.map(f => ({
       name: f.name,
       type: f.type,
-      contentLength: f.content?.length || 0
+      contentLength: f.content?.length || 0,
+      transcriptLength: f.transcript?.length || 0,
+      willSendContent: f.type === 'pdf' && f.transcript ? f.transcript.length : f.content?.length || 0
     })));
     
     const response = await postData(uri, {
@@ -145,7 +147,7 @@ export const sendQuery = async (
         id: file.id,
         name: file.name,
         type: file.type,
-        content: file.content
+        content: file.type === 'pdf' && file.transcript ? file.transcript : file.content
       })),
       currentUser: currentUser // Pass the current user identity to the backend
     });
