@@ -1540,6 +1540,14 @@ export default defineComponent({
       isLoading.value = true;
       
       try {
+        // Check for deep link users first - they should be redirected, not load agent info
+        if (localCurrentUser.value?.userId?.startsWith('deep_link_')) {
+          // Deep link user detected on main app - redirect them to their deep link page
+          console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: /shared/${currentDeepLink.value}`);
+          window.location.href = `/shared/${currentDeepLink.value}`;
+          return;
+        }
+        
         // For authenticated users, only load current agent if they have been approved
         // For unauthenticated users (legacy), load current agent from legacy system
         if (!isAuthenticated.value) {
@@ -1579,35 +1587,6 @@ export default defineComponent({
         } else {
           // Authenticated user - check if they have an assigned agent
           if (localCurrentUser.value?.userId) {
-            // For deep link users, get the current agent directly (which will return the patient's agent)
-            if (localCurrentUser.value.userId.startsWith('deep_link_')) {
-              
-              try {
-                const currentAgentResponse = await fetch(
-                  `${API_BASE_URL}/current-agent`,
-                  { credentials: 'include' }
-                );
-                if (currentAgentResponse.ok) {
-                  const currentAgentData = await currentAgentResponse.json();
-                  
-                  if (currentAgentData.agent) {
-                    currentAgent.value = currentAgentData.agent;
-                    console.log(`🤖 Current agent loaded for deep link user: ${currentAgentData.agent.name}`);
-                    
-                    // Handle warnings from the API
-                    if (currentAgentData.warning) {
-                      console.warn(currentAgentData.warning);
-                    }
-                  } else {
-                    currentAgent.value = null;
-                    console.log("🤖 No agent configured for deep link user");
-                  }
-                } else {
-                }
-              } catch (error) {
-                console.error(`🔍 [AgentManagementDialog] Error getting current agent for deep link user:`, error);
-              }
-            } else {
               // Regular authenticated user - check assigned agent first
               try {
                 const assignedAgentResponse = await fetch(
@@ -1673,7 +1652,6 @@ export default defineComponent({
             } catch (error) {
               console.warn("🔐 Failed to check assigned agent:", error);
               currentAgent.value = null;
-            }
             }
           } else {
             currentAgent.value = null;
