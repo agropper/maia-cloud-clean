@@ -1540,14 +1540,6 @@ export default defineComponent({
       isLoading.value = true;
       
       try {
-        // Check for deep link users first - they should be redirected, not load agent info
-        if (localCurrentUser.value?.userId?.startsWith('deep_link_')) {
-          // Deep link user detected on main app - redirect them to their deep link page
-          console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: /shared/${currentDeepLink.value}`);
-          window.location.href = `/shared/${currentDeepLink.value}`;
-          return;
-        }
-        
         // For authenticated users, only load current agent if they have been approved
         // For unauthenticated users (legacy), load current agent from legacy system
         if (!isAuthenticated.value) {
@@ -1741,6 +1733,14 @@ export default defineComponent({
           message: "Failed to load agent information",
         });
       } finally {
+        // Check if user became a deep link user during loading
+        if (localCurrentUser.value?.userId?.startsWith('deep_link_')) {
+          // Deep link user detected - redirect them to their deep link page
+          console.log(`🔗 [AgentManagementDialog] Deep link user detected during loading, redirecting to: /shared/${currentDeepLink.value}`);
+          window.location.href = `/shared/${currentDeepLink.value}`;
+          return;
+        }
+        
         isLoading.value = false;
       }
     };
