@@ -43,6 +43,9 @@ export const postData = async (uri: string, data: any): Promise<any> => {
         if (errorData.errorType) {
           (errorMessage as any).errorType = errorData.errorType;
         }
+        if (errorData.tokenCount) {
+          (errorMessage as any).tokenCount = errorData.tokenCount;
+        }
       } catch (parseError) {
         // If we can't parse the error response, use the generic message
       }

@@ -564,11 +564,13 @@ export default defineComponent({
         
         // Add specific handling for rate limits and size limits
         if (error.status === 429 || (error.errorType === 'RATE_LIMIT')) {
-          errorMessage = "Rate limit exceeded. Please try again in a minute or use Personal AI for large documents.";
-          warningMessage = "Rate limit exceeded. Try Personal AI for large documents.";
+          const tokenCount = error.tokenCount || 'unknown';
+          errorMessage = `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`;
+          warningMessage = `Rate limit exceeded (${tokenCount} tokens). Try Personal AI for large documents.`;
         } else if (error.status === 413 || (error.errorType === 'TOO_LARGE')) {
-          errorMessage = "Document too large. Please use Personal AI for large documents.";
-          warningMessage = "Document too large. Use Personal AI instead.";
+          const tokenCount = error.tokenCount || 'unknown';
+          errorMessage = `Document too large (${tokenCount} tokens sent). Please use Personal AI for large documents.`;
+          warningMessage = `Document too large (${tokenCount} tokens). Use Personal AI instead.`;
         }
         
         writeMessage(errorMessage, "error");
