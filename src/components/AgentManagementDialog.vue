@@ -1549,8 +1549,8 @@ export default defineComponent({
       
       try {
         // For authenticated users, only load current agent if they have been approved
-        // For unauthenticated users (legacy), load current agent from legacy system
-        if (!isAuthenticated.value) {
+        // For unauthenticated users (legacy) and deep link users, load current agent from legacy system
+        if (!isAuthenticated.value || (localCurrentUser.value?.userId?.startsWith('deep_link_'))) {
           // Load current agent info from legacy system
         const currentAgentResponse = await fetch(
             `${API_BASE_URL}/current-agent`,
@@ -1741,13 +1741,6 @@ export default defineComponent({
           message: "Failed to load agent information",
         });
       } finally {
-        // Check if user became a deep link user during loading
-        if (localCurrentUser.value?.userId?.startsWith('deep_link_')) {
-          // Deep link user detected - redirect them to their deep link page
-          console.log(`🔗 [AgentManagementDialog] Deep link user detected during loading, redirecting to: /shared/${currentDeepLink.value}`);
-          window.location.href = `/shared/${currentDeepLink.value}`;
-          return;
-        }
         
         isLoading.value = false;
       }
