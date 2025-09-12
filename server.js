@@ -2014,21 +2014,29 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     // Calculate token count for error messages (fallback if not available)
     let tokenCount = 0;
     try {
-      // Reconstruct the message that would have been sent to AI
-      const { chatHistory, newValue, uploadedFiles } = req.body;
-      let aiUserMessage = newValue || '';
-      
-      // Add uploaded file content if present
-      if (uploadedFiles && uploadedFiles.length > 0) {
-        const fileContent = uploadedFiles.map(file => 
-          file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
-        ).join('\n\n');
-        if (fileContent) {
-          aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+      // First try to extract token count from the error message itself
+      const tokenMatch = error.message.match(/Requested (\d+)/);
+      if (tokenMatch) {
+        tokenCount = parseInt(tokenMatch[1], 10);
+        console.log(`🔍 [Error] Extracted token count from error message: ${tokenCount}`);
+      } else {
+        // Fallback: reconstruct the message that would have been sent to AI
+        const { chatHistory, newValue, uploadedFiles } = req.body;
+        let aiUserMessage = newValue || '';
+        
+        // Add uploaded file content if present
+        if (uploadedFiles && uploadedFiles.length > 0) {
+          const fileContent = uploadedFiles.map(file => 
+            file.type === 'pdf' && file.transcript ? file.transcript : file.content || ''
+          ).join('\n\n');
+          if (fileContent) {
+            aiUserMessage = `File content:\n${fileContent}\n\nUser query: ${aiUserMessage}`;
+          }
         }
+        
+        tokenCount = estimateTokenCount(aiUserMessage);
+        console.log(`🔍 [Error] Calculated token count from reconstructed message: ${tokenCount}`);
       }
-      
-      tokenCount = estimateTokenCount(aiUserMessage);
     } catch (tokenError) {
       console.warn('Could not calculate token count for error message:', tokenError);
     }
