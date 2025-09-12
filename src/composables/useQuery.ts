@@ -73,7 +73,7 @@ export const sendQuery = async (
   
   try {
     // Add the user's message to chat history with correct display name
-    const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Unknown User'
+    const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Public User'
     
     const updatedChatHistory = [
       ...chatHistory,
@@ -130,7 +130,7 @@ export const sendQuery = async (
                       uri.includes('chatgpt-chat') ? 'ChatGPT' :
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
-    const userInfo = currentUser?.displayName || currentUser?.userId || 'Unknown User'
+    const userInfo = currentUser?.displayName || currentUser?.userId || 'Public User'
     console.log(`🎯 QUERY DETAILS: User: ${userInfo} | AI: ${aiProvider} | Endpoint: ${uri}`)
     
     

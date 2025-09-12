@@ -14,7 +14,7 @@
               {{ agentName }}
               <!-- Sign-in/Sign-out buttons -->
               <q-btn
-                v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
+                v-if="!currentUser || (currentUser && (currentUser.userId === 'Public User' || currentUser.displayName === 'Public User'))"
                 flat
                 dense
                 size="sm"
@@ -142,15 +142,15 @@ export default defineComponent({
     const agentName = computed(() => {
       if (!props.agent) {
         // For authenticated users, show "Agent: none" with user info
-        if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
-          const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
+        if (props.currentUser && props.currentUser.userId !== 'Public User') {
+          const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Public User'
           return `Agent: none • User: ${userName}`
         }
         return 'No Agent Configured'
       }
       
       // Get current user from props - prioritize displayName over userId
-      const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
+      const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Public User'
       
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
@@ -158,7 +158,7 @@ export default defineComponent({
     const statusText = computed(() => {
       if (!props.agent) {
         // For authenticated users, show progress information
-        if (props.currentUser && props.currentUser.userId !== 'Unknown User' && props.currentWorkflowStep) {
+        if (props.currentUser && props.currentUser.userId !== 'Public User' && props.currentWorkflowStep) {
           // Check if Step 2 is completed (not just current)
           const step2 = props.workflowSteps.find(step => step.title === 'Private AI agent requested');
           if (step2 && step2.completed) {
@@ -201,7 +201,7 @@ export default defineComponent({
       }
       
       // For authenticated users, always show the AI agent icon regardless of status
-      if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+      if (props.currentUser && props.currentUser.userId !== 'Public User') {
         return 'smart_toy'
       }
       

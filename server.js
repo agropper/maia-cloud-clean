@@ -1167,7 +1167,7 @@ app.post('/api/personal-chat', async (req, res) => {
 
     // Get current user from request body (frontend) or fall back to session
     // Prioritize userId over displayName to ensure deep link users are detected correctly
-    let currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || req.session?.userId || 'Unknown User';
+    let currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || req.session?.userId || 'Public User';
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
@@ -1290,11 +1290,11 @@ app.post('/api/personal-chat', async (req, res) => {
         console.log(`🔗 [DEBUG] Step ERROR: Exception occurred - agent assignment failed:`, error);
       }
       
-      // If we couldn't find the patient's agent, fall back to Unknown User's agent
+      // If we couldn't find the patient's agent, fall back to Public User's agent
       if (!agentModel) {
-        console.log(`🔗 [personal-chat] Falling back to Unknown User's agent for deep link user`);
-        console.log(`🔗 [DEBUG] Step FALLBACK: No agent found, falling back to Unknown User's agent`);
-        currentUser = 'Unknown User';
+        console.log(`🔗 [personal-chat] Falling back to Public User's agent for deep link user`);
+        console.log(`🔗 [DEBUG] Step FALLBACK: No agent found, falling back to Public User's agent`);
+        currentUser = 'Public User';
       } else {
         console.log(`🔗 [DEBUG] Step SUCCESS: Agent assignment completed successfully`);
         console.log(`🔗 [DEBUG] Step SUCCESS: Agent details:`, {
@@ -1309,7 +1309,7 @@ app.post('/api/personal-chat', async (req, res) => {
     
     
     // Skip this for deep link users since we already resolved their patient's agent above
-    if (currentUser !== 'Unknown User' && !currentUser.startsWith('deep_link_')) {
+    if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_')) {
       try {
         const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
         if (assignedAgentResponse.ok) {
@@ -1348,7 +1348,7 @@ app.post('/api/personal-chat', async (req, res) => {
     
     // If no agent found for authenticated user, check for current agent selection
     if (!agentModel) {
-      if (currentUser !== 'Unknown User') {
+      if (currentUser !== 'Public User') {
         // Check if user has a current agent selection stored in Cloudant
         try {
           const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
@@ -1387,9 +1387,9 @@ app.post('/api/personal-chat', async (req, res) => {
           });
         }
       } else {
-        // For Unknown User, check if they have a current agent selection stored in Cloudant
+        // For Public User, check if they have a current agent selection stored in Cloudant
         try {
-          const userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
           
           if (userDoc && userDoc.currentAgentId) {
             // Get the agent's deployment URL from DigitalOcean API
@@ -1408,14 +1408,14 @@ app.post('/api/personal-chat', async (req, res) => {
               }
             }
           } else {
-            console.log(`🔍 [personal-chat] No current agent selection found for Unknown User`);
+            console.log(`🔍 [personal-chat] No current agent selection found for Public User`);
             return res.status(400).json({ 
               message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
               requiresAgentSelection: true
             });
           }
         } catch (userError) {
-          console.error(`❌ Failed to get current agent selection for Unknown User:`, userError.message);
+          console.error(`❌ Failed to get current agent selection for Public User:`, userError.message);
           return res.status(400).json({ 
             message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
             requiresAgentSelection: true
@@ -2058,7 +2058,7 @@ app.post('/api/save-group-chat', async (req, res) => {
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
     // For deep link users, use displayName for better readability in chat history
-    const chatDisplayName = req.body.displayName || currentUser || 'Unknown User';
+    const chatDisplayName = req.body.displayName || currentUser || 'Public User';
     
     if (!chatHistory || chatHistory.length === 0) {
       return res.status(400).json({ message: 'No chat history to save' });
@@ -2377,7 +2377,7 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
     // For deep link users, use displayName for better readability in chat history
-    const chatDisplayName = req.body.displayName || currentUser || 'Unknown User';
+    const chatDisplayName = req.body.displayName || currentUser || 'Public User';
     
     if (!chatHistory || chatHistory.length === 0) {
       return res.status(400).json({ message: 'No chat history to update' });
@@ -2432,7 +2432,7 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
   }
 });
 
-// Cleanup endpoint - delete all chats except "Unknown User" (for debugging)
+// Cleanup endpoint - delete all chats except "Public User" (for debugging)
 app.post('/api/cleanup-chats', async (req, res) => {
   try {
     console.log('🧹 Starting chat cleanup via API...');
@@ -2441,18 +2441,18 @@ app.post('/api/cleanup-chats', async (req, res) => {
     const allChats = await couchDBClient.getAllChats();
     console.log(`📊 Found ${allChats.length} total chats`);
     
-    // Filter to keep only "Unknown User" chats
+    // Filter to keep only "Public User" chats
     const chatsToKeep = allChats.filter(chat => 
-      chat.currentUser === 'Unknown User' || 
-      (typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Unknown User')
+      chat.currentUser === 'Public User' || 
+      (typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Public User')
     );
     
     const chatsToDelete = allChats.filter(chat => 
-      chat.currentUser !== 'Unknown User' && 
-      !(typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Unknown User')
+      chat.currentUser !== 'Public User' && 
+      !(typeof chat.currentUser === 'object' && chat.currentUser.userId === 'Public User')
     );
     
-    console.log(`✅ Keeping ${chatsToKeep.length} chats for "Unknown User"`);
+    console.log(`✅ Keeping ${chatsToKeep.length} chats for "Public User"`);
     console.log(`🗑️  Deleting ${chatsToDelete.length} other chats`);
     
     // Delete the other chats
@@ -2462,7 +2462,7 @@ app.post('/api/cleanup-chats', async (req, res) => {
     }
     
     console.log('✅ Chat cleanup completed successfully!');
-    console.log(`📊 Final state: ${chatsToKeep.length} chats for "Unknown User"`);
+    console.log(`📊 Final state: ${chatsToKeep.length} chats for "Public User"`);
     
     res.json({ 
       success: true, 
@@ -2758,13 +2758,13 @@ const getAgentApiKey = async (agentId) => {
   return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
 };
 
-// Helper function to check if an agent is available to Unknown User
-const isAgentAvailableToUnknownUser = async (agentId) => {
+// Helper function to check if an agent is available to Public User
+const isAgentAvailableToPublicUser = async (agentId) => {
   try {
     // Get all authenticated users and their owned agents
     const usersResponse = await couchDBClient.findDocuments('maia_users', {
       selector: {
-        _id: { $ne: 'Unknown User' },
+        _id: { $ne: 'Public User' },
         ownedAgents: { $exists: true }
       }
     });
@@ -2784,10 +2784,10 @@ const isAgentAvailableToUnknownUser = async (agentId) => {
       }
     });
     
-    // Agent is available to Unknown User if it's not owned by any authenticated user
+    // Agent is available to Public User if it's not owned by any authenticated user
     return !ownedAgentIds.has(agentId);
   } catch (error) {
-    console.warn('Failed to check agent availability for Unknown User:', error.message);
+    console.warn('Failed to check agent availability for Public User:', error.message);
     // If we can't check, assume it's available (fallback to current behavior)
     return true;
   }
@@ -2844,7 +2844,7 @@ app.get('/api/agents', async (req, res) => {
     }));
     
     // Filter agents based on user ownership
-    const currentUser = req.query.user || req.session?.userId || 'Unknown User';
+    const currentUser = req.query.user || req.session?.userId || 'Public User';
     let filteredAgents = allAgents;
     
     console.log(`🔍 [DEBUG] Filtering agents for user: ${currentUser}`);
@@ -2856,15 +2856,15 @@ app.get('/api/agents', async (req, res) => {
       filteredAgents = allAgents;
     } else {
     
-    if (currentUser === 'Unknown User') {
-      // Unknown User should only see agents not owned by authenticated users
-      // Agents without owners effectively belong to Unknown User
+    if (currentUser === 'Public User') {
+      // Public User should only see agents not owned by authenticated users
+      // Agents without owners effectively belong to Public User
       try {
         console.log(`🔍 [DEBUG] Getting all authenticated users and their owned agents...`);
         // Get all authenticated users and their owned agents
         const usersResponse = await couchDBClient.findDocuments('maia_users', {
           selector: {
-            _id: { $ne: 'Unknown User' },
+            _id: { $ne: 'Public User' },
             $or: [
               { ownedAgents: { $exists: true } },
               { assignedAgentId: { $exists: true } }
@@ -2901,7 +2901,7 @@ app.get('/api/agents', async (req, res) => {
         console.log(`🔍 [DEBUG] All owned agent IDs:`, Array.from(ownedAgentIds));
         
         // Filter out agents owned by authenticated users
-        // Unknown User gets all unowned agents
+        // Public User gets all unowned agents
         filteredAgents = allAgents.filter(agent => {
           const isOwned = ownedAgentIds.has(agent.uuid);
           console.log(`🔍 [DEBUG] Agent ${agent.name} (${agent.uuid}) - owned: ${isOwned}`);
@@ -3324,25 +3324,25 @@ app.get('/api/current-agent', async (req, res) => {
           });
         }
       } else {
-        // For Unknown User, check if they have a current agent selection stored in Cloudant
+        // For Public User, check if they have a current agent selection stored in Cloudant
         try {
-          let userDoc = getCache('users', 'Unknown User');
-          if (!isCacheValid('users', 'Unknown User')) {
-            userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          let userDoc = getCache('users', 'Public User');
+          if (!isCacheValid('users', 'Public User')) {
+            userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
             if (userDoc) {
-              setCache('users', 'Unknown User', userDoc);
+              setCache('users', 'Public User', userDoc);
             }
           }
-          console.log(`🔍 [current-agent] Retrieved Unknown User document:`, userDoc);
+          console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
           if (userDoc && userDoc.currentAgentId) {
-            // Check if the selected agent is still available to Unknown User (not owned by authenticated users)
-            const isAgentAvailable = await isAgentAvailableToUnknownUser(userDoc.currentAgentId);
+            // Check if the selected agent is still available to Public User (not owned by authenticated users)
+            const isAgentAvailable = await isAgentAvailableToPublicUser(userDoc.currentAgentId);
             if (isAgentAvailable) {
               agentId = userDoc.currentAgentId;
-              console.log(`🔐 [current-agent] Using Unknown User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+              console.log(`🔐 [current-agent] Using Public User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
             } else {
-              // Agent is no longer available to Unknown User (now owned by authenticated user)
-              console.log(`🔍 [current-agent] Unknown User's selected agent ${userDoc.currentAgentName} is now owned by an authenticated user, clearing selection`);
+              // Agent is no longer available to Public User (now owned by authenticated user)
+              console.log(`🔍 [current-agent] Public User's selected agent ${userDoc.currentAgentName} is now owned by an authenticated user, clearing selection`);
               // Clear the invalid agent selection
               const updatedUserDoc = {
                 ...userDoc,
@@ -4086,9 +4086,9 @@ app.post('/api/current-agent', async (req, res) => {
       return res.status(404).json({ message: 'Agent not found' });
     }
     
-    // For Unknown User, check if the agent is available to them
-    if (currentUser === 'Unknown User') {
-      const isAgentAvailable = await isAgentAvailableToUnknownUser(agentId);
+    // For Public User, check if the agent is available to them
+    if (currentUser === 'Public User') {
+      const isAgentAvailable = await isAgentAvailableToPublicUser(agentId);
       if (!isAgentAvailable) {
         return res.status(403).json({ 
           message: 'This agent is not available for selection. It may be assigned to another user.',
@@ -4127,16 +4127,16 @@ app.post('/api/current-agent', async (req, res) => {
         console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
       }
     } else {
-      // For Unknown User, store in their own document
+      // For Public User, store in their own document
       try {
-        // Try to get existing Unknown User document
+        // Try to get existing Public User document
         let userDoc;
         try {
-          userDoc = await couchDBClient.getDocument('maia_users', 'Unknown User');
+          userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
         } catch (getError) {
           // Document doesn't exist, create new one
           userDoc = {
-            _id: 'Unknown User',
+            _id: 'Public User',
             type: 'user',
             createdAt: new Date().toISOString()
           };

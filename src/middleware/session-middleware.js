@@ -93,7 +93,7 @@ class SessionMiddleware {
         return next();
       }
 
-      // Allow Unknown User to always access
+      // Allow Public User to always access
       if (req.session && req.session.userId === 'unknown_user') {
         return next();
       }

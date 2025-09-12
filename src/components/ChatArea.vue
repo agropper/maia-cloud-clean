@@ -731,7 +731,7 @@ export default defineComponent({
                         // console.log(`🔍 [ChatArea] Retrieved ${allGroups.length} group chats from backend`);
                         
                         // Apply the same filtering logic as GroupManagementModal
-                        // Filter groups by current user (including "Unknown User")
+                        // Filter groups by current user (including "Public User")
                         let currentUserName: string
                         let isDeepLinkUser = false
                         let deepLinkShareId = null

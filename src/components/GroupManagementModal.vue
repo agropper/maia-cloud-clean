@@ -176,7 +176,7 @@ export default defineComponent({
       try {
         const allGroups = await getAllGroupChats()
         
-        // Filter groups by current user (including "Unknown User")
+        // Filter groups by current user (including "Public User")
         let currentUserName: string
         let isDeepLinkUser = false
         let deepLinkShareId = null

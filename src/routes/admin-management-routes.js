@@ -266,9 +266,9 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     const users = allUsers
       .filter(user => {
-        // Exclude design documents and Unknown User
-        if (user._id.startsWith('_design/') || user._id === 'Unknown User') {
-          console.log(`🔍 [DEBUG] Excluding: ${user._id} (design doc or Unknown User)`);
+        // Exclude design documents and Public User
+        if (user._id.startsWith('_design/') || user._id === 'Public User') {
+          console.log(`🔍 [DEBUG] Excluding: ${user._id} (design doc or Public User)`);
           return false;
         }
         // For wed271, allow it through even if it has isAdmin: true (special case)

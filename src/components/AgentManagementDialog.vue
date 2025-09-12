@@ -48,10 +48,10 @@
             </div>
           </div>
 
-          <!-- Unknown User Text Prompt -->
+          <!-- Public User Text Prompt -->
           <div v-else-if="!isAuthenticated" class="q-mb-lg">
             <div class="text-caption text-grey-7 q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
-              The Unknown User is a shared demo environment. You must sign-in to request a private agent and to create knowledge bases from real health records.
+              The Public User is a shared demo environment. You must sign-in to request a private agent and to create knowledge bases from real health records.
             </div>
           </div>
 
@@ -235,7 +235,7 @@
         <div v-else>
 
 
-          <!-- No Agent Configured - Only for Unknown User (not deep link users) -->
+          <!-- No Agent Configured - Only for Public User (not deep link users) -->
           <div v-if="!currentAgent && !isAuthenticated && !isDeepLinkUser" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
@@ -1264,8 +1264,8 @@ export default defineComponent({
             window.location.href = authData.redirectTo;
             return;
           } else {
-            // Check if we have a currentUser prop and it's not "Unknown User"
-            if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+            // Check if we have a currentUser prop and it's not "Public User"
+            if (props.currentUser && props.currentUser.userId !== 'Public User') {
               localCurrentUser.value = props.currentUser;
               isAuthenticated.value = true;
               console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
@@ -1341,10 +1341,10 @@ export default defineComponent({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            username: localCurrentUser.value?.userId || 'Unknown User',
+            username: localCurrentUser.value?.userId || 'Public User',
             email: helpEmailData.value.from,
             requestType: 'help_request',
-            message: `Help Request from ${localCurrentUser.value?.userId || 'Unknown User'}:\n\nSubject: ${helpEmailData.value.subject}\n\nMessage:\n${helpEmailData.value.body}`
+            message: `Help Request from ${localCurrentUser.value?.userId || 'Public User'}:\n\nSubject: ${helpEmailData.value.subject}\n\nMessage:\n${helpEmailData.value.body}`
           }),
         });
 
@@ -1661,7 +1661,7 @@ export default defineComponent({
 
         // Load agents filtered by user ownership
         try {
-          const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Unknown User';
+          const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Public User';
           const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
           if (agentsResponse.ok) {
             const agents: DigitalOceanAgent[] = await agentsResponse.json();
@@ -1749,7 +1749,7 @@ export default defineComponent({
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
       // Note: Agents are not automatically assigned to users
-      // Agents without owners belong to Unknown User
+      // Agents without owners belong to Public User
       // Authenticated users can only select agents that are already assigned to them
       try {
         const response = await fetch(`/api/current-agent`, {
@@ -2172,7 +2172,7 @@ export default defineComponent({
 
           availableKnowledgeBases.value = allKBs;
           console.log(
-            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected) for user ${localCurrentUser.value?.userId || 'Unknown User'}`
+            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected) for user ${localCurrentUser.value?.userId || 'Public User'}`
           );
 
           // Update the current knowledge base to reflect the switch

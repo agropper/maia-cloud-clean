@@ -540,7 +540,7 @@
     <!-- Group Management Modal for Agent Chats -->
     <GroupManagementModal
       v-model="showGroupModal"
-      :currentUser="selectedAgentForChats?.owner || 'Unknown User'"
+      :currentUser="selectedAgentForChats?.owner || 'Public User'"
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
     />
@@ -1223,7 +1223,7 @@ export default defineComponent({
             (user.assignedAgentName && user.assignedAgentName === agent.name)
           );
           
-          let ownerName = 'Unknown User';
+          let ownerName = 'Public User';
           if (userWithAgent) {
             ownerName = userWithAgent.displayName || userWithAgent.userId;
           }
@@ -1265,7 +1265,7 @@ export default defineComponent({
             (user.assignedAgentName && user.assignedAgentName === agent.name)
           );
           
-          let ownerName = 'Unknown User';
+          let ownerName = 'Public User';
           if (userWithAgent) {
             ownerName = userWithAgent.displayName || userWithAgent.userId;
           }
@@ -1433,7 +1433,7 @@ export default defineComponent({
           if (userWithAgent) {
             owner = userWithAgent.displayName || userWithAgent.userId;
           } else {
-            owner = 'Unknown User';
+            owner = 'Public User';
           }
           
           return {

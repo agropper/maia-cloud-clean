@@ -93,7 +93,7 @@ export default defineComponent({
     const showAgentSelectionModal = ref(false);
     const currentAgent = ref<any>(null);
     const agentWarning = ref<string>("");
-    const currentUser = ref<any>({ userId: 'Unknown User', displayName: 'Unknown User' });
+    const currentUser = ref<any>({ userId: 'Public User', displayName: 'Public User' });
     const pendingShareId = ref<string | null>(null);
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
@@ -251,7 +251,7 @@ export default defineComponent({
           return;
         } else {
           // console.log(`❌ [ChatPrompt] No authenticated user found`);
-          // currentUser.value is already set to Unknown User by default
+          // currentUser.value is already set to Public User by default
         }
       } catch (error) {
         console.error('❌ [ChatPrompt] Failed to check existing session:', error);
@@ -260,7 +260,7 @@ export default defineComponent({
           message: error.message,
           stack: error.stack
         });
-        // currentUser.value is already set to Unknown User by default
+        // currentUser.value is already set to Public User by default
         // No need to change it - it's already valid
       }
     };
@@ -447,8 +447,8 @@ export default defineComponent({
         console.error('❌ Backend logout failed:', error);
       }
       
-      // Set to Unknown User instead of null (there should never be "no user")
-      currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+      // Set to Public User instead of null (there should never be "no user")
+      currentUser.value = { userId: 'Public User', displayName: 'Public User' };
     };
 
     const handleSignInCancelled = () => {
