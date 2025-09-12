@@ -2256,7 +2256,17 @@ app.post('/api/deep-link-session', async (req, res) => {
 // API endpoint to cleanup deep link session when user closes window
 app.post('/api/deep-link-session/cleanup', async (req, res) => {
   try {
-    const { shareId, action } = req.body;
+    // Handle both JSON body and raw JSON string from sendBeacon
+    let shareId, action;
+    if (typeof req.body === 'string') {
+      const parsed = JSON.parse(req.body);
+      shareId = parsed.shareId;
+      action = parsed.action;
+    } else {
+      shareId = req.body.shareId;
+      action = req.body.action;
+    }
+    
     const sessionId = req.sessionID;
     
     if (!shareId || !sessionId) {
