@@ -1647,12 +1647,9 @@ app.post('/api/anthropic-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Anthropic response: ${responseTime}ms`);
 
-    // Get current user from request body (frontend) or fall back to session
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
-    
+    // Frontend already adds the user message, so we only add the AI response
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.content[0].text, name: 'Anthropic' }
     ];
 
@@ -1676,7 +1673,6 @@ app.post('/api/gemini-chat', async (req, res) => {
       const mockResponse = mockAIResponses['gemini-chat'](newValue);
       const newChatHistory = [
         ...chatHistory,
-        { role: 'user', content: newValue, name: 'Unknown User' },
         { role: 'assistant', content: mockResponse, name: 'Gemini' }
       ];
       
@@ -1753,12 +1749,9 @@ app.post('/api/gemini-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ Gemini response: ${responseTime}ms`);
 
-    // Get current user from request body (frontend) or fall back to session
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
-    
+    // Frontend already adds the user message, so we only add the AI response
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: text, name: 'Gemini' }
     ];
 
@@ -1814,12 +1807,9 @@ app.post('/api/deepseek-r1-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ DeepSeek response: ${responseTime}ms`);
 
-    // Get current user from request body (frontend) or fall back to session
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
-    
+    // Frontend already adds the user message, so we only add the AI response
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.choices[0].message.content, name: 'DeepSeek' }
     ];
 
@@ -1882,12 +1872,9 @@ app.post('/api/chatgpt-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.log(`✅ ChatGPT response: ${responseTime}ms`);
 
-    // Get current user from request body (frontend) or fall back to session
-    const currentUser = req.body.currentUser?.displayName || req.body.currentUser?.userId || req.session?.userId || 'Unknown User';
-    
+    // Frontend already adds the user message, so we only add the AI response
     const newChatHistory = [
       ...chatHistory,
-      { role: 'user', content: cleanUserMessage, name: currentUser },
       { role: 'assistant', content: response.choices[0].message.content, name: 'ChatGPT' }
     ];
 
