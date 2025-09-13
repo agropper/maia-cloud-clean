@@ -411,7 +411,8 @@ app.get('/admin', (req, res) => {
   res.render('index.ejs', {
     APP_TITLE: appTitle,
     ENVIRONMENT: environment,
-    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+    APP_VERSION: process.env.APP_VERSION || '1.0.0',
+    CLOUDANT_DASHBOARD_URL: process.env.CLOUDANT_DASHBOARD || '#'
   });
 });
 

@@ -544,6 +544,19 @@
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
     />
+
+    <!-- Cloudant Dashboard Link -->
+    <div class="q-mt-lg q-pa-md text-center">
+      <QBtn
+        :href="cloudantDashboardUrl"
+        target="_blank"
+        color="primary"
+        outline
+        icon="cloud"
+        label="Cloudant Dashboard"
+        class="q-mt-md"
+      />
+    </div>
   </div>
 </template>
 
@@ -1503,6 +1516,13 @@ export default defineComponent({
       }
     };
     
+    // Computed properties
+    const cloudantDashboardUrl = computed(() => {
+      // Get the Cloudant Dashboard URL from the server-rendered template
+      // The server passes this via the EJS template
+      return window.CLOUDANT_DASHBOARD_URL || '#';
+    });
+    
     return {
       isAdmin,
       isLoading,
@@ -1553,7 +1573,8 @@ export default defineComponent({
       goToAdminRegistration,
       goToAdminSignIn,
       goToMainApp,
-      signOut
+      signOut,
+      cloudantDashboardUrl
     };
   }
 });
