@@ -305,6 +305,7 @@
                   icon="visibility"
                   @click="viewUserDetails(props.row)"
                   title="View Details"
+                  size="sm"
                 />
               </QTd>
             </template>
@@ -312,6 +313,63 @@
         </QCardSection>
       </QCard>
     </div>
+
+    <!-- Agent Creation Summary Modal -->
+    <QDialog v-model="showAgentCreationModal" persistent>
+      <QCard style="min-width: 500px">
+        <QCardSection class="row items-center q-pb-none">
+          <div class="text-h6">
+            🤖 Agent Created Successfully
+          </div>
+          <QSpace />
+          <QBtn icon="close" flat round dense @click="showAgentCreationModal = false" />
+        </QCardSection>
+
+        <QCardSection v-if="createdAgent">
+          <div class="agent-summary">
+            <h5>Agent Details</h5>
+            <div class="row q-gutter-md">
+              <div class="col-6">
+                <p><strong>Agent Name:</strong> {{ createdAgent.name }}</p>
+                <p><strong>Agent UUID:</strong> {{ createdAgent.uuid }}</p>
+                <p><strong>Created:</strong> {{ formatDate(createdAgent.created_at) }}</p>
+              </div>
+              <div class="col-6">
+                <p><strong>Model:</strong> {{ createdAgent.model?.name || 'Unknown' }}</p>
+                <p><strong>Region:</strong> {{ createdAgent.region || 'Unknown' }}</p>
+                <p><strong>Status:</strong> 
+                  <QChip
+                    :color="createdAgent.deployment?.status === 'STATUS_WAITING_FOR_DEPLOYMENT' ? 'warning' : 'positive'"
+                    text-color="white"
+                    size="sm"
+                  >
+                    {{ createdAgent.deployment?.status || 'Unknown' }}
+                  </QChip>
+                </p>
+              </div>
+            </div>
+            
+            <div class="q-mt-md">
+              <p><strong>Description:</strong> {{ createdAgent.description }}</p>
+            </div>
+            
+            <div class="q-mt-md">
+              <p><strong>API Key:</strong> 
+                <span class="text-grey-6">{{ createdAgent.api_keys?.[0]?.api_key || 'Not available' }}</span>
+              </p>
+            </div>
+          </div>
+        </QCardSection>
+
+        <QCardActions align="right">
+          <QBtn
+            color="primary"
+            label="Close"
+            @click="showAgentCreationModal = false"
+          />
+        </QCardActions>
+      </QCard>
+    </QDialog>
 
     <!-- User Details Modal -->
     <QDialog v-model="showUserModal" persistent maximized>
@@ -382,10 +440,10 @@
               <QBtn
                 v-if="selectedUser.workflowStage === 'awaiting_approval'"
                 color="positive"
-                icon="check_circle"
-                label="Approve User"
-                @click="approveUser('approved')"
-                :loading="isProcessingApproval"
+                icon="smart_toy"
+                label="CREATE AGENT"
+                @click="createAgentForUser"
+                :loading="isCreatingAgent"
               />
               
               <QBtn
@@ -620,14 +678,18 @@ export default defineComponent({
     const isLoadingAgents = ref(false);
     const isResettingPasskey = ref(false);
     const isLoadingAgentsPatients = ref(false);
+    const isCreatingAgent = ref(false);
     const users = ref([]);
     const agents = ref([]);
     const selectedAgent = ref(null);
     const showUserModal = ref(false);
     const showAssignAgentDialog = ref(false);
+    const showAgentCreationModal = ref(false);
     const selectedUser = ref(null);
     const adminNotes = ref('');
     const errorMessage = ref('');
+    const createdAgent = ref(null);
+    const deploymentPolling = ref(new Map()); // Track deployment polling for each user
     
     // Agents and Patients
     const agentsAndPatients = ref([]);
@@ -692,7 +754,8 @@ export default defineComponent({
         name: 'actions',
         label: 'Actions',
         field: 'actions',
-        align: 'center'
+        align: 'center',
+        sortable: false
       }
     ];
     
@@ -941,6 +1004,130 @@ export default defineComponent({
       await loadAgents();
     };
     
+    const setUserWorkflowStage = async (userId, stage) => {
+      try {
+        const response = await fetch(`/api/admin-management/users/${userId}/approve`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: stage === 'waiting_for_deployment' ? 'approve' : stage,
+            notes: `Workflow stage set to: ${stage}`
+          })
+        });
+        
+        if (response.ok) {
+          console.log(`✅ User ${userId} workflow stage set to: ${stage}`);
+        } else {
+          console.error(`❌ Failed to set workflow stage for user ${userId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error setting workflow stage:`, error);
+      }
+    };
+    
+    const startDeploymentPolling = (userId, agentUuid) => {
+      console.log(`🔄 Starting deployment polling for user ${userId}, agent ${agentUuid}`);
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch('/api/agents');
+          if (response.ok) {
+            const agentsData = await response.json();
+            const agent = agentsData.find(a => a.uuid === agentUuid);
+            
+            if (agent) {
+              console.log(`🔍 Agent ${agentUuid} deployment status: ${agent.deployment?.status}`);
+              
+              if (agent.deployment?.status === 'STATUS_DEPLOYED' || 
+                  agent.deployment?.status === 'STATUS_RUNNING') {
+                console.log(`✅ Agent ${agentUuid} is deployed! Updating user status to approved.`);
+                
+                // Stop polling
+                clearInterval(pollInterval);
+                deploymentPolling.value.delete(userId);
+                
+                // Update user to approved
+                await setUserWorkflowStage(userId, 'approved');
+                
+                // Refresh users list
+                await loadUsers();
+                
+                $q.notify({
+                  type: 'positive',
+                  message: `Agent for ${userId} is now deployed and ready!`
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error checking deployment status:`, error);
+        }
+      }, 15000); // Poll every 15 seconds
+      
+      // Store the interval ID for cleanup
+      deploymentPolling.value.set(userId, pollInterval);
+      
+      // Set a timeout to stop polling after 10 minutes (40 attempts)
+      setTimeout(() => {
+        if (deploymentPolling.value.has(userId)) {
+          console.log(`⏰ Deployment polling timeout for user ${userId}`);
+          clearInterval(pollInterval);
+          deploymentPolling.value.delete(userId);
+        }
+      }, 600000); // 10 minutes
+    };
+    
+    const createAgentForUser = async () => {
+      if (!selectedUser.value) return;
+      
+      isCreatingAgent.value = true;
+      try {
+        const response = await fetch('/api/agents', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            patientName: selectedUser.value.displayName,
+            model: 'OpenAI GPT-oss-120b' // Will be dynamically resolved to UUID
+          })
+        });
+        
+        if (response.ok) {
+          const agentData = await response.json();
+          createdAgent.value = agentData;
+          showAgentCreationModal.value = true;
+          
+          // Set user to waiting for deployment instead of approving immediately
+          await setUserWorkflowStage(selectedUser.value.userId, 'waiting_for_deployment');
+          
+          // Close the user details modal
+          showUserModal.value = false;
+          
+          // Start polling for deployment status
+          startDeploymentPolling(selectedUser.value.userId, agentData.uuid);
+          
+          // Refresh users list to show updated status
+          await loadUsers();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          $q.notify({
+            type: 'negative',
+            message: `Failed to create agent: ${errorData.message || 'Unknown error'}`
+          });
+        }
+      } catch (error) {
+        $q.notify({
+          type: 'negative',
+          message: `Failed to create agent: ${error.message}`
+        });
+      } finally {
+        isCreatingAgent.value = false;
+      }
+    };
+    
     const approveUser = async (action) => {
       if (!selectedUser.value) return;
       
@@ -1152,6 +1339,7 @@ export default defineComponent({
       const colors = {
         'no_passkey': 'grey',
         'awaiting_approval': 'warning',
+        'waiting_for_deployment': 'info',
         'approved': 'positive',
         'rejected': 'negative',
         'suspended': 'orange'
@@ -1163,6 +1351,7 @@ export default defineComponent({
       const labels = {
         'no_passkey': 'No Passkey',
         'awaiting_approval': 'Awaiting Approval',
+        'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
         'rejected': 'Rejected',
         'suspended': 'Suspended'
@@ -1533,11 +1722,13 @@ export default defineComponent({
       isLoadingAgents,
       isResettingPasskey,
       isLoadingAgentsPatients,
+      isCreatingAgent,
       users,
       agents,
       selectedAgent,
       showUserModal,
       showAssignAgentDialog,
+      showAgentCreationModal,
       selectedUser,
       adminNotes,
       adminForm,
@@ -1550,6 +1741,7 @@ export default defineComponent({
       userColumns,
       stats,
       errorMessage,
+      createdAgent,
       registerAdmin,
       registerPasskey,
       skipPasskeyRegistration,
@@ -1562,6 +1754,9 @@ export default defineComponent({
       handleChatLoaded,
       handleGroupDeleted,
       viewUserDetails,
+      createAgentForUser,
+      setUserWorkflowStage,
+      startDeploymentPolling,
       approveUser,
       resetUserPasskey,
       saveNotes,

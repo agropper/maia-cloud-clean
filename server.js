@@ -3851,11 +3851,26 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
 // Create agent
 app.post('/api/agents', async (req, res) => {
   try {
-    const { name, description, model, model_uuid, instructions } = req.body;
+    const { name, description, model, model_uuid, instructions, patientName, knowledgeBaseId } = req.body;
     
-    // Validate agent name - DigitalOcean only allows lowercase, numbers, and dashes
-    const validName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-    console.log(`🔍 Original name: "${name}" -> Valid name: "${validName}"`);
+    // Handle patient name pattern if provided
+    let agentName;
+    if (patientName) {
+      // Generate agent name with current date using lowercase pattern
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      
+      // Convert patient name to lowercase, remove spaces, keep only letters and numbers
+      const cleanPatientName = patientName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      agentName = `${cleanPatientName}-agent-${day}${month}${year}`;
+    } else {
+      // Use provided name with validation
+      agentName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+    
+    console.log(`🔍 Agent name: "${agentName}"`);
     
     // Determine which model to use - frontend sends model_uuid, backend expects model name
     let selectedModel;
@@ -3892,7 +3907,7 @@ app.post('/api/agents', async (req, res) => {
       console.log(`🔍 Looking for model: ${model}`);
       console.log(`🔍 Available models: ${validModels.map(m => m.name).join(', ')}`);
       
-      selectedModel = validModels.find(m => m.name.toLowerCase().includes(model.toLowerCase()));
+      selectedModel = validModels.find(m => m && m.name && typeof m.name === 'string' && m.name.toLowerCase().includes(model.toLowerCase()));
       
       if (!selectedModel) {
         return res.status(400).json({ message: `Model '${model}' not found. Available models: ${validModels.map(m => m.name).join(', ')}` });
@@ -3905,14 +3920,28 @@ app.post('/api/agents', async (req, res) => {
     const regions = await doRequest('/v2/gen-ai/regions');
     const defaultRegion = regions.regions[0]?.region || 'tor1';
     
+    // Use SystemPrompt.txt template if patientName is provided
+    let agentDescription = description;
+    let agentInstructions = instructions;
+    
+    if (patientName) {
+      agentDescription = `A private medical AI assistant for ${patientName}.`;
+      agentInstructions = `You are MAIA, a medical AI assistant, that can search through a patient's health records in a knowledge base and provide relevant answers to their requests. Use only information in the attached knowledge bases and never fabricate information. There is a lot of redundancy in a patient's knowledge base. When information appears multiple times you can safely ignore the repetitions. To ensure that all medications are accurately listed in the future, the assistant should adopt a systematic approach: Comprehensive Review: Thoroughly examine every chunk in the knowledge base to identify all medication entries, regardless of their status (active or stopped). Avoid Premature Filtering: Refrain from filtering medications based on their status unless explicitly instructed to do so. This ensures that all prescribed medications are included. Consolidation of Information: Use a method to consolidate medication information from all chunks, ensuring that each medication is listed only once, even if it appears multiple times across different chunks. Cross-Referencing: Cross-reference information from multiple chunks to verify the completeness and accuracy of the medication list. Systematic Extraction: Implement a systematic process or algorithm to extract medication information, reducing the likelihood of human error or oversight. If you are asked for a patient summary, use the following categories and format: Highlight the label and category headings. Display the patient's name followed by their age and sex. A concise medical history; including surgical history -- Doctors seen recently (say, within a year) and diagnoses of those visits -- Current Medications -- Stopped or Inactive Medications --Allergies --Brief social history: employment (or school) status; living situation; use of tobacco, alcohol, drugs --Radiology in the past year --Other testing in the past year (PFTs, EKGs, etc) Do not show your reasoning. Just provide the response in English. Always start your response with the patient's name, age and sex.`;
+    }
+
     const agentData = {
-      name: validName,
-      description,
+      name: agentName,
+      description: agentDescription,
       model_uuid: selectedModel.uuid,
-      instruction: instructions,
+      instruction: agentInstructions,
       region: defaultRegion,
       project_id: process.env.DIGITALOCEAN_PROJECT_ID || '37455431-84bd-4fa2-94cf-e8486f8f8c5e' // Default project ID
     };
+
+    // Add knowledge base if provided
+    if (knowledgeBaseId) {
+      agentData.knowledge_base_uuids = [knowledgeBaseId];
+    }
 
     // Log the exact payload being sent to DigitalOcean
     console.log('🚀 DIGITALOCEAN AGENT CREATION PAYLOAD:');
@@ -3928,8 +3957,18 @@ app.post('/api/agents', async (req, res) => {
       body: JSON.stringify(agentData)
     });
 
-    console.log(`🤖 Created agent: ${validName}`);
-    res.json(agent.data);
+    console.log(`🤖 Created agent: ${agentName}`);
+    console.log(`📋 Agent response:`, JSON.stringify(agent, null, 2));
+    
+    // Handle different response structures from DigitalOcean API
+    const responseData = agent.agent || agent.data || agent;
+    
+    if (!responseData) {
+      console.error('❌ No agent data in response:', agent);
+      return res.status(500).json({ message: 'Agent creation succeeded but no data returned' });
+    }
+    
+    res.json(responseData);
   } catch (error) {
     console.error('❌ Create agent error:', error);
     res.status(500).json({ message: `Failed to create agent: ${error.message}` });
