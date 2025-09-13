@@ -393,11 +393,13 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
     ENVIRONMENT: environment,
-    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+    APP_VERSION: process.env.APP_VERSION || '1.0.0',
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
   });
 });
 
@@ -408,8 +410,6 @@ app.get('/admin', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
-  
-  console.log('🔗 [Admin Panel] CLOUDANT_DASHBOARD env var:', cloudantUrl);
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
@@ -2194,7 +2194,10 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
 
 // Public shared chat route - anyone with the link can access
 app.get('/shared/:shareId', sessionMiddleware.createDeepLinkSession, sessionMiddleware.checkInactivityWarning, (req, res) => {
-  res.render('index');
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  res.render('index.ejs', {
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
+  });
 });
 
 // API endpoint to create deep link session when user identifies themselves
@@ -5989,7 +5992,10 @@ app.get('/api/deep-link-users/:shareId', async (req, res) => {
 
 // Catch-all route for SPA
 app.get('*', (req, res) => {
-  res.render('index');
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  res.render('index.ejs', {
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
+  });
 });
 
 // Add tooltip test route
@@ -5999,7 +6005,10 @@ app.get('/tooltip-test', (req, res) => {
 
 // Add Vue tooltip test route
 app.get('/vue-tooltip-test', (req, res) => {
-  res.render('index');
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  res.render('index.ejs', {
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
+  });
 });
 
 const PORT = process.env.PORT || 3001;

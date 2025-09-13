@@ -1520,9 +1520,7 @@ export default defineComponent({
     const cloudantDashboardUrl = computed(() => {
       // Get the Cloudant Dashboard URL from the server-rendered template
       // The server passes this via the EJS template
-      const url = window.CLOUDANT_DASHBOARD_URL || '#';
-      console.log('🔗 [Admin Panel] Cloudant Dashboard URL:', url);
-      return url;
+      return window.CLOUDANT_DASHBOARD_URL || '#';
     });
     
     return {
