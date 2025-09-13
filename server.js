@@ -407,12 +407,15 @@ app.get('/admin', (req, res) => {
   
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  
+  console.log('🔗 [Admin Panel] CLOUDANT_DASHBOARD env var:', cloudantUrl);
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
     ENVIRONMENT: environment,
     APP_VERSION: process.env.APP_VERSION || '1.0.0',
-    CLOUDANT_DASHBOARD_URL: process.env.CLOUDANT_DASHBOARD || '#'
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
   });
 });
 
