@@ -464,9 +464,9 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     const { action, notes } = req.body;
     
     // Validate action
-    if (!['approve', 'reject', 'suspend'].includes(action)) {
+    if (!['approve', 'reject', 'suspend', 'reset'].includes(action)) {
       return res.status(400).json({ 
-        error: 'Invalid action. Must be one of: approve, reject, suspend' 
+        error: 'Invalid action. Must be one of: approve, reject, suspend, reset' 
       });
     }
     
@@ -476,27 +476,41 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Map action to approval status
+    // Map action to approval status and workflow stage
     let approvalStatus;
+    let workflowStage;
     switch (action) {
       case 'approve':
         approvalStatus = 'approved';
+        workflowStage = 'approved';
         break;
       case 'reject':
         approvalStatus = 'rejected';
+        workflowStage = 'rejected';
         break;
       case 'suspend':
         approvalStatus = 'suspended';
+        workflowStage = 'suspended';
+        break;
+      case 'reset':
+        approvalStatus = 'pending';
+        workflowStage = 'awaiting_approval';
         break;
     }
     
-    // Update user approval status
+    // Update user approval status and workflow stage
     const updatedUser = {
       ...userDoc,
       approvalStatus: approvalStatus,
+      workflowStage: workflowStage,
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
+    
+    // Validate consistency before saving
+    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
+    validateWorkflowConsistency(updatedUser);
+    
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
     // If approved, trigger resource creation workflow
@@ -511,6 +525,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
       userId: userId,
       action: action,
       approvalStatus: approvalStatus,
+      workflowStage: workflowStage,
       timestamp: new Date().toISOString(),
       nextSteps: action === 'approve' ? 'Private AI agent and knowledge base will be created automatically' : null
     });
@@ -658,8 +673,93 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
   }
 });
 
+// TEMPORARY: Fix user data endpoint
+router.post('/fix-user-data/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🔧 [FIX] Fixing user data for: ${userId}`);
+    
+    // Get the user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    console.log(`🔍 [FIX] Current user data:`, {
+      _id: userDoc._id,
+      workflowStage: userDoc.workflowStage,
+      approvalStatus: userDoc.approvalStatus
+    });
+    
+    // Fix the inconsistency
+    if (userDoc.workflowStage === 'approved' && !userDoc.approvalStatus) {
+      console.log(`🔧 [FIX] Setting approvalStatus to 'approved' for user ${userId}`);
+      userDoc.approvalStatus = 'approved';
+      userDoc.updatedAt = new Date().toISOString();
+      userDoc.fixNotes = 'Fixed workflow inconsistency: set approvalStatus to match workflowStage';
+      
+      // Save the updated document
+      await couchDBClient.saveDocument('maia_users', userDoc);
+      console.log(`✅ [FIX] User ${userId} fixed successfully`);
+      
+      res.json({ 
+        message: `User ${userId} data fixed successfully`,
+        userId: userId,
+        workflowStage: userDoc.workflowStage,
+        approvalStatus: userDoc.approvalStatus
+      });
+    } else {
+      console.log(`ℹ️ [FIX] No inconsistency found for user ${userId}`);
+      res.json({ 
+        message: `No inconsistency found for user ${userId}`,
+        userId: userId,
+        workflowStage: userDoc.workflowStage,
+        approvalStatus: userDoc.approvalStatus
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ [FIX] Error fixing user data:', error);
+    res.status(500).json({ error: 'Failed to fix user data' });
+  }
+});
+
 // Helper function to determine workflow stage
+function validateWorkflowConsistency(user) {
+  const { workflowStage, approvalStatus } = user;
+  
+  // Define valid combinations
+  const validCombinations = {
+    'no_passkey': ['no_passkey', undefined], // No approval status needed
+    'awaiting_approval': ['pending', undefined], // Awaiting approval
+    'waiting_for_deployment': ['approved'], // Approved but waiting for agent deployment
+    'approved': ['approved'], // Fully approved
+    'rejected': ['rejected'], // Rejected
+    'suspended': ['suspended'] // Suspended
+  };
+  
+  const validApprovalStatuses = validCombinations[workflowStage] || [];
+  
+  if (!validApprovalStatuses.includes(approvalStatus)) {
+    const error = new Error(`Workflow state inconsistency detected for user ${user._id}: workflowStage="${workflowStage}" but approvalStatus="${approvalStatus}". Valid combinations: ${JSON.stringify(validCombinations)}`);
+    console.error('❌ [WORKFLOW VALIDATION ERROR]', error.message);
+    console.error('🔍 [DEBUG] User data:', {
+      _id: user._id,
+      workflowStage,
+      approvalStatus,
+      credentialID: user.credentialID
+    });
+    throw error;
+  }
+  
+  console.log(`✅ [WORKFLOW VALIDATION] User ${user._id}: workflowStage="${workflowStage}" ✓ approvalStatus="${approvalStatus}" ✓`);
+}
+
 function determineWorkflowStage(user) {
+  // Primary source of truth: stored workflowStage field
+  if (user.workflowStage) {
+    // Validate consistency between workflowStage and approvalStatus
+    validateWorkflowConsistency(user);
+    return user.workflowStage;
+  }
+  
+  // Fallback for legacy users without workflowStage field
   // Check if user has a passkey (look for credentialID field)
   if (!user.credentialID) {
     return 'no_passkey';
@@ -690,6 +790,67 @@ function determineWorkflowStage(user) {
   
   return 'unknown';
 }
+
+// Admin endpoint to update user workflow stage
+router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { workflowStage, notes } = req.body;
+    
+    console.log(`🔄 [DEBUG] Workflow stage update request for user ${userId}:`, { workflowStage, notes });
+    
+    // Validate workflow stage
+    const validStages = ['no_passkey', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
+    if (!validStages.includes(workflowStage)) {
+      console.log(`❌ [DEBUG] Invalid workflow stage: ${workflowStage}. Valid stages: ${validStages.join(', ')}`);
+      return res.status(400).json({ 
+        error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
+      });
+    }
+    
+    // Get user document
+    console.log(`🔄 [DEBUG] Getting user document for ${userId}`);
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      console.log(`❌ [DEBUG] User not found: ${userId}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`🔄 [DEBUG] User document found:`, { 
+      userId: userDoc._id, 
+      currentWorkflowStage: userDoc.workflowStage,
+      approvalStatus: userDoc.approvalStatus 
+    });
+    
+    // Update user workflow stage
+    const updatedUser = {
+      ...userDoc,
+      workflowStage: workflowStage,
+      adminNotes: notes || `Workflow stage updated to: ${workflowStage}`,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Validate consistency before saving
+    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
+    validateWorkflowConsistency(updatedUser);
+    
+    console.log(`🔄 [DEBUG] Updating user document with new workflow stage: ${workflowStage}`);
+    await couchDBClient.saveDocument('maia_users', updatedUser);
+    
+    console.log(`✅ [DEBUG] User workflow stage updated successfully`);
+    
+    res.json({ 
+      message: `User workflow stage updated to ${workflowStage}`,
+      userId: userId,
+      workflowStage: workflowStage,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error updating user workflow stage:', error);
+    res.status(500).json({ error: 'Failed to update user workflow stage' });
+  }
+});
 
 // Admin endpoint to reset a user's passkey
 router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) => {

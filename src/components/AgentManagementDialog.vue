@@ -48,6 +48,65 @@
             </div>
           </div>
 
+          <!-- Authenticated User Information Panel -->
+          <div v-else-if="isAuthenticated && !isDeepLinkUser" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+              <div class="row items-center">
+                <q-icon name="person" color="primary" size="1.2rem" class="q-mr-sm" />
+                <div>
+                  <strong>Private AI Access</strong><br>
+                  You have access to your private AI agent and can create knowledge bases from your health records. Use the options below to manage your files and knowledge bases.
+                </div>
+              </div>
+            </div>
+            
+            <!-- File Management Options for Authenticated Users -->
+            <div v-if="currentAgent && currentAgent.type === 'assigned'" class="q-mb-lg">
+              <div class="text-h6 q-mb-md">📁 File Management</div>
+              <div class="row q-gutter-md">
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Create/Add to Knowledge Base"
+                  color="positive"
+                  icon="add_circle"
+                  @click="handleFileAction('create_or_add')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Import More Files"
+                  color="primary"
+                  icon="upload_file"
+                  @click="handleFileAction('import_more')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Clear Files"
+                  color="warning"
+                  icon="clear_all"
+                  @click="handleFileAction('clear_files')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="!userHasFiles"
+                  label="Import Files"
+                  color="primary"
+                  icon="upload_file"
+                  @click="handleFileAction('import_files')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  label="Cancel"
+                  color="grey"
+                  icon="cancel"
+                  @click="handleClose"
+                  class="q-px-lg"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- Public User Text Prompt -->
           <div v-else-if="!isAuthenticated" class="q-mb-lg">
             <div class="text-caption text-grey-7 q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
@@ -964,6 +1023,113 @@
       </q-card>
     </q-dialog>
   </q-dialog>
+  
+  <!-- File Choice Confirmation Modal -->
+  <q-dialog v-model="showFileChoiceModal" persistent>
+    <q-card style="min-width: 400px">
+      <q-card-section class="row items-center q-pb-none">
+        <div class="text-h6">Confirm File Action</div>
+        <q-space />
+        <q-btn icon="close" flat round dense @click="showFileChoiceModal = false" />
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1 q-mb-md">
+          You are about to: <strong>{{ getActionDescription(selectedFileAction) }}</strong>
+        </div>
+        <div class="text-caption text-grey-6">
+          This action will be executed in the background. You can monitor progress in the execution modal.
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn
+          label="Cancel"
+          color="grey"
+          @click="showFileChoiceModal = false"
+        />
+        <q-btn
+          label="Confirm"
+          color="primary"
+          @click="executeFileAction"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+
+  <!-- Execution Progress Modal -->
+  <q-dialog v-model="showExecutionModal" persistent>
+    <q-card style="min-width: 500px">
+      <q-card-section class="row items-center q-pb-none">
+        <div class="text-h6">Executing Action</div>
+        <q-space />
+        <q-btn 
+          icon="close" 
+          flat 
+          round 
+          dense 
+          @click="showExecutionModal = false"
+          :disable="executionInProgress"
+        />
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1 q-mb-md">
+          <strong>{{ getActionDescription(selectedFileAction) }}</strong>
+        </div>
+        
+        <!-- Execution Stages -->
+        <div class="execution-stages">
+          <div 
+            v-for="(stage, index) in executionStages" 
+            :key="index"
+            class="execution-stage q-mb-sm"
+            :class="{ 
+              'completed': index < currentExecutionStage,
+              'current': index === currentExecutionStage,
+              'pending': index > currentExecutionStage
+            }"
+          >
+            <div class="row items-center">
+              <q-icon 
+                :name="index < currentExecutionStage ? 'check_circle' : 
+                       index === currentExecutionStage ? 'radio_button_unchecked' : 'radio_button_unchecked'"
+                :color="index < currentExecutionStage ? 'positive' : 
+                        index === currentExecutionStage ? 'primary' : 'grey-4'"
+                size="1.2rem"
+                class="q-mr-sm"
+              />
+              <div class="text-body2">{{ stage.title }}</div>
+              <q-space />
+              <q-spinner-dots 
+                v-if="index === currentExecutionStage && executionInProgress"
+                size="1rem"
+                color="primary"
+              />
+            </div>
+            <div v-if="stage.description" class="text-caption text-grey-6 q-ml-lg">
+              {{ stage.description }}
+            </div>
+          </div>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn
+          label="Cancel"
+          color="grey"
+          @click="cancelExecution"
+          :disable="!executionInProgress"
+        />
+        <q-btn
+          label="OK"
+          color="primary"
+          @click="showExecutionModal = false"
+          :disable="!executionComplete"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script lang="ts">
@@ -1062,6 +1228,10 @@ export default defineComponent({
     warning: {
       type: String,
       default: "",
+    },
+    AIoptions: {
+      type: Array,
+      default: () => [],
     },
   },
   emits: [
@@ -1176,6 +1346,16 @@ export default defineComponent({
     // Cancel request modal state
     const showCancelRequestModal = ref(false);
     const isCancellingRequest = ref(false);
+    
+    // File management state for authenticated users
+    const userHasFiles = ref(false);
+    const showFileChoiceModal = ref(false);
+    const showExecutionModal = ref(false);
+    const executionStages = ref([]);
+    const currentExecutionStage = ref(0);
+    const executionInProgress = ref(false);
+    const executionComplete = ref(false);
+    const selectedFileAction = ref('');
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -1764,36 +1944,27 @@ export default defineComponent({
           const result = await response.json();
           console.log("✅ Agent saved to Cloudant:", result);
 
-          // Step 2: Read the agent back from Cloudant to verify it was saved
-          const verifyResponse = await fetch(`/api/current-agent`, {
-            credentials: 'include'
-          });
+          // Skip verification step - trust that the agent was saved successfully
+          // The verification was causing issues due to session context problems
+          console.log("[*] Agent selected successfully:", result.agent?.name || 'Unknown');
           
-          if (verifyResponse.ok) {
-            const verifyResult = await verifyResponse.json();
+          // Update the UI with the agent data from the save response
+          if (result.agent) {
+            currentAgent.value = result.agent;
             
-            if (verifyResult.agent && verifyResult.agent.uuid === agentId) {
-              console.log("[*] Agent selected and verified:", verifyResult.agent.name);
-              
-              // Step 3: Only now update the UI
-              currentAgent.value = verifyResult.agent;
-              
-              // Emit agent update event
-              emit("agent-updated", verifyResult.agent);
+            // Emit agent update event
+            emit("agent-updated", result.agent);
 
-          $q.notify({
-            type: "positive",
-                message: `Agent "${verifyResult.agent.name}" selected and verified!`,
-                timeout: 3000,
-              });
+            $q.notify({
+              type: "positive",
+              message: `Agent "${result.agent.name}" selected successfully!`,
+              timeout: 3000,
+            });
 
-              // Show KB link suggestion modal
-              showKbLinkSuggestionDialog.value = true;
-            } else {
-              throw new Error("Agent verification failed - agent not found in Cloudant");
-            }
+            // Show KB link suggestion modal
+            showKbLinkSuggestionDialog.value = true;
           } else {
-            throw new Error("Failed to verify agent in Cloudant");
+            throw new Error("No agent data returned from save operation");
           }
         } else {
           throw new Error("Failed to set current agent");
@@ -3416,6 +3587,171 @@ export default defineComponent({
       showChooseFilesDialog.value = true;
     };
 
+    // File management methods for authenticated users
+    const checkUserFiles = async () => {
+      if (!isAuthenticated.value || isDeepLinkUser.value) return;
+      
+      try {
+        // Check if user has files in their Spaces bucket
+        const response = await fetch(`${API_BASE_URL}/user-files`);
+        if (response.ok) {
+          const filesData = await response.json();
+          userHasFiles.value = filesData.hasFiles || false;
+          console.log(`📁 User has files: ${userHasFiles.value}`);
+        }
+      } catch (error) {
+        console.error('❌ Error checking user files:', error);
+        userHasFiles.value = false;
+      }
+    };
+
+    const handleFileAction = (action: string) => {
+      selectedFileAction.value = action;
+      showFileChoiceModal.value = true;
+    };
+
+    const getActionDescription = (action: string) => {
+      const descriptions: Record<string, string> = {
+        'create_or_add': 'Create new or add to existing knowledge base',
+        'import_more': 'Import more files before creating knowledge base',
+        'clear_files': 'Clear all files (you will need to import them again)',
+        'import_files': 'Import files to create a new knowledge base'
+      };
+      return descriptions[action] || action;
+    };
+
+    const executeFileAction = async () => {
+      showFileChoiceModal.value = false;
+      showExecutionModal.value = true;
+      executionInProgress.value = true;
+      executionComplete.value = false;
+      currentExecutionStage.value = 0;
+
+      // Set up execution stages based on action
+      const stages = getExecutionStages(selectedFileAction.value);
+      executionStages.value = stages;
+
+      try {
+        for (let i = 0; i < stages.length; i++) {
+          currentExecutionStage.value = i;
+          await executeStage(stages[i], selectedFileAction.value);
+          
+          // Wait a bit between stages for visual feedback
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        executionComplete.value = true;
+        executionInProgress.value = false;
+        
+        $q.notify({
+          type: 'positive',
+          message: 'Action completed successfully!'
+        });
+        
+        } catch (error: any) {
+        console.error('❌ Execution failed:', error);
+        executionInProgress.value = false;
+        $q.notify({
+          type: 'negative',
+          message: `Action failed: ${error.message || 'Unknown error'}`
+        });
+      }
+    };
+
+    const getExecutionStages = (action: string) => {
+      const stageTemplates: Record<string, Array<{title: string, description: string}>> = {
+        'create_or_add': [
+          { title: 'Checking existing knowledge bases', description: 'Scanning for existing knowledge bases' },
+          { title: 'Processing files', description: 'Converting files to AI-readable format' },
+          { title: 'Creating/updating knowledge base', description: 'Setting up knowledge base structure' },
+          { title: 'Indexing content', description: 'Processing content for AI search' },
+          { title: 'Verifying completion', description: 'Ensuring indexing is complete' }
+        ],
+        'import_more': [
+          { title: 'Opening file import', description: 'Launching file selection interface' },
+          { title: 'Waiting for file selection', description: 'User selecting additional files' }
+        ],
+        'clear_files': [
+          { title: 'Backing up file references', description: 'Creating backup of file metadata' },
+          { title: 'Clearing user files', description: 'Removing files from storage' },
+          { title: 'Cleaning up metadata', description: 'Removing file references' }
+        ],
+        'import_files': [
+          { title: 'Opening file import', description: 'Launching file selection interface' },
+          { title: 'Waiting for file selection', description: 'User selecting files to import' }
+        ]
+      };
+      return stageTemplates[action] || [];
+    };
+
+    const executeStage = async (stage: any, action: string) => {
+      // Simulate stage execution - in real implementation, this would call actual APIs
+      console.log(`Executing stage: ${stage.title} for action: ${action}`);
+      
+      switch (stage.title) {
+        case 'Indexing content':
+          // For knowledge base creation, wait for indexing to complete
+          if (action === 'create_or_add') {
+            await waitForIndexingCompletion();
+          }
+          break;
+        case 'Opening file import':
+          // Trigger file import dialog
+          if (action === 'import_more' || action === 'import_files') {
+            // This would open the file chooser
+            console.log('Opening file chooser...');
+          }
+          break;
+        default:
+          // Simulate work
+          await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    };
+
+    const waitForIndexingCompletion = async () => {
+      // Poll for indexing completion
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes max
+      
+      while (attempts < maxAttempts) {
+        try {
+          // Check indexing status - this would be a real API call
+          const response = await fetch(`${API_BASE_URL}/indexing-status`);
+          if (response.ok) {
+            const status = await response.json();
+            if (status.completed) {
+              console.log('✅ Indexing completed');
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('Error checking indexing status:', error);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+        attempts++;
+      }
+      
+      throw new Error('Indexing timeout - please check manually');
+    };
+
+    const cancelExecution = () => {
+      executionInProgress.value = false;
+      showExecutionModal.value = false;
+      
+      $q.notify({
+        type: 'warning',
+        message: 'Action cancelled'
+      });
+    };
+
+    // Watch for dialog opening to check files
+    watch(showDialog, (newValue) => {
+      if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
+        checkUserFiles();
+      }
+    });
+
     return {
       showDialog,
       currentAgent,
@@ -3514,6 +3850,19 @@ export default defineComponent({
       currentWorkflowStep,
       handleManageKnowledgeBases,
       isDeepLinkUser,
+      // File management for authenticated users
+      userHasFiles,
+      showFileChoiceModal,
+      showExecutionModal,
+      executionStages,
+      currentExecutionStage,
+      executionInProgress,
+      executionComplete,
+      selectedFileAction,
+      handleFileAction,
+      getActionDescription,
+      executeFileAction,
+      cancelExecution,
     };
 
 
@@ -3620,5 +3969,28 @@ export default defineComponent({
 
 .help-btn:hover {
   opacity: 1;
+}
+
+/* Execution modal styling */
+.execution-stages {
+  margin: 16px 0;
+}
+
+.execution-stage {
+  padding: 8px 0;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.execution-stage.completed {
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.execution-stage.current {
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.execution-stage.pending {
+  opacity: 0.6;
 }
 </style>

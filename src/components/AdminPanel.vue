@@ -474,6 +474,15 @@
               />
               
               <QBtn
+                v-if="selectedUser.workflowStage === 'approved'"
+                color="primary"
+                icon="add_circle"
+                label="Create Agent"
+                @click="resetUserForAgentCreation"
+                :loading="isProcessingApproval"
+              />
+              
+              <QBtn
                 v-if="selectedUser.hasPasskey"
                 color="warning"
                 icon="key_off"
@@ -978,7 +987,10 @@ export default defineComponent({
     };
     
     const viewUserDetails = async (user) => {
+      console.log(`🔍 [DEBUG] viewUserDetails called with user:`, user.userId);
+      console.log(`🔍 [DEBUG] Setting selectedUser to:`, user.userId);
       selectedUser.value = user;
+      console.log(`🔍 [DEBUG] selectedUser is now:`, selectedUser.value?.userId);
       adminNotes.value = '';
       showUserModal.value = true;
       
@@ -1004,23 +1016,62 @@ export default defineComponent({
       await loadAgents();
     };
     
+    const resetUserForAgentCreation = async () => {
+      if (!selectedUser.value) return;
+      
+      console.log(`🔍 [DEBUG] resetUserForAgentCreation called for user:`, selectedUser.value.userId);
+      isProcessingApproval.value = true;
+      try {
+        // Reset the user's workflow stage to awaiting_approval
+        await setUserWorkflowStage(selectedUser.value.userId, 'awaiting_approval');
+        
+        $q.notify({
+          type: 'positive',
+          message: `User ${selectedUser.value.displayName} reset to "Awaiting Approval" state for agent creation testing`
+        });
+        
+        // Close the user details modal
+        showUserModal.value = false;
+        
+        // Reload users to reflect the change
+        await loadUsers();
+        
+      } catch (error) {
+        console.error('Error resetting user for agent creation:', error);
+        $q.notify({
+          type: 'negative',
+          message: 'Failed to reset user state. Please try again.'
+        });
+      } finally {
+        isProcessingApproval.value = false;
+      }
+    };
+    
     const setUserWorkflowStage = async (userId, stage) => {
       try {
-        const response = await fetch(`/api/admin-management/users/${userId}/approve`, {
+        console.log(`🔄 [DEBUG] Setting workflow stage for user ${userId} to: ${stage}`);
+        console.log(`🔄 [DEBUG] Making request to: /api/admin-management/users/${userId}/workflow-stage`);
+        
+        // Use the new workflow stage endpoint for direct stage updates
+        const response = await fetch(`/api/admin-management/users/${userId}/workflow-stage`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            action: stage === 'waiting_for_deployment' ? 'approve' : stage,
+            workflowStage: stage,
             notes: `Workflow stage set to: ${stage}`
           })
         });
         
+        console.log(`🔄 [DEBUG] Response status: ${response.status} ${response.statusText}`);
+        
         if (response.ok) {
-          console.log(`✅ User ${userId} workflow stage set to: ${stage}`);
+          const result = await response.json();
+          console.log(`✅ User ${userId} workflow stage set to: ${stage}`, result);
         } else {
-          console.error(`❌ Failed to set workflow stage for user ${userId}`);
+          const errorText = await response.text();
+          console.error(`❌ Failed to set workflow stage for user ${userId}:`, response.status, errorText);
         }
       } catch (error) {
         console.error(`❌ Error setting workflow stage:`, error);
@@ -1755,6 +1806,7 @@ export default defineComponent({
       handleGroupDeleted,
       viewUserDetails,
       createAgentForUser,
+      resetUserForAgentCreation,
       setUserWorkflowStage,
       startDeploymentPolling,
       approveUser,

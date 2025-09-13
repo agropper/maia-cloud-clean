@@ -2784,11 +2784,11 @@ const getAgentApiKey = async (agentId) => {
 // Helper function to check if an agent is available to Public User
 const isAgentAvailableToPublicUser = async (agentId) => {
   try {
-    // Get all authenticated users and their owned agents (exclude both Public User and Unknown User)
+    // Get all authenticated users (exclude both Public User and Unknown User)
     const usersResponse = await couchDBClient.findDocuments('maia_users', {
       selector: {
         _id: { $nin: ['Public User', 'Unknown User'] },
-        ownedAgents: { $exists: true }
+        credentialID: { $exists: true } // Only users with passkeys (authenticated users)
       }
     });
     
@@ -2805,7 +2805,30 @@ const isAgentAvailableToPublicUser = async (agentId) => {
           }
         });
       }
+      
+      // Also check for assignedAgentId (admin system)
+      if (user.assignedAgentId) {
+        ownedAgentIds.add(user.assignedAgentId);
+      }
     });
+    
+    // Check if agent is owned by pattern matching (e.g., "fri951-agent-*" belongs to user "fri951")
+    const agents = await doRequest('/v2/gen-ai/agents');
+    const agentArray = agents.agents || [];
+    const selectedAgent = agentArray.find(agent => agent.uuid === agentId);
+    
+    if (selectedAgent) {
+      const agentNamePattern = /^([a-z0-9]+)-agent-/;
+      const nameMatch = selectedAgent.name.match(agentNamePattern);
+      if (nameMatch) {
+        const potentialOwner = nameMatch[1];
+        const ownerExists = usersResponse.docs.some(user => user._id === potentialOwner);
+        if (ownerExists) {
+          console.log(`🔍 [isAgentAvailableToPublicUser] Agent ${selectedAgent.name} is owned by pattern match: ${potentialOwner}`);
+          return false; // Not available to Public User
+        }
+      }
+    }
     
     // Agent is available to Public User if it's not owned by any authenticated user
     return !ownedAgentIds.has(agentId);
@@ -2884,18 +2907,16 @@ app.get('/api/agents', async (req, res) => {
       // Agents without owners effectively belong to Public User
       try {
         console.log(`🔍 [DEBUG] Getting all authenticated users and their owned agents...`);
-        // Get all authenticated users and their owned agents (exclude both Public User and Unknown User)
+        // Get all authenticated users (exclude both Public User and Unknown User)
         const usersResponse = await couchDBClient.findDocuments('maia_users', {
           selector: {
             _id: { $nin: ['Public User', 'Unknown User'] },
-            $or: [
-              { ownedAgents: { $exists: true } },
-              { assignedAgentId: { $exists: true } }
-            ]
+            credentialID: { $exists: true } // Only users with passkeys (authenticated users)
           }
         });
         
         console.log(`🔍 [DEBUG] Found ${usersResponse.docs.length} authenticated users with ownedAgents`);
+        console.log(`🔍 [DEBUG] Users found:`, usersResponse.docs.map(u => u._id));
         
         const ownedAgentIds = new Set();
         usersResponse.docs.forEach(user => {
@@ -2927,6 +2948,21 @@ app.get('/api/agents', async (req, res) => {
         // Public User gets all unowned agents
         filteredAgents = allAgents.filter(agent => {
           const isOwned = ownedAgentIds.has(agent.uuid);
+          
+          // Additional check: if agent name follows user pattern (e.g., "fri951-agent-*"), 
+          // check if it should be owned by a specific user
+          const agentNamePattern = /^([a-z0-9]+)-agent-/;
+          const nameMatch = agent.name.match(agentNamePattern);
+          if (nameMatch && !isOwned) {
+            const potentialOwner = nameMatch[1];
+            // Check if this user exists and should own this agent
+            const ownerExists = usersResponse.docs.some(user => user._id === potentialOwner);
+            if (ownerExists) {
+              console.log(`🔍 [DEBUG] Agent ${agent.name} (${agent.uuid}) - owned by pattern match: ${potentialOwner}`);
+              return false; // Don't show to Public User
+            }
+          }
+          
           console.log(`🔍 [DEBUG] Agent ${agent.name} (${agent.uuid}) - owned: ${isOwned}`);
           return !isOwned;
         });
@@ -2967,6 +3003,17 @@ app.get('/api/agents', async (req, res) => {
         }
         
         console.log(`🔍 [DEBUG] User's owned agent IDs:`, Array.from(ownedAgentIds));
+        
+        // Check for pattern-based ownership (e.g., "fri951-agent-*" belongs to user "fri951")
+        const agentNamePattern = new RegExp(`^${currentUser}-agent-`);
+        const patternBasedAgents = allAgents.filter(agent => agentNamePattern.test(agent.name));
+        
+        if (patternBasedAgents.length > 0) {
+          console.log(`🔍 [DEBUG] Found ${patternBasedAgents.length} pattern-based agents for ${currentUser}:`, patternBasedAgents.map(a => a.name));
+          patternBasedAgents.forEach(agent => {
+            ownedAgentIds.add(agent.uuid);
+          });
+        }
         
         if (ownedAgentIds.size > 0) {
           filteredAgents = allAgents.filter(agent => {
@@ -3170,6 +3217,11 @@ app.get('/api/current-agent', async (req, res) => {
     // Get current user from session if available
     let currentUser = req.session?.userId || 'Public User';
     console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
+    console.log(`🔍 [DEBUG] Session data:`, {
+      hasSession: !!req.session,
+      userId: req.session?.userId,
+      sessionId: req.sessionID
+    });
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
