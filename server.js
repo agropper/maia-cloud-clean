@@ -6,6 +6,10 @@ console.log('🚨 SERVER.JS IS LOADING - LINE 3');
 // Import session management utilities
 import { SessionManager } from './src/utils/session-manager.js';
 import { SessionMiddleware } from './src/middleware/session-middleware.js';
+import UserStateManagerClass from './src/utils/UserStateManager.js';
+
+// Create singleton instance
+const UserStateManager = new UserStateManagerClass();
 
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
@@ -4227,8 +4231,18 @@ app.post('/api/current-agent', async (req, res) => {
         };
         
         // Save updated user document
-        await couchDBClient.updateDocument('maia_users', updatedUserDoc);
+        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
+        
+        // Update user state cache - map current agent to assigned agent for consistency
+        UserStateManager.updateUserStateSection(currentUser, 'agent', {
+          currentAgentId: selectedAgent.uuid,
+          currentAgentName: selectedAgent.name,
+          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
+          currentAgentSetAt: new Date().toISOString(),
+          assignedAgentId: selectedAgent.uuid, // Map current to assigned
+          assignedAgentName: selectedAgent.name // Map current to assigned
+        });
         
         // Debug: Verify the document was saved correctly
         const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
@@ -4271,6 +4285,16 @@ app.post('/api/current-agent', async (req, res) => {
         console.log(`🔍 Saving Public User document:`, updatedUserDoc);
         await couchDBClient.saveDocument('maia_users', updatedUserDoc);
         console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
+        
+        // Update user state cache for Public User - map current agent to assigned agent for consistency
+        UserStateManager.updateUserStateSection('Public User', 'agent', {
+          currentAgentId: selectedAgent.uuid,
+          currentAgentName: selectedAgent.name,
+          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
+          currentAgentSetAt: new Date().toISOString(),
+          assignedAgentId: selectedAgent.uuid, // Map current to assigned
+          assignedAgentName: selectedAgent.name // Map current to assigned
+        });
       } catch (userError) {
         console.error(`❌ Failed to store current agent selection for Public User:`, userError);
       }
@@ -4298,6 +4322,161 @@ app.post('/api/current-agent', async (req, res) => {
   } catch (error) {
     console.error('❌ Set current agent error:', error);
     res.status(500).json({ message: `Failed to set current agent: ${error.message}` });
+  }
+});
+
+// ============================================================================
+// UNIFIED USER STATE MANAGEMENT ENDPOINTS
+// ============================================================================
+
+// Get cache statistics (for debugging) - MUST come before parameterized routes
+app.get('/api/user-state/cache/stats', (req, res) => {
+  try {
+    const stats = UserStateManager.getCacheStats();
+    res.json(stats);
+  } catch (error) {
+    console.error(`❌ [user-state] Stats error:`, error);
+    res.status(500).json({ error: 'Failed to get cache stats' });
+  }
+});
+
+// Get all users' state (for admin panel) - MUST come before /:userId route
+app.get('/api/user-state/all', async (req, res) => {
+  try {
+    console.log(`🔍 [user-state] GET all users request`);
+    
+    // Get all user states from cache
+    const allUserIds = UserStateManager.getAllUserIds();
+    const userStates = [];
+    
+    for (const userId of allUserIds) {
+      const userState = UserStateManager.getUserState(userId);
+      if (userState) {
+        userStates.push(userState);
+      }
+    }
+    
+    console.log(`✅ [user-state] Returning ${userStates.length} user states from cache`);
+    res.json({ users: userStates });
+  } catch (error) {
+    console.error(`❌ [user-state] Error getting all users:`, error);
+    res.status(500).json({ error: 'Failed to get all users state' });
+  }
+});
+
+// Get complete user state (agent + KB + workflow)
+app.get('/api/user-state/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🔍 [user-state] GET request for user: ${userId}`);
+    
+    // Get user state from cache
+    let userState = UserStateManager.getUserState(userId);
+    
+    if (!userState) {
+      console.log(`🔄 [user-state] User ${userId} not in cache, fetching from database...`);
+      
+      // Fetch user document from database
+      const userDoc = await couchDBClient.getDocument('maia_users', userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Get KB assignments for this user
+      let assignedKBs = [];
+      try {
+        // TODO: Implement KB assignment lookup
+        // For now, return empty array
+        assignedKBs = [];
+      } catch (kbError) {
+        console.error(`❌ [user-state] Error fetching KB assignments for ${userId}:`, kbError.message);
+      }
+      
+      // Build user state from database
+      userState = UserStateManager.buildUserStateFromDB(userDoc, assignedKBs, []);
+      
+      // Cache the user state
+      UserStateManager.updateUserState(userId, userState);
+    }
+    
+    console.log(`✅ [user-state] Returning state for ${userId}:`, {
+      currentAgent: userState.currentAgentName,
+      assignedKBs: userState.assignedKnowledgeBases?.length || 0,
+      workflowStage: userState.workflowStage
+    });
+    
+    res.json(userState);
+  } catch (error) {
+    console.error(`❌ [user-state] Error:`, error);
+    res.status(500).json({ error: 'Failed to get user state' });
+  }
+});
+
+// Get specific section of user state
+app.get('/api/user-state/:userId/:section', async (req, res) => {
+  try {
+    const { userId, section } = req.params;
+    console.log(`🔍 [user-state] GET request for user: ${userId}, section: ${section}`);
+    
+    // Validate section
+    const validSections = ['agent', 'knowledge-bases', 'workflow'];
+    if (!validSections.includes(section)) {
+      return res.status(400).json({ error: 'Invalid section. Must be: agent, knowledge-bases, or workflow' });
+    }
+    
+    // Get user state from cache
+    let userState = UserStateManager.getUserState(userId);
+    
+    if (!userState) {
+      // If not in cache, fetch from database first
+      const userDoc = await couchDBClient.getDocument('maia_users', userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Build and cache user state
+      userState = UserStateManager.buildUserStateFromDB(userDoc, [], []);
+      UserStateManager.updateUserState(userId, userState);
+    }
+    
+    // Get specific section
+    const sectionData = UserStateManager.getUserStateSection(userId, section);
+    
+    console.log(`✅ [user-state] Returning ${section} for ${userId}:`, sectionData);
+    res.json(sectionData);
+  } catch (error) {
+    console.error(`❌ [user-state] Error:`, error);
+    res.status(500).json({ error: 'Failed to get user state section' });
+  }
+});
+
+// Update user state (used by other endpoints to update cache)
+app.post('/api/user-state/:userId/update', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { section, data } = req.body;
+    
+    console.log(`🔄 [user-state] Update request for user: ${userId}, section: ${section}`);
+    
+    // Validate section
+    const validSections = ['agent', 'knowledge-bases', 'workflow', 'all'];
+    if (!validSections.includes(section)) {
+      return res.status(400).json({ error: 'Invalid section. Must be: agent, knowledge-bases, workflow, or all' });
+    }
+    
+    if (section === 'all') {
+      // Update complete user state
+      UserStateManager.updateUserState(userId, data);
+    } else {
+      // Update specific section
+      UserStateManager.updateUserStateSection(userId, section, data);
+    }
+    
+    console.log(`✅ [user-state] Updated ${section} for user ${userId}`);
+    res.json({ success: true, message: `Updated ${section} for user ${userId}` });
+  } catch (error) {
+    console.error(`❌ [user-state] Update error:`, error);
+    res.status(500).json({ error: 'Failed to update user state' });
   }
 });
 
@@ -6104,13 +6283,44 @@ app.get('/vue-tooltip-test', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 MAIA Secure Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
       console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
   console.log(`📅 Server started at: ${new Date().toISOString()}`);
+  
+  // Initialize UserStateManager cache on startup
+  try {
+    console.log(`🔄 [STARTUP] Initializing UserStateManager cache...`);
+    await UserStateManager.initializeCache(
+      async () => {
+        // Function to get all user documents
+        const allUsers = await couchDBClient.getAllDocuments('maia_users');
+        console.log(`🔍 [STARTUP] Found ${allUsers.length} total documents in database`);
+        const filteredUsers = allUsers.filter(doc => 
+          doc.type === 'user' || 
+          doc.type === 'unknown' || 
+          doc.type === null ||
+          (doc.userId && doc.userId.startsWith('deep_link_'))
+        );
+        console.log(`🔍 [STARTUP] Filtered to ${filteredUsers.length} users (type: user, unknown, or null)`);
+        filteredUsers.forEach(user => {
+          console.log(`🔍 [STARTUP] User: ${user.userId || user._id}, type: ${user.type}, displayName: ${user.displayName}`);
+        });
+        return filteredUsers;
+      },
+      async (userId) => {
+        // Function to get KB assignments for a user
+        // TODO: Implement actual KB assignment lookup
+        return [];
+      }
+    );
+    console.log(`✅ [STARTUP] UserStateManager cache initialized successfully`);
+  } catch (error) {
+    console.error(`❌ [STARTUP] Failed to initialize UserStateManager cache:`, error);
+  }
   
   // Start cleanup job for expired deep links
   setInterval(async () => {

@@ -483,6 +483,15 @@
               />
               
               <QBtn
+                v-if="selectedUser.workflowStage === 'inconsistent'"
+                color="purple"
+                icon="sync_problem"
+                label="Fix Data Inconsistency"
+                @click="fixDataInconsistency"
+                :loading="isProcessingApproval"
+              />
+              
+              <QBtn
                 v-if="selectedUser.hasPasskey"
                 color="warning"
                 icon="key_off"
@@ -788,7 +797,7 @@ export default defineComponent({
           // If we can access the health endpoint, the system is ready
           // Now check if current user is admin by trying to get users
           try {
-            const usersResponse = await fetch('/api/admin-management/users');
+            const usersResponse = await fetch('/api/user-state/all');
             if (usersResponse.ok) {
               isAdmin.value = true;
               await loadUsers();
@@ -947,17 +956,18 @@ export default defineComponent({
       
       isLoading.value = true;
       try {
-        const response = await fetch('/api/admin-management/users');
+        const response = await fetch('/api/user-state/all');
         if (response.ok) {
           const data = await response.json();
           users.value = data.users;
+          console.log(`✅ [Browser] Admin Panel: Loaded ${users.value.length} users from unified state`);
         } else {
           const errorData = await response.json().catch(() => ({}));
           
           // Handle rate limiting specifically
           if (response.status === 429) {
             console.warn('🚨 [Browser] Admin Panel: Cloudant Rate Limit Exceeded (429)', {
-              endpoint: '/api/admin-management/users',
+              endpoint: '/api/user-state/all',
               error: errorData.error || 'Rate limit exceeded',
               retryAfter: errorData.retryAfter || '30 seconds',
               suggestion: errorData.suggestion || 'Please wait and try again',
@@ -995,7 +1005,7 @@ export default defineComponent({
       showUserModal.value = true;
       
       try {
-        const response = await fetch(`/api/admin-management/users/${user.userId}`);
+        const response = await fetch(`/api/user-state/${user.userId}`);
         if (response.ok) {
           const userDetails = await response.json();
           // Ensure userId is preserved from the original user object
@@ -1007,6 +1017,7 @@ export default defineComponent({
           if (userDetails.adminNotes) {
             adminNotes.value = userDetails.adminNotes;
           }
+          console.log(`✅ [Browser] Admin Panel: Loaded user details for ${user.userId} from unified state`);
         }
       } catch (error) {
         console.error('Error loading user details:', error);
@@ -1275,6 +1286,60 @@ export default defineComponent({
       });
     };
     
+    const fixDataInconsistency = async () => {
+      if (!selectedUser.value) return;
+      
+      // Show confirmation dialog
+      $q.dialog({
+        title: 'Fix Data Inconsistency',
+        message: `This will reset the workflow stage for user "${selectedUser.value.displayName}" to "awaiting_approval" to fix the data inconsistency. Continue?`,
+        cancel: true,
+        persistent: true,
+        ok: {
+          label: 'Fix Inconsistency',
+          color: 'purple'
+        }
+      }).onOk(async () => {
+        isProcessingApproval.value = true;
+        try {
+          // Reset the user's workflow stage to awaiting_approval
+          const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/workflow-stage`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              workflowStage: 'awaiting_approval',
+              approvalStatus: 'pending'
+            })
+          });
+          
+          if (response.ok) {
+            $q.notify({
+              type: 'positive',
+              message: `Data inconsistency fixed for user "${selectedUser.value.displayName}". Workflow stage reset to "awaiting_approval".`
+            });
+            
+            // Refresh user details to show updated status
+            await viewUserDetails(selectedUser.value);
+            
+            // Refresh users list
+            await loadUsers();
+          } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fix data inconsistency');
+          }
+        } catch (error) {
+          $q.notify({
+            type: 'negative',
+            message: `Failed to fix data inconsistency: ${error.message}`
+          });
+        } finally {
+          isProcessingApproval.value = false;
+        }
+      });
+    };
+    
     const saveNotes = async () => {
       if (!selectedUser.value || !adminNotes.value.trim()) return;
       
@@ -1393,7 +1458,8 @@ export default defineComponent({
         'waiting_for_deployment': 'info',
         'approved': 'positive',
         'rejected': 'negative',
-        'suspended': 'orange'
+        'suspended': 'orange',
+        'inconsistent': 'purple'
       };
       return colors[stage] || 'grey';
     };
@@ -1405,7 +1471,8 @@ export default defineComponent({
         'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
         'rejected': 'Rejected',
-        'suspended': 'Suspended'
+        'suspended': 'Suspended',
+        'inconsistent': 'Data Inconsistent'
       };
       return labels[stage] || stage;
     };
@@ -1650,7 +1717,7 @@ export default defineComponent({
         // Get user data to determine ownership
         let usersData = [];
         try {
-          const usersResponse = await fetch('/api/admin-management/users');
+          const usersResponse = await fetch('/api/user-state/all');
           if (usersResponse.ok) {
             const usersResult = await usersResponse.json();
             usersData = usersResult.users || [];
@@ -1811,6 +1878,7 @@ export default defineComponent({
       startDeploymentPolling,
       approveUser,
       resetUserPasskey,
+      fixDataInconsistency,
       saveNotes,
       selectAgent,
       assignAgent,

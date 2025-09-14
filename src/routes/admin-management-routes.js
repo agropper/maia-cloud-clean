@@ -1,5 +1,9 @@
 import express from 'express';
 // Removed maia2Client import - using couchDBClient instead
+import UserStateManagerClass from '../utils/UserStateManager.js';
+
+// Create singleton instance
+const UserStateManager = new UserStateManagerClass();
 
 const router = express.Router();
 
@@ -755,7 +759,13 @@ function determineWorkflowStage(user) {
   // Primary source of truth: stored workflowStage field
   if (user.workflowStage) {
     // Validate consistency between workflowStage and approvalStatus
-    validateWorkflowConsistency(user);
+    try {
+      validateWorkflowConsistency(user);
+    } catch (error) {
+      console.error(`❌ [WORKFLOW VALIDATION] Error for user ${user._id}:`, error.message);
+      // Return a safe default instead of throwing
+      return 'inconsistent';
+    }
     return user.workflowStage;
   }
   
@@ -832,10 +842,33 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     // Validate consistency before saving
     console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
-    validateWorkflowConsistency(updatedUser);
+    try {
+      validateWorkflowConsistency(updatedUser);
+    } catch (error) {
+      console.error(`❌ [WORKFLOW VALIDATION] Inconsistent data detected for user ${userId}:`, error.message);
+      // Handle specific workflow transitions
+      if (workflowStage === 'awaiting_approval' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'approved') {
+        console.log(`🔧 [DEBUG] Allowing workflow stage update to fix inconsistent data`);
+        // Update approvalStatus to match the new workflow stage
+        updatedUser.approvalStatus = 'pending';
+      } else if (workflowStage === 'waiting_for_deployment' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'pending') {
+        console.log(`🔧 [DEBUG] Allowing workflow stage update to waiting_for_deployment after agent creation`);
+        // Update approvalStatus to match the new workflow stage
+        updatedUser.approvalStatus = 'approved';
+      } else {
+        throw error; // Re-throw if it's not a recognized transition
+      }
+    }
     
     console.log(`🔄 [DEBUG] Updating user document with new workflow stage: ${workflowStage}`);
     await couchDBClient.saveDocument('maia_users', updatedUser);
+    
+    // Update user state cache
+    UserStateManager.updateUserStateSection(userId, 'workflow', {
+      workflowStage: workflowStage,
+      approvalStatus: updatedUser.approvalStatus,
+      adminNotes: updatedUser.adminNotes
+    });
     
     console.log(`✅ [DEBUG] User workflow stage updated successfully`);
     

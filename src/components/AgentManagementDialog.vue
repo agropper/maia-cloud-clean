@@ -3593,11 +3593,19 @@ export default defineComponent({
       
       try {
         // Check if user has files in their Spaces bucket
-        const response = await fetch(`${API_BASE_URL}/user-files`);
+        const response = await fetch(`${API_BASE_URL}/bucket-files`);
         if (response.ok) {
           const filesData = await response.json();
-          userHasFiles.value = filesData.hasFiles || false;
-          console.log(`📁 User has files: ${userHasFiles.value}`);
+          // Check if there are any files (not just directories)
+          const hasFiles = filesData.files && filesData.files.some((file: any) => 
+            !file.key.endsWith('/') && file.size > 0
+          );
+          userHasFiles.value = hasFiles || false;
+          console.log(`📁 User has files: ${userHasFiles.value} (${filesData.files?.length || 0} total items)`);
+        } else {
+          // Endpoint not available, set default value
+          userHasFiles.value = false;
+          console.log(`📁 Bucket files endpoint not available, defaulting to false`);
         }
       } catch (error) {
         console.error('❌ Error checking user files:', error);
