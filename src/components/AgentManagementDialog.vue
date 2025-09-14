@@ -1830,29 +1830,38 @@ export default defineComponent({
 
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
-      if (!localCurrentUser.value?.userId) return [];
+      if (!localCurrentUser.value?.userId) {
+        console.log('🔧 checkUserBucketFiles: No userId available');
+        return [];
+      }
       
       // Use cached value if available and not forcing refresh
       if (!forceRefresh && userBucketFiles.value.length > 0) {
+        console.log('🔧 checkUserBucketFiles: Using cached value, count:', userBucketFiles.value.length);
         return userBucketFiles.value;
       }
       
       try {
         const username = localCurrentUser.value.userId
         const userFolder = `${username}/`
+        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username, 'folder:', userFolder);
         
         const response = await fetch('/api/bucket-files')
         if (response.ok) {
           const result = await response.json()
+          console.log('🔧 checkUserBucketFiles: API response:', result);
           if (result.success && result.files) {
             // Filter files that belong to this user
             const userFiles = result.files.filter(file => 
               file.key.startsWith(userFolder) && !file.key.endsWith('/')
             )
+            console.log('🔧 checkUserBucketFiles: Filtered user files:', userFiles.length, userFiles);
             // Update the cached value
             userBucketFiles.value = userFiles;
             return userFiles
           }
+        } else {
+          console.log('🔧 checkUserBucketFiles: API response not ok:', response.status);
         }
       } catch (error) {
         console.error('❌ Error checking user bucket files:', error)
@@ -3972,11 +3981,19 @@ export default defineComponent({
       }
     };
 
-    const handleFileAction = (action: string) => {
+    const handleFileAction = async (action: string) => {
       selectedFileAction.value = action;
       
       // For create_or_add action, open the enhanced file selection modal directly
       if (action === 'create_or_add') {
+        console.log('🔧 Opening enhanced file selection modal for create_or_add action');
+        console.log('🔧 Current userHasFiles:', userHasFiles.value);
+        console.log('🔧 Current userBucketFiles count:', userBucketFiles.value.length);
+        
+        // Ensure bucket files are loaded before opening modal
+        await checkUserBucketFiles(true);
+        console.log('🔧 After loading bucket files:', userBucketFiles.value.length);
+        
         showChooseFilesDialog.value = true;
       } else {
         // For other actions, show the confirmation modal
