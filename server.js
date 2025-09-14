@@ -2788,6 +2788,8 @@ const getAgentApiKey = async (agentId) => {
 // Helper function to check if an agent is available to Public User
 const isAgentAvailableToPublicUser = async (agentId) => {
   try {
+    console.log(`🔍 [isAgentAvailableToPublicUser] Checking agent availability for: ${agentId}`);
+    
     // Get all authenticated users (exclude both Public User and Unknown User)
     const usersResponse = await couchDBClient.findDocuments('maia_users', {
       selector: {
@@ -2796,16 +2798,21 @@ const isAgentAvailableToPublicUser = async (agentId) => {
       }
     });
     
+    console.log(`🔍 [isAgentAvailableToPublicUser] Found ${usersResponse.docs.length} authenticated users`);
+    
     const ownedAgentIds = new Set();
     usersResponse.docs.forEach(user => {
+      console.log(`🔍 [isAgentAvailableToPublicUser] Checking user: ${user._id}`);
       if (user.ownedAgents) {
         user.ownedAgents.forEach(agent => {
           if (typeof agent === 'string') {
             // Legacy format - just UUID
             ownedAgentIds.add(agent);
+            console.log(`🔍 [isAgentAvailableToPublicUser] Added owned agent (legacy): ${agent}`);
           } else if (agent.id) {
             // New format - object with id and name
             ownedAgentIds.add(agent.id);
+            console.log(`🔍 [isAgentAvailableToPublicUser] Added owned agent (new): ${agent.id}`);
           }
         });
       }
@@ -2813,20 +2820,29 @@ const isAgentAvailableToPublicUser = async (agentId) => {
       // Also check for assignedAgentId (admin system)
       if (user.assignedAgentId) {
         ownedAgentIds.add(user.assignedAgentId);
+        console.log(`🔍 [isAgentAvailableToPublicUser] Added assigned agent: ${user.assignedAgentId}`);
       }
     });
+    
+    console.log(`🔍 [isAgentAvailableToPublicUser] All owned agent IDs:`, Array.from(ownedAgentIds));
     
     // Check if agent is owned by pattern matching (e.g., "fri951-agent-*" belongs to user "fri951")
     const agents = await doRequest('/v2/gen-ai/agents');
     const agentArray = agents.agents || [];
     const selectedAgent = agentArray.find(agent => agent.uuid === agentId);
     
+    console.log(`🔍 [isAgentAvailableToPublicUser] Selected agent:`, selectedAgent ? selectedAgent.name : 'Not found');
+    
     if (selectedAgent) {
       const agentNamePattern = /^([a-z0-9]+)-agent-/;
       const nameMatch = selectedAgent.name.match(agentNamePattern);
+      console.log(`🔍 [isAgentAvailableToPublicUser] Agent name pattern match:`, nameMatch);
+      
       if (nameMatch) {
         const potentialOwner = nameMatch[1];
         const ownerExists = usersResponse.docs.some(user => user._id === potentialOwner);
+        console.log(`🔍 [isAgentAvailableToPublicUser] Potential owner: ${potentialOwner}, exists: ${ownerExists}`);
+        
         if (ownerExists) {
           console.log(`🔍 [isAgentAvailableToPublicUser] Agent ${selectedAgent.name} is owned by pattern match: ${potentialOwner}`);
           return false; // Not available to Public User
@@ -2835,7 +2851,9 @@ const isAgentAvailableToPublicUser = async (agentId) => {
     }
     
     // Agent is available to Public User if it's not owned by any authenticated user
-    return !ownedAgentIds.has(agentId);
+    const isAvailable = !ownedAgentIds.has(agentId);
+    console.log(`🔍 [isAgentAvailableToPublicUser] Agent ${agentId} available to Public User: ${isAvailable}`);
+    return isAvailable;
   } catch (error) {
     console.warn('Failed to check agent availability for Public User:', error.message);
     // If we can't check, assume it's available (fallback to current behavior)
@@ -3221,7 +3239,7 @@ app.get('/api/current-agent', async (req, res) => {
     // Get current user from session if available
     let currentUser = req.session?.userId || 'Public User';
     console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
-    console.log(`🔍 [DEBUG] Session data:`, {
+    console.log(`🔍 [current-agent] Session data:`, {
       hasSession: !!req.session,
       userId: req.session?.userId,
       sessionId: req.sessionID
@@ -3405,17 +3423,15 @@ app.get('/api/current-agent', async (req, res) => {
       } else {
         // For Public User, check if they have a current agent selection stored in Cloudant
         try {
-          let userDoc = getCache('users', 'Public User');
-          if (!isCacheValid('users', 'Public User')) {
-            userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-            if (userDoc) {
-              setCache('users', 'Public User', userDoc);
-            }
-          }
+          // Always get fresh data from database for Public User to ensure validation
+          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
           console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
           if (userDoc && userDoc.currentAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
+            console.log(`🔍 [current-agent] Validating agent availability for Public User: ${userDoc.currentAgentId}`);
             const isAgentAvailable = await isAgentAvailableToPublicUser(userDoc.currentAgentId);
+            console.log(`🔍 [current-agent] Agent ${userDoc.currentAgentId} available to Public User: ${isAgentAvailable}`);
+            
             if (isAgentAvailable) {
               agentId = userDoc.currentAgentId;
               console.log(`🔐 [current-agent] Using Public User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
@@ -3432,6 +3448,16 @@ app.get('/api/current-agent', async (req, res) => {
                 updatedAt: new Date().toISOString()
               };
               await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+              
+              // Update the cache to reflect the cleared assignment
+              UserStateManager.updateUserStateSection('Public User', 'agent', {
+                currentAgentId: null,
+                currentAgentName: null,
+                currentAgentEndpoint: null,
+                currentAgentSetAt: null,
+                assignedAgentId: null,
+                assignedAgentName: null
+              });
               
               return res.json({ 
                 agent: null, 
@@ -3984,7 +4010,7 @@ app.post('/api/agents', async (req, res) => {
       agentDescription = `A private medical AI assistant for ${patientName}.`;
       agentInstructions = `You are MAIA, a medical AI assistant, that can search through a patient's health records in a knowledge base and provide relevant answers to their requests. Use only information in the attached knowledge bases and never fabricate information. There is a lot of redundancy in a patient's knowledge base. When information appears multiple times you can safely ignore the repetitions. To ensure that all medications are accurately listed in the future, the assistant should adopt a systematic approach: Comprehensive Review: Thoroughly examine every chunk in the knowledge base to identify all medication entries, regardless of their status (active or stopped). Avoid Premature Filtering: Refrain from filtering medications based on their status unless explicitly instructed to do so. This ensures that all prescribed medications are included. Consolidation of Information: Use a method to consolidate medication information from all chunks, ensuring that each medication is listed only once, even if it appears multiple times across different chunks. Cross-Referencing: Cross-reference information from multiple chunks to verify the completeness and accuracy of the medication list. Systematic Extraction: Implement a systematic process or algorithm to extract medication information, reducing the likelihood of human error or oversight. If you are asked for a patient summary, use the following categories and format: Highlight the label and category headings. Display the patient's name followed by their age and sex. A concise medical history; including surgical history -- Doctors seen recently (say, within a year) and diagnoses of those visits -- Current Medications -- Stopped or Inactive Medications --Allergies --Brief social history: employment (or school) status; living situation; use of tobacco, alcohol, drugs --Radiology in the past year --Other testing in the past year (PFTs, EKGs, etc) Do not show your reasoning. Just provide the response in English. Always start your response with the patient's name, age and sex.`;
     }
-
+    
     const agentData = {
       name: agentName,
       description: agentDescription,
@@ -4182,6 +4208,58 @@ app.get('/api/models', async (req, res) => {
   } catch (error) {
     console.error('❌ List models error:', error);
     res.status(500).json({ message: `Failed to list models: ${error.message}` });
+  }
+});
+
+// Clear Public User agent assignment (admin endpoint)
+app.post('/api/admin/clear-public-user-agent', async (req, res) => {
+  try {
+    console.log('🔍 [admin] Clearing Public User agent assignment...');
+    
+    // Get Public User document
+    const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+    console.log('🔍 [admin] Current Public User document:', {
+      currentAgentId: userDoc.currentAgentId,
+      currentAgentName: userDoc.currentAgentName
+    });
+    
+    // Clear the agent assignment
+    const updatedUserDoc = {
+      ...userDoc,
+      currentAgentId: null,
+      currentAgentName: null,
+      currentAgentEndpoint: null,
+      currentAgentSetAt: null,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save updated document
+    await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+    
+    // Update the cache
+    UserStateManager.updateUserStateSection('Public User', 'agent', {
+      currentAgentId: null,
+      currentAgentName: null,
+      currentAgentEndpoint: null,
+      currentAgentSetAt: null,
+      assignedAgentId: null,
+      assignedAgentName: null
+    });
+    
+    console.log('✅ [admin] Successfully cleared Public User agent assignment');
+    
+    res.json({ 
+      success: true, 
+      message: 'Public User agent assignment cleared successfully' 
+    });
+    
+  } catch (error) {
+    console.error('❌ [admin] Error clearing Public User agent assignment:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clear Public User agent assignment',
+      details: error.message 
+    });
   }
 });
 
