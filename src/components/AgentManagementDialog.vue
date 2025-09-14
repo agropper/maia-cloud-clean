@@ -351,12 +351,7 @@
                     label="File Management Actions"
                     color="primary"
                     icon="settings"
-                    :disable="!hasUploadedDocuments && !userHasFiles"
-                    :title="
-                      hasUploadedDocuments || userHasFiles
-                        ? 'Choose a file management action'
-                        : 'Upload documents first using the paper clip'
-                    "
+                    :title="'Choose a file management action'"
                   >
                     <q-list>
                       <q-item
@@ -418,11 +413,10 @@
                   </q-btn-dropdown>
                   
                   <div
-                    v-if="!hasUploadedDocuments && !userHasFiles"
+                    v-if="!userHasFiles"
                     class="text-caption text-grey q-mt-xs"
                   >
-                    Upload documents using the paper clip button to create a new
-                    knowledge base
+                    No files found in your bucket folder. Upload files to get started with knowledge base creation.
                   </div>
                 </div>
 
