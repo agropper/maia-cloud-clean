@@ -1457,6 +1457,7 @@ export default defineComponent({
         'awaiting_approval': 'warning',
         'waiting_for_deployment': 'info',
         'approved': 'positive',
+        'hasAgent': 'positive',
         'rejected': 'negative',
         'suspended': 'orange',
         'inconsistent': 'purple'
@@ -1470,6 +1471,7 @@ export default defineComponent({
         'awaiting_approval': 'Awaiting Approval',
         'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
+        'hasAgent': 'Has Agent',
         'rejected': 'Rejected',
         'suspended': 'Suspended',
         'inconsistent': 'Data Inconsistent'
