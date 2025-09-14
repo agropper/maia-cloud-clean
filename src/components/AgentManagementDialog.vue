@@ -3974,7 +3974,14 @@ export default defineComponent({
 
     const handleFileAction = (action: string) => {
       selectedFileAction.value = action;
-      showFileChoiceModal.value = true;
+      
+      // For create_or_add action, open the enhanced file selection modal directly
+      if (action === 'create_or_add') {
+        showChooseFilesDialog.value = true;
+      } else {
+        // For other actions, show the confirmation modal
+        showFileChoiceModal.value = true;
+      }
     };
 
     const getActionDescription = (action: string) => {
