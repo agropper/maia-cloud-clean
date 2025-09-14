@@ -345,22 +345,80 @@
                   >
                 </div>
 
-                <!-- Create New Knowledge Base Button - Only for authenticated users (not deep link users) -->
+                <!-- File Management Actions Dropdown - Only for authenticated users (not deep link users) -->
                 <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
-                  <q-btn
-                    label="Create New Knowledge Base"
+                  <q-btn-dropdown
+                    label="File Management Actions"
                     color="primary"
-                    icon="add"
-                    @click="handleCreateKnowledgeBase"
-                    :disable="!hasUploadedDocuments"
+                    icon="settings"
+                    :disable="!hasUploadedDocuments && !userHasFiles"
                     :title="
-                      hasUploadedDocuments
-                        ? 'Create a new KB from uploaded documents'
+                      hasUploadedDocuments || userHasFiles
+                        ? 'Choose a file management action'
                         : 'Upload documents first using the paper clip'
                     "
-                  />
+                  >
+                    <q-list>
+                      <q-item
+                        v-if="userHasFiles"
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('create_or_add')"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="add_circle" color="positive" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label>Create new or add to existing knowledge base</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <q-item
+                        v-if="userHasFiles"
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('import_more')"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="upload_file" color="primary" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label>Import more files before creating knowledge base</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <q-item
+                        v-if="userHasFiles"
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('clear_files')"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="clear_all" color="warning" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label>Clear all files (you will need to import them again)</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <q-item
+                        v-if="!userHasFiles"
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('import_files')"
+                      >
+                        <q-item-section avatar>
+                          <q-icon name="upload_file" color="primary" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label>Import files to create a new knowledge base</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  
                   <div
-                    v-if="!hasUploadedDocuments"
+                    v-if="!hasUploadedDocuments && !userHasFiles"
                     class="text-caption text-grey q-mt-xs"
                   >
                     Upload documents using the paper clip button to create a new
