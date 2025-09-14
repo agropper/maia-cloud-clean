@@ -1221,7 +1221,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, nextTick, onUnmounted } from "vue";
+import { defineComponent, ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import type { PropType } from "vue";
 import { useQuasar } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
@@ -3680,17 +3680,20 @@ export default defineComponent({
     };
 
     // File management methods for authenticated users
+    console.log(`📁 [DEBUG] AgentManagementDialog setup - userHasFiles initial value:`, userHasFiles.value);
+    
     const checkUserFiles = async () => {
       if (!isAuthenticated.value || isDeepLinkUser.value) {
         console.log(`📁 [DEBUG] checkUserFiles skipped - authenticated: ${isAuthenticated.value}, isDeepLinkUser: ${isDeepLinkUser.value}`);
         return;
       }
       
-      console.log(`📁 [DEBUG] checkUserFiles called for authenticated user: ${currentUser.value?.userId}`);
+      console.log(`📁 [DEBUG] checkUserFiles called for authenticated user: ${localCurrentUser.value?.userId}`);
+      console.log(`📁 [DEBUG] localCurrentUser object:`, localCurrentUser.value);
       
       try {
         // Check if user has files in their Spaces bucket using user-specific endpoint
-        const response = await fetch(`${API_BASE_URL}/bucket/user-status/${encodeURIComponent(currentUser.value?.userId || '')}`);
+        const response = await fetch(`${API_BASE_URL}/bucket/user-status/${encodeURIComponent(localCurrentUser.value?.userId || '')}`);
         if (response.ok) {
           const statusData = await response.json();
           console.log(`📁 [DEBUG] User bucket status response:`, statusData);
@@ -3710,7 +3713,7 @@ export default defineComponent({
             
             // Filter files for current user only
             const userFiles = filesData.files && filesData.files.filter((file: any) => 
-              file.key.startsWith(`${currentUser.value?.userId}/`) && 
+              file.key.startsWith(`${localCurrentUser.value?.userId}/`) && 
               !file.key.endsWith('/') && 
               file.size > 0
             );
@@ -3871,9 +3874,28 @@ export default defineComponent({
 
     // Watch for dialog opening to check files
     watch(showDialog, (newValue) => {
+      console.log(`📁 [DEBUG] Dialog watch triggered - showDialog: ${newValue}, isAuthenticated: ${isAuthenticated.value}, isDeepLinkUser: ${isDeepLinkUser.value}`);
       if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
+        console.log(`📁 [DEBUG] Calling checkUserFiles from dialog watch`);
         checkUserFiles();
       }
+    });
+
+    // Also watch for changes in authentication status
+    watch([isAuthenticated, localCurrentUser], ([newAuth, newUser]) => {
+      console.log(`📁 [DEBUG] Auth/User watch triggered - isAuthenticated: ${newAuth}, localCurrentUser:`, newUser);
+      if (newAuth && newUser && !isDeepLinkUser.value && showDialog.value) {
+        console.log(`📁 [DEBUG] Calling checkUserFiles from auth/user watch`);
+        checkUserFiles();
+      }
+    });
+
+    // Test call on component mount
+    onMounted(() => {
+      console.log(`📁 [DEBUG] Component mounted - calling checkUserFiles manually`);
+      setTimeout(() => {
+        checkUserFiles();
+      }, 1000);
     });
 
     return {
