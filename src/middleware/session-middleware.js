@@ -119,10 +119,6 @@ class SessionMiddleware {
   // Middleware to create session on authentication
   createSessionOnAuth = async (req, res, next) => {
     try {
-      console.log(`🔍 [createSessionOnAuth] Route: ${req.path}`);
-      console.log(`🔍 [createSessionOnAuth] Session ID: ${req.sessionID}`);
-      console.log(`🔍 [createSessionOnAuth] Session data:`, req.session);
-      
       // Run the passkey route first
       await next();
       
@@ -132,19 +128,15 @@ class SessionMiddleware {
       const sessionId = req.sessionID;
       const userId = req.session.userId;
       
-      console.log(`🔍 [createSessionOnAuth] After route - Session ID: ${sessionId}, User ID: ${userId}`);
-      
       if (userId && sessionId) {
         try {
           // Session creation is now handled automatically by CouchDBSessionStore
           // when req.session is saved with userId. The store will create the session document.
-          console.log(`✅ [createSessionOnAuth] Session will be created automatically by CouchDBSessionStore for user: ${userId}`);
+          // Session creation is already logged by the route handler
         } catch (error) {
           console.error('❌ [createSessionOnAuth] Error in session creation logic:', error);
           // Don't throw - let the response continue
         }
-      } else {
-        console.log(`🔍 [createSessionOnAuth] No session data to create - userId: ${userId}, sessionId: ${sessionId}`);
       }
     } catch (error) {
       console.error('❌ [createSessionOnAuth] Error creating session on auth:', error);

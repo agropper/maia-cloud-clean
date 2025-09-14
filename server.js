@@ -240,20 +240,7 @@ app.use((req, res, next) => {
     // Add to memory cache
     sessionEventCache.set(eventKey, sessionEvent);
     
-    // Debug message for relevant session events only
-    console.log('[*] [Session Event] Captured authenticated event:', {
-      eventKey,
-      sessionId,
-      userId,
-      route,
-      method,
-      timestamp,
-      hasSessionData: !!req.session,
-      sessionKeys: req.session ? Object.keys(req.session) : []
-    });
-    
-    // Log cache size
-    console.log('[*] [Session Event] Cache size:', sessionEventCache.size);
+    // Session events are tracked silently for debugging purposes
     
     // Database writes are now handled in the route handlers themselves
     // This ensures proper timing - writes happen after authentication is confirmed
@@ -273,7 +260,7 @@ const sessionMiddleware = new SessionMiddleware(sessionManager);
 // Endpoint to view session events in cache
 app.get('/api/debug/session-events', (req, res) => {
   const events = Array.from(sessionEventCache.values());
-  console.log('[*] [Session Event] Retrieved', events.length, 'events from cache');
+  // Retrieved events from cache silently
   
   res.json({
     totalEvents: events.length,

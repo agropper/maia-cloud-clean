@@ -419,8 +419,8 @@ export default defineComponent({
       // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = userData;
       
-      // Refresh the session status to ensure we have the latest data
-      await checkExistingSession();
+      // No need to call checkExistingSession() - we already know user is authenticated
+      // await checkExistingSession();
       
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately

@@ -516,32 +516,15 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.authenticatedAt = new Date().toISOString();
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
-      console.log(`🔍 [passkey] Session data after setting:`, req.session);
       
       // Explicitly save the session
       req.session.save((err) => {
         if (err) {
           console.error('❌ [passkey] Error saving session:', err);
-        } else {
-          console.log(`✅ [passkey] Session saved for user: ${updatedUser._id}`);
         }
       });
       
-      // GroupFilter: Log user sign in and group chat count
-      try {
-        const allChats = await couchDBClient.getAllChats();
-        const userChats = allChats.filter(chat => {
-          if (typeof chat.currentUser === 'string') {
-            return chat.currentUser === updatedUser.userId;
-          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
-            return chat.currentUser.userId === updatedUser.userId || chat.currentUser.displayName === updatedUser.userId;
-          }
-          return false;
-        });
-        console.log(`GroupFilter: SIGN_IN - User: ${updatedUser.userId} - Chats visible: ${userChats.length}`);
-      } catch (error) {
-        console.error("GroupFilter: Error getting group chats:", error);
-      }
+      // Group chat filtering is handled by the frontend
       
       // Set the session cookie BEFORE sending response
       res.cookie('maia.sid', req.sessionID, {
@@ -568,7 +551,7 @@ router.post("/authenticate-verify", async (req, res) => {
         },
       };
       
-      console.log(`🔍 [passkey] Sending response:`, responseData);
+      // Sending authentication response
       res.json(responseData);
     } else {
       res.status(400).json({ error: "Authentication verification failed" });
@@ -606,31 +589,14 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
-    console.log(`🔍 [auth-status] Session ID: ${req.sessionID}`);
-    console.log(`🔍 [auth-status] Session data:`, req.session);
-    console.log(`🔍 [auth-status] Session userId: ${req.session?.userId}`);
-    
     if (req.session && req.session.userId) {
-      console.log(`🔍 [auth-status] Session found with userId: ${req.session.userId}`);
-      console.log(`🔍 [auth-status] Session type: ${req.session.sessionType}`);
-      console.log(`🔍 [auth-status] Checking if userId starts with 'deep_link_': ${req.session.userId.startsWith('deep_link_')}`);
-      
       // Check if this is a deep link user - they should not be authenticated on main app
       if (req.session.userId.startsWith('deep_link_')) {
-        console.log(`🔗 [auth-status] Deep link user detected on main app: ${req.session.userId}`);
-        console.log(`🔗 [auth-status] Deep link users should only exist on deep link pages`);
-        console.log(`🔗 [auth-status] Session details:`, {
-          userId: req.session.userId,
-          sessionType: req.session.sessionType,
-          deepLinkId: req.session.deepLinkId
-        });
-        
         // Store deepLinkId before destroying session
         const deepLinkId = req.session.deepLinkId;
         
         // Clear the session for deep link users on main app
         req.session.destroy();
-        console.log(`🔗 [auth-status] Session destroyed, returning redirect to: ${deepLinkId ? `/shared/${deepLinkId}` : '/'}`);
         res.json({ 
           authenticated: false, 
           message: "Deep link users should only access shared pages",
@@ -655,14 +621,6 @@ router.get("/auth-status", async (req, res) => {
       if (userDoc) {
         // Echo current user to backend console
         console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
-        console.log('🔍 [auth-status] Session details:', {
-          userId: req.session.userId,
-          userName: req.session.userName,
-          sessionType: req.session.sessionType,
-          deepLinkId: req.session.deepLinkId
-        });
-        
-        // Session is managed in-memory only (maia_sessions database removed)
         
         res.json({
           authenticated: true,
@@ -719,21 +677,7 @@ router.post("/logout", async (req, res) => {
       const userId = req.session.userId;
       console.log(`👋 User signed out: ${userId}`);
       
-      // GroupFilter: Log user sign out and group chat count before destroying session
-      try {
-        const allChats = await couchDBClient.getAllChats();
-        const userChats = allChats.filter(chat => {
-          if (typeof chat.currentUser === 'string') {
-            return chat.currentUser === userId;
-          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
-            return chat.currentUser.userId === userId || chat.currentUser.displayName === userId;
-          }
-          return false;
-        });
-        console.log(`GroupFilter: SIGN_OUT - User: ${userId} - Chats visible: ${userChats.length}`);
-      } catch (error) {
-        console.error("GroupFilter: Error getting group chats:", error);
-      }
+      // Group chat filtering is handled by the frontend
       
       req.session.destroy(async (err) => {
         if (err) {

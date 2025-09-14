@@ -280,3 +280,18 @@ The MAIA Cloud Admin Panel provides comprehensive management capabilities with:
 - **Secure User Management**: Passkey authentication and session control
 
 The system is designed for reliability, consistency, and maintainability while supporting both authenticated users and deep link access patterns.
+
+## Essential Console Messages (Keep These)
+
+Based on terminal output analysis, these are the only essential messages to keep in production:
+
+1. `✅ Local development environment` - Environment confirmation
+2. `✅ rpID: localhost` - Passkey configuration
+3. `✅ origin: http://localhost:3001` - Server origin
+4. `✅ MAIA2 Client initialized successfully with Cloudant` - Database client status
+5. `✅ Connected to Cloudant: 3.5.0+cloudant` - Database connection
+6. `✅ Database 'maia_chats' already exists` - Database verification
+7. `✅ Database 'maia_knowledge_bases' already exists` - Database verification
+8. `✅ Admin management health check - system ready, user count: X` - System health
+
+**All other console.log messages should be removed** - including debug messages, request logging, PDF processing details, and temporary file paths.
