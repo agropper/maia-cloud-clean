@@ -171,7 +171,7 @@ class UserStateManager {
     let workflowStage = 'no_passkey';
     if (hasValidPasskey) {
       if (userDoc.approvalStatus === 'approved') {
-        workflowStage = 'approved';
+        workflowStage = 'hasAgent';
       } else if (userDoc.approvalStatus === 'pending') {
         workflowStage = 'awaiting_approval';
       } else if (userDoc.approvalStatus === 'rejected') {
