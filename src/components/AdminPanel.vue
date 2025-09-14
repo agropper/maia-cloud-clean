@@ -295,31 +295,6 @@
                 </QChip>
               </QTd>
             </template>
-            
-            <template v-slot:body-cell-bucketStatus="props">
-              <QTd :props="props">
-                <div v-if="props.row.hasBucket" class="text-center">
-                  <QChip
-                    color="positive"
-                    text-color="white"
-                    size="sm"
-                    icon="folder"
-                  >
-                    {{ props.row.bucketFileCount }} files
-                  </QChip>
-                </div>
-                <div v-else class="text-center">
-                  <QChip
-                    color="grey"
-                    text-color="white"
-                    size="sm"
-                    icon="folder_off"
-                  >
-                    No Bucket
-                  </QChip>
-                </div>
-              </QTd>
-            </template>
 
             <template v-slot:body-cell-actions="props">
               <QTd :props="props">
@@ -805,13 +780,6 @@ export default defineComponent({
         align: 'left',
         sortable: true,
         format: (val) => val || 'None'
-      },
-      {
-        name: 'bucketStatus',
-        label: 'Bucket Status',
-        field: 'hasBucket',
-        align: 'center',
-        sortable: true
       },
       {
         name: 'actions',
