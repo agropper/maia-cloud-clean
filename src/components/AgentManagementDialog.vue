@@ -1454,7 +1454,7 @@ export default defineComponent({
           if (localCurrentUser.value?.userId) {
             try {
               const assignedAgentResponse = await fetch(
-                `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
+                `${API_BASE_URL}/api/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
                 { credentials: 'include' }
               );
               if (assignedAgentResponse.ok) {
