@@ -215,9 +215,51 @@ class UserStateManager {
       hasPasskey: hasPasskey,
       hasValidPasskey: hasValidPasskey,
       
+      // Bucket Status - Will be populated by bucket status check
+      hasBucket: false,
+      bucketFileCount: 0,
+      bucketCreatedAt: null,
+      bucketTotalSize: 0,
+      
       // Metadata
       lastUpdated: new Date().toISOString(),
       cacheVersion: this.cacheVersion
+    };
+  }
+
+  /**
+   * Update bucket status for a user
+   * @param {string} userId - User ID
+   * @param {Object} bucketStatus - Bucket status data
+   */
+  updateBucketStatus(userId, bucketStatus) {
+    if (this.userStateCache.has(userId)) {
+      const userState = this.userStateCache.get(userId);
+      userState.hasBucket = bucketStatus.hasFolder || false;
+      userState.bucketFileCount = bucketStatus.fileCount || 0;
+      userState.bucketCreatedAt = bucketStatus.createdAt || null;
+      userState.bucketTotalSize = bucketStatus.totalSize || 0;
+      userState.lastUpdated = new Date().toISOString();
+      
+      this.userStateCache.set(userId, userState);
+      console.log(`📁 [UserStateManager] Updated bucket status for ${userId}: hasBucket=${userState.hasBucket}, files=${userState.bucketFileCount}`);
+    }
+  }
+
+  /**
+   * Get bucket status for a user
+   * @param {string} userId - User ID
+   * @returns {Object} Bucket status
+   */
+  getBucketStatus(userId) {
+    const userState = this.userStateCache.get(userId);
+    if (!userState) return null;
+    
+    return {
+      hasBucket: userState.hasBucket,
+      bucketFileCount: userState.bucketFileCount,
+      bucketCreatedAt: userState.bucketCreatedAt,
+      bucketTotalSize: userState.bucketTotalSize
     };
   }
 
@@ -236,6 +278,65 @@ class UserStateManager {
    */
   getAllUserIds() {
     return Array.from(this.userStateCache.keys());
+  }
+
+  /**
+   * Check and ensure bucket folders for all users
+   * @returns {Promise<void>}
+   */
+  async ensureAllUserBuckets() {
+    console.log('📁 [UserStateManager] Ensuring bucket folders for all users...');
+    
+    const userIds = Array.from(this.userStateCache.keys());
+    const bucketChecks = [];
+    
+    for (const userId of userIds) {
+      // Skip deep link users and Public User for now
+      if (userId.startsWith('deep_link_') || userId === 'Public User') {
+        continue;
+      }
+      
+      bucketChecks.push(this.ensureUserBucket(userId));
+    }
+    
+    try {
+      await Promise.all(bucketChecks);
+      console.log(`✅ [UserStateManager] Completed bucket checks for ${bucketChecks.length} users`);
+    } catch (error) {
+      console.error('❌ [UserStateManager] Error ensuring user buckets:', error);
+    }
+  }
+
+  /**
+   * Ensure bucket folder exists for a specific user
+   * @param {string} userId - User ID
+   * @returns {Promise<void>}
+   */
+  async ensureUserBucket(userId) {
+    try {
+      // First check current status
+      const statusResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${userId}`);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        this.updateBucketStatus(userId, statusData);
+        return;
+      }
+      
+      // If no folder exists, create it
+      const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      
+      if (createResponse.ok) {
+        const createData = await createResponse.json();
+        this.updateBucketStatus(userId, createData);
+        console.log(`✅ [UserStateManager] Created bucket folder for ${userId}`);
+      }
+    } catch (error) {
+      console.error(`❌ [UserStateManager] Error ensuring bucket for ${userId}:`, error);
+    }
   }
 
   /**

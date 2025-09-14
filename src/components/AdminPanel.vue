@@ -295,6 +295,31 @@
                 </QChip>
               </QTd>
             </template>
+            
+            <template v-slot:body-cell-bucketStatus="props">
+              <QTd :props="props">
+                <div v-if="props.row.hasBucket" class="text-center">
+                  <QChip
+                    color="positive"
+                    text-color="white"
+                    size="sm"
+                    icon="folder"
+                  >
+                    {{ props.row.bucketFileCount }} files
+                  </QChip>
+                </div>
+                <div v-else class="text-center">
+                  <QChip
+                    color="grey"
+                    text-color="white"
+                    size="sm"
+                    icon="folder_off"
+                  >
+                    No Bucket
+                  </QChip>
+                </div>
+              </QTd>
+            </template>
 
             <template v-slot:body-cell-actions="props">
               <QTd :props="props">
@@ -409,6 +434,19 @@
                     <QChip color="info" size="sm" label="Active" />
                   </span>
                   <span v-else class="text-grey-6">None assigned</span>
+                </p>
+                <p><strong>Bucket Status:</strong> 
+                  <span v-if="selectedUser.hasBucket">
+                    <QChip color="positive" size="sm" icon="folder">
+                      Has Bucket with {{ selectedUser.bucketFileCount }} files
+                    </QChip>
+                    <span v-if="selectedUser.bucketTotalSize" class="text-caption text-grey-6 q-ml-sm">
+                      ({{ formatFileSize(selectedUser.bucketTotalSize) }})
+                    </span>
+                  </span>
+                  <span v-else class="text-grey-6">
+                    <QChip color="grey" size="sm" icon="folder_off">No Bucket</QChip>
+                  </span>
                 </p>
               </div>
             </div>
@@ -767,6 +805,13 @@ export default defineComponent({
         align: 'left',
         sortable: true,
         format: (val) => val || 'None'
+      },
+      {
+        name: 'bucketStatus',
+        label: 'Bucket Status',
+        field: 'hasBucket',
+        align: 'center',
+        sortable: true
       },
       {
         name: 'actions',
@@ -1484,6 +1529,14 @@ export default defineComponent({
       return new Date(dateString).toLocaleDateString();
     };
     
+    const formatFileSize = (bytes) => {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+    
     const goToAdminRegistration = () => {
       window.location.href = '/admin/register';
     };
@@ -1887,6 +1940,7 @@ export default defineComponent({
       getWorkflowStageColor,
       formatWorkflowStage,
       formatDate,
+      formatFileSize,
       goToAdminRegistration,
       goToAdminSignIn,
       goToMainApp,

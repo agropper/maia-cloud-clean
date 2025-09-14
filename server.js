@@ -1092,6 +1092,171 @@ app.get('/api/bucket-files', async (req, res) => {
   }
 });
 
+// Ensure user folder exists in DigitalOcean Spaces bucket
+app.post('/api/bucket/ensure-user-folder', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required',
+        error: 'MISSING_USER_ID'
+      });
+    }
+
+    console.log(`📁 Ensuring user folder exists for: ${userId}`);
+    
+    const { S3Client, PutObjectCommand, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const userFolder = `${userId}/`;
+    
+    // First, check if folder already exists by looking for files in the folder
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: userFolder,
+      MaxKeys: 1
+    });
+
+    const listResult = await s3Client.send(listCommand);
+    const hasFiles = listResult.Contents && listResult.Contents.length > 0;
+    
+    if (hasFiles) {
+      console.log(`✅ User folder already exists: ${userFolder}`);
+      return res.json({
+        success: true,
+        message: 'User folder already exists',
+        folderExists: true,
+        folderPath: userFolder,
+        fileCount: listResult.Contents.length
+      });
+    }
+
+    // Create folder by uploading a placeholder file
+    const folderMarkerKey = `${userFolder}.folder-marker`;
+    const folderMarkerContent = `Folder created for user: ${userId}\nCreated at: ${new Date().toISOString()}`;
+    
+    const uploadCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: folderMarkerKey,
+      Body: folderMarkerContent,
+      ContentType: 'text/plain',
+      Metadata: {
+        'folder-type': 'user-folder-marker',
+        'user-id': userId,
+        'created-at': new Date().toISOString()
+      }
+    });
+
+    await s3Client.send(uploadCommand);
+    console.log(`✅ Created user folder with marker: ${folderMarkerKey}`);
+    
+    res.json({
+      success: true,
+      message: 'User folder created successfully',
+      folderExists: true,
+      folderPath: userFolder,
+      fileCount: 1,
+      markerFile: folderMarkerKey
+    });
+    
+  } catch (error) {
+    console.error('❌ Error ensuring user folder:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to ensure user folder: ${error.message}`,
+      error: 'FOLDER_CREATION_FAILED'
+    });
+  }
+});
+
+// Get user-specific bucket status
+app.get('/api/bucket/user-status/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📊 Getting bucket status for user: ${userId}`);
+    
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const userFolder = `${userId}/`;
+    
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: userFolder,
+      MaxKeys: 1000
+    });
+
+    const result = await s3Client.send(listCommand);
+    const files = result.Contents || [];
+    
+    // Filter out folder markers and count actual files
+    const actualFiles = files.filter(file => 
+      !file.Key.endsWith('.folder-marker') && 
+      !file.Key.endsWith('/') && 
+      file.Size > 0
+    );
+    
+    const hasFolder = files.length > 0;
+    const fileCount = actualFiles.length;
+    const totalSize = actualFiles.reduce((sum, file) => sum + (file.Size || 0), 0);
+    
+    console.log(`📊 User ${userId} bucket status: ${fileCount} files, ${totalSize} bytes`);
+    
+    res.json({
+      success: true,
+      userId: userId,
+      folderPath: userFolder,
+      hasFolder: hasFolder,
+      fileCount: fileCount,
+      totalSize: totalSize,
+      files: actualFiles.map(file => ({
+        key: file.Key,
+        size: file.Size,
+        lastModified: file.LastModified,
+        etag: file.ETag
+      })),
+      createdAt: hasFolder ? files[0]?.LastModified : null
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting user bucket status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to get user bucket status: ${error.message}`,
+      error: 'STATUS_CHECK_FAILED'
+    });
+  }
+});
+
 // Delete file from DigitalOcean Spaces bucket
 app.delete('/api/delete-bucket-file', async (req, res) => {
   try {
@@ -6369,6 +6534,73 @@ app.listen(PORT, async () => {
   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
   console.log(`📅 Server started at: ${new Date().toISOString()}`);
   
+  // Helper function to ensure bucket folders for all users
+  async function ensureAllUserBuckets() {
+    console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
+    
+    const userIds = UserStateManager.getAllUserIds();
+    const bucketChecks = [];
+    
+    for (const userId of userIds) {
+      // Include all users - deep link users also need bucket folders
+      bucketChecks.push(ensureUserBucket(userId));
+    }
+    
+    try {
+      await Promise.all(bucketChecks);
+      console.log(`✅ [STARTUP] Completed bucket checks for ${bucketChecks.length} users`);
+    } catch (error) {
+      console.error('❌ [STARTUP] Error ensuring user buckets:', error);
+    }
+  }
+
+  // Helper function to ensure bucket folder for a specific user
+  async function ensureUserBucket(userId) {
+    try {
+      // First check current status
+      const statusResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${userId}`);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        
+        // If user has no folder, create one
+        if (!statusData.hasFolder) {
+          console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
+          const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+          });
+          
+          if (createResponse.ok) {
+            const createData = await createResponse.json();
+            UserStateManager.updateBucketStatus(userId, createData);
+            console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
+          }
+        } else {
+          // User already has folder, just update cache
+          UserStateManager.updateBucketStatus(userId, statusData);
+        }
+        return;
+      }
+      
+      // If status check failed, try to create folder anyway
+      console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
+      const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      
+      if (createResponse.ok) {
+        const createData = await createResponse.json();
+        UserStateManager.updateBucketStatus(userId, createData);
+        console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
+      }
+    } catch (error) {
+      console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
+    }
+  }
+  
   // Initialize UserStateManager cache on startup
   try {
     console.log(`🔄 [STARTUP] Initializing UserStateManager cache...`);
@@ -6396,11 +6628,16 @@ app.listen(PORT, async () => {
       }
     );
     console.log(`✅ [STARTUP] UserStateManager cache initialized successfully`);
+    
+    // Ensure bucket folders for all users
+    console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
+    await ensureAllUserBuckets();
+    console.log('✅ [STARTUP] Bucket folder checks completed');
   } catch (error) {
     console.error(`❌ [STARTUP] Failed to initialize UserStateManager cache:`, error);
   }
   
-  // Start cleanup job for expired deep links
+// Start cleanup job for expired deep links
   setInterval(async () => {
     try {
       const cleanedCount = await sessionManager.cleanupExpiredDeepLinks();
