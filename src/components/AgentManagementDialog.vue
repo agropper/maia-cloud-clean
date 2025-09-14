@@ -354,59 +354,95 @@
                     :title="'Choose a file management action'"
                   >
                     <q-list>
+                      <!-- Create new or add to existing knowledge base -->
                       <q-item
-                        v-if="userHasFiles"
                         clickable
                         v-close-popup
                         @click="handleFileAction('create_or_add')"
+                        :disable="!userHasFiles"
                       >
                         <q-item-section avatar>
-                          <q-icon name="add_circle" color="positive" />
+                          <q-icon 
+                            name="add_circle" 
+                            :color="userHasFiles ? 'positive' : 'grey-5'" 
+                          />
                         </q-item-section>
                         <q-item-section>
-                          <q-item-label>Create new or add to existing knowledge base</q-item-label>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Create new or add to existing knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
                         </q-item-section>
                       </q-item>
                       
+                      <!-- Import more files before creating knowledge base -->
                       <q-item
-                        v-if="userHasFiles"
                         clickable
                         v-close-popup
                         @click="handleFileAction('import_more')"
+                        :disable="!userHasFiles"
                       >
                         <q-item-section avatar>
-                          <q-icon name="upload_file" color="primary" />
+                          <q-icon 
+                            name="upload_file" 
+                            :color="userHasFiles ? 'primary' : 'grey-5'" 
+                          />
                         </q-item-section>
                         <q-item-section>
-                          <q-item-label>Import more files before creating knowledge base</q-item-label>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Import more files before creating knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
                         </q-item-section>
                       </q-item>
                       
+                      <!-- Clear all files -->
                       <q-item
-                        v-if="userHasFiles"
                         clickable
                         v-close-popup
                         @click="handleFileAction('clear_files')"
+                        :disable="!userHasFiles"
                       >
                         <q-item-section avatar>
-                          <q-icon name="clear_all" color="warning" />
+                          <q-icon 
+                            name="clear_all" 
+                            :color="userHasFiles ? 'orange' : 'grey-5'" 
+                          />
                         </q-item-section>
                         <q-item-section>
-                          <q-item-label>Clear all files (you will need to import them again)</q-item-label>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Clear all files (you will need to import them again)
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
                         </q-item-section>
                       </q-item>
                       
+                      <!-- Import files to create a new knowledge base -->
                       <q-item
-                        v-if="!userHasFiles"
                         clickable
                         v-close-popup
                         @click="handleFileAction('import_files')"
+                        :disable="userHasFiles"
                       >
                         <q-item-section avatar>
-                          <q-icon name="upload_file" color="primary" />
+                          <q-icon 
+                            name="upload_file" 
+                            :color="!userHasFiles ? 'primary' : 'grey-5'" 
+                          />
                         </q-item-section>
                         <q-item-section>
-                          <q-item-label>Import files to create a new knowledge base</q-item-label>
+                          <q-item-label :class="{ 'text-grey-5': userHasFiles }">
+                            Import files to create a new knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="userHasFiles" caption class="text-grey-5">
+                            Files already exist in bucket folder
+                          </q-item-label>
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -3645,26 +3681,50 @@ export default defineComponent({
 
     // File management methods for authenticated users
     const checkUserFiles = async () => {
-      if (!isAuthenticated.value || isDeepLinkUser.value) return;
+      if (!isAuthenticated.value || isDeepLinkUser.value) {
+        console.log(`📁 [DEBUG] checkUserFiles skipped - authenticated: ${isAuthenticated.value}, isDeepLinkUser: ${isDeepLinkUser.value}`);
+        return;
+      }
+      
+      console.log(`📁 [DEBUG] checkUserFiles called for authenticated user: ${currentUser.value?.userId}`);
       
       try {
-        // Check if user has files in their Spaces bucket
-        const response = await fetch(`${API_BASE_URL}/bucket-files`);
+        // Check if user has files in their Spaces bucket using user-specific endpoint
+        const response = await fetch(`${API_BASE_URL}/bucket/user-status/${encodeURIComponent(currentUser.value?.userId || '')}`);
         if (response.ok) {
-          const filesData = await response.json();
-          // Check if there are any files (not just directories)
-          const hasFiles = filesData.files && filesData.files.some((file: any) => 
-            !file.key.endsWith('/') && file.size > 0
-          );
+          const statusData = await response.json();
+          console.log(`📁 [DEBUG] User bucket status response:`, statusData);
+          
+          // Use the hasFolder and fileCount from the status endpoint
+          const hasFiles = statusData.hasFolder && statusData.fileCount > 0;
           userHasFiles.value = hasFiles || false;
-          console.log(`📁 User has files: ${userHasFiles.value} (${filesData.files?.length || 0} total items)`);
+          console.log(`📁 [DEBUG] User has files: ${userHasFiles.value} (${statusData.fileCount || 0} files in bucket)`);
+          console.log(`📁 [DEBUG] userHasFiles ref value:`, userHasFiles.value);
         } else {
-          // Endpoint not available, set default value
-          userHasFiles.value = false;
-          console.log(`📁 Bucket files endpoint not available, defaulting to false`);
+          // Fallback to general bucket-files endpoint and filter by user
+          console.log(`📁 [DEBUG] User-specific endpoint failed, falling back to general endpoint`);
+          const response = await fetch(`${API_BASE_URL}/bucket-files`);
+          if (response.ok) {
+            const filesData = await response.json();
+            console.log(`📁 [DEBUG] Bucket files response:`, filesData);
+            
+            // Filter files for current user only
+            const userFiles = filesData.files && filesData.files.filter((file: any) => 
+              file.key.startsWith(`${currentUser.value?.userId}/`) && 
+              !file.key.endsWith('/') && 
+              file.size > 0
+            );
+            const hasFiles = userFiles && userFiles.length > 0;
+            userHasFiles.value = hasFiles || false;
+            console.log(`📁 [DEBUG] User has files (fallback): ${userHasFiles.value} (${userFiles?.length || 0} user files)`);
+            console.log(`📁 [DEBUG] userHasFiles ref value:`, userHasFiles.value);
+          } else {
+            userHasFiles.value = false;
+            console.log(`📁 Bucket files endpoint not available, defaulting to false`);
+          }
         }
       } catch (error) {
-        console.error('❌ Error checking user files:', error);
+        console.error('❌ [DEBUG] Error checking user files:', error);
         userHasFiles.value = false;
       }
     };
