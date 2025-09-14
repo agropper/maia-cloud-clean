@@ -6303,7 +6303,7 @@ app.listen(PORT, async () => {
           doc.type === 'user' || 
           doc.type === 'unknown' || 
           doc.type === null ||
-          (doc.userId && doc.userId.startsWith('deep_link_'))
+          (doc._id && doc._id.startsWith('deep_link_'))
         );
         console.log(`🔍 [STARTUP] Filtered to ${filteredUsers.length} users (type: user, unknown, or null)`);
         filteredUsers.forEach(user => {
