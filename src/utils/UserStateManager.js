@@ -160,6 +160,36 @@ class UserStateManager {
    * @returns {Object} Complete user state
    */
   buildUserStateFromDB(userDoc, assignedKBs = [], availableKBs = []) {
+    // Calculate passkey status from database fields (reliable)
+    const hasPasskey = !!userDoc.credentialID;
+    const hasValidPasskey = !!(userDoc.credentialID && 
+      userDoc.credentialID !== 'test-credential-id-wed271' && 
+      userDoc.credentialPublicKey && 
+      userDoc.counter !== undefined);
+    
+    // Determine workflow stage based on actual database state (not stored workflowStage)
+    let workflowStage = 'no_passkey';
+    if (hasValidPasskey) {
+      if (userDoc.approvalStatus === 'approved') {
+        workflowStage = 'approved';
+      } else if (userDoc.approvalStatus === 'pending') {
+        workflowStage = 'awaiting_approval';
+      } else if (userDoc.approvalStatus === 'rejected') {
+        workflowStage = 'rejected';
+      } else if (userDoc.approvalStatus === 'suspended') {
+        workflowStage = 'suspended';
+      } else {
+        // Has valid passkey but no approval status - assume needs approval
+        workflowStage = 'awaiting_approval';
+      }
+    } else if (hasPasskey) {
+      // Has passkey but not valid (e.g., test credential)
+      workflowStage = 'no_passkey';
+    } else {
+      // No passkey at all
+      workflowStage = 'no_passkey';
+    }
+    
     return {
       userId: userDoc.userId || userDoc._id,
       displayName: userDoc.displayName || userDoc.userId || userDoc._id,
@@ -176,10 +206,14 @@ class UserStateManager {
       assignedKnowledgeBases: assignedKBs,
       availableKnowledgeBases: availableKBs,
       
-      // Workflow State
-      workflowStage: userDoc.workflowStage || 'no_passkey',
+      // Workflow State - Calculated from database fields, not stored workflowStage
+      workflowStage: workflowStage,
       approvalStatus: userDoc.approvalStatus || 'pending',
       adminNotes: userDoc.adminNotes || '',
+      
+      // Passkey Status - Calculated from database fields
+      hasPasskey: hasPasskey,
+      hasValidPasskey: hasValidPasskey,
       
       // Metadata
       lastUpdated: new Date().toISOString(),
