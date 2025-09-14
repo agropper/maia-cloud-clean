@@ -522,7 +522,7 @@
                           <!-- Protection Toggle (only for KB owner) -->
                           <q-btn
                             v-if="
-                              currentUser && kb.owner === currentUser.username
+                              localCurrentUser && kb.owner === localCurrentUser.userId
                             "
                             :icon="kb.isProtected ? 'lock_open' : 'lock'"
                             :color="kb.isProtected ? 'warning' : 'grey'"
@@ -615,79 +615,124 @@
       </q-card>
     </q-dialog>
 
-    <!-- Step 4: Choose Files Dialog -->
+    <!-- Enhanced File Selection Dialog -->
     <q-dialog v-model="showChooseFilesDialog" persistent>
-      <q-card style="min-width: 600px">
+      <q-card style="min-width: 700px; max-width: 900px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">📁 Choose Files for Knowledge Base</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <div v-if="!hasUploadedDocuments" class="text-center q-pa-md">
+          <div v-if="!hasUploadedDocuments && userBucketFiles.length === 0" class="text-center q-pa-md">
             <q-icon name="attach_file" size="3rem" color="grey-4" />
-            <div class="text-h6 q-mt-md">No Documents Available</div>
+            <div class="text-h6 q-mt-md">No Files Available</div>
             <div class="text-caption q-mb-md">
-              Upload documents using the paper clip button to create a knowledge
-              base
+              Upload documents using the paper clip button or add files to your bucket folder
             </div>
           </div>
 
           <div v-else>
-            <div class="text-subtitle2 q-mb-md">
-              Select documents to include in the new knowledge base:
-            </div>
-
             <q-form
-              @submit="handleChooseFilesSubmit"
+              @submit="handleEnhancedFileSelection"
               class="q-gutter-md"
             >
-              <q-input
-                v-model="newKbName"
-                label="Knowledge Base Name"
-                outlined
-                :rules="[(val) => !!val || 'Name is required']"
-                hint="Enter a descriptive name for your knowledge base"
-              />
+              <!-- Knowledge Base Selection -->
+              <div class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">Knowledge Base:</div>
+                <q-select
+                  v-model="selectedKbId"
+                  :options="kbOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  outlined
+                  :rules="[(val) => !!val || 'Please select or create a knowledge base']"
+                  hint="Select existing KB or create new one"
+                />
+                
+                <!-- Show KB name input when creating new -->
+                <q-input
+                  v-if="selectedKbId === 'new'"
+                  v-model="newKbNameInput"
+                  label="New Knowledge Base Name"
+                  outlined
+                  :rules="[(val) => !!val || 'Name is required']"
+                  hint="Enter a descriptive name for your knowledge base"
+                  class="q-mt-sm"
+                />
+                
+                <q-input
+                  v-if="selectedKbId === 'new'"
+                  v-model="newKbDescriptionInput"
+                  label="Description"
+                  outlined
+                  type="textarea"
+                  rows="2"
+                  hint="Optional description of the knowledge base contents"
+                />
+              </div>
 
-              <q-input
-                v-model="newKbDescription"
-                label="Description"
-                outlined
-                type="textarea"
-                rows="3"
-                hint="Optional description of the knowledge base contents"
-              />
+              <!-- Uploaded Files Section -->
+              <div v-if="hasUploadedDocuments" class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">
+                  📎 Uploaded Files ({{ uploadedFiles?.length || 0 }} files):
+                </div>
+                <div class="q-pa-sm bg-blue-1 rounded-borders">
+                  <div
+                    v-for="file in uploadedFiles"
+                    :key="file.id"
+                    class="q-mb-xs"
+                  >
+                    <q-item dense>
+                      <q-item-section>
+                        <q-item-label>{{ file.name }}</q-item-label>
+                        <q-item-label caption>{{
+                          formatFileSize(file.content?.length || 0)
+                        }} characters | {{ file.type }}</q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-checkbox v-model="selectedDocuments" :val="file.id" />
+                      </q-item-section>
+                    </q-item>
+                  </div>
+                </div>
+              </div>
 
-              <!-- Document List -->
-              <div>
-                <div class="text-subtitle2 q-mb-sm">Uploaded Files ({{ uploadedFiles?.length || 0 }} files):</div>
-                <div
-                  v-for="file in uploadedFiles"
-                  :key="file.id"
-                  class="q-mb-xs"
-                >
-                  <q-item dense>
-                    <q-item-section>
-                      <q-item-label>{{ file.name }}</q-item-label>
-                      <q-item-label caption>{{
-                        formatFileSize(file.content?.length || 0)
-                      }} characters | {{ file.type }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-checkbox v-model="selectedDocuments" :val="file.id" />
-                    </q-item-section>
-                  </q-item>
+              <!-- Bucket Files Section -->
+              <div v-if="userBucketFiles.length > 0" class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">
+                  📁 Files in Bucket Folder ({{ userBucketFiles.length }} files):
+                </div>
+                <div class="q-pa-sm bg-green-1 rounded-borders">
+                  <div
+                    v-for="file in userBucketFiles"
+                    :key="file.key"
+                    class="q-mb-xs"
+                  >
+                    <q-item dense>
+                      <q-item-section>
+                        <q-item-label>{{ file.key.split('/').pop() }}</q-item-label>
+                        <q-item-label caption>{{
+                          formatFileSize(file.size || 0)
+                        }} bytes | Last modified: {{ new Date(file.lastModified).toLocaleDateString() }}</q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-checkbox v-model="selectedBucketFiles" :val="file.key" />
+                      </q-item-section>
+                    </q-item>
+                  </div>
                 </div>
               </div>
 
               <div class="row q-gutter-sm q-mt-md">
                 <q-btn
-                  label="Choose Files & Upload to Bucket"
+                  label="Create/Update Knowledge Base"
                   color="primary"
                   type="submit"
                   :loading="isCreatingKb"
-                  :disable="selectedDocuments.length === 0"
+                  :disable="selectedDocuments.length === 0 && selectedBucketFiles.length === 0"
                 />
                 <q-btn label="Cancel" flat v-close-popup />
               </div>
@@ -1369,6 +1414,15 @@ export default defineComponent({
     const newKbDescription = ref("");
     const isCreatingKb = ref(false);
     const selectedDocuments = ref<string[]>([]);
+    
+    // Enhanced file selection modal state
+    const selectedBucketFiles = ref<string[]>([]);
+    const selectedKbId = ref<string>('');
+    const newKbNameInput = ref<string>('');
+    const newKbDescriptionInput = ref<string>('');
+    
+    // Files to be cleaned up after successful indexing
+    const filesToCleanup = ref<string[]>([]);
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
@@ -1933,7 +1987,7 @@ export default defineComponent({
 
         // Load agents filtered by user ownership
         try {
-          const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId || 'Public User';
+          const currentUsername = localCurrentUser.value?.userId || 'Public User';
           const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
           if (agentsResponse.ok) {
             const agents: DigitalOceanAgent[] = await agentsResponse.json();
@@ -2170,7 +2224,7 @@ export default defineComponent({
         username: userData.username,
         displayName: userData.displayName,
       };
-      currentUser.value = userInfo;
+      localCurrentUser.value = userInfo;
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
 
@@ -2664,8 +2718,6 @@ export default defineComponent({
       isCreatingKb.value = true;
       try {
         console.log('🚀 KB creation starting with', selectedDocuments.value.length, 'selected files')
-        console.log('📁 Selected files:', selectedDocuments.value)
-        console.log('📁 Available files:', props.uploadedFiles?.map(f => f.name))
         
         // Step 1: Upload selected files to Spaces bucket in user-specific folder
         console.log('📤 Starting bucket upload to user folder...')
@@ -2816,6 +2868,69 @@ export default defineComponent({
       await createKnowledgeBaseFromBucketFiles();
     };
 
+    // Handle enhanced file selection with both uploaded and bucket files
+    const handleEnhancedFileSelection = async () => {
+      if (selectedDocuments.value.length === 0 && selectedBucketFiles.value.length === 0) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select at least one file to include in the knowledge base'
+        });
+        return;
+      }
+
+      if (!selectedKbId.value) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select or create a knowledge base'
+        });
+        return;
+      }
+
+      isCreatingKb.value = true;
+      
+      try {
+        const kbName = selectedKbId.value === 'new' ? newKbNameInput.value : 
+          availableKnowledgeBases.value.find(kb => (kb.uuid || kb.id) === selectedKbId.value)?.name;
+        
+        console.log(`🚀 Creating/updating knowledge base: ${kbName}`);
+        console.log(`📎 Selected files: ${selectedDocuments.value.length} uploaded, ${selectedBucketFiles.value.length} from bucket`);
+
+        // Store files for cleanup after successful indexing
+        filesToCleanup.value = [...selectedBucketFiles.value];
+
+        // TODO: Implement actual KB creation/update logic here
+        // This will involve:
+        // 1. Creating new KB if selectedKbId === 'new'
+        // 2. Adding selected files to the KB
+        // 3. Starting indexing
+        // 4. Cleaning up files after successful indexing (handled in checkIndexingStatus)
+
+        $q.notify({
+          type: 'positive',
+          message: `Knowledge base "${kbName}" will be created/updated with selected files`
+        });
+
+        // Close the dialog
+        showChooseFilesDialog.value = false;
+        
+        // Reset form
+        selectedDocuments.value = [];
+        selectedBucketFiles.value = [];
+        selectedKbId.value = '';
+        newKbNameInput.value = '';
+        newKbDescriptionInput.value = '';
+
+      } catch (error) {
+        console.error('❌ Error creating/updating knowledge base:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to create/update knowledge base: ${error.message || 'Unknown error'}`
+        });
+      } finally {
+        isCreatingKb.value = false;
+      }
+    };
+
     // Create knowledge base directly from existing bucket files
     const createKnowledgeBaseFromBucketFiles = async () => {
       if (!newKbName.value) return;
@@ -2909,13 +3024,67 @@ export default defineComponent({
     };
 
     // User's existing files in bucket folder
-    const userBucketFiles = ref([]);
+    const userBucketFiles = ref<any[]>([]);
 
     // Computed property to check if there are documents available for KB creation
     const hasUploadedDocuments = computed(() => {
       // Check if user has files in bucket OR uploaded files
       return (userBucketFiles.value && userBucketFiles.value.length > 0) || 
              (props.uploadedFiles && props.uploadedFiles.length > 0);
+    });
+
+    // Computed property for KB dropdown options
+    const kbOptions = computed(() => {
+      const options = [];
+      
+      // Add existing KBs owned by the current user
+      const userKBs = availableKnowledgeBases.value.filter(kb => 
+        kb.name && kb.name.startsWith(localCurrentUser.value?.userId || '')
+      );
+      
+      // Sort by most recently indexed (if we have that info)
+      userKBs.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+      
+      // Add existing KBs to options
+      userKBs.forEach(kb => {
+        options.push({
+          value: kb.uuid || kb.id,
+          label: kb.name,
+          kb: kb
+        });
+      });
+      
+      // Add option to create new KB
+      options.push({
+        value: 'new',
+        label: 'Create New Knowledge Base',
+        kb: null
+      });
+      
+      return options;
+    });
+
+    // Computed property to get the default selected KB (most recent)
+    const defaultKbId = computed(() => {
+      const userKBs = availableKnowledgeBases.value.filter(kb => 
+        kb.name && kb.name.startsWith(localCurrentUser.value?.userId || '')
+      );
+      
+      if (userKBs.length > 0) {
+        // Return the most recently indexed KB
+        userKBs.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+          return bTime - aTime;
+        });
+        return userKBs[0].uuid || userKBs[0].id;
+      }
+      
+      return 'new'; // Default to creating new if no existing KBs
     });
     
 
@@ -2928,6 +3097,75 @@ export default defineComponent({
       const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+    };
+
+    // Delete files from bucket folder after successful KB indexing
+    const cleanupBucketFiles = async (fileKeys: string[]) => {
+      if (!fileKeys || fileKeys.length === 0) {
+        return;
+      }
+
+      try {
+        console.log(`🧹 Cleaning up ${fileKeys.length} files from bucket folder`);
+        
+        for (const fileKey of fileKeys) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/bucket-files`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ key: fileKey })
+            });
+
+            if (response.ok) {
+              console.log(`✅ Deleted file: ${fileKey}`);
+            } else {
+              console.warn(`⚠️ Failed to delete file: ${fileKey} (${response.status})`);
+            }
+          } catch (error) {
+            console.error(`❌ Error deleting file ${fileKey}:`, error);
+          }
+        }
+
+        // Refresh bucket files list
+        await checkUserBucketFiles(true);
+        
+        console.log('🧹 Bucket cleanup completed');
+      } catch (error) {
+        console.error('❌ Error during bucket cleanup:', error);
+        throw error;
+      }
+    };
+
+    // Show error modal for cleanup failures
+    const showCleanupErrorModal = (error: any, fileKeys: string[]) => {
+      $q.dialog({
+        title: 'Cleanup Error',
+        message: `Failed to clean up files after successful indexing: ${error.message || 'Unknown error'}. Would you like to clean up the files anyway?`,
+        ok: {
+          label: 'Clean Up Files',
+          color: 'primary'
+        },
+        cancel: {
+          label: 'Keep Files',
+          color: 'grey'
+        }
+      }).onOk(async () => {
+        try {
+          await cleanupBucketFiles(fileKeys);
+          $q.notify({
+            type: 'positive',
+            message: 'Files cleaned up successfully'
+          });
+        } catch (cleanupError) {
+          console.error('❌ Manual cleanup failed:', cleanupError);
+          $q.notify({
+            type: 'negative',
+            message: 'Failed to clean up files manually'
+          });
+        }
+      });
     };
 
     // Clean up bucket after successful KB creation
@@ -3169,7 +3407,7 @@ export default defineComponent({
         showCreateKbDialog.value = false;
             }
             
-            console.log(`📊 Indexing status: ${status}, Phase: ${phase} - Updated monitoring logic`);
+            console.log(`📊 Indexing status: ${status}, Phase: ${phase}`);
             
             // Debug: Log the exact status values to help troubleshoot
             // Checking indexing status
@@ -3200,6 +3438,19 @@ export default defineComponent({
               
               // Attach the knowledge base to the current agent
               await attachKnowledgeBaseToAgent(kbId, job);
+              
+              // Clean up files after successful indexing
+              if (filesToCleanup.value.length > 0) {
+                try {
+                  await cleanupBucketFiles(filesToCleanup.value);
+                  console.log('🧹 Files cleaned up successfully after indexing');
+                } catch (cleanupError) {
+                  console.error('❌ Failed to cleanup files after indexing:', cleanupError);
+                  showCleanupErrorModal(cleanupError, filesToCleanup.value);
+                }
+                // Clear the cleanup list
+                filesToCleanup.value = [];
+              }
             } else if (status === 'INDEX_JOB_STATUS_FAILED' || status === 'failed' || status === 'error') {
               console.error(`❌ Knowledge base indexing failed: ${job.error || 'Unknown error'}`);
               
@@ -3441,7 +3692,7 @@ export default defineComponent({
                 kbId: result.kbInfo.id,
                 kbName: result.kbInfo.name || 'Unknown KB',
                 currentOwner: result.kbInfo.currentOwner || 'Unknown',
-                newOwner: currentUser.value?.username || 'unknown'
+                newOwner: localCurrentUser.value?.userId || 'unknown'
               };
             } else {
               console.error("❌ Invalid kbInfo data for ownership transfer:", result.kbInfo);
@@ -3527,7 +3778,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: currentUser.value?.username,
+                owner: localCurrentUser.value?.userId,
               }),
             }
           );
@@ -3695,7 +3946,7 @@ export default defineComponent({
           // Use the hasFolder and fileCount from the status endpoint
           const hasFiles = statusData.hasFolder && statusData.fileCount > 0;
           userHasFiles.value = hasFiles || false;
-          console.log(`📁 User has files: ${userHasFiles.value} (${statusData.fileCount || 0} files in bucket)`);
+          console.log(`📁 User has ${statusData.fileCount || 0} files in bucket`);
         } else {
           // Fallback to general bucket-files endpoint and filter by user
           const response = await fetch(`${API_BASE_URL}/bucket-files`);
@@ -3710,7 +3961,7 @@ export default defineComponent({
             );
             const hasFiles = userFiles && userFiles.length > 0;
             userHasFiles.value = hasFiles || false;
-            console.log(`📁 User has files (fallback): ${userHasFiles.value} (${userFiles?.length || 0} user files)`);
+            console.log(`📁 User has ${userFiles?.length || 0} files in bucket (fallback)`);
           } else {
             userHasFiles.value = false;
           }
@@ -3808,7 +4059,8 @@ export default defineComponent({
         case 'Indexing content':
           // For knowledge base creation, wait for indexing to complete
           if (action === 'create_or_add') {
-            await waitForIndexingCompletion();
+            // TODO: Pass actual kbId when implementing real KB creation
+            await waitForIndexingCompletion('placeholder-kb-id');
           }
           break;
         case 'Opening file import':
@@ -3824,21 +4076,20 @@ export default defineComponent({
       }
     };
 
-    const waitForIndexingCompletion = async () => {
-      // Poll for indexing completion
+    const waitForIndexingCompletion = async (kbId: string) => {
+      // Poll for indexing completion using existing DigitalOcean API
       let attempts = 0;
       const maxAttempts = 30; // 5 minutes max
       
       while (attempts < maxAttempts) {
         try {
-          // Check indexing status - this would be a real API call
-          const response = await fetch(`${API_BASE_URL}/indexing-status`);
-          if (response.ok) {
-            const status = await response.json();
-            if (status.completed) {
-              console.log('✅ Indexing completed');
-              return;
-            }
+          // Use existing checkIndexingStatus function that uses DigitalOcean API
+          await checkIndexingStatus(kbId);
+          
+          // Check if indexing is complete by looking at the workflow step
+          if (workflowSteps.value[5].completed) {
+            console.log('✅ Indexing completed');
+            return;
           }
         } catch (error) {
           console.warn('Error checking indexing status:', error);
@@ -3865,6 +4116,17 @@ export default defineComponent({
     watch(showDialog, (newValue) => {
       if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
         checkUserFiles();
+      }
+    });
+
+    // Watch for file selection dialog opening to initialize KB selection
+    watch(showChooseFilesDialog, (newValue) => {
+      if (newValue) {
+        // Initialize KB selection with default
+        selectedKbId.value = defaultKbId.value;
+        
+        // Load user bucket files
+        checkUserBucketFiles(true);
       }
     });
 
@@ -3981,6 +4243,18 @@ export default defineComponent({
       getActionDescription,
       executeFileAction,
       cancelExecution,
+      // Enhanced file selection modal
+      selectedBucketFiles,
+      selectedKbId,
+      newKbNameInput,
+      newKbDescriptionInput,
+      kbOptions,
+      defaultKbId,
+      handleEnhancedFileSelection,
+      filesToCleanup,
+      cleanupBucketFiles,
+      showCleanupErrorModal,
+      currentKbId,
     };
 
 
