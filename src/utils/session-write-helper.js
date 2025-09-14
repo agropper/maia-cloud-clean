@@ -3,7 +3,6 @@ import { createCouchDBClient } from './couchdb-client.js';
 // Function to write session to maia_sessions database
 export const writeSessionToDatabase = async (sessionEvent) => {
   try {
-    console.log('[*] [Session Write] Writing session to maia_sessions database:', {
       sessionId: sessionEvent.sessionId,
       userId: sessionEvent.userId,
       route: sessionEvent.route,
@@ -32,11 +31,9 @@ export const writeSessionToDatabase = async (sessionEvent) => {
     };
 
     // Write to database
-    console.log('[*] [Session Write] Writing to maia_sessions:', JSON.stringify(sessionDoc, null, 2));
     
     await couchDBClient.saveDocument('maia_sessions', sessionDoc);
     
-    console.log('[*] [Session Write] Successfully wrote session to maia_sessions database');
   } catch (error) {
     console.error('❌ [Session Write] Error writing session to CouchDB:', error);
     throw error;

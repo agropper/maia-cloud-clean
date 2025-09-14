@@ -50,7 +50,6 @@ window.fetch = async (...args) => {
         timestamp: data.timestamp
       });
     } catch (e) {
-      console.log('[*] [Browser] Session verified (in-memory only)');
     }
   }
   
@@ -69,19 +68,16 @@ window.fetch = async (...args) => {
   
   if (sessionExpiredHeader) {
     const reason = response.headers.get('X-Session-Expired-Reason');
-    console.log('🔗 [Browser] Session expired:', reason);
     
     // Show user notification about session expiration
     if (window.location.pathname.startsWith('/shared/')) {
       // For deep link users, show a notification and potentially redirect
-      console.log('🔗 [Browser] Deep link session expired, user may need to refresh');
     }
   }
   
   if (sessionWarningHeader) {
     const warningMessage = response.headers.get('X-Session-Warning-Message');
     const inactiveMinutes = response.headers.get('X-Session-Inactive-Minutes');
-    console.log('⚠️ [Browser] Session inactivity warning:', warningMessage, `(${inactiveMinutes} minutes inactive)`);
   }
   
   return response;
@@ -101,7 +97,6 @@ window.addEventListener('beforeunload', async (event) => {
       if (navigator.sendBeacon) {
         const data = JSON.stringify({ shareId, action: 'window_close' });
         navigator.sendBeacon('/api/deep-link-session/cleanup', data);
-        console.log('🔗 [Deep Link] Window close detected, cleaning up session for:', shareId);
       }
     } catch (error) {
       console.error('❌ [Deep Link] Error cleaning up session on window close:', error);

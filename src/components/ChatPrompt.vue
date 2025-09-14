@@ -174,7 +174,6 @@ export default defineComponent({
 
           if (data.agent) {
             currentAgent.value = data.agent;
-            console.log("[*] Current agent:", data.agent.name);
 
             if (data.agent.knowledgeBase) {
             } else {
@@ -189,7 +188,6 @@ export default defineComponent({
             }
           } else {
             currentAgent.value = null;
-            console.log("[*] No agent selected");
             
             // Check if agent selection is required
             if (data.requiresAgentSelection) {
@@ -214,12 +212,8 @@ export default defineComponent({
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
-        // console.log(`🔍 [ChatPrompt] Checking existing session...`);
-        // console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
         
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
-        // console.log(`🔍 [ChatPrompt] Response status:`, response.status);
-        // console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
         
         if (!response.ok) {
           console.error(`❌ [ChatPrompt] HTTP error! status: ${response.status}`);
@@ -229,10 +223,8 @@ export default defineComponent({
         }
         
         const data = await response.json();
-        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
-          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
           
           // Now that user is authenticated, get session verification
@@ -244,11 +236,9 @@ export default defineComponent({
           }
         } else if (data.redirectTo) {
           // Deep link user detected on main app - redirect them to their deep link page
-          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
           window.location.href = data.redirectTo;
           return;
         } else {
-          // console.log(`❌ [ChatPrompt] No authenticated user found`);
           // currentUser.value is already set to Public User by default
         }
       } catch (error) {
@@ -269,7 +259,6 @@ export default defineComponent({
         // Step 1: Check if this is a deep link page first
         const path = window.location.pathname;
         if (path.startsWith('/shared/')) {
-          console.log('🔗 [ChatPrompt] Deep link page detected, skipping authentication');
           // Skip authentication for deep link pages
           await handleDeepLink();
           return;
@@ -382,7 +371,6 @@ export default defineComponent({
           personalChatOption.value = agentInfo.endpoint;
         }
 
-        console.log("✅ Agent updated in ChatPrompt:", agentInfo.name);
         
         // Fetch current agent data to get updated warning information
         try {
@@ -416,7 +404,6 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = userData;
       
       // Refresh the session status to ensure we have the latest data

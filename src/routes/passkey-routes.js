@@ -13,7 +13,6 @@ let couchDBClient = null;
 
 // Function to set the CouchDB client (will be called from server.js)
 export const setCouchDBClient = (client) => {
-  console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
   couchDBClient = client;
 };
 
@@ -40,7 +39,6 @@ const isLocalhost = process.env.NODE_ENV !== 'production' && (!process.env.DOMAI
 const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NODE_ENV === 'production';
 
 // Log environment detection for debugging
-console.log('🔍 Environment Detection Logic:');
 console.log('  - NODE_ENV:', process.env.NODE_ENV);
 console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
 console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
@@ -82,7 +80,6 @@ const origin = (() => {
 })();
 
 // Log configuration for debugging
-console.log("🔍 Passkey Configuration:");
 console.log("  - NODE_ENV:", process.env.NODE_ENV);
 console.log("  - Environment Detection:");
 console.log("    - isLocalhost:", isLocalhost);
@@ -96,19 +93,9 @@ console.log("    - PORT:", process.env.PORT || '3001 (default)');
 console.log("    - HTTPS:", process.env.HTTPS || 'not set');
 
 // Configuration summary and recommendations
-console.log("📋 Configuration Summary:");
 if (isCloud && rpID === 'localhost') {
-  console.log("❌ PROBLEM: Cloud environment detected but using localhost rpID!");
-  console.log("❌ This will cause passkey registration to fail!");
-  console.log("💡 SOLUTION: Set DOMAIN=your-domain.com or PASSKEY_RPID=your-domain.com");
 } else if (isCloud) {
-  console.log("✅ Cloud environment configured correctly");
-  console.log("✅ rpID:", rpID);
-  console.log("✅ origin:", origin);
 } else {
-  console.log("✅ Local development environment");
-  console.log("✅ rpID:", rpID);
-  console.log("✅ origin:", origin);
 }
 
 // Add a function to log config on each request for debugging
@@ -157,7 +144,6 @@ router.post("/check-user", async (req, res) => {
         });
       }
     } catch (error) {
-      console.log("🔍 Database error:", error.message);
       // If database doesn't exist or document not found, user ID is available
       if (
         error.message.includes("not found") ||
@@ -187,7 +173,6 @@ router.post("/register", async (req, res) => {
     const { userId, displayName, adminSecret } = req.body;
 
     if (!userId || !displayName) {
-      console.log("❌ Missing userId or displayName in request");
       return res.status(400).json({ error: "User ID and display name are required" });
     }
 
@@ -211,14 +196,11 @@ router.post("/register", async (req, res) => {
       if (existingUser.credentialID) {
         // Special case: Allow admin to replace passkey (admin has already been verified in admin panel)
         if (userId === 'admin') {
-          console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
           // Admin override: Allow admin to reset any user's passkey
-          console.log("✅ Admin override: Allowing passkey reset for user:", userId);
           // Continue with registration (replace existing passkey)
         } else {
-          console.log("❌ User already has a passkey:", userId);
           return res.status(400).json({ 
             error: "User already has a registered passkey. Contact admin to reset it.",
             hasExistingPasskey: true,
@@ -227,7 +209,6 @@ router.post("/register", async (req, res) => {
         }
       } else {
         // If user exists but doesn't have a passkey, allow registration
-        console.log("✅ User exists but no passkey, allowing registration:", userId);
       }
     }
 
@@ -269,7 +250,6 @@ router.post("/register", async (req, res) => {
     // Store user document with challenge for verification
     try {
               await couchDBClient.saveDocument("maia_users", userDoc);
-      console.log("✅ User document saved successfully");
     } catch (error) {
       console.error("❌ Failed to save user document:", error.message);
       // If database doesn't exist, create it first
@@ -277,7 +257,6 @@ router.post("/register", async (req, res) => {
         try {
       await couchDBClient.createDatabase("maia_users");
           await couchDBClient.saveDocument("maia_users", userDoc);
-          console.log("✅ Database created and user document saved");
         } catch (createError) {
           console.error("❌ Failed to create database:", createError);
           // For now, continue without database storage
@@ -288,7 +267,6 @@ router.post("/register", async (req, res) => {
       }
     }
 
-    console.log("✅ Registration options sent successfully");
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating registration options:", error);
@@ -299,23 +277,19 @@ router.post("/register", async (req, res) => {
 // Verify registration response
 router.post("/register-verify", async (req, res) => {
   try {
-    console.log("🔍 Registration verification request received");
     const { userId, response } = req.body;
 
     if (!userId || !response) {
-      console.log("❌ Missing userId or response in verification request");
       return res
         .status(400)
         .json({ error: "User ID and response are required" });
     }
 
-    console.log("🔍 Getting user document for verification:", userId);
 
     // Get the user document with the stored challenge
     let userDoc;
     try {
               userDoc = await couchDBClient.getDocument("maia_users", userId);
-      console.log("✅ User document retrieved successfully");
     } catch (error) {
       console.error("❌ Error getting user document:", error);
       return res.status(404).json({
@@ -324,16 +298,13 @@ router.post("/register-verify", async (req, res) => {
     }
 
     if (!userDoc || !userDoc.challenge) {
-      console.log("❌ No user document or challenge found");
       return res.status(400).json({
         error: "No registration challenge found. Please try registering again.",
       });
     }
 
-    console.log("🔍 Verifying registration response");
 
     // Verify the registration response
-    console.log("🔍 Registration verification parameters:");
     console.log("  - expectedOrigin:", origin);
     console.log("  - expectedRPID:", rpID);
     console.log("  - challenge present:", !!userDoc.challenge);
@@ -345,18 +316,8 @@ router.post("/register-verify", async (req, res) => {
       expectedRPID: rpID,
     });
 
-    console.log("🔍 Registration verification result:", verification.verified);
-    console.log("🔍 Response origin:", response.response.clientExtensionResults?.appid);
-    console.log("🔍 Response type:", response.type);
-    console.log("🔍 Response ID:", response.id);
 
     if (verification.verified) {
-      console.log("🔍 Updating user document with credential information");
-      console.log("🔍 Verification result structure:", Object.keys(verification.registrationInfo));
-      console.log("🔍 Credential object keys:", Object.keys(verification.registrationInfo.credential));
-      console.log("🔍 Credential ID:", verification.registrationInfo.credential.id);
-      console.log("🔍 Credential Public Key:", verification.registrationInfo.credential.publicKey);
-      console.log("🔍 Counter:", verification.registrationInfo.credential.counter);
       
       // Update user document with credential information
       // Convert Uint8Array to base64 string for storage
@@ -373,7 +334,6 @@ router.post("/register-verify", async (req, res) => {
       // Save the updated user document to Cloudant
       await couchDBClient.saveDocument("maia_users", updatedUser);
 
-      console.log("✅ Passkey registration successful for user:", userId);
 
       res.json({
         success: true,
@@ -418,19 +378,16 @@ router.post("/authenticate", async (req, res) => {
     }
 
     if (!userDoc) {
-      console.log("❌ User not found:", userId);
       return res.status(404).json({ error: "User not found" });
     }
 
     if (!userDoc.credentialID) {
-      console.log("❌ User has no registered passkey:", userId);
       return res.status(400).json({ error: "User has no registered passkey" });
     }
 
     // Generate authentication options
     // In v13, credentialID should be stored as a base64url string
     if (typeof userDoc.credentialID !== "string") {
-      console.log("❌ Invalid credential ID format:", typeof userDoc.credentialID);
       throw new Error("Invalid credential ID format - expected base64url string");
     }
 
@@ -515,15 +472,12 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
 
-      console.log(`✅ Session created for user: ${updatedUser._id}`);
-      console.log(`🔍 [passkey] Session data after setting:`, req.session);
       
       // Explicitly save the session
       req.session.save((err) => {
         if (err) {
           console.error('❌ [passkey] Error saving session:', err);
         } else {
-          console.log(`✅ [passkey] Session saved for user: ${updatedUser._id}`);
         }
       });
       
@@ -568,7 +522,6 @@ router.post("/authenticate-verify", async (req, res) => {
         },
       };
       
-      console.log(`🔍 [passkey] Sending response:`, responseData);
       res.json(responseData);
     } else {
       res.status(400).json({ error: "Authentication verification failed" });
@@ -606,20 +559,12 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
-    console.log(`🔍 [auth-status] Session ID: ${req.sessionID}`);
-    console.log(`🔍 [auth-status] Session data:`, req.session);
-    console.log(`🔍 [auth-status] Session userId: ${req.session?.userId}`);
     
     if (req.session && req.session.userId) {
-      console.log(`🔍 [auth-status] Session found with userId: ${req.session.userId}`);
-      console.log(`🔍 [auth-status] Session type: ${req.session.sessionType}`);
-      console.log(`🔍 [auth-status] Checking if userId starts with 'deep_link_': ${req.session.userId.startsWith('deep_link_')}`);
       
       // Check if this is a deep link user - they should not be authenticated on main app
       if (req.session.userId.startsWith('deep_link_')) {
-        console.log(`🔗 [auth-status] Deep link user detected on main app: ${req.session.userId}`);
-        console.log(`🔗 [auth-status] Deep link users should only exist on deep link pages`);
-        console.log(`🔗 [auth-status] Session details:`, {
+        console.log('🔍 [passkey] Deep link user detected:', {
           userId: req.session.userId,
           sessionType: req.session.sessionType,
           deepLinkId: req.session.deepLinkId
@@ -630,7 +575,6 @@ router.get("/auth-status", async (req, res) => {
         
         // Clear the session for deep link users on main app
         req.session.destroy();
-        console.log(`🔗 [auth-status] Session destroyed, returning redirect to: ${deepLinkId ? `/shared/${deepLinkId}` : '/'}`);
         res.json({ 
           authenticated: false, 
           message: "Deep link users should only access shared pages",
@@ -654,8 +598,7 @@ router.get("/auth-status", async (req, res) => {
       }
       if (userDoc) {
         // Echo current user to backend console
-        console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
-        console.log('🔍 [auth-status] Session details:', {
+        console.log('🔍 [passkey] Current user:', {
           userId: req.session.userId,
           userName: req.session.userName,
           sessionType: req.session.sessionType,
@@ -672,13 +615,11 @@ router.get("/auth-status", async (req, res) => {
           },
         });
       } else {
-        console.log(`❌ [auth-status] User document not found for userId: ${req.session.userId}`);
         // Session exists but user document not found, clear session
         req.session.destroy();
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
-      console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
@@ -713,11 +654,9 @@ router.get("/session-verification", async (req, res) => {
 // Logout route to clear session
 router.post("/logout", async (req, res) => {
   try {
-    console.log(`🚨 BACKEND LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
     
     if (req.session) {
       const userId = req.session.userId;
-      console.log(`👋 User signed out: ${userId}`);
       
       // GroupFilter: Log user sign out and group chat count before destroying session
       try {
@@ -740,10 +679,8 @@ router.post("/logout", async (req, res) => {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
         }
-        console.log(`✅ Session destroyed for user: ${userId}`);
         
         // Session management is now in-memory only (maia_sessions database removed)
-        console.log('[*] [Session Delete] Session destroyed (in-memory only)');
         
         // Send a message to the browser console after session destruction
         res.json({ 
@@ -753,7 +690,6 @@ router.post("/logout", async (req, res) => {
         });
       });
     } else {
-      console.log(`ℹ️ No active session to destroy`);
       res.json({ success: true, message: "No active session" });
     }
   } catch (error) {

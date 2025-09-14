@@ -179,7 +179,6 @@ export default {
           container.appendChild(canvas)
         }
         
-        console.log(`✅ PDF loaded successfully: ${totalPages} pages rendered`)
       } catch (e) {
         console.error('PDF loading error:', e)
         

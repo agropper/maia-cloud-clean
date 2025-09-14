@@ -131,7 +131,6 @@ export const sendQuery = async (
                       uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     const userInfo = currentUser?.displayName || currentUser?.userId || 'Public User'
-    console.log(`🎯 QUERY DETAILS: User: ${userInfo} | AI: ${aiProvider} | Endpoint: ${uri}`)
     
     
     const response = await postData(uri, {
@@ -151,8 +150,6 @@ export const sendQuery = async (
     const responseTime = Date.now() - startTime
     const contextKB = Math.round(contextSize / 1024 * 100) / 100
     
-    console.log(`🤖 ${aiProvider}: ${totalTokens} tokens, ${contextKB}KB context, ${appState.uploadedFiles?.length || 0} files`)
-    console.log(`✅ ${aiProvider} response: ${responseTime}ms`)
 
     return response;
   } catch (error: any) {
@@ -166,7 +163,6 @@ export const sendQuery = async (
     
     // Check if this is an agent selection required error
     if (error.requiresAgentSelection && onAgentSelectionRequired) {
-      console.log(`🔍 Agent selection required for ${aiProvider}:`, error.message)
       onAgentSelectionRequired();
       return []; // Return empty array to prevent further processing
     }

@@ -217,22 +217,15 @@ export const setupMAIAEnvironment = async (apiKey: string, patientId: string = '
   const doAPI = new DigitalOceanAPI(apiKey)
   
   try {
-    console.log(`🚀 Setting up MAIA environment for patient ${patientId}...`)
     
     // Create knowledge base
-    console.log('📚 Creating knowledge base...')
     const knowledgeBase = await createMAIAKnowledgeBase(apiKey, patientId)
-    console.log(`✅ Knowledge base created: ${knowledgeBase.id}`)
     
     // Create agent
-    console.log('🤖 Creating AI agent...')
     const agent = await createMAIAAgent(apiKey, patientId)
-    console.log(`✅ Agent created: ${agent.id}`)
     
     // Associate knowledge base with agent
-    console.log('🔗 Associating knowledge base with agent...')
     await doAPI.associateKnowledgeBaseWithAgent(agent.id, knowledgeBase.id)
-    console.log('✅ Knowledge base associated with agent')
     
     return {
       agent,

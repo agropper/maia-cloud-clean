@@ -751,30 +751,30 @@
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <div class="text-subtitle2 q-mb-md">
+            <div class="text-subtitle2 q-mb-md">
             Create knowledge base from your existing bucket files:
-          </div>
+            </div>
 
-          <q-form
+            <q-form
             @submit="handleCreateKbSubmit"
-            class="q-gutter-md"
-          >
-            <q-input
-              v-model="newKbName"
-              label="Knowledge Base Name"
-              outlined
-              :rules="[(val) => !!val || 'Name is required']"
-              hint="Enter a descriptive name for your knowledge base"
+              class="q-gutter-md"
+            >
+              <q-input
+                v-model="newKbName"
+                label="Knowledge Base Name"
+                outlined
+                :rules="[(val) => !!val || 'Name is required']"
+                hint="Enter a descriptive name for your knowledge base"
               readonly
-            />
+              />
 
-            <q-input
-              v-model="newKbDescription"
-              label="Description"
-              outlined
-              type="textarea"
-              rows="3"
-              hint="Optional description of the knowledge base contents"
+              <q-input
+                v-model="newKbDescription"
+                label="Description"
+                outlined
+                type="textarea"
+                rows="3"
+                hint="Optional description of the knowledge base contents"
               readonly
             />
 
@@ -1091,6 +1091,67 @@
             label="I understand" 
             color="grey" 
             @click="handleWarningConfirmed"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Indexing Progress Modal -->
+    <q-dialog v-model="showIndexingProgressModal" persistent>
+      <q-card style="min-width: 500px">
+        <q-card-section class="q-pb-none">
+          <div class="text-h6">📊 Knowledge Base Indexing Progress</div>
+        </q-card-section>
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-md">{{ indexingProgress.kbName }}</div>
+          
+          <!-- Progress Bar -->
+          <div class="q-mb-md">
+            <div class="text-caption q-mb-xs">Progress: {{ indexingProgress.progress }}%</div>
+            <div class="progress-container" style="width: 100%; height: 20px; background-color: #e0e0e0; border-radius: 10px; overflow: hidden;">
+              <div 
+                class="progress-bar" 
+                :style="{
+                  width: indexingProgress.progress + '%',
+                  height: '100%',
+                  backgroundColor: indexingProgress.status === 'error' ? '#f44336' : '#1976d2',
+                  transition: 'width 0.3s ease'
+                }"
+              ></div>
+            </div>
+          </div>
+          
+          <!-- Status Message -->
+          <div class="text-body2 q-mb-md">
+            <q-icon 
+              :name="getStatusIcon(indexingProgress.status)" 
+              :color="getStatusColor(indexingProgress.status)"
+              class="q-mr-sm"
+            />
+            {{ indexingProgress.message }}
+          </div>
+          
+          <!-- Elapsed Time -->
+          <div v-if="indexingProgress.startTime" class="text-caption text-grey-6">
+            Started: {{ formatTime(indexingProgress.startTime) }}
+            <span v-if="indexingProgress.status === 'indexing'">
+              • Elapsed: {{ getElapsedTime(indexingProgress.startTime) }}
+            </span>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn 
+            v-if="indexingProgress.status === 'indexing'"
+            label="Cancel Indexing" 
+            color="warning" 
+            @click="showCancelIndexingModal = true"
+            icon="stop"
+          />
+          <q-btn 
+            v-if="indexingProgress.status === 'completed' || indexingProgress.status === 'error'"
+            label="Close" 
+            color="primary" 
+            @click="showIndexingProgressModal = false"
           />
         </q-card-actions>
       </q-card>
@@ -1488,6 +1549,16 @@ export default defineComponent({
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
     const isCancellingIndexing = ref(false);
+    
+    // Progress monitoring modal state
+    const showIndexingProgressModal = ref(false);
+    const indexingProgress = ref({
+      status: '',
+      progress: 0,
+      message: '',
+      kbName: '',
+      startTime: null as Date | null
+    });
 
     // Cancel request modal state
     const showCancelRequestModal = ref(false);
@@ -1573,7 +1644,6 @@ export default defineComponent({
         if (props.currentUser && props.currentUser.userId?.startsWith('deep_link_')) {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log(`🔗 [AgentManagementDialog] Deep link user authenticated via props: ${props.currentUser.userId}`);
           return;
         }
         
@@ -1586,7 +1656,6 @@ export default defineComponent({
             // User authenticated
           } else if (authData.redirectTo) {
             // Deep link user detected on main app - redirect them to their deep link page
-            console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: ${authData.redirectTo}`);
             window.location.href = authData.redirectTo;
             return;
           } else {
@@ -1594,11 +1663,9 @@ export default defineComponent({
             if (props.currentUser && props.currentUser.userId !== 'Public User') {
               localCurrentUser.value = props.currentUser;
               isAuthenticated.value = true;
-              console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
             } else {
               isAuthenticated.value = false;
               localCurrentUser.value = null;
-              console.log(`🔐 No user authenticated`);
             }
           }
         } else {
@@ -1606,24 +1673,19 @@ export default defineComponent({
           if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
             localCurrentUser.value = props.currentUser;
             isAuthenticated.value = true;
-            console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
           } else {
             isAuthenticated.value = false;
             localCurrentUser.value = null;
-            console.log(`🔐 No user authenticated`);
           }
         }
       } catch (error) {
-        console.log("🔐 Error checking authentication, checking props:", error);
         // Fallback to props
         if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log(`🔐 User authenticated via props fallback: ${props.currentUser.userId}`);
         } else {
           isAuthenticated.value = false;
           localCurrentUser.value = null;
-          console.log(`🔐 No user authenticated`);
         }
       }
     };
@@ -1746,7 +1808,6 @@ export default defineComponent({
             workflowSteps.value[4].current = true;
             // Only log once per session to prevent duplicates
             if (!hasLoggedStep5.value) {
-              console.log(`🎯 STEP 5 ACTIVATED: User has ${userFiles.length} files in bucket, ready to create knowledge base`);
               hasLoggedStep5.value = true;
             }
           } else {
@@ -1810,58 +1871,48 @@ export default defineComponent({
           workflowSteps.value[4].current = true;
           // Only log once per session to prevent duplicates
           if (!hasLoggedStep5.value) {
-            console.log(`🎯 STEP 5 ACTIVATED: User already has ${userFiles.length} files in bucket, ready to create knowledge base`);
             hasLoggedStep5.value = true;
           }
         } else {
           // No files yet - step 4 is current
           workflowSteps.value[3].current = true;
           workflowSteps.value[4].current = false;
-          console.log("✅ Workflow progress updated: Agent created, ready for file selection");
         }
       } catch (error) {
         console.error('Error checking bucket files:', error);
         // Fallback: step 4 is current
         workflowSteps.value[3].current = true;
         workflowSteps.value[4].current = false;
-        console.log("✅ Workflow progress updated: Agent created, ready for file selection");
       }
     };
 
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
       if (!localCurrentUser.value?.userId) {
-        console.log('🔧 checkUserBucketFiles: No userId available');
         return [];
       }
       
       // Use cached value if available and not forcing refresh
       if (!forceRefresh && userBucketFiles.value.length > 0) {
-        console.log('🔧 checkUserBucketFiles: Using cached value, count:', userBucketFiles.value.length);
         return userBucketFiles.value;
       }
       
       try {
         const username = localCurrentUser.value.userId
         const userFolder = `${username}/`
-        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username, 'folder:', userFolder);
         
         const response = await fetch('/api/bucket-files')
         if (response.ok) {
           const result = await response.json()
-          console.log('🔧 checkUserBucketFiles: API response:', result);
           if (result.success && result.files) {
             // Filter files that belong to this user
             const userFiles = result.files.filter(file => 
               file.key.startsWith(userFolder) && !file.key.endsWith('/')
             )
-            console.log('🔧 checkUserBucketFiles: Filtered user files:', userFiles.length, userFiles);
             // Update the cached value
             userBucketFiles.value = userFiles;
             return userFiles
           }
-        } else {
-          console.log('🔧 checkUserBucketFiles: API response not ok:', response.status);
         }
       } catch (error) {
         console.error('❌ Error checking user bucket files:', error)
@@ -1908,7 +1959,6 @@ export default defineComponent({
               `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
             );
           } else {
-            console.log(`📚 No KB assigned`);
           }
 
           // Handle warnings from the API
@@ -1917,7 +1967,6 @@ export default defineComponent({
           }
         } else {
           currentAgent.value = null;
-          console.log("🤖 No agent configured");
         }
         } else {
           // Authenticated user - check if they have an assigned agent
@@ -1950,7 +1999,6 @@ export default defineComponent({
                         }
                       } else {
                         currentAgent.value = null;
-                        console.log("🤖 No agent configured for authenticated user");
                       }
                     } else {
                       // Fallback to mock agent if API fails
@@ -1961,12 +2009,10 @@ export default defineComponent({
                       type: 'assigned',
                       assignedAt: assignedAgentData.agentAssignedAt
                     };
-                      console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
                     }
                   
                   // Only log once per session to prevent duplicates
                   if (!hasLoggedAgentAssignment.value) {
-                    console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
                     hasLoggedAgentAssignment.value = true;
                   }
                   
@@ -1974,14 +2020,12 @@ export default defineComponent({
                   await updateWorkflowProgressForAgent();
                 } else {
                   currentAgent.value = null;
-                  console.log("🔐 User has no agent assigned yet");
                 }
               } else {
                 currentAgent.value = null;
                 if (assignedAgentResponse.status === 429) {
                   console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
                 } else {
-                  console.log("🔐 Failed to check assigned agent:", assignedAgentResponse.status, assignedAgentResponse.statusText);
                 }
               }
             } catch (error) {
@@ -1990,7 +2034,6 @@ export default defineComponent({
             }
           } else {
             currentAgent.value = null;
-            console.log("🔐 No userId available");
           }
         }
 
@@ -2001,7 +2044,6 @@ export default defineComponent({
           if (agentsResponse.ok) {
             const agents: DigitalOceanAgent[] = await agentsResponse.json();
             availableAgents.value = agents;
-            console.log(`[*] Available agents: ${agents.length} for user ${currentUsername}`);
           }
         } catch (agentsError) {
           console.warn("Failed to load agents list:", agentsError);
@@ -2097,21 +2139,19 @@ export default defineComponent({
 
         if (response.ok) {
           const result = await response.json();
-          console.log("✅ Agent saved to Cloudant:", result);
 
           // Skip verification step - trust that the agent was saved successfully
           // The verification was causing issues due to session context problems
-          console.log("[*] Agent selected successfully:", result.agent?.name || 'Unknown');
           
           // Update the UI with the agent data from the save response
           if (result.agent) {
             currentAgent.value = result.agent;
-            
-            // Emit agent update event
-            emit("agent-updated", result.agent);
 
-            $q.notify({
-              type: "positive",
+          // Emit agent update event
+          emit("agent-updated", result.agent);
+
+          $q.notify({
+            type: "positive",
               message: `Agent "${result.agent.name}" selected successfully!`,
               timeout: 3000,
             });
@@ -2263,7 +2303,6 @@ export default defineComponent({
       newOwner: string;
       displayName: string;
     }) => {
-      console.log("✅ Ownership transfer completed:", transferData);
       
       // Close the modal
       showOwnershipTransferModal.value = false;
@@ -2312,12 +2351,10 @@ export default defineComponent({
     // Load agent info when dialog opens
     const onDialogOpen = async () => {
       try {
-        console.log(`🔐 Dialog opening - checking authentication status...`);
       await checkAuthenticationStatus();
       await loadAgentInfo();
         // Display current agent information (only if not already logged)
         if (currentAgent.value && !hasLoggedAgentAssignment.value) {
-          console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
         }
         await updateWorkflowProgress(); // Update workflow progress after loading data
       } finally {
@@ -2328,7 +2365,6 @@ export default defineComponent({
     // Watch for user changes to log them (but don't make API calls)
     watch(() => props.currentUser, (newUser) => {
       if (newUser && localCurrentUser.value?.userId !== newUser.userId) {
-        console.log(`[*] Current user: ${newUser.userId}`);
       }
     }, { immediate: true });
 
@@ -2383,7 +2419,6 @@ export default defineComponent({
               `Failed to detach current KB: ${deleteResponse.statusText}`
             );
           }
-          console.log(`✅ Detached current KB: ${knowledgeBase.value.name}`);
         }
 
         // Then associate new KB with agent
@@ -2426,7 +2461,6 @@ export default defineComponent({
           );
         }
 
-        console.log(`✅ KB switch verified: agent now has ${actualKb.name}`);
 
         // Update local state with the verified data
         knowledgeBase.value = actualKb;
@@ -2531,7 +2565,6 @@ export default defineComponent({
         
         if (bucketFiles.length > 0) {
           // User already has files - skip to knowledge base creation
-          console.log(`🎯 User already has ${bucketFiles.length} files, proceeding to knowledge base creation`);
           // Update workflow to step 5
           workflowSteps.value[3].completed = true;
           workflowSteps.value[3].current = false;
@@ -2669,7 +2702,6 @@ export default defineComponent({
             if (uploadResponse.ok) {
               const uploadResult = await uploadResponse.json()
               if (uploadResult.success) {
-                console.log(`✅ File uploaded to bucket: ${bucketKey}`)
                 uploadedFiles.push({
                   id: uploadResult.fileInfo.bucketKey,
                   name: fileName,
@@ -2726,10 +2758,8 @@ export default defineComponent({
 
       isCreatingKb.value = true;
       try {
-        console.log('🚀 KB creation starting with', selectedDocuments.value.length, 'selected files')
         
         // Step 1: Upload selected files to Spaces bucket in user-specific folder
-        console.log('📤 Starting bucket upload to user folder...')
         const uploadedFiles = []
         const username = localCurrentUser.value?.userId || 'unknown'
         const userFolder = `${username}/`
@@ -2749,16 +2779,13 @@ export default defineComponent({
               aiContent = file.transcript
               fileName = file.name.replace('.pdf', '.md')
               fileType = 'text/markdown'
-              console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
             } else if (file.type === 'rtf' && file.transcript) {
               aiContent = file.transcript
               fileName = file.name.replace('.rtf', '.md')
               fileType = 'text/markdown'
-              console.log(`📄 Using extracted markdown for RTF: ${fileName} (${aiContent?.length || 0} chars)`)
             } else if (file.type === 'transcript' || file.name.endsWith('.md')) {
               // Already in markdown format
               fileType = 'text/markdown'
-              console.log(`📄 Using existing markdown: ${fileName} (${aiContent?.length || 0} chars)`)
             } else if (file.type === 'pdf' && !file.transcript) {
               // PDF without transcript - this shouldn't happen
               console.warn(`⚠️ PDF file ${fileName} has no transcript - skipping`)
@@ -2772,14 +2799,13 @@ export default defineComponent({
             
             // Upload to user-specific folder in DigitalOcean Spaces
             const bucketKey = `${userFolder}${fileName}`
-            console.log(`📤 Uploading to bucket: ${bucketKey} (${aiContent.length} chars)`)
             
             const uploadResponse = await fetch('/api/upload-to-bucket', {
               method: 'POST',
-              headers: {
+          headers: {
                 'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
+          },
+          body: JSON.stringify({
                 fileName: fileName,
                 content: aiContent,
                 fileType: fileType
@@ -2789,7 +2815,6 @@ export default defineComponent({
             if (uploadResponse.ok) {
               const uploadResult = await uploadResponse.json()
               if (uploadResult.success) {
-                console.log(`✅ File uploaded to bucket: ${bucketKey}`)
                 uploadedFiles.push({
                   id: uploadResult.fileInfo.bucketKey,
                   name: fileName,
@@ -2807,16 +2832,13 @@ export default defineComponent({
           }
         }
         
-        console.log(`✅ NEW CODE - Uploaded ${uploadedFiles.length} files to bucket`)
         
         // Step 2: Create knowledge base with uploaded files
-        console.log('📚 NEW CODE - Creating knowledge base...')
         const requestBody = {
-          name: newKbName.value,
-          description: newKbDescription.value,
+            name: newKbName.value,
+            description: newKbDescription.value,
           documents: uploadedFiles
         };
-        console.log(`📚 NEW CODE - Creating KB with ${uploadedFiles.length} documents`);
 
         const response = await fetch(`${API_BASE_URL}/knowledge-bases`, {
           method: "POST",
@@ -2834,10 +2856,8 @@ export default defineComponent({
         }
 
         const newKb = await response.json();
-        console.log('✅ NEW CODE - Knowledge base created successfully')
 
         // Step 3: Clean up bucket (but don't delete yet - wait for user confirmation)
-        console.log('🧹 NEW CODE - KB creation successful, bucket cleanup ready')
 
         // Add to available knowledge bases
         availableKnowledgeBases.value.push(newKb);
@@ -2868,7 +2888,6 @@ export default defineComponent({
 
     // Handle Step 4: Choose files and upload to bucket
     const handleChooseFilesSubmit = async () => {
-      console.log('🚀 Step 4: Form submitted - calling uploadSelectedFilesToBucket');
       await uploadSelectedFilesToBucket();
     };
 
@@ -2901,22 +2920,82 @@ export default defineComponent({
         const kbName = selectedKbId.value === 'new' ? newKbNameInput.value : 
           availableKnowledgeBases.value.find(kb => (kb.uuid || kb.id) === selectedKbId.value)?.name;
         
-        console.log(`🚀 Creating/updating knowledge base: ${kbName}`);
-        console.log(`📎 Selected files: ${selectedDocuments.value.length} uploaded, ${selectedBucketFiles.value.length} from bucket`);
 
         // Store files for cleanup after successful indexing
         filesToCleanup.value = [...selectedBucketFiles.value];
 
-        // TODO: Implement actual KB creation/update logic here
-        // This will involve:
-        // 1. Creating new KB if selectedKbId === 'new'
-        // 2. Adding selected files to the KB
-        // 3. Starting indexing
-        // 4. Cleaning up files after successful indexing (handled in checkIndexingStatus)
+        // Create or update knowledge base
+        let newKb;
+        if (selectedKbId.value === 'new') {
+          // Create new KB with data sources
+          const createResponse = await fetch(`${API_BASE_URL}/knowledge-bases`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: kbName,
+              description: newKbDescriptionInput.value || `Knowledge base for ${localCurrentUser.value?.userId}`,
+              owner: localCurrentUser.value?.userId,
+              datasources: [
+                {
+                  "spaces_data_source": {
+                    "bucket_name": "maia",
+                    "item_path": `${localCurrentUser.value?.userId}/`,
+                    "region": "tor1"
+                  }
+                }
+              ]
+            })
+          });
+          
+          if (!createResponse.ok) {
+            throw new Error('Failed to create knowledge base');
+          }
+          
+          const createResult = await createResponse.json();
+          // Handle different response structures
+          newKb = createResult.knowledgeBase || createResult.kb || createResult.knowledge_base || createResult;
+        } else {
+          newKb = availableKnowledgeBases.value.find(kb => (kb.uuid || kb.id) === selectedKbId.value);
+        }
+
+        // Start indexing
+        // Handle nested structure: newKb might be {knowledge_base: {...}} or just the KB object
+        const kbObject = newKb.knowledge_base || newKb;
+        const kbId = kbObject.uuid || kbObject.id;
+        
+        if (!kbId) {
+          throw new Error('No valid KB ID found for indexing');
+        }
+        
+        const indexResponse = await fetch(`${API_BASE_URL}/auto-start-indexing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            knowledgeBaseId: kbId,
+            files: selectedBucketFiles.value
+          })
+        });
+        
+        if (!indexResponse.ok) {
+          const errorText = await indexResponse.text();
+          console.error('🔧 Indexing failed:', indexResponse.status, errorText);
+          throw new Error(`Failed to start indexing: ${indexResponse.status} ${errorText}`);
+        }
+        
+        const indexResult = await indexResponse.json();
+
+        // Update workflow to step 6 (indexing)
+        workflowSteps.value[4].completed = true;
+        workflowSteps.value[4].current = false;
+        workflowSteps.value[5].current = true;
+        
+        
+        // Start monitoring indexing status
+        startIndexingMonitor(kbObject);
 
         $q.notify({
           type: 'positive',
-          message: `Knowledge base "${kbName}" will be created/updated with selected files`
+          message: `Knowledge base "${kbName}" created and indexing started!`
         });
 
         // Close the dialog
@@ -2994,7 +3073,6 @@ export default defineComponent({
 
         const newKb = await response.json();
         const kbName = newKb.name || newKb.knowledge_base?.name || 'Unknown KB';
-        console.log(`✅ Knowledge base created successfully from bucket files: ${kbName}`)
 
         // Add to available knowledge bases
         availableKnowledgeBases.value.push(newKb);
@@ -3007,7 +3085,6 @@ export default defineComponent({
         workflowSteps.value[4].current = false;
         workflowSteps.value[5].current = true;
         
-        console.log(`🎯 STEP 6 ACTIVATED: Knowledge base created, starting indexing monitor`);
         
         // Start monitoring indexing status
         startIndexingMonitor(newKb);
@@ -3108,6 +3185,53 @@ export default defineComponent({
       return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
     };
 
+    // Progress modal helper functions
+    const getStatusIcon = (status: string) => {
+      const icons: Record<string, string> = {
+        'indexing': 'hourglass_empty',
+        'completed': 'check_circle',
+        'error': 'error',
+        'pending': 'schedule'
+      };
+      return icons[status] || 'help';
+    };
+
+    const getStatusColor = (status: string) => {
+      const colors: Record<string, string> = {
+        'indexing': 'primary',
+        'completed': 'positive',
+        'error': 'negative',
+        'pending': 'orange'
+      };
+      return colors[status] || 'grey';
+    };
+
+    const formatTime = (date: Date) => {
+      return date.toLocaleTimeString();
+    };
+
+    const getElapsedTime = (startTime: Date) => {
+      const now = new Date();
+      const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const getProgressFromStatus = (status: string, phase: string) => {
+      // Map status and phase to progress percentage
+      if (status === 'INDEX_JOB_STATUS_PENDING') return 10;
+      if (status === 'INDEX_JOB_STATUS_IN_PROGRESS') {
+        if (phase === 'BATCH_JOB_PHASE_PREPARING') return 25;
+        if (phase === 'BATCH_JOB_PHASE_PROCESSING') return 50;
+        if (phase === 'BATCH_JOB_PHASE_FINALIZING') return 75;
+        return 30; // Default for in progress
+      }
+      if (status === 'INDEX_JOB_STATUS_COMPLETED') return 100;
+      if (status === 'INDEX_JOB_STATUS_FAILED') return 0;
+      return 0;
+    };
+
     // Delete files from bucket folder after successful KB indexing
     const cleanupBucketFiles = async (fileKeys: string[]) => {
       if (!fileKeys || fileKeys.length === 0) {
@@ -3115,7 +3239,6 @@ export default defineComponent({
       }
 
       try {
-        console.log(`🧹 Cleaning up ${fileKeys.length} files from bucket folder`);
         
         for (const fileKey of fileKeys) {
           try {
@@ -3128,7 +3251,6 @@ export default defineComponent({
             });
 
             if (response.ok) {
-              console.log(`✅ Deleted file: ${fileKey}`);
             } else {
               console.warn(`⚠️ Failed to delete file: ${fileKey} (${response.status})`);
             }
@@ -3140,7 +3262,6 @@ export default defineComponent({
         // Refresh bucket files list
         await checkUserBucketFiles(true);
         
-        console.log('🧹 Bucket cleanup completed');
       } catch (error) {
         console.error('❌ Error during bucket cleanup:', error);
         throw error;
@@ -3179,18 +3300,15 @@ export default defineComponent({
 
     // Clean up bucket after successful KB creation
     const cleanupBucket = async () => {
-      console.log('🧹 Starting bucket cleanup...')
       try {
         // First, get list of files in bucket
         const listResponse = await fetch('/api/bucket-files')
         if (listResponse.ok) {
           const result = await listResponse.json()
           if (result.success && result.files.length > 0) {
-            console.log(`🧹 Found ${result.files.length} files to delete from bucket`)
             
             // Delete each file
             for (const file of result.files) {
-              console.log(`🧹 Deleting file from bucket: ${file.key}`)
               const deleteResponse = await fetch('/api/delete-bucket-file', {
                 method: 'DELETE',
                 headers: {
@@ -3200,19 +3318,16 @@ export default defineComponent({
               })
               
               if (deleteResponse.ok) {
-                console.log(`✅ Deleted file from bucket: ${file.key}`)
               } else {
                 console.error(`❌ Failed to delete file from bucket: ${file.key}`)
               }
             }
             
-            console.log('✅ Bucket cleanup completed')
             $q.notify({
               type: "positive",
               message: "Bucket cleanup completed successfully!",
             });
           } else {
-            console.log('🧹 No files found in bucket to clean up')
           }
         } else {
           console.error('❌ Failed to list bucket files for cleanup')
@@ -3233,15 +3348,16 @@ export default defineComponent({
 
     // Start monitoring knowledge base indexing status
     const startIndexingMonitor = async (knowledgeBase: any) => {
+      
       // Extract UUID from different possible response structures
       const kbUuid = knowledgeBase?.uuid || 
                      knowledgeBase?.id || 
                      knowledgeBase?.knowledge_base?.uuid || 
                      knowledgeBase?.knowledge_base?.id;
       
+      
       if (!kbUuid) {
         console.warn('⚠️ No knowledge base UUID available for indexing monitor');
-        // Knowledge base object structure logged
         return;
       }
 
@@ -3250,7 +3366,16 @@ export default defineComponent({
       
       currentKbId = kbUuid;
       const kbName = knowledgeBase.name || knowledgeBase.knowledge_base?.name || 'Unknown KB';
-      console.log(`📊 Starting indexing monitor for KB: ${kbName} (${currentKbId})`);
+      
+      // Initialize progress modal
+      indexingProgress.value = {
+        status: 'indexing',
+        progress: 0,
+        message: 'Starting indexing process...',
+        kbName: kbName,
+        startTime: new Date()
+      };
+      showIndexingProgressModal.value = true;
       
       // Record start time for timing measurement
       indexingStartTime = Date.now();
@@ -3269,7 +3394,6 @@ export default defineComponent({
       if (indexingInterval) {
         clearInterval(indexingInterval);
         indexingInterval = null;
-        console.log('📊 Stopped indexing monitor');
       }
       currentKbId = null;
     };
@@ -3277,9 +3401,7 @@ export default defineComponent({
     // Start indexing job for a knowledge base
     const startIndexingJob = async (kbId: string) => {
       // Also log to browser console for user visibility
-      console.log('🚀 AUTO-START INDEXING: Starting indexing job for knowledge base...');
       try {
-        console.log(`🚀 Starting indexing job for KB: ${kbId}`);
         
         const response = await fetch(`${API_BASE_URL}/test-start-indexing`, {
           method: 'POST',
@@ -3296,7 +3418,6 @@ export default defineComponent({
           const result = await response.json();
           
           if (result.success) {
-            console.log(`✅ Indexing job started successfully: ${result.indexingJob.uuid}`);
             
             // Update workflow step
             workflowSteps.value[5].title = 'Indexing job started - monitoring progress...';
@@ -3331,7 +3452,6 @@ export default defineComponent({
     const cancelIndexing = async () => {
       try {
         isCancellingIndexing.value = true;
-        console.log('🛑 Cancelling indexing process...');
         
         // Stop the monitoring
         stopIndexingMonitor();
@@ -3364,7 +3484,6 @@ export default defineComponent({
     const cancelRequest = async () => {
       try {
         isCancellingRequest.value = true;
-        console.log('🛑 Cancelling private AI agent request...');
         
         // Reset workflow steps to go back to Step 2 (request pending)
         workflowSteps.value[2].completed = false;
@@ -3411,12 +3530,20 @@ export default defineComponent({
             const elapsedSeconds = Math.round((Date.now() - indexingStartTime) / 1000);
             workflowSteps.value[5].title = `Knowledge base being indexed. Status: ${status}, Phase: ${phase} (${elapsedSeconds}s)`;
             
+            // Update progress modal
+            const progress = getProgressFromStatus(status, phase);
+            indexingProgress.value = {
+              ...indexingProgress.value,
+              status: 'indexing',
+              progress: progress,
+              message: `Status: ${status}, Phase: ${phase} (${elapsedSeconds}s)`
+            };
+            
             // Hide the CREATE KNOWLEDGE BASE button once indexing starts
             if (status === 'INDEX_JOB_STATUS_IN_PROGRESS' || status === 'INDEX_JOB_STATUS_PENDING') {
         showCreateKbDialog.value = false;
             }
             
-            console.log(`📊 Indexing status: ${status}, Phase: ${phase}`);
             
             // Debug: Log the exact status values to help troubleshoot
             // Checking indexing status
@@ -3426,7 +3553,14 @@ export default defineComponent({
                 phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
               const completionTime = Date.now();
               const indexingDuration = Math.round((completionTime - indexingStartTime) / 1000);
-              console.log(`✅ Knowledge base indexing completed in ${indexingDuration} seconds!`);
+              
+              // Update progress modal to show completion
+              indexingProgress.value = {
+                ...indexingProgress.value,
+                status: 'completed',
+                progress: 100,
+                message: `Indexing completed successfully in ${indexingDuration} seconds!`
+              };
               
               // Mark step 6 as completed
               workflowSteps.value[5].completed = true;
@@ -3452,7 +3586,6 @@ export default defineComponent({
               if (filesToCleanup.value.length > 0) {
                 try {
                   await cleanupBucketFiles(filesToCleanup.value);
-                  console.log('🧹 Files cleaned up successfully after indexing');
                 } catch (cleanupError) {
                   console.error('❌ Failed to cleanup files after indexing:', cleanupError);
                   showCleanupErrorModal(cleanupError, filesToCleanup.value);
@@ -3462,6 +3595,14 @@ export default defineComponent({
               }
             } else if (status === 'INDEX_JOB_STATUS_FAILED' || status === 'failed' || status === 'error') {
               console.error(`❌ Knowledge base indexing failed: ${job.error || 'Unknown error'}`);
+              
+              // Update progress modal to show error
+              indexingProgress.value = {
+                ...indexingProgress.value,
+                status: 'error',
+                progress: 0,
+                message: `Indexing failed: ${job.error || 'Unknown error'}`
+              };
               
               // Update step title to show error
               workflowSteps.value[5].title = `Knowledge base indexing failed. Please contact support.`;
@@ -3477,7 +3618,6 @@ export default defineComponent({
             }
             // If status is 'INDEX_JOB_STATUS_IN_PROGRESS' or 'INDEX_JOB_STATUS_PENDING', continue monitoring
           } else if (statusData.needsIndexing) {
-            console.log('📊 No indexing job found - indexing needs to be started');
             
             // Update workflow step to show that indexing needs to be started
             workflowSteps.value[5].title = 'Knowledge base ready - indexing needs to be started';
@@ -3514,7 +3654,6 @@ export default defineComponent({
           const result = await response.json();
           if (result.agent) {
             currentAgent.value = result.agent;
-            console.log('[*] Agent data refreshed with', result.agent.knowledgeBases?.length || 0, 'connected KBs');
           }
         }
       } catch (error) {
@@ -3538,7 +3677,6 @@ export default defineComponent({
         }
         
         const agentId = currentAgent.value.uuid || currentAgent.value.id;
-        console.log(`🔗 Attaching knowledge base ${kbId} to agent ${agentId}`);
         
         // Call the backend to attach the KB to the agent
         const response = await fetch(`${API_BASE_URL}/agents/${agentId}/knowledge-bases`, {
@@ -3554,7 +3692,6 @@ export default defineComponent({
         
         if (response.ok) {
           const result = await response.json();
-          console.log(`✅ Knowledge base attached to agent successfully:`, result);
           
           // Refresh agent data to show updated KB list
           await refreshAgentData();
@@ -3643,7 +3780,6 @@ export default defineComponent({
           throw new Error(`Failed to detach KB: ${response.statusText}`);
         }
 
-        console.log(`✅ Detached KB: ${kb.name}`);
         $q.notify({
           type: "positive",
           message: `Knowledge base "${kb.name}" detached from agent.`,
@@ -3675,7 +3811,6 @@ export default defineComponent({
         return;
       }
 
-      console.log(`[*] Connecting KB "${kb.name}" to agent "${currentAgent.value.name}"`);
       isUpdating.value = true;
       try {
         const response = await fetch(
@@ -3691,7 +3826,6 @@ export default defineComponent({
         if (!response.ok) {
           // Check if this requires ownership transfer
           if (result.requiresOwnershipTransfer && result.kbInfo) {
-            console.log("🔄 Ownership transfer required for KB:", result.kbInfo);
             
             // Validate kbInfo data before showing modal
             if (result.kbInfo && result.kbInfo.id) {
@@ -3740,7 +3874,6 @@ export default defineComponent({
             throw new Error(`Failed to connect KB: ${response.statusText}`);
           }
         } else {
-          console.log(`✅ Connected KB: ${kb.name}`);
           $q.notify({
             type: "positive",
             message: `Knowledge base "${kb.name}" connected to agent.`,
@@ -3955,7 +4088,6 @@ export default defineComponent({
           // Use the hasFolder and fileCount from the status endpoint
           const hasFiles = statusData.hasFolder && statusData.fileCount > 0;
           userHasFiles.value = hasFiles || false;
-          console.log(`📁 User has ${statusData.fileCount || 0} files in bucket`);
         } else {
           // Fallback to general bucket-files endpoint and filter by user
           const response = await fetch(`${API_BASE_URL}/bucket-files`);
@@ -3970,7 +4102,6 @@ export default defineComponent({
             );
             const hasFiles = userFiles && userFiles.length > 0;
             userHasFiles.value = hasFiles || false;
-            console.log(`📁 User has ${userFiles?.length || 0} files in bucket (fallback)`);
           } else {
             userHasFiles.value = false;
           }
@@ -3986,14 +4117,8 @@ export default defineComponent({
       
       // For create_or_add action, open the enhanced file selection modal directly
       if (action === 'create_or_add') {
-        console.log('🔧 Opening enhanced file selection modal for create_or_add action');
-        console.log('🔧 Current userHasFiles:', userHasFiles.value);
-        console.log('🔧 Current userBucketFiles count:', userBucketFiles.value.length);
-        
         // Ensure bucket files are loaded before opening modal
         await checkUserBucketFiles(true);
-        console.log('🔧 After loading bucket files:', userBucketFiles.value.length);
-        
         showChooseFilesDialog.value = true;
       } else {
         // For other actions, show the confirmation modal
@@ -4112,7 +4237,6 @@ export default defineComponent({
           
           // Check if indexing is complete by looking at the workflow step
           if (workflowSteps.value[5].completed) {
-            console.log('✅ Indexing completed');
             return;
           }
         } catch (error) {
@@ -4138,8 +4262,13 @@ export default defineComponent({
 
     // Watch for dialog opening to check files (only when dialog opens)
     watch(showDialog, (newValue) => {
-      if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
-        checkUserFiles();
+      if (newValue) {
+        // Check authentication first, then files
+        checkAuthenticationStatus().then(() => {
+          if (isAuthenticated.value && !isDeepLinkUser.value) {
+            checkUserFiles();
+          }
+        });
       }
     });
 
@@ -4148,6 +4277,14 @@ export default defineComponent({
       if (newValue) {
         // Initialize KB selection with default
         selectedKbId.value = defaultKbId.value;
+        
+        // Generate automatic KB name with patient name pattern
+        if (localCurrentUser.value?.userId) {
+          const today = new Date();
+          const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+          newKbNameInput.value = `${localCurrentUser.value.userId}-kb-${dateStr}`;
+          newKbDescriptionInput.value = `Knowledge base for ${localCurrentUser.value.userId} created on ${today.toLocaleDateString()}`;
+        }
         
         // Load user bucket files
         checkUserBucketFiles(true);
@@ -4246,6 +4383,8 @@ export default defineComponent({
       cancelIndexing,
       showCancelIndexingModal,
       isCancellingIndexing,
+      showIndexingProgressModal,
+      indexingProgress,
       cancelRequest,
       showCancelRequestModal,
       isCancellingRequest,

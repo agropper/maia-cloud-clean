@@ -21,7 +21,6 @@ class KnowledgeBaseManager {
       await this.couchDBClient.createDatabase(this.kbDatabase);
       await this.couchDBClient.createDatabase(this.userKbDatabase);
       this.initialized = true;
-      console.log('✅ Knowledge base databases initialized');
     } catch (error) {
       console.error('❌ Failed to initialize KB databases:', error);
       // Don't set initialized to true if there's an error
@@ -75,7 +74,6 @@ class KnowledgeBaseManager {
       };
 
       await this.couchDBClient.saveDocument(this.kbDatabase, protectionDoc);
-      console.log(`🔒 KB ${kbName} (${kbId}) protected for user ${owner}`);
       return { success: true };
     } catch (error) {
       console.error('❌ Failed to set KB protection:', error);
@@ -93,7 +91,6 @@ class KnowledgeBaseManager {
       }
 
       await this.couchDBClient.deleteDocument(this.kbDatabase, kbId);
-      console.log(`🔓 KB ${kbId} protection removed by ${owner}`);
       return { success: true };
     } catch (error) {
       console.error('❌ Failed to remove KB protection:', error);

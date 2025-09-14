@@ -424,7 +424,6 @@ export default defineComponent({
         const file = files[0] // Take the first file for now
         if (file) {
           try {
-            console.log(`📁 Processing file: ${file.name} (${Math.round(file.size / 1024)}KB)`)
             
             // Process file through the proper upload pipeline (which handles bucket upload)
             await uploadFile(file, props.appState, (message: string, type: string) => {

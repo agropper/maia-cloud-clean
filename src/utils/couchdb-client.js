@@ -63,10 +63,8 @@ export class CouchDBClient {
   async initializeDatabase() {
     try {
       await this.db.db.create(this.databaseName)
-      console.log(`✅ Database '${this.databaseName}' created`)
     } catch (error) {
       if (error.statusCode === 412) {
-        console.log(`✅ Database '${this.databaseName}' already exists`)
       } else {
         console.error('❌ Failed to create database:', error)
         throw error
@@ -77,11 +75,9 @@ export class CouchDBClient {
   async createDatabase(databaseName) {
     try {
       await this.db.db.create(databaseName)
-      console.log(`✅ Database '${databaseName}' created`)
       return true
     } catch (error) {
       if (error.statusCode === 412) {
-        console.log(`✅ Database '${databaseName}' already exists`)
         return true
       } else {
         console.error('❌ Failed to create database:', error)
@@ -151,7 +147,6 @@ export class CouchDBClient {
     try {
       const info = await this.db.info()
       const serviceType = this.isCloudant ? 'Cloudant' : 'CouchDB'
-      console.log(`✅ Connected to ${serviceType}: ${info.version}`)
       return true
     } catch (error) {
       console.error('❌ Connection failed:', error)
@@ -163,7 +158,7 @@ export class CouchDBClient {
   async saveChat(chatData) {
     return this.handleCloudantError(async () => {
       // Debug: Log what's being saved
-      console.log(`🔍 [COUCHDB] Saving chat document:`, {
+      console.log('🔍 [CouchDB] Saving chat data:', {
         _id: chatData._id,
         type: chatData.type,
         uploadedFilesCount: chatData.uploadedFiles?.length || 0,
@@ -187,7 +182,6 @@ export class CouchDBClient {
       }
 
       const result = await this.database.insert(chatData)
-      console.log(`🔍 [COUCHDB] Chat saved successfully: ${result.id}`);
       return {
         id: result.id,
         rev: result.rev,
@@ -240,7 +234,6 @@ export class CouchDBClient {
       return null
     } catch (error) {
       // If view doesn't exist, fall back to scanning all documents
-      console.log('📄 Share ID view not found, scanning all documents...')
       try {
         const allChats = await this.getAllChats()
         return allChats.find(chat => chat.shareId === shareId) || null
@@ -275,7 +268,6 @@ export class CouchDBClient {
       }
       
       await this.database.insert(designDoc)
-      console.log('✅ Share ID view created successfully')
     } catch (error) {
       console.error('❌ Failed to create share ID view:', error)
       // Don't throw error, fallback scanning will work

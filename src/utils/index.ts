@@ -516,15 +516,11 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
       if (uploadResponse.ok) {
         const uploadResult = await uploadResponse.json()
         if (uploadResult.success) {
-          console.log(`✅ PDF file uploaded to bucket via utils: ${file.name}`)
         } else {
-          console.log(`⚠️ PDF bucket upload failed via utils: ${uploadResult.message}`)
         }
       } else {
-        console.log(`⚠️ PDF bucket upload failed via utils: ${uploadResponse.statusText}`)
       }
     } catch (uploadError) {
-      console.log(`⚠️ PDF bucket upload error via utils: ${uploadError}`)
     }
     
     return result.markdown || result.text;
@@ -619,15 +615,11 @@ const processRTFFile = async (file: File): Promise<string> => {
       if (uploadResponse.ok) {
         const uploadResult = await uploadResponse.json()
         if (uploadResult.success) {
-          console.log(`✅ RTF file uploaded to bucket via utils: ${file.name}`)
         } else {
-          console.log(`⚠️ RTF bucket upload failed via utils: ${uploadResult.message}`)
         }
       } else {
-        console.log(`⚠️ RTF bucket upload failed via utils: ${uploadResponse.statusText}`)
       }
     } catch (uploadError) {
-      console.log(`⚠️ RTF bucket upload error via utils: ${uploadError}`)
     }
     
     return result.markdown || result.text;

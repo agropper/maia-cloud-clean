@@ -17,15 +17,12 @@ class CouchDBSessionStore extends Store {
     this.warningDuration = options.warningDuration || 30 * 1000; // 30 seconds
     
     // Essential: Database configuration
-    console.log('[*] [CouchDB Session] Store initialized with database:', this.dbName);
   }
 
   // Get session from database
   async get(sessionId, callback) {
     try {
       // Essential: Database access
-      console.log('[*] [CouchDB Session] GET: Reading session from maia_sessions database');
-      console.log('[*] [CouchDB Session] GET: SessionId:', sessionId);
       
       // Ensure sessionId is a valid string
       if (!sessionId || typeof sessionId !== 'string') {
@@ -40,16 +37,13 @@ class CouchDBSessionStore extends Store {
       }
 
       const docId = `session_${cleanSessionId}`;
-      console.log('[*] [CouchDB Session] GET: Document ID:', docId);
       const sessionDoc = await this.couchDBClient.getDocument(this.dbName, docId);
       
       if (!sessionDoc || !sessionDoc.isActive) {
-        console.log('[*] [CouchDB Session] GET: Session not found or inactive');
         if (callback) callback(null, null);
         return;
       }
       
-      console.log('[*] [CouchDB Session] GET: Session found:', sessionDoc.userId);
 
       // Check if session has expired due to inactivity
       const now = new Date();
@@ -83,9 +77,6 @@ class CouchDBSessionStore extends Store {
   // Set session in database
   async set(sessionId, sessionData, callback) {
     try {
-      console.log('[*] [CouchDB Session] SET: Starting session write to maia_sessions database');
-      console.log('[*] [CouchDB Session] SET: SessionId:', sessionId);
-      console.log('[*] [CouchDB Session] SET: SessionData keys:', Object.keys(sessionData || {}));
       
       // Ensure sessionId is a valid string
       if (!sessionId || typeof sessionId !== 'string') {
@@ -101,18 +92,14 @@ class CouchDBSessionStore extends Store {
         return;
       }
 
-      console.log('[*] [CouchDB Session] SET: Clean sessionId:', cleanSessionId);
       const now = new Date();
       const expiresAt = new Date(now.getTime() + this.inactivityTimeout);
-      console.log('[*] [CouchDB Session] SET: Expires at:', expiresAt.toISOString());
       
       // Check if session already exists to avoid conflicts
       let sessionDoc;
       try {
-        console.log('[*] [CouchDB Session] SET: Checking if session exists in database');
         const existingDoc = await this.couchDBClient.getDocument(this.dbName, `session_${cleanSessionId}`);
         if (existingDoc) {
-          console.log('[*] [CouchDB Session] SET: Found existing session, updating');
           // Update existing session
           sessionDoc = {
             ...existingDoc,
@@ -126,9 +113,7 @@ class CouchDBSessionStore extends Store {
             deepLinkId: sessionData.deepLinkId || existingDoc.deepLinkId || null,
             ownedBy: sessionData.ownedBy || existingDoc.ownedBy || null
           };
-          console.log(`🔄 [CouchDB Session] Updating existing session: ${cleanSessionId} (user: ${sessionData.userId})`);
         } else {
-          console.log('[*] [CouchDB Session] SET: No existing session found, creating new');
           // Create new session
           sessionDoc = {
             _id: `session_${cleanSessionId}`,
@@ -144,7 +129,6 @@ class CouchDBSessionStore extends Store {
             deepLinkId: sessionData.deepLinkId || null,
             ownedBy: sessionData.ownedBy || null
           };
-          console.log(`💾 [CouchDB Session] Creating new session: ${cleanSessionId} (user: ${sessionData.userId})`);
         }
       } catch (getError) {
         // Document doesn't exist, create new one
@@ -162,16 +146,11 @@ class CouchDBSessionStore extends Store {
           deepLinkId: sessionData.deepLinkId || null,
           ownedBy: sessionData.ownedBy || null
         };
-        console.log(`💾 [CouchDB Session] Creating new session (not found): ${cleanSessionId} (user: ${sessionData.userId})`);
       }
 
-      console.log('[*] [CouchDB Session] SET: Writing session document to maia_sessions database');
-      console.log('[*] [CouchDB Session] SET: Document ID:', sessionDoc._id);
-      console.log('[*] [CouchDB Session] SET: Document data:', JSON.stringify(sessionDoc, null, 2));
       
       await this.couchDBClient.saveDocument(this.dbName, sessionDoc);
       
-      console.log('[*] [CouchDB Session] SET: Successfully wrote session to maia_sessions database');
       if (callback) callback(null);
     } catch (error) {
       console.error('❌ [CouchDB Session] SET: Error writing session to CouchDB:', error);
@@ -203,7 +182,6 @@ class CouchDBSessionStore extends Store {
         sessionDoc.isActive = false;
         sessionDoc.deactivatedAt = new Date().toISOString();
         await this.couchDBClient.saveDocument(this.dbName, sessionDoc);
-        console.log(`🗑️ [CouchDB Session] Deactivated session: ${cleanSessionId}`);
       }
       
       if (callback) callback(null);
@@ -245,11 +223,9 @@ class CouchDBSessionStore extends Store {
           sessionDoc.warningShownAt = null;
 
           await this.couchDBClient.saveDocument(this.dbName, sessionDoc);
-          console.log(`🔄 [CouchDB Session] Touched session: ${cleanSessionId} (user: ${sessionDoc.userId})`);
         }
       } catch (getError) {
         // Session doesn't exist, that's okay for touch operations
-        console.log(`🔍 [CouchDB Session] Session ${cleanSessionId} not found for touch operation`);
       }
       
       if (callback) callback(null);
@@ -327,7 +303,6 @@ class CouchDBSessionStore extends Store {
         await this.couchDBClient.saveDocument(this.dbName, doc);
       }
       
-      console.log(`🧹 [CouchDB Session] Cleared ${result.docs.length} sessions`);
       if (callback) callback(null);
     } catch (error) {
       console.error('❌ Error clearing sessions from CouchDB:', error);

@@ -22,12 +22,10 @@ class SessionMiddleware {
       ];
       
       if (publicEndpoints.includes(req.path)) {
-        console.log(`🔓 Skipping session validation for public endpoint: ${req.path}`);
         // Session activity is now handled automatically by CouchDBSessionStore
         return next();
       }
 
-      console.log(`🔒 Validating session for protected endpoint: ${req.path}`);
       const sessionId = req.sessionID;
       
       if (!sessionId) {
@@ -119,9 +117,6 @@ class SessionMiddleware {
   // Middleware to create session on authentication
   createSessionOnAuth = async (req, res, next) => {
     try {
-      console.log(`🔍 [createSessionOnAuth] Route: ${req.path}`);
-      console.log(`🔍 [createSessionOnAuth] Session ID: ${req.sessionID}`);
-      console.log(`🔍 [createSessionOnAuth] Session data:`, req.session);
       
       // Run the passkey route first
       await next();
@@ -132,19 +127,16 @@ class SessionMiddleware {
       const sessionId = req.sessionID;
       const userId = req.session.userId;
       
-      console.log(`🔍 [createSessionOnAuth] After route - Session ID: ${sessionId}, User ID: ${userId}`);
       
       if (userId && sessionId) {
         try {
           // Session creation is now handled automatically by CouchDBSessionStore
           // when req.session is saved with userId. The store will create the session document.
-          console.log(`✅ [createSessionOnAuth] Session will be created automatically by CouchDBSessionStore for user: ${userId}`);
         } catch (error) {
           console.error('❌ [createSessionOnAuth] Error in session creation logic:', error);
           // Don't throw - let the response continue
         }
       } else {
-        console.log(`🔍 [createSessionOnAuth] No session data to create - userId: ${userId}, sessionId: ${sessionId}`);
       }
     } catch (error) {
       console.error('❌ [createSessionOnAuth] Error creating session on auth:', error);
@@ -166,7 +158,6 @@ class SessionMiddleware {
         const existingSession = await this.sessionManager.getSession(sessionId);
         
         if (!existingSession) {
-          console.log(`🔗 [Deep Link] Creating session for initial access to: ${deepLinkId}`);
           await this.sessionManager.createSession(
             sessionId, 
             'deeplink', 
@@ -175,7 +166,6 @@ class SessionMiddleware {
             ownedBy
           );
         } else {
-          console.log(`🔗 [Deep Link] Session already exists for: ${deepLinkId}`);
         }
       }
 
@@ -198,13 +188,11 @@ class SessionMiddleware {
           // Session is invalid or expired, add headers to inform frontend
           res.set('X-Session-Expired', 'true');
           res.set('X-Session-Expired-Reason', validation.reason);
-          console.log('🔗 [Session] Session expired:', sessionId, validation.reason);
         } else if (validation.warning) {
           // Add warning to response headers
           res.set('X-Session-Warning', 'true');
           res.set('X-Session-Warning-Message', validation.warningMessage);
           res.set('X-Session-Inactive-Minutes', validation.inactiveMinutes.toString());
-          console.log('⚠️ [Session] Inactivity warning for session:', sessionId, validation.inactiveMinutes, 'minutes');
         } else {
           // Update last activity for valid sessions
           await this.sessionManager.updateLastActivity(sessionId);

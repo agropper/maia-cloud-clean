@@ -386,7 +386,6 @@ export default defineComponent({
       if (idx === -1) return
       
       // Log the deletion for debugging
-      console.log('🗑️ Deleting message:', {
         index: idx,
         role: this.messageToDelete.role,
         content: this.messageToDelete.content?.substring(0, 100) + '...',
@@ -400,7 +399,6 @@ export default defineComponent({
       if (this.precedingUserMessage && idx > 0) {
         const userIdx = idx - 1
         if (this.appState.chatHistory[userIdx]?.role === 'user') {
-          console.log('🗑️ Also deleting preceding user message:', {
             index: userIdx,
             content: this.precedingUserMessage.content?.substring(0, 100) + '...'
           })
@@ -422,7 +420,6 @@ export default defineComponent({
       this.messageToDelete = null
       this.precedingUserMessage = null
       
-      console.log('✅ Message deletion completed. New chat history length:', this.appState.chatHistory.length)
     },
     viewSystemMessage(content: string) {
       if (typeof content === 'string') {
@@ -497,7 +494,6 @@ export default defineComponent({
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
           const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
-          console.log('🔄 Updating existing group chat:', this.appState.currentChatId)
           result = await updateGroupChat(
             this.appState.currentChatId,
             this.appState.chatHistory,
@@ -511,7 +507,6 @@ export default defineComponent({
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
           const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
-          console.log('🆕 Creating new group chat for user:', userId)
   
           result = await saveGroupChat(
             this.appState.chatHistory,
@@ -529,12 +524,9 @@ export default defineComponent({
         const baseUrl = window.location.origin;
         const deepLink = `${baseUrl}/shared/${result.shareId}`
         
-        console.log('🔗 Generated deep link:', deepLink)
-        console.log('📊 Result from saveGroupChat:', result)
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
-          console.log('🎯 Setting deep link in GroupSharingBadge')
           const badgeRef = this.$refs.groupSharingBadgeRef as any
           if (badgeRef.setDeepLink) {
             badgeRef.setDeepLink(deepLink)
@@ -553,12 +545,10 @@ export default defineComponent({
         
         // Reset status to Current
         this.updateChatStatus('Current')
-        console.log('✅ Chat status updated to Current')
         
         // Refresh group count after creating/updating group chat
         this.loadGroupCount()
         
-        console.log('✅ Group chat saved successfully:', result)
         
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
@@ -582,7 +572,6 @@ export default defineComponent({
         
         // This function is now a fallback for edge cases
         // Most group chat creation now happens directly in handlePostToCloudant
-        console.log('🔄 Fallback group chat creation triggered')
         
         // Validate chat history has user messages (not just system messages)
         if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
@@ -643,7 +632,6 @@ export default defineComponent({
         // Refresh group count after creating group chat
         this.loadGroupCount()
         
-        console.log('✅ Fallback group chat created successfully')
         
       } catch (error) {
         console.error('❌ Error creating fallback group chat:', error)
@@ -716,19 +704,15 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
-                        // console.log(`🔍 [ChatArea] loadGroupCount called - isUserReady: ${this.isUserReady}`);
                         
                         // Only proceed if user is ready
                         if (!this.isUserReady) {
-                          // console.log(`⏸️ [ChatArea] Skipping loadGroupCount - user not ready`);
                           return
                         }
                         
-                        // console.log(`🔍 [ChatArea] Getting all group chats from backend...`);
                         // Get all chats from backend
                         const { getAllGroupChats } = useGroupChat()
                         const allGroups = await getAllGroupChats()
-                        // console.log(`🔍 [ChatArea] Retrieved ${allGroups.length} group chats from backend`);
                         
                         // Apply the same filtering logic as GroupManagementModal
                         // Filter groups by current user (including "Public User")
@@ -777,11 +761,9 @@ export default defineComponent({
                     async handleNewChat(loadedChat?: any) {
                       if (loadedChat) {
                         // Load the specific chat data
-                        console.log('📂 Loading chat data into ChatArea:', loadedChat)
                         this.appState.chatHistory = loadedChat.chatHistory || []
                         this.appState.uploadedFiles = loadedChat.uploadedFiles || []
                         this.appState.currentChatId = loadedChat.id
-                        console.log('✅ Chat loaded successfully in ChatArea')
                       } else {
                         // Clear current chat and start fresh
                         this.appState.chatHistory = []

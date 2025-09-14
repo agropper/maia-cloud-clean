@@ -35,9 +35,7 @@ class SessionManager {
     }
 
     try {
-      console.log(`🔍 [SessionManager] Session created in-memory only:`, sessionDoc);
       // Note: maia_sessions database removed - sessions are now in-memory only
-      console.log(`✅ Session created: ${sessionType} for ${userId}`);
       return sessionDoc;
     } catch (error) {
       console.error('❌ Error creating session:', error);
@@ -49,7 +47,6 @@ class SessionManager {
   async getSession(sessionId) {
     try {
       // Note: maia_sessions database removed - sessions are now in-memory only
-      console.log(`🔍 [SessionManager] Session lookup in-memory only: session_${sessionId}`);
       return null; // Sessions are now managed by express-session middleware
     } catch (error) {
       // Session doesn't exist - this is normal for new sessions
@@ -61,7 +58,6 @@ class SessionManager {
   async updateLastActivity(sessionId) {
     try {
       // Note: maia_sessions database removed - sessions are now in-memory only
-      console.log(`🔍 [SessionManager] Session activity update in-memory only: session_${sessionId}`);
       return null; // Sessions are now managed by express-session middleware
     } catch (error) {
       console.error('❌ Error updating last activity:', error);
@@ -94,7 +90,6 @@ class SessionManager {
         sessionDoc.warningShown = true;
         sessionDoc.warningShownAt = now.toISOString();
         // Note: maia_sessions database removed - sessions are now in-memory only
-        console.log('🔍 [SessionManager] Session update in-memory only');
         
         return { 
           valid: true, 
@@ -131,7 +126,6 @@ class SessionManager {
         sessionDoc.expiresAt = expiresAt.toISOString();
         
         // Note: maia_sessions database removed - sessions are now in-memory only
-        console.log('🔍 [SessionManager] Session update in-memory only');
       }
     } catch (error) {
       console.error('❌ Error updating last activity:', error);
@@ -142,17 +136,12 @@ class SessionManager {
   async deactivateSession(sessionId, deactivatedBy = 'admin') {
     try {
       const sessionDocId = `session_${sessionId}`;
-      console.log('[*] [Session Delete] Admin deleting session from maia_sessions database:', sessionDocId);
 
       const sessionDoc = await this.couchDBClient.getDocument('maia_sessions', sessionDocId);
       if (sessionDoc) {
         // Physically delete the session document to prevent database growth
         // Note: maia_sessions database removed - sessions are now in-memory only
-        console.log('🔍 [SessionManager] Session deletion in-memory only');
-        console.log('[*] [Session Delete] Successfully deleted session from maia_sessions database');
-        console.log(`✅ Session deleted: ${sessionId}`);
       } else {
-        console.log('[*] [Session Delete] Session not found in maia_sessions database (may have been cleaned up)');
       }
     } catch (error) {
       console.error('❌ [Session Delete] Error deactivating session from maia_sessions database:', error);
@@ -183,8 +172,7 @@ class SessionManager {
       // First, let's see ALL sessions in the database for debugging
       // Note: maia_sessions database removed - sessions are now in-memory only
       const allSessions = [];
-      console.log(`🔍 [SessionManager] DEBUG: Total sessions in database: ${allSessions.length}`);
-      console.log(`🔍 [SessionManager] DEBUG: All sessions:`, allSessions.map(s => ({
+      console.log('🔍 [SessionManager] All sessions in database:', allSessions.map(s => ({
         _id: s._id,
         sessionType: s.sessionType,
         userId: s.userId,
@@ -204,10 +192,9 @@ class SessionManager {
       // Note: maia_sessions database removed - sessions are now in-memory only
       const result = { docs: [] };
       const activeSessions = result.docs;
-      console.log(`🔍 [SessionManager] Active sessions found: ${activeSessions.length}`);
       
       if (activeSessions.length > 0) {
-        console.log(`🔍 [SessionManager] Active session details:`, activeSessions.map(s => ({
+        console.log('🔍 [SessionManager] Active sessions found:', activeSessions.map(s => ({
           _id: s._id,
           sessionType: s.sessionType,
           userId: s.userId,
@@ -262,7 +249,6 @@ class SessionManager {
 
       for (const session of expiredDeepLinks) {
         await this.deactivateSession(session._id.replace('session_', ''));
-        console.log(`🧹 Cleaned up expired deep link: ${session.deepLinkId}`);
       }
 
       return expiredDeepLinks.length;

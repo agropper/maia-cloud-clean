@@ -20,7 +20,6 @@ const updateAgentActivity = (agentId, userId) => {
       lastActivity: new Date(),
       userId: userId
     });
-    console.log(`[*] [Agent Activity] Updated activity for agent ${agentId} by user ${userId}`);
   }
 };
 
@@ -46,7 +45,6 @@ export const setCouchDBClient = (client) => {
 const requireAdminAuth = async (req, res, next) => {
   try {
     // TEMPORARY: Bypass authentication for testing
-    console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
     req.adminUser = { _id: 'admin', isAdmin: true };
     return next();
     
@@ -100,7 +98,6 @@ router.get('/health', requireAdminAuth, async (req, res) => {
     
     // Try to access the maia_users database
     const users = await couchDBClient.getAllDocuments('maia_users');
-    console.log('✅ Admin management health check - system ready, user count:', users.length);
     res.json({ 
       status: 'ready',
       message: 'Admin management system is ready',
@@ -108,11 +105,9 @@ router.get('/health', requireAdminAuth, async (req, res) => {
       userCount: users.length
     });
   } catch (error) {
-    console.log('⏳ Admin management health check failed:', error.message);
     
     // Handle Cloudant rate limiting specifically - this is NOT a system readiness issue
     if (error.statusCode === 429 || error.error === 'too_many_requests') {
-      console.log('📊 Rate limiting detected during health check - system is ready, just busy');
       // System is ready, just rate limited - return ready status
       res.json({ 
         status: 'ready',
@@ -148,14 +143,11 @@ const checkDatabaseReady = async (req, res, next) => {
     
     // Try to get a small sample of users to verify system is ready
     const users = await couchDBClient.getAllDocuments('maia_users');
-    console.log('✅ Database system ready, can access users');
     next();
   } catch (error) {
-    console.log('⏳ Database system readiness check failed:', error.message);
     
     // Handle Cloudant rate limiting specifically - this is NOT a system readiness issue
     if (error.statusCode === 429 || error.error === 'too_many_requests') {
-      console.log('📊 Rate limiting detected during readiness check - system is ready, just busy');
       // System is ready, just rate limited - allow the request to proceed
       next();
       return;
@@ -191,7 +183,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       if (existingUser) {
         if (existingUser.isAdmin) {
           // Admin user exists - allow new passkey registration (replaces old one)
-          console.log('✅ Admin user exists, allowing new passkey registration:', username);
           return res.json({ 
             message: 'Admin user verified. You can now register a new passkey (this will replace your existing one).',
             username: existingUser._id,
@@ -201,7 +192,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
           });
         } else {
           // User exists but isn't admin - upgrade them to admin
-          console.log('✅ Upgrading existing user to admin:', username);
           const updatedUser = {
             ...existingUser,
             isAdmin: true,
@@ -219,7 +209,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       }
     } catch (error) {
       // User doesn't exist - create new admin user
-      console.log('✅ Creating new admin user:', username);
       const adminUser = {
         _id: username,
         type: 'admin',
@@ -228,7 +217,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       };
       
       await couchDBClient.saveDocument('maia_users', adminUser);
-      console.log('✅ New admin user created successfully');
       
       return res.json({
         message: 'New admin user created successfully. You can now register your passkey.',
@@ -257,7 +245,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Get all users from maia_users database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
-    console.log(`🔍 [DEBUG] Total documents in maia_users: ${allUsers.length}`);
     
     // Log some sample documents to understand what we're getting
     const sampleDocs = allUsers.slice(0, 5).map(doc => ({
@@ -266,18 +253,16 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       hasCredentialID: !!doc.credentialID,
       type: doc.type || 'unknown'
     }));
-    console.log('🔍 [DEBUG] Sample documents:', sampleDocs);
     
     const users = allUsers
       .filter(user => {
         // Exclude design documents only (Public User should be included)
         if (user._id.startsWith('_design/')) {
-          console.log(`🔍 [DEBUG] Excluding: ${user._id} (design doc)`);
           return false;
         }
         // For wed271, allow it through even if it has isAdmin: true (special case)
         if (user._id === 'wed271') {
-          console.log('🔍 [SPECIAL] Including wed271 despite admin status:', {
+          console.log('🔍 [admin] Special case for wed271:', {
             userId: user._id,
             isAdmin: user.isAdmin
           });
@@ -286,7 +271,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         // For all other users, exclude admin users
         const isAdmin = user.isAdmin;
         if (isAdmin) {
-          console.log(`🔍 [DEBUG] Excluding admin user: ${user._id}`);
         }
         return !isAdmin;
       })
@@ -333,11 +317,13 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
-    console.log(`🔍 [DEBUG] Final filtered users count: ${users.length}`);
-    console.log(`🔍 [DEBUG] Users by workflow stage:`, users.reduce((acc, user) => {
+    // Count workflow stages
+    const workflowStageCounts = users.reduce((acc, user) => {
       acc[user.workflowStage] = (acc[user.workflowStage] || 0) + 1;
       return acc;
-    }, {}));
+    }, {});
+    
+    console.log('🔍 [admin] Workflow stage counts:', workflowStageCounts);
     
     res.json({ users });
     
@@ -375,7 +361,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     }
     
     // DEBUG: Log the full user document to see what we're working with
-    console.log(`🔍 [DEBUG] User details for ${userId}:`, {
+    console.log('🔍 [admin] User document details:', {
       _id: userDoc._id,
       ownedAgents: userDoc.ownedAgents,
       currentAgentId: userDoc.currentAgentId,
@@ -396,7 +382,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       currentAgentId = firstAgent.id;
       currentAgentName = firstAgent.name;
       agentAssignedAt = firstAgent.assignedAt;
-      console.log(`🔍 [DEBUG] Extracted current agent from ownedAgents:`, {
+      console.log('🔍 [admin] Using first owned agent:', {
         currentAgentId,
         currentAgentName,
         agentAssignedAt
@@ -408,7 +394,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       const matchingAgent = userDoc.ownedAgents.find(agent => agent.id === currentAgentId);
       if (matchingAgent && matchingAgent.assignedAt) {
         agentAssignedAt = matchingAgent.assignedAt;
-        console.log(`🔍 [DEBUG] Extracted agentAssignedAt from ownedAgents:`, agentAssignedAt);
       }
     }
     
@@ -446,7 +431,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
     };
     
-    console.log(`🔍 [DEBUG] Final user info for ${userId}:`, {
+    console.log('🔍 [admin] Final user info:', {
       currentAgentId: userInfo.currentAgentId,
       currentAgentName: userInfo.currentAgentName,
       agentAssignedAt: userInfo.agentAssignedAt,
@@ -512,7 +497,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     };
     
     // Validate consistency before saving
-    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
     validateWorkflowConsistency(updatedUser);
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
@@ -521,7 +505,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     if (action === 'approve') {
       // TODO: Implement automatic agent and KB creation
       // For now, just log that resources should be created
-      console.log(`🚀 User ${userId} approved - should create private AI agent and knowledge base`);
     }
     
     res.json({ 
@@ -651,7 +634,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
     
     // Debug logging
-    console.log(`🔍 [DEBUG] assigned-agent endpoint for ${userId}:`, {
+    console.log('🔍 [admin] Agent assignment debug:', {
       assignedAgentId: userDoc.assignedAgentId,
       currentAgentId: userDoc.currentAgentId,
       assignedAgentName: userDoc.assignedAgentName,
@@ -681,11 +664,10 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
 router.post('/fix-user-data/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`🔧 [FIX] Fixing user data for: ${userId}`);
     
     // Get the user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
-    console.log(`🔍 [FIX] Current user data:`, {
+    console.log('🔍 [admin] Fix user data - current state:', {
       _id: userDoc._id,
       workflowStage: userDoc.workflowStage,
       approvalStatus: userDoc.approvalStatus
@@ -693,14 +675,12 @@ router.post('/fix-user-data/:userId', async (req, res) => {
     
     // Fix the inconsistency
     if (userDoc.workflowStage === 'approved' && !userDoc.approvalStatus) {
-      console.log(`🔧 [FIX] Setting approvalStatus to 'approved' for user ${userId}`);
       userDoc.approvalStatus = 'approved';
       userDoc.updatedAt = new Date().toISOString();
       userDoc.fixNotes = 'Fixed workflow inconsistency: set approvalStatus to match workflowStage';
       
       // Save the updated document
       await couchDBClient.saveDocument('maia_users', userDoc);
-      console.log(`✅ [FIX] User ${userId} fixed successfully`);
       
       res.json({ 
         message: `User ${userId} data fixed successfully`,
@@ -709,7 +689,6 @@ router.post('/fix-user-data/:userId', async (req, res) => {
         approvalStatus: userDoc.approvalStatus
       });
     } else {
-      console.log(`ℹ️ [FIX] No inconsistency found for user ${userId}`);
       res.json({ 
         message: `No inconsistency found for user ${userId}`,
         userId: userId,
@@ -752,7 +731,6 @@ function validateWorkflowConsistency(user) {
     throw error;
   }
   
-  console.log(`✅ [WORKFLOW VALIDATION] User ${user._id}: workflowStage="${workflowStage}" ✓ approvalStatus="${approvalStatus}" ✓`);
 }
 
 function determineWorkflowStage(user) {
@@ -807,26 +785,22 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     const { userId } = req.params;
     const { workflowStage, notes } = req.body;
     
-    console.log(`🔄 [DEBUG] Workflow stage update request for user ${userId}:`, { workflowStage, notes });
     
     // Validate workflow stage
     const validStages = ['no_passkey', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
     if (!validStages.includes(workflowStage)) {
-      console.log(`❌ [DEBUG] Invalid workflow stage: ${workflowStage}. Valid stages: ${validStages.join(', ')}`);
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
       });
     }
     
     // Get user document
-    console.log(`🔄 [DEBUG] Getting user document for ${userId}`);
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
-      console.log(`❌ [DEBUG] User not found: ${userId}`);
       return res.status(404).json({ error: 'User not found' });
     }
     
-    console.log(`🔄 [DEBUG] User document found:`, { 
+    console.log('🔍 [admin] Workflow stage update - current state:', {
       userId: userDoc._id, 
       currentWorkflowStage: userDoc.workflowStage,
       approvalStatus: userDoc.approvalStatus 
@@ -841,18 +815,15 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     };
     
     // Validate consistency before saving
-    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
     try {
       validateWorkflowConsistency(updatedUser);
     } catch (error) {
       console.error(`❌ [WORKFLOW VALIDATION] Inconsistent data detected for user ${userId}:`, error.message);
       // Handle specific workflow transitions
       if (workflowStage === 'awaiting_approval' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'approved') {
-        console.log(`🔧 [DEBUG] Allowing workflow stage update to fix inconsistent data`);
         // Update approvalStatus to match the new workflow stage
         updatedUser.approvalStatus = 'pending';
       } else if (workflowStage === 'waiting_for_deployment' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'pending') {
-        console.log(`🔧 [DEBUG] Allowing workflow stage update to waiting_for_deployment after agent creation`);
         // Update approvalStatus to match the new workflow stage
         updatedUser.approvalStatus = 'approved';
       } else {
@@ -860,7 +831,6 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       }
     }
     
-    console.log(`🔄 [DEBUG] Updating user document with new workflow stage: ${workflowStage}`);
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
     // Update user state cache
@@ -870,7 +840,6 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       adminNotes: updatedUser.adminNotes
     });
     
-    console.log(`✅ [DEBUG] User workflow stage updated successfully`);
     
     res.json({ 
       message: `User workflow stage updated to ${workflowStage}`,
@@ -916,7 +885,6 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     // Save the updated user document
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    console.log(`✅ Admin reset passkey for user: ${userId}`);
     
     res.json({
       success: true,
@@ -1021,7 +989,6 @@ router.post('/sessions/:sessionId/signout', requireAdminAuth, async (req, res) =
   try {
     const { sessionId } = req.params;
     
-    console.log(`🔓 [Admin] Signing out session: ${sessionId}`);
     await sessionManager.deactivateSession(sessionId, 'admin_signout');
     
     res.json({
@@ -1075,9 +1042,7 @@ router.get('/sessions/active-check', requireAdminAuth, async (req, res) => {
 // API endpoint to get agent activities for Admin Panel
 router.get('/agent-activities', (req, res) => {
   try {
-    console.log('[*] [Agent Activities] Endpoint called');
     const activities = getAllAgentActivities();
-    console.log('[*] [Agent Activities] Returning activities:', activities);
     res.json({
       success: true,
       activities: activities

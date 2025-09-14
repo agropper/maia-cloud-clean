@@ -973,7 +973,6 @@ export default defineComponent({
         if (response.ok) {
           const data = await response.json();
           users.value = data.users;
-          console.log(`✅ [Browser] Admin Panel: Loaded ${users.value.length} users from unified state`);
         } else {
           const errorData = await response.json().catch(() => ({}));
           
@@ -1010,10 +1009,7 @@ export default defineComponent({
     };
     
     const viewUserDetails = async (user) => {
-      console.log(`🔍 [DEBUG] viewUserDetails called with user:`, user.userId);
-      console.log(`🔍 [DEBUG] Setting selectedUser to:`, user.userId);
       selectedUser.value = user;
-      console.log(`🔍 [DEBUG] selectedUser is now:`, selectedUser.value?.userId);
       adminNotes.value = '';
       showUserModal.value = true;
       
@@ -1030,7 +1026,6 @@ export default defineComponent({
           if (userDetails.adminNotes) {
             adminNotes.value = userDetails.adminNotes;
           }
-          console.log(`✅ [Browser] Admin Panel: Loaded user details for ${user.userId} from unified state`);
         }
       } catch (error) {
         console.error('Error loading user details:', error);
@@ -1043,7 +1038,6 @@ export default defineComponent({
     const resetUserForAgentCreation = async () => {
       if (!selectedUser.value) return;
       
-      console.log(`🔍 [DEBUG] resetUserForAgentCreation called for user:`, selectedUser.value.userId);
       isProcessingApproval.value = true;
       try {
         // Reset the user's workflow stage to awaiting_approval
@@ -1073,8 +1067,6 @@ export default defineComponent({
     
     const setUserWorkflowStage = async (userId, stage) => {
       try {
-        console.log(`🔄 [DEBUG] Setting workflow stage for user ${userId} to: ${stage}`);
-        console.log(`🔄 [DEBUG] Making request to: /api/admin-management/users/${userId}/workflow-stage`);
         
         // Use the new workflow stage endpoint for direct stage updates
         const response = await fetch(`/api/admin-management/users/${userId}/workflow-stage`, {
@@ -1088,11 +1080,9 @@ export default defineComponent({
           })
         });
         
-        console.log(`🔄 [DEBUG] Response status: ${response.status} ${response.statusText}`);
         
         if (response.ok) {
           const result = await response.json();
-          console.log(`✅ User ${userId} workflow stage set to: ${stage}`, result);
         } else {
           const errorText = await response.text();
           console.error(`❌ Failed to set workflow stage for user ${userId}:`, response.status, errorText);
@@ -1103,7 +1093,6 @@ export default defineComponent({
     };
     
     const startDeploymentPolling = (userId, agentUuid) => {
-      console.log(`🔄 Starting deployment polling for user ${userId}, agent ${agentUuid}`);
       
       const pollInterval = setInterval(async () => {
         try {
@@ -1113,11 +1102,9 @@ export default defineComponent({
             const agent = agentsData.find(a => a.uuid === agentUuid);
             
             if (agent) {
-              console.log(`🔍 Agent ${agentUuid} deployment status: ${agent.deployment?.status}`);
               
               if (agent.deployment?.status === 'STATUS_DEPLOYED' || 
                   agent.deployment?.status === 'STATUS_RUNNING') {
-                console.log(`✅ Agent ${agentUuid} is deployed! Updating user status to approved.`);
                 
                 // Stop polling
                 clearInterval(pollInterval);
@@ -1147,7 +1134,6 @@ export default defineComponent({
       // Set a timeout to stop polling after 10 minutes (40 attempts)
       setTimeout(() => {
         if (deploymentPolling.value.has(userId)) {
-          console.log(`⏰ Deployment polling timeout for user ${userId}`);
           clearInterval(pollInterval);
           deploymentPolling.value.delete(userId);
         }
