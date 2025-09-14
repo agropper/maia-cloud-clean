@@ -3680,36 +3680,27 @@ export default defineComponent({
     };
 
     // File management methods for authenticated users
-    console.log(`📁 [DEBUG] AgentManagementDialog setup - userHasFiles initial value:`, userHasFiles.value);
     
     const checkUserFiles = async () => {
       if (!isAuthenticated.value || isDeepLinkUser.value) {
-        console.log(`📁 [DEBUG] checkUserFiles skipped - authenticated: ${isAuthenticated.value}, isDeepLinkUser: ${isDeepLinkUser.value}`);
         return;
       }
-      
-      console.log(`📁 [DEBUG] checkUserFiles called for authenticated user: ${localCurrentUser.value?.userId}`);
-      console.log(`📁 [DEBUG] localCurrentUser object:`, localCurrentUser.value);
       
       try {
         // Check if user has files in their Spaces bucket using user-specific endpoint
         const response = await fetch(`${API_BASE_URL}/bucket/user-status/${encodeURIComponent(localCurrentUser.value?.userId || '')}`);
         if (response.ok) {
           const statusData = await response.json();
-          console.log(`📁 [DEBUG] User bucket status response:`, statusData);
           
           // Use the hasFolder and fileCount from the status endpoint
           const hasFiles = statusData.hasFolder && statusData.fileCount > 0;
           userHasFiles.value = hasFiles || false;
-          console.log(`📁 [DEBUG] User has files: ${userHasFiles.value} (${statusData.fileCount || 0} files in bucket)`);
-          console.log(`📁 [DEBUG] userHasFiles ref value:`, userHasFiles.value);
+          console.log(`📁 User has files: ${userHasFiles.value} (${statusData.fileCount || 0} files in bucket)`);
         } else {
           // Fallback to general bucket-files endpoint and filter by user
-          console.log(`📁 [DEBUG] User-specific endpoint failed, falling back to general endpoint`);
           const response = await fetch(`${API_BASE_URL}/bucket-files`);
           if (response.ok) {
             const filesData = await response.json();
-            console.log(`📁 [DEBUG] Bucket files response:`, filesData);
             
             // Filter files for current user only
             const userFiles = filesData.files && filesData.files.filter((file: any) => 
@@ -3719,15 +3710,13 @@ export default defineComponent({
             );
             const hasFiles = userFiles && userFiles.length > 0;
             userHasFiles.value = hasFiles || false;
-            console.log(`📁 [DEBUG] User has files (fallback): ${userHasFiles.value} (${userFiles?.length || 0} user files)`);
-            console.log(`📁 [DEBUG] userHasFiles ref value:`, userHasFiles.value);
+            console.log(`📁 User has files (fallback): ${userHasFiles.value} (${userFiles?.length || 0} user files)`);
           } else {
             userHasFiles.value = false;
-            console.log(`📁 Bucket files endpoint not available, defaulting to false`);
           }
         }
       } catch (error) {
-        console.error('❌ [DEBUG] Error checking user files:', error);
+        console.error('❌ Error checking user files:', error);
         userHasFiles.value = false;
       }
     };
@@ -3872,31 +3861,14 @@ export default defineComponent({
       });
     };
 
-    // Watch for dialog opening to check files
+    // Watch for dialog opening to check files (only when dialog opens)
     watch(showDialog, (newValue) => {
-      console.log(`📁 [DEBUG] Dialog watch triggered - showDialog: ${newValue}, isAuthenticated: ${isAuthenticated.value}, isDeepLinkUser: ${isDeepLinkUser.value}`);
       if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
-        console.log(`📁 [DEBUG] Calling checkUserFiles from dialog watch`);
         checkUserFiles();
       }
     });
 
-    // Also watch for changes in authentication status
-    watch([isAuthenticated, localCurrentUser], ([newAuth, newUser]) => {
-      console.log(`📁 [DEBUG] Auth/User watch triggered - isAuthenticated: ${newAuth}, localCurrentUser:`, newUser);
-      if (newAuth && newUser && !isDeepLinkUser.value && showDialog.value) {
-        console.log(`📁 [DEBUG] Calling checkUserFiles from auth/user watch`);
-        checkUserFiles();
-      }
-    });
-
-    // Test call on component mount
-    onMounted(() => {
-      console.log(`📁 [DEBUG] Component mounted - calling checkUserFiles manually`);
-      setTimeout(() => {
-        checkUserFiles();
-      }, 1000);
-    });
+    // Test call on component mount - removed to prevent excessive API calls
 
     return {
       showDialog,
