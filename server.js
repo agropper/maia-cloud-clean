@@ -1,7 +1,7 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
-console.log('🚨 SERVER.JS IS LOADING - LINE 3');
+// console.log('🚨 SERVER.JS IS LOADING - LINE 3');
 
 // Import session management utilities
 import { SessionManager } from './src/utils/session-manager.js';
@@ -467,7 +467,7 @@ app.use((req, res, next) => {
 // Request logging middleware
 if (process.env.ENABLE_REQUEST_LOGGING === 'true') {
   app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    // console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
   });
 }
@@ -674,7 +674,7 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
     // Convert to markdown format
     const markdown = convertPdfToMarkdown(data);
     
-    console.log(`📄 PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
+    // console.log(`📄 PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
     
     res.json({
       success: true,
@@ -702,9 +702,9 @@ app.post('/api/process-rtf', uploadRTF.single('rtfFile'), async (req, res) => {
     const cleanedRtfPath = tempRtfPath.replace('.rtf', '-STEP2-CLEANED.rtf');
     const outputMdPath = `/tmp/${Date.now()}-converted.md`;
     
-    console.log(`📄 Temp RTF path: ${tempRtfPath}`);
-    console.log(`📄 Cleaned RTF path: ${cleanedRtfPath}`);
-    console.log(`📄 Output MD path: ${outputMdPath}`);
+    // console.log(`📄 Temp RTF path: ${tempRtfPath}`);
+    // console.log(`📄 Cleaned RTF path: ${cleanedRtfPath}`);
+    // console.log(`📄 Output MD path: ${outputMdPath}`);
     
     fs.writeFileSync(tempRtfPath, req.file.buffer);
 //     console.log(`✅ Saved uploaded file to: ${tempRtfPath}`);
@@ -718,14 +718,14 @@ app.post('/api/process-rtf', uploadRTF.single('rtfFile'), async (req, res) => {
     try {
       const result = await execAsync(`node rtf-cleaner.js "${tempRtfPath}" "${cleanedRtfPath}"`);
 //       console.log(`✅ RTF cleaning complete`);
-      console.log(`📄 Cleaner stdout:`, result.stdout);
+      // console.log(`📄 Cleaner stdout:`, result.stdout);
       if (result.stderr) // console.log(`⚠️ Cleaner stderr:`, result.stderr);
       
       // Check if cleaned file exists and has content
       if (fs.existsSync(cleanedRtfPath)) {
         const cleanedContent = fs.readFileSync(cleanedRtfPath, 'utf8');
-        console.log(`📄 Cleaned RTF file size: ${cleanedContent.length} characters`);
-        console.log(`📄 Cleaned RTF first 200 chars: ${cleanedContent.substring(0, 200)}`);
+        // console.log(`📄 Cleaned RTF file size: ${cleanedContent.length} characters`);
+        // console.log(`📄 Cleaned RTF first 200 chars: ${cleanedContent.substring(0, 200)}`);
       } else {
         console.error(`❌ Cleaned RTF file not found: ${cleanedRtfPath}`);
         return res.status(500).json({ error: 'Cleaned RTF file not found after cleaning' });
@@ -740,7 +740,7 @@ app.post('/api/process-rtf', uploadRTF.single('rtfFile'), async (req, res) => {
     try {
       const result = await execAsync(`node rtf-to-md.js "${cleanedRtfPath}" "${outputMdPath}"`);
 //       console.log(`✅ RTF to MD conversion complete`);
-      console.log(`📄 Converter stdout:`, result.stdout);
+      // console.log(`📄 Converter stdout:`, result.stdout);
       if (result.stderr) // console.log(`⚠️ Converter stderr:`, result.stderr);
       
       // Check if output file exists
@@ -911,7 +911,7 @@ app.post('/api/upload-file', async (req, res) => {
       });
     }
 
-    console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars)`);
+    // console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars)`);
     
     // Generate a unique key for the file in the bucket
     const timestamp = Date.now();
@@ -982,7 +982,7 @@ app.post('/api/upload-to-bucket', async (req, res) => {
       });
     }
 
-    console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars) to folder: ${userFolder || 'root'}`);
+    // console.log(`📤 Uploading file to DigitalOcean Spaces bucket: ${fileName} (${content.length} chars) to folder: ${userFolder || 'root'}`);
     
     // Generate a unique key for the file in the bucket
     const timestamp = Date.now();
@@ -1679,8 +1679,8 @@ app.post('/api/personal-chat', async (req, res) => {
     
     // Add the response with proper name field
 //     console.log('🔍 [DEBUG] About to add AI response to newChatHistory:');
-    console.log('  - current length:', newChatHistory.length);
-    console.log('  - AI response:', response.choices[0].message);
+    // console.log('  - current length:', newChatHistory.length);
+    // console.log('  - AI response:', response.choices[0].message);
     
     newChatHistory.push({
       ...response.choices[0].message,
@@ -1688,8 +1688,8 @@ app.post('/api/personal-chat', async (req, res) => {
     });
     
 //     console.log('🔍 [DEBUG] After adding AI response:');
-    console.log('  - new length:', newChatHistory.length);
-    console.log('  - last message:', newChatHistory[newChatHistory.length - 1]);
+    // console.log('  - new length:', newChatHistory.length);
+    // console.log('  - last message:', newChatHistory[newChatHistory.length - 1]);
 
     // Update agent activity
     updateAgentActivity(agentId, currentUser);
@@ -2112,14 +2112,14 @@ app.post('/api/chatgpt-chat', async (req, res) => {
 
     // Debug: Log what we received
 //     console.log('🔍 [ChatGPT] Received request:');
-    console.log('  - chatHistory length:', chatHistory.length);
-    console.log('  - newValue:', newValue);
-    console.log('  - uploadedFiles count:', uploadedFiles?.length || 0);
-    console.log('  - uploadedFiles details:', uploadedFiles?.map(f => ({
-      name: f.name,
-      type: f.type,
-      contentLength: f.content?.length || 0
-    })));
+    // console.log('  - chatHistory length:', chatHistory.length);
+    // console.log('  - newValue:', newValue);
+    // console.log('  - uploadedFiles count:', uploadedFiles?.length || 0);
+    // console.log('  - uploadedFiles details:', uploadedFiles?.map(f => ({
+    //   name: f.name,
+    //   type: f.type,
+    //   contentLength: f.content?.length || 0
+    // })));
 
     // Keep the original user message clean for chat history
     const cleanUserMessage = newValue;
@@ -2239,13 +2239,13 @@ app.post('/api/save-group-chat', async (req, res) => {
       return res.status(400).json({ message: 'No chat history to save' });
     }
 
-    console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
+    // console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
 
     // Files are already processed by frontend (base64 conversion done there)
     // Just ensure they're properly formatted for storage
     const processedUploadedFiles = (uploadedFiles || []).map(file => {
       if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
+        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
       }
       return file;
     });
@@ -2293,7 +2293,7 @@ app.post('/api/save-group-chat', async (req, res) => {
 
     // Use Cloudant client
     const result = await couchDBClient.saveChat(groupChatDoc);
-    console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
+    // console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
     
     // Invalidate chat cache since we added new chat data
     invalidateCache('chats');
@@ -2326,7 +2326,7 @@ app.get('/api/load-group-chat/:chatId', async (req, res) => {
       return res.status(404).json({ message: 'Chat not found' });
     }
     
-    console.log(`📄 Loaded chat: ${chatId}`);
+    // console.log(`📄 Loaded chat: ${chatId}`);
     
     // Debug: Log the uploadedFiles structure
     if (chat.uploadedFiles && chat.uploadedFiles.length > 0) {
@@ -2494,7 +2494,7 @@ app.get('/api/shared/:shareId', async (req, res) => {
       return res.status(404).json({ message: 'Shared chat not found' });
     }
     
-    console.log(`📄 Loaded shared chat: ${shareId}`);
+    // console.log(`📄 Loaded shared chat: ${shareId}`);
     res.json({
       id: chat._id,
       shareId: chat.shareId,
@@ -2588,7 +2588,7 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     // Just ensure they're properly formatted for storage
     const processedUploadedFiles = (uploadedFiles || []).map(file => {
       if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
+        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
       }
       return file;
     });
@@ -2627,7 +2627,7 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
 // Cleanup endpoint - delete all chats except "Public User" (for debugging)
 app.post('/api/cleanup-chats', async (req, res) => {
   try {
-    console.log('🧹 Starting chat cleanup via API...');
+    // console.log('🧹 Starting chat cleanup via API...');
     
     // Get all chats
     const allChats = await couchDBClient.getAllChats();
@@ -2707,7 +2707,7 @@ app.post('/api/save-chat', async (req, res) => {
       return res.status(400).json({ message: 'No chat history to save' });
     }
 
-    console.log(`💾 Attempting to save chat with ${chatHistory.length} messages`);
+    // console.log(`💾 Attempting to save chat with ${chatHistory.length} messages`);
 
     const chatDoc = {
       _id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2722,7 +2722,7 @@ app.post('/api/save-chat', async (req, res) => {
 
     // Use Cloudant client
     const result = await couchDBClient.saveChat(chatDoc);
-    console.log(`💾 Chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
+    // console.log(`💾 Chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
     
     res.json({ 
       success: true, 
@@ -2780,7 +2780,7 @@ app.get('/api/load-chat/:chatId', async (req, res) => {
       return res.status(404).json({ message: 'Chat not found' });
     }
     
-    console.log(`📄 Loaded chat: ${chatId}`);
+    // console.log(`📄 Loaded chat: ${chatId}`);
     res.json({
       id: chat._id,
       patientId: chat.patientId,
@@ -2814,7 +2814,7 @@ app.delete('/api/delete-chat/:chatId', async (req, res) => {
 // Clean up chats with missing name properties (for data format upgrades)
 app.delete('/api/cleanup-invalid-chats', async (req, res) => {
   try {
-    console.log('🧹 Starting cleanup of chats with missing name properties...');
+    // console.log('🧹 Starting cleanup of chats with missing name properties...');
     
     // Get all chats
     const allChats = await couchDBClient.getAllChats();
@@ -2905,12 +2905,12 @@ const doRequest = async (endpoint, options = {}) => {
   // Log the request details for debugging agent creation
   if (options.method === 'POST' && endpoint.includes('/agents')) {
 //     console.log('🌐 DIGITALOCEAN API REQUEST DETAILS:');
-    console.log('=====================================');
-    console.log(`URL: ${url}`);
-    console.log(`Method: ${config.method || 'GET'}`);
-    console.log(`Headers: ${JSON.stringify(headers, null, 2)}`);
-    console.log(`Body: ${options.body}`);
-    console.log('=====================================');
+    // console.log('=====================================');
+    // console.log(`URL: ${url}`);
+    // console.log(`Method: ${config.method || 'GET'}`);
+    // console.log(`Headers: ${JSON.stringify(headers, null, 2)}`);
+    // console.log(`Body: ${options.body}`);
+    // console.log('=====================================');
   }
 
   const response = await fetch(url, config);
@@ -2941,12 +2941,12 @@ const agentApiKeys = {
 const getAgentApiKey = async (agentId) => {
   // Check if we have a hardcoded key for this agent
   if (agentApiKeys[agentId]) {
-    console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
+    // console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
     return agentApiKeys[agentId];
   }
 
   // Fallback to global API key if no agent-specific key found
-  console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
+  // console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
   return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
 };
 
@@ -3857,7 +3857,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
     // If the KB is protected, require authentication and ownership verification
     if (isProtected) {
       if (!currentUser) {
-        console.log(`🚨 [SECURITY] Protected KB requires authentication - blocking unauthenticated access`);
+        // console.log(`🚨 [SECURITY] Protected KB requires authentication - blocking unauthenticated access`);
         return res.status(401).json({ 
           error: 'Authentication required for protected knowledge base',
           details: 'This knowledge base has owner restrictions'
@@ -4192,11 +4192,11 @@ app.post('/api/agents', async (req, res) => {
 
     // Log the exact payload being sent to DigitalOcean
 //     console.log('🚀 DIGITALOCEAN AGENT CREATION PAYLOAD:');
-    console.log('========================================');
-    console.log(JSON.stringify(agentData, null, 2));
-    console.log('========================================');
+    // console.log('========================================');
+    // console.log(JSON.stringify(agentData, null, 2));
+    // console.log('========================================');
 //     console.log(`🔗 Endpoint: ${process.env.DIGITALOCEAN_BASE_URL}/v2/gen-ai/agents`);
-    console.log(`🔑 Token: ${process.env.DIGITALOCEAN_TOKEN ? 'Present' : 'Missing'}`);
+    // console.log(`🔑 Token: ${process.env.DIGITALOCEAN_TOKEN ? 'Present' : 'Missing'}`);
 //     console.log(`📋 Project ID: ${agentData.project_id}`);
 
     const agent = await doRequest('/v2/gen-ai/agents', {
@@ -5110,7 +5110,7 @@ app.post('/api/auto-start-indexing', async (req, res) => {
       const mostRecentKB = kbList[0];
 //       console.log('🔍 Most recent KB object:', JSON.stringify(mostRecentKB, null, 2));
 //       console.log(`📚 Most recent KB: ${mostRecentKB.name} (${mostRecentKB.uuid})`);
-      console.log(`📅 Created: ${mostRecentKB.created_at}`);
+      // console.log(`📅 Created: ${mostRecentKB.created_at}`);
 //       console.log(`📊 Current indexing status: ${mostRecentKB.last_indexing_job?.status || 'No indexing job'}`);
       
       // Check if this KB already has a completed indexing job
@@ -5253,7 +5253,7 @@ app.post('/api/reindex-specific-kb', async (req, res) => {
     }
     
 //     console.log(`✅ Found target KB: ${targetKB.name} (${targetKB.uuid})`);
-    console.log(`📅 Created: ${targetKB.created_at}`);
+    // console.log(`📅 Created: ${targetKB.created_at}`);
 //     console.log(`📊 Current indexing status: ${targetKB.last_indexing_job?.status || 'No indexing job'}`);
     
     // Get the knowledge base details to find data sources
@@ -5412,7 +5412,7 @@ app.post('/api/reindex-specific-kb', async (req, res) => {
 // Test endpoint: Create KB from wed271 folder and monitor indexing
 app.post('/api/test-large-file-indexing', async (req, res) => {
   try {
-    console.log(`🧪 TEST: Creating KB from wed271 folder with large file...`);
+    // console.log(`🧪 TEST: Creating KB from wed271 folder with large file...`);
     
     // Create a unique KB name with timestamp
     const timestamp = Date.now();
@@ -5549,7 +5549,7 @@ async function monitorIndexingProgress(kbId, kbName, startTime) {
           
           if (job.status === 'INDEX_JOB_STATUS_COMPLETED') {
             const totalTime = Math.round((currentTime - startTime) / 1000);
-            console.log(`\n🎉 INDEXING COMPLETED!`);
+            // console.log(`\n🎉 INDEXING COMPLETED!`);
 //             console.log(`📊 Total time: ${totalTime} seconds (${elapsedMinutes} minutes)`);
 //             console.log(`📊 Final tokens: ${job.tokens || 'N/A'}`);
 //             console.log(`📊 Job UUID: ${job.uuid}`);
@@ -5563,7 +5563,7 @@ async function monitorIndexingProgress(kbId, kbName, startTime) {
       
       // Stop monitoring after max checks or if taking too long
       if (checkCount >= maxChecks) {
-        console.log(`\n⏰ Monitoring stopped after ${maxChecks} checks (${elapsedMinutes} minutes)`);
+        // console.log(`\n⏰ Monitoring stopped after ${maxChecks} checks (${elapsedMinutes} minutes)`);
         clearInterval(monitorInterval);
         return;
       }
@@ -5573,7 +5573,7 @@ async function monitorIndexingProgress(kbId, kbName, startTime) {
       checkCount++;
       
       if (checkCount >= maxChecks) {
-        console.log(`\n⏰ Monitoring stopped due to errors after ${checkCount} checks`);
+        // console.log(`\n⏰ Monitoring stopped due to errors after ${checkCount} checks`);
         clearInterval(monitorInterval);
         return;
       }
@@ -5933,7 +5933,7 @@ app.use('/api/admin-management', adminManagementRoutes);
 // Cleanup endpoint to replace maia_users with clean data
 app.post('/api/cleanup-database', async (req, res) => {
   try {
-    console.log('🧹 Starting database cleanup via API...');
+    // console.log('🧹 Starting database cleanup via API...');
     
     // Essential users to keep
     const essentialUsers = [
@@ -5984,7 +5984,7 @@ app.post('/api/cleanup-database', async (req, res) => {
     }
     
     // Insert essential users
-    console.log('📤 Inserting essential users...');
+    // console.log('📤 Inserting essential users...');
     for (const user of essentialUsers) {
       try {
         await couchDBClient.saveDocument('maia_users', user);
@@ -6529,10 +6529,10 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
 //   console.log(`🚀 MAIA Secure Server running on port ${PORT}`);
 //   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
+  // console.log(`👤 Single Patient Mode: ${process.env.SINGLE_PATIENT_MODE === 'true' ? 'Enabled' : 'Disabled'}`);
 //       console.log(`🔗 Health check: ${process.env.ORIGIN || `http://localhost:${PORT}`}/health`);
 //   console.log(`🔧 CODE VERSION: Updated AgentManagementDialog.vue with workflow fixes and console cleanup`);
-  console.log(`📅 Server started at: ${new Date().toISOString()}`);
+  // console.log(`📅 Server started at: ${new Date().toISOString()}`);
   
   // Helper function to ensure bucket folders for all users
   async function ensureAllUserBuckets() {
@@ -6642,7 +6642,7 @@ app.listen(PORT, async () => {
     try {
       const cleanedCount = await sessionManager.cleanupExpiredDeepLinks();
       if (cleanedCount > 0) {
-        console.log(`🧹 Cleaned up ${cleanedCount} expired deep links`);
+        // console.log(`🧹 Cleaned up ${cleanedCount} expired deep links`);
       }
     } catch (error) {
       console.error('❌ Error in deep link cleanup job:', error);
@@ -6653,7 +6653,7 @@ app.listen(PORT, async () => {
 // Test endpoint for knowledge base creation debugging
 app.post('/api/test-create-kb', async (req, res) => {
   try {
-    console.log('🧪 TEST ENDPOINT: Creating knowledge base for debugging');
+    // console.log('🧪 TEST ENDPOINT: Creating knowledge base for debugging');
     
     // List all environment variables we need
     const envVars = {
