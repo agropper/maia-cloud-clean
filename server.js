@@ -534,12 +534,12 @@ app.get('/api/session-status', (req, res) => {
 // Session test endpoint
 app.get('/api/session-test', (req, res) => {
 //   console.log(`🔍 [SESSION TEST] Request:`, {
-    sessionId: req.sessionID,
-    hasSession: !!req.session,
-    sessionKeys: req.session ? Object.keys(req.session) : 'no session',
-    cookies: req.headers.cookie || 'no cookies',
-    userAgent: req.headers['user-agent']?.substring(0, 50)
-  });
+//     sessionId: req.sessionID,
+//     hasSession: !!req.session,
+//     sessionKeys: req.session ? Object.keys(req.session) : 'no session',
+//     cookies: req.headers.cookie || 'no cookies',
+//     userAgent: req.headers['user-agent']?.substring(0, 50)
+//   });
 
   // Set a test session value
   req.session.testValue = 'session-working-' + Date.now();
@@ -1370,10 +1370,10 @@ app.post('/api/personal-chat', async (req, res) => {
         // console.log(`🔗 [DEBUG] Step 2: Looking up deep link user document in maia_users...`);
         const deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
 //         console.log(`🔗 [DEBUG] Step 2 Result:`, deepLinkUserDoc ? {
-          userId: deepLinkUserDoc.userId,
-          shareId: deepLinkUserDoc.shareId,
-          displayName: deepLinkUserDoc.displayName
-        } : 'Document not found');
+//           userId: deepLinkUserDoc.userId,
+//           shareId: deepLinkUserDoc.shareId,
+//           displayName: deepLinkUserDoc.displayName
+//         } : 'Document not found');
         
         if (deepLinkUserDoc && deepLinkUserDoc.shareId) {
           // console.log(`🔗 [personal-chat] Found shareId for deep link user: ${deepLinkUserDoc.shareId}`);
@@ -1385,11 +1385,11 @@ app.post('/api/personal-chat', async (req, res) => {
           
           const sharedChat = allChats.find(chat => chat.shareId === deepLinkUserDoc.shareId);
 //           console.log(`🔗 [DEBUG] Step 3b: Shared chat found:`, sharedChat ? {
-            chatId: sharedChat._id,
-            shareId: sharedChat.shareId,
-            currentUser: sharedChat.currentUser,
-            currentUserType: typeof sharedChat.currentUser
-          } : 'No chat found with matching shareId');
+//             chatId: sharedChat._id,
+//             shareId: sharedChat.shareId,
+//             currentUser: sharedChat.currentUser,
+//             currentUserType: typeof sharedChat.currentUser
+//           } : 'No chat found with matching shareId');
           
           if (sharedChat && sharedChat.currentUser) {
             const patientUser = typeof sharedChat.currentUser === 'string' 
@@ -1415,11 +1415,11 @@ app.post('/api/personal-chat', async (req, res) => {
                 const agentResponse = await doRequest(`/v2/gen-ai/agents/${assignedAgentData.assignedAgentId}`);
                 const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
 //                 console.log(`🔗 [DEBUG] Step 5a: Agent data from DigitalOcean:`, agentData ? {
-                  name: agentData.name,
-                  hasDeployment: !!agentData.deployment,
-                  deploymentUrl: agentData.deployment?.url,
-                  hasKnowledgeBases: !!agentData.knowledge_bases
-                } : 'No agent data');
+//                   name: agentData.name,
+//                   hasDeployment: !!agentData.deployment,
+//                   deploymentUrl: agentData.deployment?.url,
+//                   hasKnowledgeBases: !!agentData.knowledge_bases
+//                 } : 'No agent data');
                 
                 if (agentData && agentData.deployment?.url) {
                   agentModel = agentData.name;
@@ -1434,12 +1434,12 @@ app.post('/api/personal-chat', async (req, res) => {
                   
                   // console.log(`🔗 [personal-chat] Deep link user using patient's agent: ${agentData.name} (${agentEndpoint})`);
 //                   console.log(`🔗 [DEBUG] Step 5b: Agent assignment successful:`, {
-                    agentModel,
-                    agentName,
-                    agentId,
-                    agentEndpoint,
-                    knowledgeBases
-                  });
+//                     agentModel,
+//                     agentName,
+//                     agentId,
+//                     agentEndpoint,
+//                     knowledgeBases
+//                   });
                 } else {
                   // console.log(`🔗 [personal-chat] Patient's agent ${assignedAgentData.assignedAgentName} has no deployment URL`);
                   // console.log(`🔗 [DEBUG] Step 5c: Agent has no deployment URL - agent assignment failed`);
@@ -1473,12 +1473,12 @@ app.post('/api/personal-chat', async (req, res) => {
       } else {
         // console.log(`🔗 [DEBUG] Step SUCCESS: Agent assignment completed successfully`);
 //         console.log(`🔗 [DEBUG] Step SUCCESS: Agent details:`, {
-          agentModel,
-          agentName,
-          agentId,
-          agentEndpoint,
-          knowledgeBases
-        });
+//           agentModel,
+//           agentName,
+//           agentId,
+//           agentEndpoint,
+//           knowledgeBases
+//         });
       }
     }
     
@@ -1729,25 +1729,25 @@ app.post('/api/anthropic-chat', async (req, res) => {
 
     // Debug: Log the incoming chat history structure
 //     console.log('🔍 Anthropic - Incoming chat history structure:', {
-      length: chatHistory.length,
-      sampleMessage: chatHistory[0] ? {
-        role: chatHistory[0].role,
-        content: chatHistory[0].content,
-        hasName: 'name' in chatHistory[0],
-        name: chatHistory[0].name,
-        allKeys: Object.keys(chatHistory[0])
-      } : 'No messages'
-    });
+//       length: chatHistory.length,
+//       sampleMessage: chatHistory[0] ? {
+//         role: chatHistory[0].role,
+//         content: chatHistory[0].content,
+//         hasName: 'name' in chatHistory[0],
+//         name: chatHistory[0].name,
+//         allKeys: Object.keys(chatHistory[0])
+//       } : 'No messages'
+//     });
 
     // Debug: Check for empty content messages
     const emptyContentMessages = chatHistory.filter(msg => !msg.content || msg.content.trim() === '');
     if (emptyContentMessages.length > 0) {
 //       console.log('⚠️ WARNING: Found messages with empty content:', emptyContentMessages.map((msg, index) => ({
-        index,
-        role: msg.role,
-        content: msg.content,
-        allKeys: Object.keys(msg)
-      })));
+//         index,
+//         role: msg.role,
+//         content: msg.content,
+//         allKeys: Object.keys(msg)
+//       })));
     }
 
     // Clean chat history to remove any 'name' fields that Anthropic doesn't support
@@ -1781,23 +1781,23 @@ app.post('/api/anthropic-chat', async (req, res) => {
 
     // Debug: Log what's being sent to Anthropic
 //     console.log('🔍 Anthropic - Sending to API:', {
-      cleanChatHistoryLength: cleanChatHistory.length,
-      cleanChatHistorySample: cleanChatHistory[0] ? {
-        role: cleanChatHistory[0].role,
-        content: cleanChatHistory[0].content,
-        allKeys: Object.keys(cleanChatHistory[0])
-      } : 'No messages',
-      aiUserMessage: aiUserMessage.substring(0, 100) + '...'
-    });
+//       cleanChatHistoryLength: cleanChatHistory.length,
+//       cleanChatHistorySample: cleanChatHistory[0] ? {
+//         role: cleanChatHistory[0].role,
+//         content: cleanChatHistory[0].content,
+//         allKeys: Object.keys(cleanChatHistory[0])
+//       } : 'No messages',
+//       aiUserMessage: aiUserMessage.substring(0, 100) + '...'
+//     });
 
     // Debug: Check cleaned messages for empty content
     const emptyCleanedMessages = cleanChatHistory.filter(msg => !msg.content || msg.content.trim() === '');
     if (emptyCleanedMessages.length > 0) {
 //       console.log('⚠️ WARNING: Cleaned messages with empty content:', emptyCleanedMessages.map((msg, index) => ({
-        index,
-        role: msg.role,
-        content: msg.content
-      })));
+//         index,
+//         role: msg.role,
+//         content: msg.content
+//       })));
     }
 
     const response = await anthropic.messages.create({
@@ -1888,25 +1888,25 @@ app.post('/api/gemini-chat', async (req, res) => {
 
     // Debug: Log the incoming chat history structure
 //     console.log('🔍 Gemini - Incoming chat history structure:', {
-      length: chatHistory.length,
-      sampleMessage: chatHistory[0] ? {
-        role: chatHistory[0].role,
-        content: chatHistory[0].content,
-        hasName: 'name' in chatHistory[0],
-        name: chatHistory[0].name,
-        allKeys: Object.keys(chatHistory[0])
-      } : 'No messages'
-    });
+//       length: chatHistory.length,
+//       sampleMessage: chatHistory[0] ? {
+//         role: chatHistory[0].role,
+//         content: chatHistory[0].content,
+//         hasName: 'name' in chatHistory[0],
+//         name: chatHistory[0].name,
+//         allKeys: Object.keys(chatHistory[0])
+//       } : 'No messages'
+//     });
 
     // Debug: Check for empty content messages
     const emptyContentMessages = chatHistory.filter(msg => !msg.content || msg.content.trim() === '');
     if (emptyContentMessages.length > 0) {
 //       console.log('⚠️ WARNING: Found messages with empty content:', emptyContentMessages.map((msg, index) => ({
-        index,
-        role: msg.role,
-        content: msg.content,
-        allKeys: Object.keys(msg)
-      })));
+//         index,
+//         role: msg.role,
+//         content: msg.content,
+//         allKeys: Object.keys(msg)
+//       })));
     }
 
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
@@ -2280,16 +2280,16 @@ app.post('/api/save-group-chat', async (req, res) => {
 
     // Debug: Log what's being sent to the database
 //     console.log(`🔍 [SAVE] Document being saved:`, {
-      _id: groupChatDoc._id,
-      type: groupChatDoc.type,
-      uploadedFilesCount: groupChatDoc.uploadedFiles.length,
-      firstFileStructure: groupChatDoc.uploadedFiles[0] ? {
-        name: groupChatDoc.uploadedFiles[0].name,
-        type: groupChatDoc.uploadedFiles[0].type,
-        hasOriginalFile: !!groupChatDoc.uploadedFiles[0].originalFile,
-        originalFileKeys: groupChatDoc.uploadedFiles[0].originalFile ? Object.keys(groupChatDoc.uploadedFiles[0].originalFile) : 'none'
-      } : 'no files'
-    });
+//       _id: groupChatDoc._id,
+//       type: groupChatDoc.type,
+//       uploadedFilesCount: groupChatDoc.uploadedFiles.length,
+//       firstFileStructure: groupChatDoc.uploadedFiles[0] ? {
+//         name: groupChatDoc.uploadedFiles[0].name,
+//         type: groupChatDoc.uploadedFiles[0].type,
+//         hasOriginalFile: !!groupChatDoc.uploadedFiles[0].originalFile,
+//         originalFileKeys: groupChatDoc.uploadedFiles[0].originalFile ? Object.keys(groupChatDoc.uploadedFiles[0].originalFile) : 'none'
+//       } : 'no files'
+//     });
 
     // Use Cloudant client
     const result = await couchDBClient.saveChat(groupChatDoc);
@@ -2376,20 +2376,20 @@ app.post('/api/deep-link-session', async (req, res) => {
     const sessionId = req.sessionID;
     
 //     console.log('🔗 [Deep Link Session] Request data:', {
-      shareId,
-      userId,
-      userName,
-      userEmail,
-      sessionId,
-      hasSession: !!req.session
-    });
+//       shareId,
+//       userId,
+//       userName,
+//       userEmail,
+//       sessionId,
+//       hasSession: !!req.session
+//     });
     
     if (!shareId || !userId || !sessionId) {
 //       console.log('❌ [Deep Link Session] Missing required fields:', {
-        shareId: !!shareId,
-        userId: !!userId,
-        sessionId: !!sessionId
-      });
+//         shareId: !!shareId,
+//         userId: !!userId,
+//         sessionId: !!sessionId
+//       });
       return res.status(400).json({ message: 'Missing required fields' });
     }
     
@@ -2415,11 +2415,11 @@ app.post('/api/deep-link-session', async (req, res) => {
     };
     
 //     console.log('🔗 [Deep Link Session] Creating session for identified user:', {
-      sessionId,
-      userId,
-      userName,
-      shareId
-    });
+//       sessionId,
+//       userId,
+//       userName,
+//       shareId
+//     });
     
     // Session stored in memory only
     
@@ -2432,10 +2432,10 @@ app.post('/api/deep-link-session', async (req, res) => {
     
 //     console.log('✅ [Deep Link Session] Session created successfully for user:', userName);
 //     console.log('✅ [Deep Link Session] Express session updated with user info:', {
-      userId: req.session.userId,
-      userName: req.session.userName,
-      sessionType: req.session.sessionType
-    });
+//       userId: req.session.userId,
+//       userName: req.session.userName,
+//       sessionType: req.session.sessionType
+//     });
     
     res.json({ success: true, message: 'Session created successfully' });
     
@@ -2466,10 +2466,10 @@ app.post('/api/deep-link-session/cleanup', async (req, res) => {
     }
     
 //     console.log('🔗 [Deep Link Cleanup] Cleaning up session:', {
-      sessionId,
-      shareId,
-      action
-    });
+//       sessionId,
+//       shareId,
+//       action
+//     });
     
     // Session cleanup handled in memory only
 //     console.log('✅ [Deep Link Cleanup] Session cleaned up from memory:', sessionId);
@@ -3038,10 +3038,10 @@ app.get('/api/agents', async (req, res) => {
     const allAgents = await Promise.all((agents.agents || []).map(async (agent) => {
       // Debug: Log the raw agent data from DigitalOcean API
 //       console.log(`🔍 [DEBUG] Raw agent data from DigitalOcean API:`, {
-        id: agent.uuid,
-        name: agent.name,
-        knowledge_bases: agent.knowledge_bases
-      });
+//         id: agent.uuid,
+//         name: agent.name,
+//         knowledge_bases: agent.knowledge_bases
+//       });
       
       // Fetch detailed agent data including knowledge bases
       let connectedKnowledgeBases = [];
@@ -3405,10 +3405,10 @@ app.get('/api/current-agent', async (req, res) => {
     let currentUser = req.session?.userId || 'Public User';
     // console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
 //     console.log(`🔍 [current-agent] Session data:`, {
-      hasSession: !!req.session,
-      userId: req.session?.userId,
-      sessionId: req.sessionID
-    });
+//       hasSession: !!req.session,
+//       userId: req.session?.userId,
+//       sessionId: req.sessionID
+//     });
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
@@ -3429,10 +3429,10 @@ app.get('/api/current-agent', async (req, res) => {
             }
           }
 //           console.log(`🔗 [DEBUG] Step 2 Result:`, deepLinkUserDoc ? {
-            userId: deepLinkUserDoc.userId,
-            shareId: deepLinkUserDoc.shareId,
-            displayName: deepLinkUserDoc.displayName
-          } : 'Document not found');
+//             userId: deepLinkUserDoc.userId,
+//             shareId: deepLinkUserDoc.shareId,
+//             displayName: deepLinkUserDoc.displayName
+//           } : 'Document not found');
           
           if (deepLinkUserDoc && deepLinkUserDoc.shareId) {
 //             console.log(`🔗 [current-agent] Found shareId for deep link user: ${deepLinkUserDoc.shareId}`);
@@ -3453,11 +3453,11 @@ app.get('/api/current-agent', async (req, res) => {
             
             const sharedChat = allChats.find(chat => chat.shareId === deepLinkUserDoc.shareId);
 //             console.log(`🔗 [DEBUG] Step 3b: Shared chat found:`, sharedChat ? {
-              chatId: sharedChat._id,
-              shareId: sharedChat.shareId,
-              currentUser: sharedChat.currentUser,
-              currentUserType: typeof sharedChat.currentUser
-            } : 'No chat found with matching shareId');
+//               chatId: sharedChat._id,
+//               shareId: sharedChat.shareId,
+//               currentUser: sharedChat.currentUser,
+//               currentUserType: typeof sharedChat.currentUser
+//             } : 'No chat found with matching shareId');
             
             if (sharedChat && sharedChat.currentUser) {
               const patientUser = typeof sharedChat.currentUser === 'string' 
@@ -3866,10 +3866,10 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       
       // Verify user has permission to access this protected knowledge base
 //       console.log(`🔍 [DEBUG] Ownership check:`, {
-        kbOwner: kbOwner,
-        currentUserUsername: currentUser?.username,
-        isMatch: kbOwner === currentUser?.username
-      });
+//         kbOwner: kbOwner,
+//         currentUserUsername: currentUser?.username,
+//         isMatch: kbOwner === currentUser?.username
+//       });
       
       if (kbOwner && kbOwner !== 'unknown' && kbOwner !== currentUser.username) {
         // console.log(`🔄 [OWNERSHIP TRANSFER] User ${currentUser.username} attempting to access KB owned by ${kbOwner}`);
@@ -4384,9 +4384,9 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
     // Get Public User document
     const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
 //     console.log('🔍 [admin] Current Public User document:', {
-      currentAgentId: userDoc.currentAgentId,
-      currentAgentName: userDoc.currentAgentName
-    });
+//       currentAgentId: userDoc.currentAgentId,
+//       currentAgentName: userDoc.currentAgentName
+//     });
     
     // Clear the agent assignment
     const updatedUserDoc = {
@@ -4490,10 +4490,10 @@ app.post('/api/current-agent', async (req, res) => {
         // Debug: Verify the document was saved correctly
         const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
 //         console.log(`🔍 [DEBUG] Verification - user document after save:`, {
-          currentAgentId: verifyDoc.currentAgentId,
-          currentAgentName: verifyDoc.currentAgentName,
-          currentAgentSetAt: verifyDoc.currentAgentSetAt
-        });
+//           currentAgentId: verifyDoc.currentAgentId,
+//           currentAgentName: verifyDoc.currentAgentName,
+//           currentAgentSetAt: verifyDoc.currentAgentSetAt
+//         });
       } catch (userError) {
         console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
       }
@@ -4643,10 +4643,10 @@ app.get('/api/user-state/:userId', async (req, res) => {
     }
     
 //     console.log(`✅ [user-state] Returning state for ${userId}:`, {
-      currentAgent: userState.currentAgentName,
-      assignedKBs: userState.assignedKnowledgeBases?.length || 0,
-      workflowStage: userState.workflowStage
-    });
+//       currentAgent: userState.currentAgentName,
+//       assignedKBs: userState.assignedKnowledgeBases?.length || 0,
+//       workflowStage: userState.workflowStage
+//     });
     
     res.json(userState);
   } catch (error) {
