@@ -1605,11 +1605,9 @@ export default defineComponent({
             if (props.currentUser && props.currentUser.userId !== 'Public User') {
               localCurrentUser.value = props.currentUser;
               isAuthenticated.value = true;
-              console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
             } else {
               isAuthenticated.value = false;
               localCurrentUser.value = null;
-              console.log(`🔐 No user authenticated`);
             }
           }
         } else {
@@ -1617,24 +1615,19 @@ export default defineComponent({
           if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
             localCurrentUser.value = props.currentUser;
             isAuthenticated.value = true;
-            console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
           } else {
             isAuthenticated.value = false;
             localCurrentUser.value = null;
-            console.log(`🔐 No user authenticated`);
           }
         }
       } catch (error) {
-        console.log("🔐 Error checking authentication, checking props:", error);
         // Fallback to props
         if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log(`🔐 User authenticated via props fallback: ${props.currentUser.userId}`);
         } else {
           isAuthenticated.value = false;
           localCurrentUser.value = null;
-          console.log(`🔐 No user authenticated`);
         }
       }
     };
@@ -1920,7 +1913,6 @@ export default defineComponent({
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
-      console.log(`🔍 [DEBUG] onAgentSelected called for agentId: ${agentId}`);
       // Note: Agents are not automatically assigned to users
       // Agents without owners belong to Public User
       // Authenticated users can only select agents that are already assigned to them
@@ -1946,7 +1938,6 @@ export default defineComponent({
             currentAgent.value = result.agent;
 
           // Emit agent update event
-          console.log(`🔍 [DEBUG] Emitting agent-updated event for agent: ${result.agent.name}`);
           emit("agent-updated", result.agent);
 
           $q.notify({
@@ -1973,7 +1964,6 @@ export default defineComponent({
     };
 
     const selectAgent = async (agent: any) => {
-      console.log(`🔍 [DEBUG] selectAgent called for agent: ${agent.name} (${agent.id})`);
       await onAgentSelected(agent.id);
     };
 
@@ -2146,7 +2136,6 @@ export default defineComponent({
 
     // Set loading state before dialog shows
     const onDialogBeforeShow = () => {
-      console.log(`🔐 [DEBUG] onDialogBeforeShow called at: ${new Date().toISOString()}`);
       isDialogLoading.value = true;
     };
 
@@ -2196,27 +2185,21 @@ export default defineComponent({
       // Set current agent from props (if available)
       if (props.currentAgent) {
         currentAgent.value = props.currentAgent;
-        console.log(`🤖 Current agent from props: ${props.currentAgent.name}`);
       } else {
         currentAgent.value = null;
-        console.log(`🤖 No current agent in props`);
       }
       
       // Set current knowledge base from props (if available)
       if (props.currentKnowledgeBase) {
         knowledgeBase.value = props.currentKnowledgeBase;
-        console.log(`📚 Current KB from props: ${props.currentKnowledgeBase.name}`);
       } else {
         knowledgeBase.value = null;
-        console.log(`📚 No current KB in props`);
       }
     };
 
     // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
       try {
-        console.log(`🔐 Dialog opening - loading data from DO API only`);
-        
         // Load current user state first (no API calls)
         loadCurrentUserState();
         

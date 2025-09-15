@@ -161,7 +161,6 @@ export default defineComponent({
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
       // Add stack trace to debug where calls are coming from
-      console.log(`🔍 [DEBUG] fetchCurrentAgent called from:`, new Error().stack);
       
       // Check if we already have a pending request for this endpoint
       const cacheKey = 'current-agent';
@@ -394,7 +393,6 @@ export default defineComponent({
         
         // Fetch current agent data to get updated warning information
         try {
-          console.log(`🔍 [DEBUG] handleAgentUpdated calling fetchCurrentAgent (cached)`);
           // Clear the API call cache to force a fresh request
           apiCallCache.delete('current-agent');
           await fetchCurrentAgent();
