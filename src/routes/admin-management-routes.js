@@ -620,6 +620,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
 router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
+    console.log(`🔍 [BACKEND DEBUG] assigned-agent endpoint called for user: ${userId} at ${new Date().toISOString()}`);
     
     // First try to get from UserStateManager cache
     const userStateManager = req.app.locals.userStateManager;

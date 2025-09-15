@@ -1874,19 +1874,26 @@ export default defineComponent({
 
     // Load current agent info with debouncing
     const loadAgentInfo = async () => {
+      console.log(`🔐 [DEBUG] loadAgentInfo called at: ${new Date().toISOString()}`);
+      
       // Clear any existing debounce timer
       if (loadAgentInfoDebounceTimer.value) {
+        console.log(`🔐 [DEBUG] Clearing existing debounce timer`);
         clearTimeout(loadAgentInfoDebounceTimer.value);
       }
       
       // Set a new debounce timer
+      console.log(`🔐 [DEBUG] Setting 300ms debounce timer`);
       loadAgentInfoDebounceTimer.value = setTimeout(async () => {
+        console.log(`🔐 [DEBUG] Debounce timer fired, calling performLoadAgentInfo`);
         await performLoadAgentInfo();
       }, 300); // 300ms debounce
     };
     
     // Actual load agent info implementation
     const performLoadAgentInfo = async () => {
+      console.log(`🔐 [DEBUG] performLoadAgentInfo called at: ${new Date().toISOString()}`);
+      
       // Prevent multiple simultaneous calls
       if (isLoading.value) {
         console.log("Skipping duplicate loadAgentInfo request");
@@ -1894,6 +1901,7 @@ export default defineComponent({
       }
       
       // Add delay to avoid 429 errors during app initialization
+      console.log(`🔐 [DEBUG] Adding 500ms delay before API calls`);
       await new Promise(resolve => setTimeout(resolve, 500));
       
       isLoading.value = true;
@@ -1939,11 +1947,13 @@ export default defineComponent({
           // Authenticated user - check if they have an assigned agent
           if (localCurrentUser.value?.userId) {
               // Regular authenticated user - check assigned agent first
+              console.log(`🔐 [DEBUG] Making assigned-agent API call for user: ${localCurrentUser.value.userId}`);
               try {
                 const assignedAgentResponse = await fetch(
                   `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
                   { credentials: 'include' }
                 );
+                console.log(`🔐 [DEBUG] assigned-agent API call completed with status: ${assignedAgentResponse.status}`);
                 if (assignedAgentResponse.ok) {
                   const assignedAgentData = await assignedAgentResponse.json();
                   if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
@@ -2322,26 +2332,41 @@ export default defineComponent({
 
     // Set loading state before dialog shows
     const onDialogBeforeShow = () => {
+      console.log(`🔐 [DEBUG] onDialogBeforeShow called at: ${new Date().toISOString()}`);
       isDialogLoading.value = true;
     };
 
     // Load agent info when dialog opens
     const onDialogOpen = async () => {
       try {
-        console.log(`🔐 Dialog opening - checking authentication status...`);
+        console.log(`🔐 [DEBUG] Dialog opening - checking authentication status...`);
+        console.log(`🔐 [DEBUG] onDialogOpen called at: ${new Date().toISOString()}`);
+        
+        console.log(`🔐 [DEBUG] Calling checkAuthenticationStatus`);
         await checkAuthenticationStatus();
+        console.log(`🔐 [DEBUG] checkAuthenticationStatus completed`);
+        
+        console.log(`🔐 [DEBUG] Calling loadAgentInfo`);
         await loadAgentInfo();
+        console.log(`🔐 [DEBUG] loadAgentInfo completed`);
         
         // Check user files for authenticated users (consolidated from watcher)
         if (isAuthenticated.value && !isDeepLinkUser.value) {
+          console.log(`🔐 [DEBUG] Calling checkUserFiles for authenticated user`);
           await checkUserFiles();
+          console.log(`🔐 [DEBUG] checkUserFiles completed`);
         }
         
         // Display current agent information (only if not already logged)
         if (currentAgent.value && !hasLoggedAgentAssignment.value) {
           console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
         }
+        
+        console.log(`🔐 [DEBUG] Calling updateWorkflowProgress`);
         await updateWorkflowProgress(); // Update workflow progress after loading data
+        console.log(`🔐 [DEBUG] updateWorkflowProgress completed`);
+        
+        console.log(`🔐 [DEBUG] onDialogOpen completed at: ${new Date().toISOString()}`);
       } finally {
         isDialogLoading.value = false;
       }
