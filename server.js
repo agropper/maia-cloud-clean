@@ -3735,6 +3735,46 @@ app.get('/api/current-agent', async (req, res) => {
     
 
 
+    // SECURITY CHECK: Validate agent ownership for non-deep-link users
+    if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_')) {
+      const agentName = agentData.name;
+      const expectedPrefix = `${currentUser}-agent-`;
+      
+      // Check if agent name matches the expected pattern for this user
+      if (!agentName.startsWith(expectedPrefix)) {
+        console.error(`🚨 SECURITY VIOLATION: User ${currentUser} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
+        
+        // Clear the invalid agent assignment
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          if (userDoc) {
+            const updatedUserDoc = {
+              ...userDoc,
+              currentAgentId: null,
+              currentAgentName: null,
+              currentAgentEndpoint: null,
+              currentAgentSetAt: null,
+              assignedAgentId: null,
+              assignedAgentName: null,
+              updatedAt: new Date().toISOString()
+            };
+            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            
+            // Clear from cache
+            UserStateManager.removeUser(currentUser);
+          }
+        } catch (clearError) {
+          console.error(`❌ Failed to clear invalid agent assignment:`, clearError.message);
+        }
+        
+        return res.status(403).json({ 
+          agent: null,
+          message: 'Security violation detected: Agent assignment does not match user. Please contact administrator.',
+          requiresAgentSelection: true
+        });
+      }
+    }
+
     const response = { 
       agent: transformedAgent,
       endpoint: endpoint
@@ -3743,7 +3783,6 @@ app.get('/api/current-agent', async (req, res) => {
     if (warning) {
       response.warning = warning;
     }
-
 
     res.json(response);
   } catch (error) {

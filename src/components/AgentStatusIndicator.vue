@@ -149,6 +149,19 @@ export default defineComponent({
         return 'No Agent Configured'
       }
       
+      // SECURITY CHECK: Validate agent ownership for non-deep-link users
+      const currentUserId = props.currentUser?.userId || 'Public User';
+      if (currentUserId !== 'Public User' && !currentUserId.startsWith('deep_link_')) {
+        const agentName = props.agent.name;
+        const expectedPrefix = `${currentUserId}-agent-`;
+        
+        // Check if agent name matches the expected pattern for this user
+        if (!agentName.startsWith(expectedPrefix)) {
+          console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
+          throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
+        }
+      }
+      
       // Get current user from props - prioritize displayName over userId
       const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Public User'
       
