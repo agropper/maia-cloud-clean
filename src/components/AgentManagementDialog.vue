@@ -1920,6 +1920,7 @@ export default defineComponent({
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
+      console.log(`🔍 [DEBUG] onAgentSelected called for agentId: ${agentId}`);
       // Note: Agents are not automatically assigned to users
       // Agents without owners belong to Public User
       // Authenticated users can only select agents that are already assigned to them
@@ -1945,6 +1946,7 @@ export default defineComponent({
             currentAgent.value = result.agent;
 
           // Emit agent update event
+          console.log(`🔍 [DEBUG] Emitting agent-updated event for agent: ${result.agent.name}`);
           emit("agent-updated", result.agent);
 
           $q.notify({
@@ -1971,6 +1973,7 @@ export default defineComponent({
     };
 
     const selectAgent = async (agent: any) => {
+      console.log(`🔍 [DEBUG] selectAgent called for agent: ${agent.name} (${agent.id})`);
       await onAgentSelected(agent.id);
     };
 
