@@ -3735,8 +3735,8 @@ app.get('/api/current-agent', async (req, res) => {
     
 
 
-    // SECURITY CHECK: Validate agent ownership for non-deep-link users
-    if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_')) {
+    // SECURITY CHECK: Validate agent ownership for authenticated users (not Public User or deep-link users)
+    if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_') && currentUser !== 'Unknown User') {
       const agentName = agentData.name;
       const expectedPrefix = `${currentUser}-agent-`;
       
