@@ -2235,8 +2235,28 @@ export default defineComponent({
     watch(() => props.currentUser, (newUser) => {
       if (newUser && localCurrentUser.value?.userId !== newUser.userId) {
         console.log(`[*] Current user: ${newUser.userId}`);
+        localCurrentUser.value = newUser;
       }
     }, { immediate: true });
+
+    // Watch for agent changes to update dialog state
+    watch(() => props.currentAgent, (newAgent) => {
+      if (newAgent && currentAgent.value?.id !== newAgent.id) {
+        console.log(`🤖 Agent updated in dialog: ${newAgent.name}`);
+        currentAgent.value = newAgent;
+      }
+    });
+
+    // Watch for knowledge base changes to update dialog state
+    watch(() => props.currentKnowledgeBase, (newKB) => {
+      if (newKB && knowledgeBase.value?.id !== newKB.id) {
+        console.log(`📚 KB updated in dialog: ${newKB.name}`);
+        knowledgeBase.value = newKB;
+      } else if (!newKB && knowledgeBase.value) {
+        console.log(`📚 KB removed from dialog`);
+        knowledgeBase.value = null;
+      }
+    });
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
