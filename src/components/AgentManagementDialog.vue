@@ -3411,22 +3411,7 @@ export default defineComponent({
       }
     };
 
-    // Refresh agent data to get updated knowledge base list
-    const refreshAgentData = async () => {
-      try {
-        // Refresh the current agent data using the current-agent endpoint
-        const response = await fetch(`${API_BASE_URL}/current-agent`, { credentials: 'include' });
-        if (response.ok) {
-          const result = await response.json();
-          if (result.agent) {
-            currentAgent.value = result.agent;
-            console.log('[*] Agent data refreshed with', result.agent.knowledgeBases?.length || 0, 'connected KBs');
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error refreshing agent data:', error);
-      }
-    };
+    // Note: refreshAgentData function removed - agent data is now updated via props from parent component
 
     // Attach knowledge base to current agent
     const attachKnowledgeBaseToAgent = async (kbId: string, jobStatus: any) => {
@@ -3462,8 +3447,7 @@ export default defineComponent({
           const result = await response.json();
           console.log(`✅ Knowledge base attached to agent successfully:`, result);
           
-          // Refresh agent data to show updated KB list
-          await refreshAgentData();
+          // Agent data will be updated via props from parent component
           
           // Don't emit refresh-agent-data to prevent overriding the current agent
           // emit("refresh-agent-data");
@@ -3561,8 +3545,7 @@ export default defineComponent({
           message: `Knowledge base "${kb.name}" detached from agent.`,
         });
 
-        // Refresh agent data to show updated KB list
-        await refreshAgentData();
+        // Agent data will be updated via props from parent component
         
         // Emit event to parent to update agent badge
         emit("agent-updated", currentAgent.value);
@@ -3665,8 +3648,7 @@ export default defineComponent({
           });
         }
 
-        // Refresh agent data to show updated KB list
-        await refreshAgentData();
+        // Agent data will be updated via props from parent component
         
         // Emit event to parent to update agent badge
         emit("agent-updated", currentAgent.value);
