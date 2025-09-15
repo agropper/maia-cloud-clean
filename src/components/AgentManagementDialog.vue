@@ -1944,49 +1944,76 @@ export default defineComponent({
           console.log("🤖 No agent configured");
         }
         } else {
-          // Authenticated user - use /current-agent endpoint which handles assigned-agent internally
+          // Authenticated user - check if they have an assigned agent
           if (localCurrentUser.value?.userId) {
-              console.log(`🔐 [DEBUG] Making /current-agent API call for authenticated user: ${localCurrentUser.value.userId}`);
+              // Regular authenticated user - check assigned agent first
+              console.log(`🔐 [DEBUG] Making assigned-agent API call for user: ${localCurrentUser.value.userId}`);
               try {
-                const currentAgentResponse = await fetch(
-                  `${API_BASE_URL}/current-agent`,
+                const assignedAgentResponse = await fetch(
+                  `${API_BASE_URL}/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
                   { credentials: 'include' }
                 );
-                console.log(`🔐 [DEBUG] /current-agent API call completed with status: ${currentAgentResponse.status}`);
-                
-                if (currentAgentResponse.ok) {
-                  const currentAgentData = await currentAgentResponse.json();
-                  if (currentAgentData.agent) {
-                    currentAgent.value = currentAgentData.agent;
-                    console.log(
-                      `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
+                console.log(`🔐 [DEBUG] assigned-agent API call completed with status: ${assignedAgentResponse.status}`);
+                if (assignedAgentResponse.ok) {
+                  const assignedAgentData = await assignedAgentResponse.json();
+                  if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
+                    // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
+                    const currentAgentResponse = await fetch(
+                      `${API_BASE_URL}/current-agent`,
+                      { credentials: 'include' }
                     );
-                    
-                    // Handle warnings from the API
-                    if (currentAgentData.warning) {
-                      console.warn(currentAgentData.warning);
+                    if (currentAgentResponse.ok) {
+                      const currentAgentData = await currentAgentResponse.json();
+                      if (currentAgentData.agent) {
+                        currentAgent.value = currentAgentData.agent;
+                        console.log(
+                          `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
+                        );
+                        
+                        // Handle warnings from the API
+                        if (currentAgentData.warning) {
+                          console.warn(currentAgentData.warning);
+                        }
+                      } else {
+                        currentAgent.value = null;
+                        console.log("🤖 No agent configured for authenticated user");
+                      }
+                    } else {
+                      // Fallback to mock agent if API fails
+                    currentAgent.value = {
+                      id: assignedAgentData.assignedAgentId,
+                      name: assignedAgentData.assignedAgentName,
+                      status: 'active',
+                      type: 'assigned',
+                      assignedAt: assignedAgentData.agentAssignedAt
+                    };
+                      console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
                     }
-                    
-                    // Only log once per session to prevent duplicates
-                    if (!hasLoggedAgentAssignment.value) {
-                      console.log(`✅ Agent Assignment Confirmed: ${currentAgentData.agent.name} (${currentAgentData.agent.id}) - Assigned: ${new Date(currentAgentData.agent.assignedAt || Date.now()).toLocaleDateString()}`);
-                      hasLoggedAgentAssignment.value = true;
-                    }
-                    
-                    // Update workflow progress - agent is created
-                    await updateWorkflowProgressForAgent();
-                  } else {
-                    currentAgent.value = null;
-                    console.log("🤖 No agent configured for authenticated user");
+                  
+                  // Only log once per session to prevent duplicates
+                  if (!hasLoggedAgentAssignment.value) {
+                    console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
+                    hasLoggedAgentAssignment.value = true;
                   }
+                  
+                  // Update workflow progress - agent is created
+                  await updateWorkflowProgressForAgent();
                 } else {
                   currentAgent.value = null;
-                  console.log("🔐 Failed to get current agent:", currentAgentResponse.status, currentAgentResponse.statusText);
+                  console.log("🔐 User has no agent assigned yet");
                 }
-              } catch (error) {
-                console.warn("🔐 Failed to get current agent:", error);
+              } else {
                 currentAgent.value = null;
+                if (assignedAgentResponse.status === 429) {
+                  console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
+                } else {
+                  console.log("🔐 Failed to check assigned agent:", assignedAgentResponse.status, assignedAgentResponse.statusText);
+                }
               }
+            } catch (error) {
+              console.warn("🔐 Failed to check assigned agent:", error);
+              currentAgent.value = null;
+            }
           } else {
             currentAgent.value = null;
             console.log("🔐 No userId available");
