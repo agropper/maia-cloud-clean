@@ -429,6 +429,11 @@ export default defineComponent({
       // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = UserService.normalizeUserObject(userData);
       
+      // Clear any cached data for the previous user to prevent cross-user contamination
+      const previousUserId = 'Public User'; // We know we're coming from Public User
+      const previousCacheKey = `current-agent-${previousUserId}`;
+      apiCallCache.delete(previousCacheKey);
+      
       // Fetch the user's current agent and KB from API to update Agent Badge
       console.log(`🔍 [DEBUG] handleUserAuthenticated - fetching current agent for user:`, currentUser.value.userId);
       await fetchCurrentAgent();
@@ -455,6 +460,11 @@ export default defineComponent({
       } catch (error) {
         console.error('❌ Backend logout failed:', error);
       }
+      
+      // Clear any cached data for the current user to prevent cross-user contamination
+      const currentUserId = currentUser.value?.userId || 'Unknown User';
+      const currentCacheKey = `current-agent-${currentUserId}`;
+      apiCallCache.delete(currentCacheKey);
       
       // Set to Public User instead of null (there should never be "no user")
       currentUser.value = UserService.createPublicUser();
