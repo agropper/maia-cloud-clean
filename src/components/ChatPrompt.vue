@@ -255,7 +255,8 @@ export default defineComponent({
           window.location.href = data.redirectTo;
           return;
         } else {
-          // console.log(`❌ [ChatPrompt] No authenticated user found`);
+          console.log(`❌ [ChatPrompt] No authenticated user found - auth response:`, data);
+          console.log(`🔍 [DEBUG] Current user before setting to Public User:`, currentUser.value);
           // currentUser.value is already set to Public User by default
         }
       } catch (error) {
