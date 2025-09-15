@@ -3391,6 +3391,20 @@ app.get('/api/current-agent', async (req, res) => {
     // Get current user from session if available
     let currentUser = req.session?.userId || 'Public User';
     console.log(`🔍 [BACKEND DEBUG] /current-agent endpoint called for user: ${currentUser} at ${new Date().toISOString()}`);
+    console.log(`🔍 [CACHE DEBUG] Checking UserStateManager cache for user: ${currentUser}`);
+    
+    // Check if user is in cache
+    const cachedUser = UserStateManager.getUser(currentUser);
+    if (cachedUser) {
+      console.log(`🔍 [CACHE DEBUG] User found in cache:`, {
+        currentAgentId: cachedUser.currentAgentId,
+        currentAgentName: cachedUser.currentAgentName,
+        assignedAgentId: cachedUser.assignedAgentId,
+        assignedAgentName: cachedUser.assignedAgentName
+      });
+    } else {
+      console.log(`🔍 [CACHE DEBUG] User NOT found in cache, will fetch from database`);
+    }
     // console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
 //     console.log(`🔍 [current-agent] Session data:`, {
 //       hasSession: !!req.session,
@@ -3694,6 +3708,12 @@ app.get('/api/current-agent', async (req, res) => {
     if (warning) {
       response.warning = warning;
     }
+
+    console.log(`🔍 [CACHE DEBUG] Returning agent data:`, {
+      agentId: transformedAgent?.id,
+      agentName: transformedAgent?.name,
+      agentUuid: transformedAgent?.uuid
+    });
 
     res.json(response);
   } catch (error) {
@@ -4468,9 +4488,12 @@ app.post('/api/current-agent', async (req, res) => {
 //         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
         
         // Clear the user from cache first to force fresh data on next GET request
+        console.log(`🔍 [CACHE DEBUG] Clearing cache for user: ${currentUser}`);
         UserStateManager.removeUser(currentUser);
+        console.log(`🔍 [CACHE DEBUG] Cache cleared for user: ${currentUser}`);
         
         // Update user state cache - map current agent to assigned agent for consistency
+        console.log(`🔍 [CACHE DEBUG] Updating cache for user: ${currentUser} with agent: ${selectedAgent.name}`);
         UserStateManager.updateUserStateSection(currentUser, 'agent', {
           currentAgentId: selectedAgent.uuid,
           currentAgentName: selectedAgent.name,
@@ -4479,14 +4502,15 @@ app.post('/api/current-agent', async (req, res) => {
           assignedAgentId: selectedAgent.uuid, // Map current to assigned
           assignedAgentName: selectedAgent.name // Map current to assigned
         });
+        console.log(`🔍 [CACHE DEBUG] Cache updated for user: ${currentUser}`);
         
         // Debug: Verify the document was saved correctly
         const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
-//         console.log(`🔍 [DEBUG] Verification - user document after save:`, {
-//           currentAgentId: verifyDoc.currentAgentId,
-//           currentAgentName: verifyDoc.currentAgentName,
-//           currentAgentSetAt: verifyDoc.currentAgentSetAt
-//         });
+        console.log(`🔍 [DB DEBUG] User document after save:`, {
+          currentAgentId: verifyDoc.currentAgentId,
+          currentAgentName: verifyDoc.currentAgentName,
+          currentAgentSetAt: verifyDoc.currentAgentSetAt
+        });
       } catch (userError) {
         console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
       }
@@ -4523,9 +4547,12 @@ app.post('/api/current-agent', async (req, res) => {
 //         console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
         
         // Clear the user from cache first to force fresh data on next GET request
+        console.log(`🔍 [CACHE DEBUG] Clearing cache for Public User`);
         UserStateManager.removeUser('Public User');
+        console.log(`🔍 [CACHE DEBUG] Cache cleared for Public User`);
         
         // Update user state cache for Public User - map current agent to assigned agent for consistency
+        console.log(`🔍 [CACHE DEBUG] Updating cache for Public User with agent: ${selectedAgent.name}`);
         UserStateManager.updateUserStateSection('Public User', 'agent', {
           currentAgentId: selectedAgent.uuid,
           currentAgentName: selectedAgent.name,
@@ -4533,6 +4560,15 @@ app.post('/api/current-agent', async (req, res) => {
           currentAgentSetAt: new Date().toISOString(),
           assignedAgentId: selectedAgent.uuid, // Map current to assigned
           assignedAgentName: selectedAgent.name // Map current to assigned
+        });
+        console.log(`🔍 [CACHE DEBUG] Cache updated for Public User`);
+        
+        // Debug: Verify the document was saved correctly
+        const verifyDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+        console.log(`🔍 [DB DEBUG] Public User document after save:`, {
+          currentAgentId: verifyDoc.currentAgentId,
+          currentAgentName: verifyDoc.currentAgentName,
+          currentAgentSetAt: verifyDoc.currentAgentSetAt
         });
       } catch (userError) {
         console.error(`❌ Failed to store current agent selection for Public User:`, userError);
