@@ -164,14 +164,8 @@ export default defineComponent({
         const expectedPrefix = `${currentUserId}-agent-`;
         
         if (!agentName.startsWith(expectedPrefix)) {
-          // Check if this is a public agent during user transition - allow temporarily
-          if (agentName.startsWith('public-')) {
-            console.warn(`⚠️ [TRANSITION] User ${currentUserId} temporarily seeing public agent ${agentName} during sign-in transition`);
-            // Don't throw error, just log warning and continue
-          } else {
-            console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
-            throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
-          }
+          console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
+          throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
         }
       }
       
