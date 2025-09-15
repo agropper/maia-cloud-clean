@@ -3565,7 +3565,22 @@ export default defineComponent({
           message: `Knowledge base "${kb.name}" detached from agent.`,
         });
 
-        // Agent data will be updated via props from parent component
+        // Update local agent state to reflect KB detachment
+        if (currentAgent.value) {
+          // Remove the KB from the agent's knowledgeBases array
+          if (currentAgent.value.knowledgeBases) {
+            currentAgent.value.knowledgeBases = currentAgent.value.knowledgeBases.filter(
+              (agentKb: any) => agentKb.uuid !== kb.uuid
+            );
+          }
+          // Clear the single knowledgeBase property if it matches
+          if (currentAgent.value.knowledgeBase && currentAgent.value.knowledgeBase.uuid === kb.uuid) {
+            currentAgent.value.knowledgeBase = null;
+          }
+        }
+        
+        // Update local knowledge base state
+        knowledgeBase.value = null;
         
         // Emit event to parent to update agent badge
         emit("agent-updated", currentAgent.value);
@@ -3668,7 +3683,25 @@ export default defineComponent({
           });
         }
 
-        // Agent data will be updated via props from parent component
+        // Update local agent state to reflect KB connection
+        if (currentAgent.value) {
+          // Add the KB to the agent's knowledgeBases array
+          if (!currentAgent.value.knowledgeBases) {
+            currentAgent.value.knowledgeBases = [];
+          }
+          // Check if KB is not already in the array
+          const existingKb = currentAgent.value.knowledgeBases.find(
+            (agentKb: any) => agentKb.uuid === kb.uuid
+          );
+          if (!existingKb) {
+            currentAgent.value.knowledgeBases.push(kb);
+          }
+          // Set as single knowledgeBase property
+          currentAgent.value.knowledgeBase = kb;
+        }
+        
+        // Update local knowledge base state
+        knowledgeBase.value = kb;
         
         // Emit event to parent to update agent badge
         emit("agent-updated", currentAgent.value);
