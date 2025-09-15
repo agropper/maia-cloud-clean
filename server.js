@@ -3563,23 +3563,32 @@ app.get('/api/current-agent', async (req, res) => {
       if (currentUser !== 'Unknown User') {
         // Check if user has a current agent selection stored in Cloudant
         try {
-          let userDoc = getCache('users', currentUser);
-          if (!isCacheValid('users', currentUser)) {
-            userDoc = await couchDBClient.getDocument('maia_users', currentUser);
-            if (userDoc) {
-              setCache('users', currentUser, userDoc);
-            }
-          }
-          if (userDoc && userDoc.currentAgentId) {
-            agentId = userDoc.currentAgentId;
-            // console.log(`🔐 [current-agent] Using user's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+          // First try UserStateManager cache (updated by POST endpoint)
+          const cachedUser = UserStateManager.getUserState(currentUser);
+          if (cachedUser && cachedUser.currentAgentId) {
+            agentId = cachedUser.currentAgentId;
+            console.log(`🔍 [CACHE DEBUG] Using cached agent from UserStateManager: ${cachedUser.currentAgentName} (${agentId})`);
           } else {
-            // No current agent selection found for user
-            return res.json({ 
-              agent: null, 
-              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
-              requiresAgentSelection: true
-            });
+            // Fallback to database if not in UserStateManager cache
+            console.log(`🔍 [CACHE DEBUG] UserStateManager cache miss, fetching from database`);
+            let userDoc = getCache('users', currentUser);
+            if (!isCacheValid('users', currentUser)) {
+              userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+              if (userDoc) {
+                setCache('users', currentUser, userDoc);
+              }
+            }
+            if (userDoc && userDoc.currentAgentId) {
+              agentId = userDoc.currentAgentId;
+              console.log(`🔍 [CACHE DEBUG] Using database agent: ${userDoc.currentAgentName} (${agentId})`);
+            } else {
+              // No current agent selection found for user
+              return res.json({ 
+                agent: null, 
+                message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+                requiresAgentSelection: true
+              });
+            }
           }
         } catch (userError) {
           console.warn(`Failed to get current agent selection for user ${currentUser}:`, userError.message);
