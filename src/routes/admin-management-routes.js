@@ -300,39 +300,28 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
+    // Clear UserStateManager cache to ensure fresh data
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      userStateManager.clearCache();
+      console.log('🔍 [CACHE] Cleared UserStateManager cache for fresh Admin Panel data');
+    }
+    
     // Get all users from maia_users database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
-    console.log(`🔍 [DEBUG] Total documents in maia_users: ${allUsers.length}`);
-    
-    // Log some sample documents to understand what we're getting
-    const sampleDocs = allUsers.slice(0, 5).map(doc => ({
-      _id: doc._id,
-      isAdmin: doc.isAdmin,
-      hasCredentialID: !!doc.credentialID,
-      type: doc.type || 'unknown'
-    }));
-    console.log('🔍 [DEBUG] Sample documents:', sampleDocs);
     
     const users = allUsers
       .filter(user => {
         // Exclude design documents only (Public User should be included)
         if (user._id.startsWith('_design/')) {
-          console.log(`🔍 [DEBUG] Excluding: ${user._id} (design doc)`);
           return false;
         }
         // For wed271, allow it through even if it has isAdmin: true (special case)
         if (user._id === 'wed271') {
-          console.log('🔍 [SPECIAL] Including wed271 despite admin status:', {
-            userId: user._id,
-            isAdmin: user.isAdmin
-          });
           return true;
         }
         // For all other users, exclude admin users
         const isAdmin = user.isAdmin;
-        if (isAdmin) {
-          console.log(`🔍 [DEBUG] Excluding admin user: ${user._id}`);
-        }
         return !isAdmin;
       })
       .map(user => {
@@ -378,11 +367,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
-    console.log(`🔍 [DEBUG] Final filtered users count: ${users.length}`);
-    console.log(`🔍 [DEBUG] Users by workflow stage:`, users.reduce((acc, user) => {
-      acc[user.workflowStage] = (acc[user.workflowStage] || 0) + 1;
-      return acc;
-    }, {}));
+    // Admin Panel data loaded
     
     res.json({ users });
     
@@ -1188,14 +1173,12 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     
     // Allow clearing agent by setting agentId and agentName to null
     if (agentId === null && agentName === null) {
-      console.log(`🔧 [DB] Clearing assigned agent for user ${userId}`);
+      // Clearing agent assignment
     } else if (!agentId || !agentName) {
       return res.status(400).json({ 
         error: 'Missing required fields: agentId, agentName (or set both to null to clear)' 
       });
     }
-    
-    console.log(`🔧 [DB] Updating assigned agent for user ${userId}: ${agentName} (${agentId})`);
     
     // Get user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
@@ -1229,7 +1212,6 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
       });
     }
     
-    console.log(`✅ [DB] Successfully updated assigned agent for user ${userId}`);
     
     res.json({
       success: true,
@@ -1367,8 +1349,6 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
       return res.status(400).json({ error: 'userId query parameter is required' });
     }
     
-    console.log(`🔍 [DB] Checking agent assignment status for user: ${userId}`);
-    
     // Get user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
@@ -1398,7 +1378,6 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
       }
     }
     
-    console.log(`✅ [DB] Agent status for user ${userId}:`, status);
     
     res.json({
       success: true,

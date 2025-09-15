@@ -646,7 +646,7 @@
           label="Cloudant Dashboard"
         />
         <QBtn
-          @click="runDatabaseConsistencyCheck"
+          @click="runManualConsistencyCheck"
           color="warning"
           outline
           icon="database"
@@ -813,24 +813,13 @@ export default defineComponent({
 
     const checkAdminStatus = async () => {
       try {
-        // Use the health endpoint instead of the users endpoint for admin status check
+        // Use the health endpoint for admin status check
         const response = await fetch('/api/admin-management/health');
         if (response.ok) {
           const healthData = await response.json();
-          // If we can access the health endpoint, the system is ready
-          // Now check if current user is admin by trying to get users
-          try {
-            const usersResponse = await fetch('/api/user-state/all');
-            if (usersResponse.ok) {
-              isAdmin.value = true;
-              await loadUsers();
-            } else if (usersResponse.status === 401 || usersResponse.status === 403) {
-              isAdmin.value = false;
-            }
-          } catch (usersError) {
-            console.log('User not authenticated as admin');
-            isAdmin.value = false;
-          }
+          // If we can access the health endpoint, the user is admin
+          isAdmin.value = true;
+          await loadUsers();
         } else {
           isAdmin.value = false;
         }
@@ -979,11 +968,11 @@ export default defineComponent({
       
       isLoading.value = true;
       try {
-        const response = await fetch('/api/user-state/all');
+        const response = await fetch('/api/admin-management/users');
         if (response.ok) {
           const data = await response.json();
           users.value = data.users;
-          console.log(`✅ [Browser] Admin Panel: Loaded ${users.value.length} users from unified state`);
+          console.log(`✅ [Browser] Admin Panel: Loaded ${users.value.length} users from admin management`);
         } else {
           const errorData = await response.json().catch(() => ({}));
           
@@ -1563,23 +1552,15 @@ export default defineComponent({
     };
 
     // Chat count loading function
-    const loadChatCountsForAgents = async (agents, usersData) => {
+    const loadChatCountsForAgents = async (agents) => {
       try {
         const { getAllGroupChats } = useGroupChat();
         const allGroups = await getAllGroupChats();
         
         // Update chat counts for each agent
         for (const agent of agents) {
-          // Find the user who owns this agent by checking assignedAgentId/assignedAgentName
-          const userWithAgent = usersData.find(user => 
-            user.assignedAgentId === agent.id || 
-            (user.assignedAgentName && user.assignedAgentName === agent.name)
-          );
-          
-          let ownerName = 'Public User';
-          if (userWithAgent) {
-            ownerName = userWithAgent.displayName || userWithAgent.userId;
-          }
+          // Use the owner field that was already determined from agent name pattern
+          const ownerName = agent.owner || 'Public User';
           
           // Filter groups by the owner - use same logic as patient view for consistency
           const filteredGroups = allGroups.filter(group => {
@@ -1605,23 +1586,15 @@ export default defineComponent({
     };
     
     // Load last activity for agents
-    const loadLastActivityForAgents = async (agents, usersData) => {
+    const loadLastActivityForAgents = async (agents) => {
       try {
         // Get long-term activity from saved chats (this works reliably)
         const { getAllGroupChats } = useGroupChat();
         const allGroups = await getAllGroupChats();
         
         for (const agent of agents) {
-          // Find the user who owns this agent
-          const userWithAgent = usersData.find(user => 
-            user.currentAgentId === agent.id || 
-            (user.currentAgentName && user.currentAgentName === agent.name)
-          );
-          
-          let ownerName = 'Public User';
-          if (userWithAgent) {
-            ownerName = userWithAgent.displayName || userWithAgent.userId;
-          }
+          // Use the owner field that was already determined from agent name pattern
+          const ownerName = agent.owner || 'Public User';
           
           // Get chats for this owner - use same logic as patient view for consistency
           const ownerChats = allGroups.filter(group => {
@@ -1740,29 +1713,20 @@ export default defineComponent({
       isLoadingAgentsPatients.value = true;
       try {
         // Use the same API call as Agent Badge - get ALL agents without filtering
-        const agentsResponse = await fetch('/api/agents?user=admin');
+        // Add cache-busting parameter to ensure fresh data
+        const agentsResponse = await fetch(`/api/agents?user=admin&_t=${Date.now()}`);
         if (!agentsResponse.ok) {
           throw new Error('Failed to load agents');
         }
         const agentsData = await agentsResponse.json();
         
+        // DO API agents and KBs state loaded
         
-        // Get user data to determine ownership
-        let usersData = [];
-        try {
-          const usersResponse = await fetch('/api/user-state/all');
-          if (usersResponse.ok) {
-            const usersResult = await usersResponse.json();
-            usersData = usersResult.users || [];
-          }
-        } catch (error) {
-          console.error('Error fetching users for ownership:', error);
-        }
         
         // Process each agent - knowledge bases are already included from DigitalOcean API
         const processedAgents = agentsData.map((agent) => {
           let patientName = 'No Knowledge Base';
-          let owner = 'Public Agent'; // Default for agents without assigned users
+          let owner = 'Public User'; // Default for agents without assigned users
           
           // Knowledge bases are already included in the agent data from DigitalOcean API
           if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
@@ -1777,16 +1741,15 @@ export default defineComponent({
             }
           }
           
-          // Determine owner: Use Display Name if there's a current agent, otherwise "Public Agent"
-          const userWithAgent = usersData.find(user => 
-            user.currentAgentId === agent.id || 
-            (user.currentAgentName && user.currentAgentName === agent.name)
-          );
-          
-          if (userWithAgent) {
-            owner = userWithAgent.displayName || userWithAgent.userId;
-          } else {
+          // Determine owner from agent name pattern
+          if (agent.name.startsWith('public-')) {
             owner = 'Public User';
+          } else if (agent.name.includes('-agent-')) {
+            // Extract user ID from agent name pattern: {userId}-agent-{date}
+            const userId = agent.name.split('-agent-')[0];
+            owner = userId;
+          } else {
+            owner = 'Unknown';
           }
           
           return {
@@ -1802,10 +1765,10 @@ export default defineComponent({
         });
         
         // Load chat counts for each agent
-        await loadChatCountsForAgents(processedAgents, usersData);
+        await loadChatCountsForAgents(processedAgents);
         
         // Load last activity for each agent
-        await loadLastActivityForAgents(processedAgents, usersData);
+        await loadLastActivityForAgents(processedAgents);
         
         agentsAndPatients.value = processedAgents;
         
@@ -1825,14 +1788,12 @@ export default defineComponent({
       isRunningConsistencyCheck.value = true;
       
       try {
-        console.log('🔍 [Admin Panel] Running database consistency check...');
-        
         // Get all users and their current agent assignments
         const usersResponse = await fetch('/api/admin-management/users');
         const usersData = await usersResponse.json();
         
-        // Get all agents from DO API
-        const agentsResponse = await fetch('/api/agents');
+        // Get all agents from DO API (admin gets all agents)
+        const agentsResponse = await fetch('/api/agents?user=admin');
         const agentsData = await agentsResponse.json();
         
         // Validate response data
@@ -1846,78 +1807,56 @@ export default defineComponent({
         
         const inconsistencies = [];
         
-        // Check each user's agent assignment
+        // Simple logic: For each user with an assignedAgentId, check if the name matches DO API
         for (const user of usersData.users) {
-          const userId = user._id;
-          const currentAgentId = user.currentAgentId;
+          const userId = user.userId; // Use userId field, not _id
           const assignedAgentId = user.assignedAgentId;
+          const assignedAgentName = user.assignedAgentName;
           
-          // Check if user has an agent assigned
-          if (!assignedAgentId) {
-            let expectedAgentName;
-            let matchingAgent;
+          if (assignedAgentId) {
+            // Look up the agent in DO API by ID
+            const doAgent = agentsData.find(agent => agent.id === assignedAgentId);
             
-            if (userId === 'Public User') {
-              // Public User should have a public-* agent
-              expectedAgentName = `public-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-              matchingAgent = agentsData.find(agent => 
-                agent.name === expectedAgentName || 
-                agent.name.startsWith('public-agent-')
-              );
-            } else {
-              // Regular users should have {userId}-agent-* pattern
-              expectedAgentName = `${user.displayName || userId}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-              matchingAgent = agentsData.find(agent => 
-                agent.name === expectedAgentName || 
-                agent.name.startsWith(`${user.displayName || userId}-agent-`)
-              );
-            }
-            
-            if (matchingAgent) {
-              inconsistencies.push({
-                type: 'missing_assignment',
-                userId: userId,
-                userName: user.displayName || userId,
-                agentId: matchingAgent.uuid,
-                agentName: matchingAgent.name,
-                message: `User ${user.displayName || userId} should be assigned agent ${matchingAgent.name}`
-              });
-            }
-          } else {
-            // Check if assigned agent exists in DO API
-            const assignedAgent = agentsData.find(agent => agent.uuid === assignedAgentId);
-            if (!assignedAgent) {
+            if (!doAgent) {
+              // Agent doesn't exist in DO API - clear the assignment
               inconsistencies.push({
                 type: 'orphaned_assignment',
                 userId: userId,
                 userName: user.displayName || userId,
                 agentId: assignedAgentId,
-                agentName: user.assignedAgentName || 'Unknown',
+                agentName: assignedAgentName || 'Unknown',
                 message: `User ${user.displayName || userId} has assigned agent ${assignedAgentId} that doesn't exist in DO API`
               });
+            } else if (doAgent.name !== assignedAgentName) {
+              // Agent exists but name doesn't match - fix the name
+              inconsistencies.push({
+                type: 'name_mismatch',
+                userId: userId,
+                userName: user.displayName || userId,
+                agentId: assignedAgentId,
+                currentAgentName: assignedAgentName || 'Unknown',
+                correctAgentName: doAgent.name,
+                message: `User ${user.displayName || userId} has wrong agent name: "${assignedAgentName}" should be "${doAgent.name}"`
+              });
             }
+            // If agent exists and name matches, no inconsistency
           }
         }
         
-        // Check for security violations (cross-user assignments)
-        for (const user of usersData.users) {
-          if (user.assignedAgentId) {
-            const assignedAgent = agentsData.find(agent => agent.uuid === user.assignedAgentId);
-            if (assignedAgent) {
-              const expectedPrefix = user._id === 'Public User' ? 'public-' : `${user._id}-agent-`;
-              if (!assignedAgent.name.startsWith(expectedPrefix)) {
-                inconsistencies.push({
-                  type: 'security_violation',
-                  userId: user._id,
-                  userName: user.displayName || user._id,
-                  agentId: user.assignedAgentId,
-                  agentName: assignedAgent.name,
-                  message: `SECURITY: User ${user._id} assigned agent ${assignedAgent.name} does not match expected pattern ${expectedPrefix}`
-                });
-              }
-            }
-          }
-        }
+        return inconsistencies;
+        
+      } catch (error) {
+        console.error('❌ [Admin Panel] Database consistency check failed:', error);
+        throw error;
+      } finally {
+        isRunningConsistencyCheck.value = false;
+      }
+    };
+    
+    // Manual consistency check with UI notifications
+    const runManualConsistencyCheck = async () => {
+      try {
+        const inconsistencies = await runDatabaseConsistencyCheck();
         
         if (inconsistencies.length === 0) {
           $q.notify({
@@ -1927,8 +1866,6 @@ export default defineComponent({
           });
         } else {
           // Show inconsistencies and offer to fix them
-          console.log('🔍 [Admin Panel] Found inconsistencies:', inconsistencies);
-          
           const inconsistencyMessages = inconsistencies.map(issue => 
             `• ${issue.message}`
           ).join('\n');
@@ -1947,20 +1884,13 @@ export default defineComponent({
               }
             ]
           });
-          
-          // Also log detailed info
-          console.log('🔍 [Admin Panel] Inconsistency details:', inconsistencyMessages);
         }
-        
       } catch (error) {
-        console.error('❌ [Admin Panel] Database consistency check failed:', error);
         $q.notify({
           type: 'negative',
           message: `Database consistency check failed: ${error.message}`,
           timeout: 5000
         });
-      } finally {
-        isRunningConsistencyCheck.value = false;
       }
     };
     
@@ -2014,27 +1944,7 @@ export default defineComponent({
         console.log('🔧 [Admin Panel] Fixing consistency issues...');
         
         for (const issue of inconsistencies) {
-          if (issue.type === 'missing_assignment') {
-            // Assign the correct agent to the user
-            const response = await fetch('/api/admin-management/database/update-user-agent', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer admin' // Use admin auth
-              },
-              body: JSON.stringify({
-                userId: issue.userId,
-                agentId: issue.agentId,
-                agentName: issue.agentName
-              })
-            });
-            
-            if (response.ok) {
-              console.log(`✅ Fixed missing assignment for ${issue.userName}: ${issue.agentName}`);
-            } else {
-              console.error(`❌ Failed to fix assignment for ${issue.userName}`);
-            }
-          } else if (issue.type === 'orphaned_assignment') {
+          if (issue.type === 'orphaned_assignment') {
             // Clear the orphaned assignment
             const response = await fetch('/api/admin-management/database/update-user-agent', {
               method: 'POST',
@@ -2051,8 +1961,62 @@ export default defineComponent({
             
             if (response.ok) {
               console.log(`✅ Cleared orphaned assignment for ${issue.userName}`);
+              
+              // Verify the fix by checking the user's current state
+              try {
+                const verifyResponse = await fetch(`/api/admin-management/database/user-agent-status?userId=${issue.userId}`);
+                if (verifyResponse.ok) {
+                  const verifyData = await verifyResponse.json();
+                  console.log(`🔍 [VERIFY] User ${issue.userName} after fix:`, {
+                    assignedAgentId: verifyData.status.assignedAgentId,
+                    assignedAgentName: verifyData.status.assignedAgentName,
+                    currentAgentId: verifyData.status.currentAgentId,
+                    currentAgentName: verifyData.status.currentAgentName
+                  });
+                }
+              } catch (verifyError) {
+                console.error(`❌ Failed to verify fix for ${issue.userName}:`, verifyError);
+              }
             } else {
               console.error(`❌ Failed to clear orphaned assignment for ${issue.userName}`);
+            }
+          } else if (issue.type === 'name_mismatch') {
+            // Fix the agent name mismatch
+            const requestBody = {
+              userId: issue.userId,
+              agentId: issue.agentId,
+              agentName: issue.correctAgentName
+            };
+            
+            const response = await fetch('/api/admin-management/database/update-user-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer admin'
+              },
+              body: JSON.stringify(requestBody)
+            });
+            
+            if (response.ok) {
+              console.log(`✅ Fixed agent name mismatch for ${issue.userName}: ${issue.currentAgentName} → ${issue.correctAgentName}`);
+              
+              // Verify the fix by checking the user's current state
+              try {
+                const verifyResponse = await fetch(`/api/admin-management/database/user-agent-status?userId=${issue.userId}`);
+                if (verifyResponse.ok) {
+                  const verifyData = await verifyResponse.json();
+                  console.log(`🔍 [VERIFY] User ${issue.userName} after fix:`, {
+                    assignedAgentId: verifyData.status.assignedAgentId,
+                    assignedAgentName: verifyData.status.assignedAgentName,
+                    currentAgentId: verifyData.status.currentAgentId,
+                    currentAgentName: verifyData.status.currentAgentName
+                  });
+                }
+              } catch (verifyError) {
+                console.error(`❌ Failed to verify fix for ${issue.userName}:`, verifyError);
+              }
+            } else {
+              console.error(`❌ Failed to fix agent name mismatch for ${issue.userName}`);
             }
           } else if (issue.type === 'security_violation') {
             // Clear the security violation
@@ -2071,21 +2035,77 @@ export default defineComponent({
             
             if (response.ok) {
               console.log(`✅ Cleared security violation for ${issue.userName}`);
+              
+              // Verify the fix by checking the user's current state
+              try {
+                const verifyResponse = await fetch(`/api/admin-management/database/user-agent-status?userId=${issue.userId}`);
+                if (verifyResponse.ok) {
+                  const verifyData = await verifyResponse.json();
+                  console.log(`🔍 [VERIFY] User ${issue.userName} after fix:`, {
+                    assignedAgentId: verifyData.status.assignedAgentId,
+                    assignedAgentName: verifyData.status.assignedAgentName,
+                    currentAgentId: verifyData.status.currentAgentId,
+                    currentAgentName: verifyData.status.currentAgentName
+                  });
+                }
+              } catch (verifyError) {
+                console.error(`❌ Failed to verify fix for ${issue.userName}:`, verifyError);
+              }
             } else {
               console.error(`❌ Failed to clear security violation for ${issue.userName}`);
             }
           }
         }
         
-        $q.notify({
-          type: 'positive',
-          message: `✅ Fixed ${inconsistencies.length} consistency issue(s)!`,
-          timeout: 3000
-        });
+        // Final verification: Check database state after fixes
+        try {
+          const finalUsersResponse = await fetch('/api/admin-management/users');
+          if (finalUsersResponse.ok) {
+            const finalUsersData = await finalUsersResponse.json();
+            // Database state verified
+          }
+        } catch (verifyError) {
+          console.error('❌ Failed to verify final database state:', verifyError);
+        }
         
         // Reload the data to reflect changes
         await loadUsers();
         await loadAgentsAndPatients();
+        
+        // Re-run consistency check to validate fixes
+        try {
+          const validationInconsistencies = await runDatabaseConsistencyCheck();
+          
+          if (validationInconsistencies && validationInconsistencies.length === 0) {
+            // Show success message only after validation confirms no issues
+            $q.notify({
+              type: 'positive',
+              message: '✅ Database consistency issues fixed successfully! All issues resolved.',
+              timeout: 3000
+            });
+          } else if (validationInconsistencies && validationInconsistencies.length > 0) {
+            // Show warning if issues still remain
+            $q.notify({
+              type: 'warning',
+              message: `⚠️ Fixed some issues, but ${validationInconsistencies.length} inconsistencies still remain. Please try again.`,
+              timeout: 5000
+            });
+          } else {
+            // Fallback if validationInconsistencies is undefined/null
+            $q.notify({
+              type: 'positive',
+              message: '✅ Database consistency issues fixed successfully!',
+              timeout: 3000
+            });
+          }
+        } catch (validationError) {
+          console.error('❌ [Admin Panel] Validation check failed:', validationError);
+          $q.notify({
+            type: 'warning',
+            message: '⚠️ Fixes applied but validation check failed. Please verify manually.',
+            timeout: 5000
+          });
+        }
         
       } catch (error) {
         console.error('❌ [Admin Panel] Failed to fix consistency issues:', error);
@@ -2105,6 +2125,18 @@ export default defineComponent({
       // Load agents and patients when admin is available
       if (isAdmin.value) {
         await loadAgentsAndPatients();
+        
+        // Run automatic consistency check
+        try {
+          const inconsistencies = await runDatabaseConsistencyCheck();
+          if (inconsistencies.length === 0) {
+            console.log('✅ [Admin Panel] Database consistency check passed - no issues found');
+          } else {
+            console.log(`⚠️ [Admin Panel] Found ${inconsistencies.length} inconsistencies on load`);
+          }
+        } catch (error) {
+          console.error('❌ [Admin Panel] Automatic consistency check failed:', error);
+        }
       }
     });
     
@@ -2202,7 +2234,8 @@ export default defineComponent({
       goToMainApp,
       signOut,
       cloudantDashboardUrl,
-      runDatabaseConsistencyCheck
+      runDatabaseConsistencyCheck,
+      runManualConsistencyCheck
     };
   }
 });

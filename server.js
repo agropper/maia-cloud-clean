@@ -3022,6 +3022,8 @@ app.get('/api/agents', async (req, res) => {
     // Transform agents to match frontend expectations and include knowledge bases
     // Note: The /v2/gen-ai/agents endpoint doesn't include knowledge base details
     // We need to fetch each agent individually to get knowledge base information
+    // DO API agents and KBs state loaded
+    
     const allAgents = await Promise.all((agents.agents || []).map(async (agent) => {
       // Debug: Log the raw agent data from DigitalOcean API
 //       console.log(`🔍 [DEBUG] Raw agent data from DigitalOcean API:`, {
@@ -3062,6 +3064,16 @@ app.get('/api/agents', async (req, res) => {
       updated_at: agent.updated_at
       };
     }));
+    
+    // DEBUG: Log each agent with its KBs
+    allAgents.forEach(agent => {
+      const agentName = (agent.name || 'Unknown').padEnd(28);
+      const agentId = (agent.id || 'Unknown').padEnd(15);
+      const kbCount = (agent.knowledgeBases?.length || 0).toString().padEnd(9);
+      const kbNames = agent.knowledgeBases?.slice(0, 2).map(kb => kb.name).join(', ') || 'None';
+      const kbNamesTruncated = kbNames.length > 25 ? kbNames.substring(0, 22) + '...' : kbNames.padEnd(25);
+      // Agent data processed
+    });
     
     // Filter agents based on user ownership
     const currentUser = req.query.user || req.session?.userId || 'Public User';
