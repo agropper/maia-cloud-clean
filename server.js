@@ -3394,7 +3394,7 @@ app.get('/api/current-agent', async (req, res) => {
     console.log(`🔍 [CACHE DEBUG] Checking UserStateManager cache for user: ${currentUser}`);
     
     // Check if user is in cache
-    const cachedUser = UserStateManager.getUser(currentUser);
+    const cachedUser = UserStateManager.getUserState(currentUser);
     if (cachedUser) {
       console.log(`🔍 [CACHE DEBUG] User found in cache:`, {
         currentAgentId: cachedUser.currentAgentId,
