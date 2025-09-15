@@ -3074,9 +3074,7 @@ app.get('/api/agents', async (req, res) => {
     if (currentUser === 'admin') {
       // console.log(`🔍 [DEBUG] Admin user - returning all agents without filtering`);
       filteredAgents = allAgents;
-    } else {
-    
-    if (currentUser === 'Public User') {
+    } else if (currentUser === 'Public User') {
       // Public User should only see agents not owned by authenticated users
       // Agents without owners effectively belong to Public User
       try {
@@ -3206,7 +3204,6 @@ app.get('/api/agents', async (req, res) => {
         console.warn(`Failed to get owned agents for ${currentUser}, showing empty list:`, error.message);
         filteredAgents = [];
       }
-    }
     }
     
     res.json(filteredAgents);
