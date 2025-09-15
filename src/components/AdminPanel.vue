@@ -1914,8 +1914,30 @@ export default defineComponent({
             timeout: 3000
           });
         } else {
-          // Show dialog with inconsistencies and fix options
-          showConsistencyCheckDialog(inconsistencies);
+          // Show inconsistencies and offer to fix them
+          console.log('🔍 [Admin Panel] Found inconsistencies:', inconsistencies);
+          
+          const inconsistencyMessages = inconsistencies.map(issue => 
+            `• ${issue.message}`
+          ).join('\n');
+          
+          $q.notify({
+            type: 'warning',
+            message: `Found ${inconsistencies.length} inconsistency(ies). Check console for details.`,
+            timeout: 5000,
+            actions: [
+              {
+                label: 'FIX ISSUES',
+                color: 'white',
+                handler: () => {
+                  fixConsistencyIssues(inconsistencies);
+                }
+              }
+            ]
+          });
+          
+          // Also log detailed info
+          console.log('🔍 [Admin Panel] Inconsistency details:', inconsistencyMessages);
         }
         
       } catch (error) {
@@ -1932,27 +1954,46 @@ export default defineComponent({
     
     // Show consistency check results dialog
     const showConsistencyCheckDialog = (inconsistencies) => {
-      $q.dialog({
-        title: '🔍 Database Consistency Check Results',
-        message: `Found ${inconsistencies.length} inconsistency(ies):`,
-        html: true,
-        ok: {
-          label: 'CANCEL',
-          color: 'grey',
-          flat: true
-        },
-        cancel: {
-          label: 'FIX ISSUES',
-          color: 'warning',
-          icon: 'build'
+      try {
+        if (!$q || !$q.dialog) {
+          console.error('❌ [Admin Panel] $q.dialog not available');
+          $q.notify({
+            type: 'negative',
+            message: 'Dialog system not available. Please refresh the page.',
+            timeout: 5000
+          });
+          return;
         }
-      }).onOk(() => {
-        // User cancelled
-        console.log('User cancelled consistency check fixes');
-      }).onCancel(() => {
-        // User wants to fix issues
-        fixConsistencyIssues(inconsistencies);
-      });
+
+        $q.dialog({
+          title: '🔍 Database Consistency Check Results',
+          message: `Found ${inconsistencies.length} inconsistency(ies):`,
+          html: true,
+          ok: {
+            label: 'CANCEL',
+            color: 'grey',
+            flat: true
+          },
+          cancel: {
+            label: 'FIX ISSUES',
+            color: 'warning',
+            icon: 'build'
+          }
+        }).onOk(() => {
+          // User cancelled
+          console.log('User cancelled consistency check fixes');
+        }).onCancel(() => {
+          // User wants to fix issues
+          fixConsistencyIssues(inconsistencies);
+        });
+      } catch (error) {
+        console.error('❌ [Admin Panel] Error showing dialog:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to show dialog: ${error.message}`,
+          timeout: 5000
+        });
+      }
     };
     
     // Fix consistency issues
