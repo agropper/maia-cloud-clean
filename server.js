@@ -4467,6 +4467,9 @@ app.post('/api/current-agent', async (req, res) => {
         await couchDBClient.saveDocument('maia_users', updatedUserDoc);
 //         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
         
+        // Clear the user from cache first to force fresh data on next GET request
+        UserStateManager.removeUser(currentUser);
+        
         // Update user state cache - map current agent to assigned agent for consistency
         UserStateManager.updateUserStateSection(currentUser, 'agent', {
           currentAgentId: selectedAgent.uuid,
@@ -4476,9 +4479,6 @@ app.post('/api/current-agent', async (req, res) => {
           assignedAgentId: selectedAgent.uuid, // Map current to assigned
           assignedAgentName: selectedAgent.name // Map current to assigned
         });
-        
-        // Clear the user from cache to force fresh data on next GET request
-        UserStateManager.removeUser(currentUser);
         
         // Debug: Verify the document was saved correctly
         const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
@@ -4522,6 +4522,9 @@ app.post('/api/current-agent', async (req, res) => {
         await couchDBClient.saveDocument('maia_users', updatedUserDoc);
 //         console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
         
+        // Clear the user from cache first to force fresh data on next GET request
+        UserStateManager.removeUser('Public User');
+        
         // Update user state cache for Public User - map current agent to assigned agent for consistency
         UserStateManager.updateUserStateSection('Public User', 'agent', {
           currentAgentId: selectedAgent.uuid,
@@ -4531,9 +4534,6 @@ app.post('/api/current-agent', async (req, res) => {
           assignedAgentId: selectedAgent.uuid, // Map current to assigned
           assignedAgentName: selectedAgent.name // Map current to assigned
         });
-        
-        // Clear the user from cache to force fresh data on next GET request
-        UserStateManager.removeUser('Public User');
       } catch (userError) {
         console.error(`❌ Failed to store current agent selection for Public User:`, userError);
       }
