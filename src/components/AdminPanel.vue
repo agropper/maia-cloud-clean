@@ -634,17 +634,26 @@
       @chatLoaded="handleChatLoaded"
     />
 
-    <!-- Cloudant Dashboard Link -->
+    <!-- Database Management Buttons -->
     <div class="q-mt-lg q-pa-md text-center">
-      <QBtn
-        :href="cloudantDashboardUrl"
-        target="_blank"
-        color="primary"
-        outline
-        icon="cloud"
-        label="Cloudant Dashboard"
-        class="q-mt-md"
-      />
+      <div class="q-gutter-md">
+        <QBtn
+          :href="cloudantDashboardUrl"
+          target="_blank"
+          color="primary"
+          outline
+          icon="cloud"
+          label="Cloudant Dashboard"
+        />
+        <QBtn
+          @click="runDatabaseConsistencyCheck"
+          color="warning"
+          outline
+          icon="database"
+          label="DATABASE CONSISTENCY CHECK"
+          :loading="isRunningConsistencyCheck"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -710,6 +719,7 @@ export default defineComponent({
     const isResettingPasskey = ref(false);
     const isLoadingAgentsPatients = ref(false);
     const isCreatingAgent = ref(false);
+    const isRunningConsistencyCheck = ref(false);
     const users = ref([]);
     const agents = ref([]);
     const selectedAgent = ref(null);
@@ -1810,6 +1820,221 @@ export default defineComponent({
       }
     };
     
+    // Database Consistency Check
+    const runDatabaseConsistencyCheck = async () => {
+      isRunningConsistencyCheck.value = true;
+      
+      try {
+        console.log('🔍 [Admin Panel] Running database consistency check...');
+        
+        // Get all users and their current agent assignments
+        const usersResponse = await fetch('/api/admin-management/users');
+        const usersData = await usersResponse.json();
+        
+        // Get all agents from DO API
+        const agentsResponse = await fetch('/api/agents');
+        const agentsData = await agentsResponse.json();
+        
+        const inconsistencies = [];
+        
+        // Check each user's agent assignment
+        for (const user of usersData.users) {
+          const userId = user._id;
+          const currentAgentId = user.currentAgentId;
+          const assignedAgentId = user.assignedAgentId;
+          
+          // Check if user has an agent assigned
+          if (!assignedAgentId) {
+            // Find matching agent in DO API based on naming convention
+            const expectedAgentName = `${user.displayName || userId}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+            const matchingAgent = agentsData.agents.find(agent => 
+              agent.name === expectedAgentName || 
+              agent.name.startsWith(`${user.displayName || userId}-agent-`)
+            );
+            
+            if (matchingAgent) {
+              inconsistencies.push({
+                type: 'missing_assignment',
+                userId: userId,
+                userName: user.displayName || userId,
+                agentId: matchingAgent.uuid,
+                agentName: matchingAgent.name,
+                message: `User ${user.displayName || userId} should be assigned agent ${matchingAgent.name}`
+              });
+            }
+          } else {
+            // Check if assigned agent exists in DO API
+            const assignedAgent = agentsData.agents.find(agent => agent.uuid === assignedAgentId);
+            if (!assignedAgent) {
+              inconsistencies.push({
+                type: 'orphaned_assignment',
+                userId: userId,
+                userName: user.displayName || userId,
+                agentId: assignedAgentId,
+                agentName: user.assignedAgentName || 'Unknown',
+                message: `User ${user.displayName || userId} has assigned agent ${assignedAgentId} that doesn't exist in DO API`
+              });
+            }
+          }
+        }
+        
+        // Check for security violations (cross-user assignments)
+        for (const user of usersData.users) {
+          if (user.assignedAgentId) {
+            const assignedAgent = agentsData.agents.find(agent => agent.uuid === user.assignedAgentId);
+            if (assignedAgent) {
+              const expectedPrefix = user._id === 'Public User' ? 'public-' : `${user._id}-agent-`;
+              if (!assignedAgent.name.startsWith(expectedPrefix)) {
+                inconsistencies.push({
+                  type: 'security_violation',
+                  userId: user._id,
+                  userName: user.displayName || user._id,
+                  agentId: user.assignedAgentId,
+                  agentName: assignedAgent.name,
+                  message: `SECURITY: User ${user._id} assigned agent ${assignedAgent.name} does not match expected pattern ${expectedPrefix}`
+                });
+              }
+            }
+          }
+        }
+        
+        if (inconsistencies.length === 0) {
+          $q.notify({
+            type: 'positive',
+            message: '✅ Database consistency check passed - no issues found!',
+            timeout: 3000
+          });
+        } else {
+          // Show dialog with inconsistencies and fix options
+          showConsistencyCheckDialog(inconsistencies);
+        }
+        
+      } catch (error) {
+        console.error('❌ [Admin Panel] Database consistency check failed:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Database consistency check failed: ${error.message}`,
+          timeout: 5000
+        });
+      } finally {
+        isRunningConsistencyCheck.value = false;
+      }
+    };
+    
+    // Show consistency check results dialog
+    const showConsistencyCheckDialog = (inconsistencies) => {
+      $q.dialog({
+        title: '🔍 Database Consistency Check Results',
+        message: `Found ${inconsistencies.length} inconsistency(ies):`,
+        html: true,
+        ok: {
+          label: 'CANCEL',
+          color: 'grey',
+          flat: true
+        },
+        cancel: {
+          label: 'FIX ISSUES',
+          color: 'warning',
+          icon: 'build'
+        }
+      }).onOk(() => {
+        // User cancelled
+        console.log('User cancelled consistency check fixes');
+      }).onCancel(() => {
+        // User wants to fix issues
+        fixConsistencyIssues(inconsistencies);
+      });
+    };
+    
+    // Fix consistency issues
+    const fixConsistencyIssues = async (inconsistencies) => {
+      try {
+        console.log('🔧 [Admin Panel] Fixing consistency issues...');
+        
+        for (const issue of inconsistencies) {
+          if (issue.type === 'missing_assignment') {
+            // Assign the correct agent to the user
+            const response = await fetch('/api/admin-management/database/update-user-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer admin' // Use admin auth
+              },
+              body: JSON.stringify({
+                userId: issue.userId,
+                agentId: issue.agentId,
+                agentName: issue.agentName
+              })
+            });
+            
+            if (response.ok) {
+              console.log(`✅ Fixed missing assignment for ${issue.userName}: ${issue.agentName}`);
+            } else {
+              console.error(`❌ Failed to fix assignment for ${issue.userName}`);
+            }
+          } else if (issue.type === 'orphaned_assignment') {
+            // Clear the orphaned assignment
+            const response = await fetch('/api/admin-management/database/update-user-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer admin'
+              },
+              body: JSON.stringify({
+                userId: issue.userId,
+                agentId: null,
+                agentName: null
+              })
+            });
+            
+            if (response.ok) {
+              console.log(`✅ Cleared orphaned assignment for ${issue.userName}`);
+            } else {
+              console.error(`❌ Failed to clear orphaned assignment for ${issue.userName}`);
+            }
+          } else if (issue.type === 'security_violation') {
+            // Clear the security violation
+            const response = await fetch('/api/admin-management/database/update-user-agent', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer admin'
+              },
+              body: JSON.stringify({
+                userId: issue.userId,
+                agentId: null,
+                agentName: null
+              })
+            });
+            
+            if (response.ok) {
+              console.log(`✅ Cleared security violation for ${issue.userName}`);
+            } else {
+              console.error(`❌ Failed to clear security violation for ${issue.userName}`);
+            }
+          }
+        }
+        
+        $q.notify({
+          type: 'positive',
+          message: `✅ Fixed ${inconsistencies.length} consistency issue(s)!`,
+          timeout: 3000
+        });
+        
+        // Reload the data to reflect changes
+        await loadUsers();
+        await loadAgentsAndPatients();
+        
+      } catch (error) {
+        console.error('❌ [Admin Panel] Failed to fix consistency issues:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to fix consistency issues: ${error.message}`,
+          timeout: 5000
+        });
+      }
+    };
+    
     // Lifecycle
     onMounted(async () => {
       checkUrlParameters();
@@ -1864,6 +2089,7 @@ export default defineComponent({
       isResettingPasskey,
       isLoadingAgentsPatients,
       isCreatingAgent,
+      isRunningConsistencyCheck,
       users,
       agents,
       selectedAgent,
@@ -1913,7 +2139,8 @@ export default defineComponent({
       goToAdminSignIn,
       goToMainApp,
       signOut,
-      cloudantDashboardUrl
+      cloudantDashboardUrl,
+      runDatabaseConsistencyCheck
     };
   }
 });
