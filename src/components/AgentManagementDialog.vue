@@ -2329,8 +2329,14 @@ export default defineComponent({
     const onDialogOpen = async () => {
       try {
         console.log(`🔐 Dialog opening - checking authentication status...`);
-      await checkAuthenticationStatus();
-      await loadAgentInfo();
+        await checkAuthenticationStatus();
+        await loadAgentInfo();
+        
+        // Check user files for authenticated users (consolidated from watcher)
+        if (isAuthenticated.value && !isDeepLinkUser.value) {
+          await checkUserFiles();
+        }
+        
         // Display current agent information (only if not already logged)
         if (currentAgent.value && !hasLoggedAgentAssignment.value) {
           console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
@@ -4164,12 +4170,8 @@ export default defineComponent({
       });
     };
 
-    // Watch for dialog opening to check files (only when dialog opens)
-    watch(showDialog, (newValue) => {
-      if (newValue && isAuthenticated.value && !isDeepLinkUser.value) {
-        checkUserFiles();
-      }
-    });
+    // Note: Dialog opening logic is consolidated in onDialogOpen function
+    // Removed duplicate watcher to prevent multiple API calls
 
     // Watch for file selection dialog opening to initialize KB selection
     watch(showChooseFilesDialog, (newValue) => {
