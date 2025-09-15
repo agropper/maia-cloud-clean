@@ -5,6 +5,51 @@ import UserStateManagerClass from '../utils/UserStateManager.js';
 // Create singleton instance
 const UserStateManager = new UserStateManagerClass();
 
+// DigitalOcean API configuration
+const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+const DIGITALOCEAN_BASE_URL = 'https://api.digitalocean.com';
+
+// DigitalOcean API request function
+const doRequest = async (endpoint, options = {}) => {
+  if (!DIGITALOCEAN_API_KEY) {
+    throw new Error('DigitalOcean API key not configured');
+  }
+
+  const url = `${DIGITALOCEAN_BASE_URL}${endpoint}`;
+  
+  const requestOptions = {
+    method: options.method || 'GET',
+    headers: {
+      'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    },
+    ...options
+  };
+
+  if (options.body) {
+    requestOptions.body = options.body;
+  }
+
+  try {
+    const response = await fetch(url, requestOptions);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ DigitalOcean API Error Response:`);
+      console.error(`Status: ${response.status}`);
+      console.error(`Headers:`, Object.fromEntries(response.headers.entries()));
+      console.error(`Body: ${errorText}`);
+      throw new Error(`DigitalOcean API error: ${response.status} - ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`❌ DigitalOcean API request failed:`, error.message);
+    throw error;
+  }
+};
+
 const router = express.Router();
 
 // CouchDB client for maia_users database
@@ -1125,6 +1170,244 @@ router.get('/agent-activities', (req, res) => {
   } catch (error) {
     console.error('Error getting agent activities:', error);
     res.status(500).json({ error: 'Failed to get agent activities' });
+  }
+});
+
+// Database Management Endpoints
+
+// Update user's assigned agent in maia_users
+router.post('/database/update-user-agent', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId, agentId, agentName } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'Missing required field: userId' 
+      });
+    }
+    
+    // Allow clearing agent by setting agentId and agentName to null
+    if (agentId === null && agentName === null) {
+      console.log(`🔧 [DB] Clearing assigned agent for user ${userId}`);
+    } else if (!agentId || !agentName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: agentId, agentName (or set both to null to clear)' 
+      });
+    }
+    
+    console.log(`🔧 [DB] Updating assigned agent for user ${userId}: ${agentName} (${agentId})`);
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update assigned agent fields
+    const updatedUserDoc = {
+      ...userDoc,
+      assignedAgentId: agentId,
+      assignedAgentName: agentName,
+      currentAgentId: agentId, // Set current to match assigned
+      currentAgentName: agentName,
+      agentAssignedAt: agentId ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save updated document
+    await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+    
+    // Update UserStateManager cache
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      userStateManager.updateUserStateSection(userId, 'agent', {
+        assignedAgentId: agentId,
+        assignedAgentName: agentName,
+        currentAgentId: agentId,
+        currentAgentName: agentName,
+        agentAssignedAt: updatedUserDoc.agentAssignedAt
+      });
+    }
+    
+    console.log(`✅ [DB] Successfully updated assigned agent for user ${userId}`);
+    
+    res.json({
+      success: true,
+      message: `Agent ${agentName} assigned to user ${userId}`,
+      userId: userId,
+      assignedAgentId: agentId,
+      assignedAgentName: agentName
+    });
+    
+  } catch (error) {
+    console.error('Error updating user agent:', error);
+    res.status(500).json({ error: 'Failed to update user agent' });
+  }
+});
+
+// Sync agent names with DO API
+router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => {
+  try {
+    console.log(`🔄 [DB] Starting agent name sync with DO API`);
+    
+    // Get all agents from DO API
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const agents = agentsResponse.agents || [];
+    
+    console.log(`🔍 [DB] Found ${agents.length} agents in DO API`);
+    
+    const syncResults = [];
+    
+    // Get all users from database
+    const usersResponse = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        assignedAgentId: { $exists: true }
+      }
+    });
+    
+    console.log(`🔍 [DB] Found ${usersResponse.docs.length} users with assigned agents`);
+    
+    for (const user of usersResponse.docs) {
+      if (!user.assignedAgentId) continue;
+      
+      // Find matching agent in DO API
+      const matchingAgent = agents.find(agent => agent.uuid === user.assignedAgentId);
+      
+      if (matchingAgent) {
+        const expectedName = `${user.displayName || user._id}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+        
+        if (matchingAgent.name !== expectedName) {
+          console.log(`🔄 [DB] Updating agent name for user ${user._id}: ${matchingAgent.name} → ${expectedName}`);
+          
+          // Update agent name in DO API
+          try {
+            await doRequest(`/v2/gen-ai/agents/${matchingAgent.uuid}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                name: expectedName
+              })
+            });
+            
+            // Update user document
+            const updatedUserDoc = {
+              ...user,
+              assignedAgentName: expectedName,
+              currentAgentName: expectedName,
+              updatedAt: new Date().toISOString()
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            
+            // Update cache
+            const userStateManager = req.app.locals.userStateManager;
+            if (userStateManager) {
+              userStateManager.updateUserStateSection(user._id, 'agent', {
+                assignedAgentName: expectedName,
+                currentAgentName: expectedName
+              });
+            }
+            
+            syncResults.push({
+              userId: user._id,
+              agentId: matchingAgent.uuid,
+              oldName: matchingAgent.name,
+              newName: expectedName,
+              status: 'updated'
+            });
+            
+          } catch (updateError) {
+            console.error(`❌ [DB] Failed to update agent name for user ${user._id}:`, updateError.message);
+            syncResults.push({
+              userId: user._id,
+              agentId: matchingAgent.uuid,
+              oldName: matchingAgent.name,
+              newName: expectedName,
+              status: 'failed',
+              error: updateError.message
+            });
+          }
+        } else {
+          syncResults.push({
+            userId: user._id,
+            agentId: matchingAgent.uuid,
+            name: matchingAgent.name,
+            status: 'already_correct'
+          });
+        }
+      } else {
+        console.warn(`⚠️ [DB] Agent ${user.assignedAgentId} not found in DO API for user ${user._id}`);
+        syncResults.push({
+          userId: user._id,
+          agentId: user.assignedAgentId,
+          status: 'not_found_in_do_api'
+        });
+      }
+    }
+    
+    console.log(`✅ [DB] Agent name sync completed. ${syncResults.length} agents processed`);
+    
+    res.json({
+      success: true,
+      message: `Agent name sync completed. ${syncResults.length} agents processed`,
+      results: syncResults
+    });
+    
+  } catch (error) {
+    console.error('Error syncing agent names:', error);
+    res.status(500).json({ error: 'Failed to sync agent names' });
+  }
+});
+
+// Check user-agent assignment status
+router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId query parameter is required' });
+    }
+    
+    console.log(`🔍 [DB] Checking agent assignment status for user: ${userId}`);
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const status = {
+      userId: userId,
+      hasAssignedAgent: !!userDoc.assignedAgentId,
+      assignedAgentId: userDoc.assignedAgentId || null,
+      assignedAgentName: userDoc.assignedAgentName || null,
+      currentAgentId: userDoc.currentAgentId || null,
+      currentAgentName: userDoc.currentAgentName || null,
+      agentAssignedAt: userDoc.agentAssignedAt || null,
+      isConsistent: userDoc.assignedAgentId === userDoc.currentAgentId
+    };
+    
+    // If user has an assigned agent, verify it exists in DO API
+    if (userDoc.assignedAgentId) {
+      try {
+        const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
+        status.agentExistsInDO = true;
+        status.agentStatus = agentResponse.agent?.deployment?.status || 'unknown';
+      } catch (error) {
+        status.agentExistsInDO = false;
+        status.agentError = error.message;
+      }
+    }
+    
+    console.log(`✅ [DB] Agent status for user ${userId}:`, status);
+    
+    res.json({
+      success: true,
+      status: status
+    });
+    
+  } catch (error) {
+    console.error('Error checking user agent status:', error);
+    res.status(500).json({ error: 'Failed to check user agent status' });
   }
 });
 

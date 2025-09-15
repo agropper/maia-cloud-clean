@@ -3644,8 +3644,54 @@ app.get('/api/current-agent', async (req, res) => {
     // console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
     
     // Get agent details including associated knowledge bases
-    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
+    let agentData;
+    try {
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
+    } catch (error) {
+      console.error(`❌ Get current agent error:`, error);
+      
+      // If agent doesn't exist in DO API, clear it from the database and return null
+      if (error.message.includes('404') || error.message.includes('not_found')) {
+        console.log(`🔧 [CLEANUP] Agent ${agentId} not found in DO API, clearing from database for user ${currentUser}`);
+        
+        try {
+          // Clear the agent from the user's document
+          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          if (userDoc) {
+            const updatedUserDoc = {
+              ...userDoc,
+              currentAgentId: null,
+              currentAgentName: null,
+              currentAgentEndpoint: null,
+              currentAgentSetAt: null,
+              assignedAgentId: null,
+              assignedAgentName: null,
+              agentAssignedAt: null,
+              updatedAt: new Date().toISOString()
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            
+            // Clear from UserStateManager cache
+            UserStateManager.removeUser(currentUser);
+            
+            console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser}`);
+          }
+        } catch (cleanupError) {
+          console.error(`❌ [CLEANUP] Failed to clear agent from database:`, cleanupError.message);
+        }
+        
+        return res.json({ 
+          agent: null, 
+          message: 'Your previous agent is no longer available. Please choose a new agent via the Agent Management dialog.',
+          requiresAgentSelection: true
+        });
+      }
+      
+      // For other errors, re-throw
+      throw error;
+    }
     
     // console.log(`📋 Agent details from API:`, JSON.stringify(agentData, null, 2));
     

@@ -1604,8 +1604,8 @@ export default defineComponent({
         for (const agent of agents) {
           // Find the user who owns this agent
           const userWithAgent = usersData.find(user => 
-            user.assignedAgentId === agent.id || 
-            (user.assignedAgentName && user.assignedAgentName === agent.name)
+            user.currentAgentId === agent.id || 
+            (user.currentAgentName && user.currentAgentName === agent.name)
           );
           
           let ownerName = 'Public User';
@@ -1767,10 +1767,10 @@ export default defineComponent({
             }
           }
           
-          // Determine owner: Use Display Name if there's an assigned agent, otherwise "Public Agent"
+          // Determine owner: Use Display Name if there's a current agent, otherwise "Public Agent"
           const userWithAgent = usersData.find(user => 
-            user.assignedAgentId === agent.id || 
-            (user.assignedAgentName && user.assignedAgentName === agent.name)
+            user.currentAgentId === agent.id || 
+            (user.currentAgentName && user.currentAgentName === agent.name)
           );
           
           if (userWithAgent) {

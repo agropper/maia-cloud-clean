@@ -517,6 +517,45 @@ router.post("/authenticate-verify", async (req, res) => {
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
       
+      // Set the user's assigned agent as current when they sign in
+      try {
+        console.log(`🔍 [AUTH] Setting assigned agent as current for user: ${updatedUser._id}`);
+        
+        // Get the user's assigned agent from admin management
+        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${updatedUser._id}/assigned-agent`);
+        if (assignedAgentResponse.ok) {
+          const assignedAgentData = await assignedAgentResponse.json();
+          if (assignedAgentData.assignedAgentId) {
+            console.log(`🔍 [AUTH] Found assigned agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId})`);
+            
+            // Set this agent as the current agent for the user
+            const currentAgentResponse = await fetch(`http://localhost:3001/api/current-agent`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `maia.sid=${req.sessionID}` // Use the same session
+              },
+              body: JSON.stringify({
+                agentId: assignedAgentData.assignedAgentId,
+                agentName: assignedAgentData.assignedAgentName
+              })
+            });
+            
+            if (currentAgentResponse.ok) {
+              console.log(`✅ [AUTH] Successfully set current agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName}`);
+            } else {
+              console.warn(`⚠️ [AUTH] Failed to set current agent for ${updatedUser._id}: ${currentAgentResponse.status}`);
+            }
+          } else {
+            console.log(`🔍 [AUTH] No assigned agent found for ${updatedUser._id} - will show "No Agent Selected"`);
+          }
+        } else {
+          console.warn(`⚠️ [AUTH] Failed to get assigned agent for ${updatedUser._id}: ${assignedAgentResponse.status}`);
+        }
+      } catch (error) {
+        console.error(`❌ [AUTH] Error setting current agent for ${updatedUser._id}:`, error.message);
+      }
+      
       // Explicitly save the session
       req.session.save((err) => {
         if (err) {

@@ -167,26 +167,34 @@ export default defineComponent({
       const userId = currentUser.value?.userId || 'Public User';
       const cacheKey = `current-agent-${userId}`;
       if (apiCallCache.has(cacheKey)) {
-        console.log(`Skipping duplicate current-agent request for user: ${userId}`);
+        console.log(`🔍 [DEBUG] fetchCurrentAgent - Using cached result for user: ${userId}`);
         return await apiCallCache.get(cacheKey);
       }
       
       // Create a promise and cache it
       const promise = (async () => {
         try {
+          console.log(`🔍 [DEBUG] fetchCurrentAgent - Making API call to /current-agent for user: ${userId}`);
           const response = await fetch(`${API_BASE_URL}/current-agent`);
+          console.log(`🔍 [DEBUG] fetchCurrentAgent - API response status: ${response.status}`);
           const data = await response.json();
+          console.log(`🔍 [DEBUG] fetchCurrentAgent - API response data:`, data);
 
           if (data.agent) {
             currentAgent.value = data.agent;
-            console.log("[*] Current agent:", data.agent.name);
+            console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has agent assigned:`, data.agent.name);
+            console.log(`🔍 [DEBUG] DO Agent Assignment API - Agent details:`, {
+              id: data.agent.id,
+              name: data.agent.name,
+              endpoint: data.endpoint
+            });
 
             if (data.agent.knowledgeBase) {
               currentKnowledgeBase.value = data.agent.knowledgeBase;
-              console.log("[*] Current KB:", data.agent.knowledgeBase.name);
+              console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has KB attached:`, data.agent.knowledgeBase.name);
             } else {
               currentKnowledgeBase.value = null;
-              console.log("[*] No KB assigned");
+              console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has no KB attached`);
             }
 
             // Handle warnings from the API
@@ -198,7 +206,9 @@ export default defineComponent({
             }
           } else {
             currentAgent.value = null;
-            console.log("[*] No agent selected");
+            currentKnowledgeBase.value = null;
+            console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has NO agent assigned`);
+            console.log(`🔍 [DEBUG] Agent Badge will show: "No Agent Selected" for user ${userId}`);
             
             // Check if agent selection is required
             if (data.requiresAgentSelection) {
