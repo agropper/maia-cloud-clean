@@ -427,6 +427,10 @@ export default defineComponent({
 
     const handleUserAuthenticated = async (userData: any) => {
       // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
+      
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
+      
       currentUser.value = UserService.normalizeUserObject(userData);
       
       // Fetch the user's current agent and KB from API to update Agent Badge
@@ -455,6 +459,9 @@ export default defineComponent({
       } catch (error) {
         console.error('❌ Backend logout failed:', error);
       }
+      
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
       
       // Set to Public User instead of null (there should never be "no user")
       currentUser.value = UserService.createPublicUser();
