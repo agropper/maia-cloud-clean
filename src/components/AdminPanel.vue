@@ -1835,6 +1835,15 @@ export default defineComponent({
         const agentsResponse = await fetch('/api/agents');
         const agentsData = await agentsResponse.json();
         
+        // Validate response data
+        if (!usersData || !usersData.users || !Array.isArray(usersData.users)) {
+          throw new Error('Invalid users data received from API');
+        }
+        
+        if (!Array.isArray(agentsData)) {
+          throw new Error('Invalid agents data received from API - expected array');
+        }
+        
         const inconsistencies = [];
         
         // Check each user's agent assignment
@@ -1847,7 +1856,7 @@ export default defineComponent({
           if (!assignedAgentId) {
             // Find matching agent in DO API based on naming convention
             const expectedAgentName = `${user.displayName || userId}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-            const matchingAgent = agentsData.agents.find(agent => 
+            const matchingAgent = agentsData.find(agent => 
               agent.name === expectedAgentName || 
               agent.name.startsWith(`${user.displayName || userId}-agent-`)
             );
@@ -1864,7 +1873,7 @@ export default defineComponent({
             }
           } else {
             // Check if assigned agent exists in DO API
-            const assignedAgent = agentsData.agents.find(agent => agent.uuid === assignedAgentId);
+            const assignedAgent = agentsData.find(agent => agent.uuid === assignedAgentId);
             if (!assignedAgent) {
               inconsistencies.push({
                 type: 'orphaned_assignment',
@@ -1881,7 +1890,7 @@ export default defineComponent({
         // Check for security violations (cross-user assignments)
         for (const user of usersData.users) {
           if (user.assignedAgentId) {
-            const assignedAgent = agentsData.agents.find(agent => agent.uuid === user.assignedAgentId);
+            const assignedAgent = agentsData.find(agent => agent.uuid === user.assignedAgentId);
             if (assignedAgent) {
               const expectedPrefix = user._id === 'Public User' ? 'public-' : `${user._id}-agent-`;
               if (!assignedAgent.name.startsWith(expectedPrefix)) {
