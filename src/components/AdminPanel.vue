@@ -1854,12 +1854,24 @@ export default defineComponent({
           
           // Check if user has an agent assigned
           if (!assignedAgentId) {
-            // Find matching agent in DO API based on naming convention
-            const expectedAgentName = `${user.displayName || userId}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-            const matchingAgent = agentsData.find(agent => 
-              agent.name === expectedAgentName || 
-              agent.name.startsWith(`${user.displayName || userId}-agent-`)
-            );
+            let expectedAgentName;
+            let matchingAgent;
+            
+            if (userId === 'Public User') {
+              // Public User should have a public-* agent
+              expectedAgentName = `public-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+              matchingAgent = agentsData.find(agent => 
+                agent.name === expectedAgentName || 
+                agent.name.startsWith('public-agent-')
+              );
+            } else {
+              // Regular users should have {userId}-agent-* pattern
+              expectedAgentName = `${user.displayName || userId}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+              matchingAgent = agentsData.find(agent => 
+                agent.name === expectedAgentName || 
+                agent.name.startsWith(`${user.displayName || userId}-agent-`)
+              );
+            }
             
             if (matchingAgent) {
               inconsistencies.push({
