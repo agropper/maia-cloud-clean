@@ -2056,12 +2056,10 @@ export default defineComponent({
 
     // Handle user authenticated from PasskeyAuthDialog
     const handleUserAuthenticated = (userData: {
-      userId: string;
       username: string;
       displayName: string;
     }) => {
       const userInfo = {
-        userId: userData.userId,
         username: userData.username,
         displayName: userData.displayName,
       };

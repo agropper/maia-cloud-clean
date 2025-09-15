@@ -261,7 +261,6 @@ export default defineComponent({
 
         if (result.success) {
           const userInfo = {
-            userId: userId.value,
             username: userId.value,
             displayName: userId.value,
           };
