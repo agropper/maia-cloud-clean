@@ -92,6 +92,7 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
     const currentAgent = ref<any>(null);
+    const currentKnowledgeBase = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>({ userId: 'Public User', displayName: 'Public User' });
     const pendingShareId = ref<string | null>(null);
@@ -177,7 +178,11 @@ export default defineComponent({
             console.log("[*] Current agent:", data.agent.name);
 
             if (data.agent.knowledgeBase) {
+              currentKnowledgeBase.value = data.agent.knowledgeBase;
+              console.log("[*] Current KB:", data.agent.knowledgeBase.name);
             } else {
+              currentKnowledgeBase.value = null;
+              console.log("[*] No KB assigned");
             }
 
             // Handle warnings from the API
@@ -392,6 +397,13 @@ export default defineComponent({
           if (data.agent) {
             // Update with fresh data from server (including warning)
             currentAgent.value = data.agent;
+            
+            // Update knowledge base
+            if (data.agent.knowledgeBase) {
+              currentKnowledgeBase.value = data.agent.knowledgeBase;
+            } else {
+              currentKnowledgeBase.value = null;
+            }
             
             // Handle warnings from the API
             if (data.warning) {
@@ -756,6 +768,7 @@ export default defineComponent({
       showAgentManagementDialog,
       showAgentSelectionModal,
       currentAgent,
+      currentKnowledgeBase,
       agentWarning,
       currentUser,
       groupCount,
@@ -877,6 +890,8 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :uploadedFiles="appState.uploadedFiles"
     :currentUser="currentUser"
+    :currentAgent="currentAgent"
+    :currentKnowledgeBase="currentKnowledgeBase"
     :warning="agentWarning"
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"
