@@ -1505,6 +1505,25 @@ export default defineComponent({
     
     // Debounce timer for loadAgentInfo calls
     const loadAgentInfoDebounceTimer = ref(null);
+    
+    // Track active API calls to prevent duplicates
+    const activeApiCalls = ref(new Set());
+    
+    // Helper function to prevent duplicate API calls
+    const makeUniqueApiCall = async (callId, apiCall) => {
+      if (activeApiCalls.value.has(callId)) {
+        console.log(`Skipping duplicate API call: ${callId}`);
+        return null;
+      }
+      
+      activeApiCalls.value.add(callId);
+      try {
+        const result = await apiCall();
+        return result;
+      } finally {
+        activeApiCalls.value.delete(callId);
+      }
+    };
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -2329,19 +2348,27 @@ export default defineComponent({
     const onDialogOpen = async () => {
       try {
         console.log(`🔐 Dialog opening - checking authentication status...`);
-        await checkAuthenticationStatus();
-        await loadAgentInfo();
         
-        // Check user files for authenticated users (consolidated from watcher)
-        if (isAuthenticated.value && !isDeepLinkUser.value) {
-          await checkUserFiles();
-        }
-        
-        // Display current agent information (only if not already logged)
-        if (currentAgent.value && !hasLoggedAgentAssignment.value) {
-          console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
-        }
-        await updateWorkflowProgress(); // Update workflow progress after loading data
+        // Use deduplication to prevent multiple simultaneous calls
+        await makeUniqueApiCall('dialog-open', async () => {
+          await checkAuthenticationStatus();
+          
+          // Only load agent info if we have an authenticated user
+          if (isAuthenticated.value) {
+            await loadAgentInfo();
+            
+            // Check user files for authenticated users (consolidated from watcher)
+            if (!isDeepLinkUser.value) {
+              await checkUserFiles();
+            }
+            
+            // Display current agent information (only if not already logged)
+            if (currentAgent.value && !hasLoggedAgentAssignment.value) {
+              console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
+            }
+            await updateWorkflowProgress(); // Update workflow progress after loading data
+          }
+        });
       } finally {
         isDialogLoading.value = false;
       }
