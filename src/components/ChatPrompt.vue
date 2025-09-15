@@ -94,6 +94,7 @@ export default defineComponent({
     const showAgentSelectionModal = ref(false);
     const currentAgent = ref<any>(null);
     const currentKnowledgeBase = ref<any>(null);
+    const assignedAgent = ref<any>(null);
     const agentWarning = ref<string>("");
     const currentUser = ref<any>(UserService.createPublicUser());
     const pendingShareId = ref<string | null>(null);
@@ -182,6 +183,7 @@ export default defineComponent({
 
           if (data.agent) {
             currentAgent.value = data.agent;
+            assignedAgent.value = data.agent; // Set assigned agent for dialog display
             console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has agent assigned:`, data.agent.name);
             console.log(`🔍 [DEBUG] DO Agent Assignment API - Agent details:`, {
               id: data.agent.id,
@@ -207,6 +209,7 @@ export default defineComponent({
           } else {
             currentAgent.value = null;
             currentKnowledgeBase.value = null;
+            assignedAgent.value = null; // Clear assigned agent
             console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has NO agent assigned`);
             console.log(`🔍 [DEBUG] Agent Badge will show: "No Agent Selected" for user ${userId}`);
             
@@ -765,6 +768,7 @@ export default defineComponent({
       showAgentSelectionModal,
       currentAgent,
       currentKnowledgeBase,
+      assignedAgent,
       agentWarning,
       currentUser,
       groupCount,
@@ -888,6 +892,7 @@ export default defineComponent({
     :currentUser="currentUser"
     :currentAgent="currentAgent"
     :currentKnowledgeBase="currentKnowledgeBase"
+    :assignedAgent="assignedAgent"
     :warning="agentWarning"
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"

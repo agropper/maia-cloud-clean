@@ -12,7 +12,7 @@
         <div v-if="isDialogLoading" class="text-center q-pa-xl">
           <q-spinner-dots
             size="3rem"
-            color="primary"
+                    color="primary"
           />
           <div class="text-h6 q-mt-md">Loading Agent Management...</div>
           <div class="text-caption q-mt-sm">Please wait while we load your agent and knowledge base information</div>
@@ -162,9 +162,9 @@
                   class="help-btn"
                 />
               </div>
-            </div>
           </div>
-          
+        </div>
+
           <!-- Request Administrator Approval Button (below first step) -->
           <div v-if="!currentAgent && !hasRequestedApproval" class="q-mt-md text-center">
             <q-btn
@@ -236,27 +236,16 @@
 
 
 
-        <!-- Agent List -->
-        <div v-if="availableAgents.length > 0" class="q-mb-md">
-          <h6 class="q-mb-sm">Available Agents:</h6>
-          <div v-for="agent in availableAgents" :key="agent.id" class="q-mb-sm">
-            <q-item clickable @click="selectAgent(agent)" class="agent-item">
-              <q-item-section>
-                <q-item-label>
-                  {{ agent.name }}
-                  <q-chip
-                    v-if="currentAgent && (currentAgent.id === agent.id || currentAgent.uuid === agent.uuid)"
-                    size="sm"
-                    color="primary"
-                    text-color="white"
-                    class="q-ml-sm"
-                  >
-                    Current
-                  </q-chip>
-                </q-item-label>
-                <q-item-label caption>{{ agent.description }}</q-item-label>
-              </q-item-section>
-            </q-item>
+        <!-- Agent Instructions -->
+        <div v-if="assignedAgent" class="q-mb-md">
+          <h6 class="q-mb-sm">Agent Instructions:</h6>
+          <div class="q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
+            <div class="text-body2">
+              <strong>{{ assignedAgent.name }}</strong>
+            </div>
+            <div class="text-caption text-grey-7 q-mt-sm">
+              {{ assignedAgent.instructions || assignedAgent.description || 'No specific instructions available for this agent.' }}
+            </div>
           </div>
         </div>
 
@@ -295,20 +284,12 @@
 
 
           <!-- No Agent Configured - Only for Public User (not deep link users) -->
-          <div v-if="!currentAgent && !isAuthenticated && !isDeepLinkUser" class="text-center q-pa-md">
+          <div v-if="!assignedAgent && !isAuthenticated && !isDeepLinkUser" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
-              Create a new agent to get started with AI assistance
+              Please sign in to access your private AI agent and create knowledge bases from your health records.
             </div>
-
-            <q-btn
-              label="Create New Agent"
-              color="primary"
-              size="lg"
-              @click="showWizard = true"
-              icon="add"
-            />
           </div>
 
           <!-- Assigned Agent Display (for authenticated users, not deep link users) -->
@@ -1379,6 +1360,10 @@ export default defineComponent({
       type: Object,
       default: null,
     },
+    assignedAgent: {
+      type: Object,
+      default: null,
+    },
   },
   emits: [
     "update:modelValue",
@@ -1964,9 +1949,6 @@ export default defineComponent({
       }
     };
 
-    const selectAgent = async (agent: any) => {
-      await onAgentSelected(agent.id);
-    };
 
     // Create new agent
     const createAgent = async () => {
@@ -4118,7 +4100,6 @@ export default defineComponent({
       selectedDocuments,
       hasUploadedDocuments,
       onAgentSelected,
-      selectAgent,
       updateAgent,
       confirmDelete,
       deleteAgent,
