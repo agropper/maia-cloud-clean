@@ -2141,9 +2141,7 @@ export default defineComponent({
     // Load available agents from DO API
     const loadAvailableAgents = async () => {
       try {
-        console.log(`🔍 [DEBUG] loadAvailableAgents - localCurrentUser.value:`, localCurrentUser.value);
         const currentUserId = UserService.getUserId(localCurrentUser.value);
-        console.log(`🔍 [DEBUG] loadAvailableAgents - currentUserId:`, currentUserId);
         const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
         if (agentsResponse.ok) {
           const agents = await agentsResponse.json();
@@ -2179,13 +2177,10 @@ export default defineComponent({
 
     // Load current user state from props/session (no API calls needed)
     const loadCurrentUserState = () => {
-      console.log(`🔍 [DEBUG] loadCurrentUserState - props.currentUser:`, props.currentUser);
       // Normalize the user object to ensure consistent structure
       const normalizedUser = UserService.normalizeUserObject(props.currentUser);
-      console.log(`🔍 [DEBUG] loadCurrentUserState - normalizedUser:`, normalizedUser);
       localCurrentUser.value = normalizedUser;
       isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
-      console.log(`🔍 [DEBUG] loadCurrentUserState - isAuthenticated:`, isAuthenticated.value);
       
       // Set current agent from props (if available)
       if (props.currentAgent) {

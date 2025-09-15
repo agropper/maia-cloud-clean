@@ -224,7 +224,6 @@ import {
 } from "quasar";
 import { startRegistration as startRegistrationWebAuthn, startAuthentication } from "@simplewebauthn/browser";
 import { API_BASE_URL } from "../utils/apiBase";
-import { UserService } from "../utils/UserService";
 
 export default defineComponent({
   name: "PasskeyAuthDialog",
@@ -533,8 +532,8 @@ export default defineComponent({
     };
 
     const onSuccess = () => {
-      // Use the stored user data if available, otherwise create a proper user object
-      const userData = registrationUserData.value || UserService.createAuthenticatedUser(userId.value, userId.value);
+      // Use the stored user data if available, otherwise fall back to just userId
+      const userData = registrationUserData.value || { userId: userId.value };
       emit("authenticated", userData);
 
       showDialog.value = false;
