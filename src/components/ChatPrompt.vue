@@ -458,6 +458,9 @@ export default defineComponent({
       
       // Set to Public User instead of null (there should never be "no user")
       currentUser.value = UserService.createPublicUser();
+      
+      // Fetch the Public User's agent to update the UI
+      await fetchCurrentAgent();
     };
 
     const handleSignInCancelled = () => {
