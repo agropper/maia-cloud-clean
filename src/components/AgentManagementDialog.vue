@@ -1878,7 +1878,7 @@ export default defineComponent({
       }
       
       // Add delay to avoid 429 errors during app initialization
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       isLoading.value = true;
       
@@ -3629,6 +3629,12 @@ export default defineComponent({
     // Handle KB detachment
     const detachKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
       if (!currentAgent.value) return;
+      
+      // Prevent rapid successive calls
+      if (isUpdating.value) {
+        console.log("Skipping duplicate detachKnowledgeBase request");
+        return;
+      }
 
       isUpdating.value = true;
       try {
@@ -3672,6 +3678,12 @@ export default defineComponent({
     const connectKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
       if (!currentAgent.value) {
         // No current agent
+        return;
+      }
+      
+      // Prevent rapid successive calls
+      if (isUpdating.value) {
+        console.log("Skipping duplicate connectKnowledgeBase request");
         return;
       }
 

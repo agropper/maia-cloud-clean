@@ -621,6 +621,42 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
   try {
     const { userId } = req.params;
     
+    // First try to get from UserStateManager cache
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      const cachedAgentData = userStateManager.getUserStateSection(userId, 'agent');
+      if (cachedAgentData) {
+        // Return cached data without hitting database
+        const assignedAgentId = cachedAgentData.assignedAgentId || cachedAgentData.currentAgentId || null;
+        const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
+        const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
+        
+        // Only log once per session to prevent spam
+        if (!req.session.assignedAgentLogged) {
+          console.log(`🔍 [CACHED] assigned-agent endpoint for ${userId}:`, {
+            assignedAgentId: cachedAgentData.assignedAgentId,
+            currentAgentId: cachedAgentData.currentAgentId,
+            assignedAgentName: cachedAgentData.assignedAgentName,
+            currentAgentName: cachedAgentData.currentAgentName,
+            finalAssignedAgentId: assignedAgentId,
+            finalAssignedAgentName: assignedAgentName,
+            source: 'cache'
+          });
+          req.session.assignedAgentLogged = true;
+        }
+        
+        return res.json({
+          userId: userId,
+          assignedAgentId: assignedAgentId,
+          assignedAgentName: assignedAgentName,
+          agentAssignedAt: agentAssignedAt
+        });
+      }
+    }
+    
+    // Fallback to database if cache miss
+    console.log(`🔍 [DB] assigned-agent endpoint for ${userId} - cache miss, fetching from database`);
+    
     // Get user document with retry logic for rate limits
     let userDoc = null;
     let retries = 0;
@@ -650,15 +686,17 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
     const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
     
-    // Debug logging
-    console.log(`🔍 [DEBUG] assigned-agent endpoint for ${userId}:`, {
-      assignedAgentId: userDoc.assignedAgentId,
-      currentAgentId: userDoc.currentAgentId,
-      assignedAgentName: userDoc.assignedAgentName,
-      currentAgentName: userDoc.currentAgentName,
-      finalAssignedAgentId: assignedAgentId,
-      finalAssignedAgentName: assignedAgentName
-    });
+    // Update cache with fresh data
+    if (userStateManager) {
+      userStateManager.updateUserStateSection(userId, 'agent', {
+        assignedAgentId: userDoc.assignedAgentId,
+        assignedAgentName: userDoc.assignedAgentName,
+        currentAgentId: userDoc.currentAgentId,
+        currentAgentName: userDoc.currentAgentName,
+        agentAssignedAt: userDoc.agentAssignedAt,
+        currentAgentSetAt: userDoc.currentAgentSetAt
+      });
+    }
     
     res.json({
       userId: userId,

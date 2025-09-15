@@ -5909,6 +5909,9 @@ setSessionManager(sessionManager);
 // Mount KB protection routes
 app.use('/api/kb-protection', kbProtectionRoutes);
 
+// Make UserStateManager available to routes
+app.locals.userStateManager = UserStateManager;
+
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin-management', adminManagementRoutes);
