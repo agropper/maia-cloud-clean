@@ -160,6 +160,9 @@ export default defineComponent({
     
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
+      // Add stack trace to debug where calls are coming from
+      console.log(`🔍 [DEBUG] fetchCurrentAgent called from:`, new Error().stack);
+      
       // Check if we already have a pending request for this endpoint
       const cacheKey = 'current-agent';
       if (apiCallCache.has(cacheKey)) {
@@ -391,28 +394,9 @@ export default defineComponent({
         
         // Fetch current agent data to get updated warning information
         try {
-          const response = await fetch(`${API_BASE_URL}/current-agent`);
-          const data = await response.json();
-          
-          if (data.agent) {
-            // Update with fresh data from server (including warning)
-            currentAgent.value = data.agent;
-            
-            // Update knowledge base
-            if (data.agent.knowledgeBase) {
-              currentKnowledgeBase.value = data.agent.knowledgeBase;
-            } else {
-              currentKnowledgeBase.value = null;
-            }
-            
-            // Handle warnings from the API
-            if (data.warning) {
-              console.warn(data.warning);
-              agentWarning.value = data.warning;
-            } else {
-              agentWarning.value = "";
-            }
-          }
+          console.log(`🔍 [DEBUG] handleAgentUpdated calling fetchCurrentAgent (cached)`);
+          await fetchCurrentAgent();
+          // fetchCurrentAgent() already handles updating currentAgent, currentKnowledgeBase, and agentWarning
         } catch (error) {
           console.error("❌ Failed to fetch updated agent data:", error);
           // Clear warning if fetch fails
