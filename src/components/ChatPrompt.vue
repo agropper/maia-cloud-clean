@@ -415,8 +415,9 @@ export default defineComponent({
       // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       currentUser.value = UserService.normalizeUserObject(userData);
       
-      // No need to call checkExistingSession() - we already know user is authenticated
-      // await checkExistingSession();
+      // Fetch the user's current agent and KB from API to update Agent Badge
+      console.log(`🔍 [DEBUG] handleUserAuthenticated - fetching current agent for user:`, currentUser.value.userId);
+      await fetchCurrentAgent();
       
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
