@@ -4146,7 +4146,7 @@ export default defineComponent({
       showCancelRequestModal,
       isCancellingRequest,
       attachKnowledgeBaseToAgent,
-      refreshAgentData,
+      // refreshAgentData removed - agent data updated via props
       currentWorkflowStep,
       handleManageKnowledgeBases,
       isDeepLinkUser,
