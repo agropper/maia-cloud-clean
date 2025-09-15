@@ -1385,6 +1385,7 @@ export default defineComponent({
 
     // Agent state
     const currentAgent = ref<DigitalOceanAgent | null>(null);
+    const assignedAgent = ref<DigitalOceanAgent | null>(null);
     const availableAgents = ref<DigitalOceanAgent[]>([]);
     const selectedAgentId = ref<string>("");
     const knowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
@@ -4102,6 +4103,7 @@ export default defineComponent({
     return {
       showDialog,
       currentAgent,
+      assignedAgent,
       availableAgents,
       knowledgeBase,
       availableKnowledgeBases,
