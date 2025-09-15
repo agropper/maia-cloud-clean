@@ -164,9 +164,10 @@ export default defineComponent({
       // Add stack trace to debug where calls are coming from
       
       // Check if we already have a pending request for this endpoint
-      const cacheKey = 'current-agent';
+      const userId = currentUser.value?.userId || 'Public User';
+      const cacheKey = `current-agent-${userId}`;
       if (apiCallCache.has(cacheKey)) {
-        console.log(`Skipping duplicate current-agent request`);
+        console.log(`Skipping duplicate current-agent request for user: ${userId}`);
         return await apiCallCache.get(cacheKey);
       }
       
