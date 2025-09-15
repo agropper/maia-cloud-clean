@@ -4478,7 +4478,7 @@ app.post('/api/current-agent', async (req, res) => {
         });
         
         // Clear the user from cache to force fresh data on next GET request
-        UserStateManager.removeUserFromCache(currentUser);
+        UserStateManager.removeUser(currentUser);
         
         // Debug: Verify the document was saved correctly
         const verifyDoc = await couchDBClient.getDocument('maia_users', currentUser);
@@ -4533,7 +4533,7 @@ app.post('/api/current-agent', async (req, res) => {
         });
         
         // Clear the user from cache to force fresh data on next GET request
-        UserStateManager.removeUserFromCache('Public User');
+        UserStateManager.removeUser('Public User');
       } catch (userError) {
         console.error(`❌ Failed to store current agent selection for Public User:`, userError);
       }
