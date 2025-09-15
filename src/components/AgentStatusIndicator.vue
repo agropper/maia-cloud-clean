@@ -149,9 +149,9 @@ export default defineComponent({
         return 'No Agent Configured'
       }
       
-      // SECURITY CHECK: Validate agent ownership for authenticated users (not Public User or deep-link users)
+      // SECURITY CHECK: Validate agent ownership for non-deep-link users
       const currentUserId = props.currentUser?.userId || 'Public User';
-      if (currentUserId !== 'Public User' && !currentUserId.startsWith('deep_link_') && currentUserId !== 'Unknown User') {
+      if (currentUserId !== 'Public User' && !currentUserId.startsWith('deep_link_')) {
         const agentName = props.agent.name;
         const expectedPrefix = `${currentUserId}-agent-`;
         
