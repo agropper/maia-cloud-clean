@@ -23,7 +23,7 @@
           <!-- Agent Badge for All Users - Always show -->
           <div class="q-mb-lg">
             <AgentStatusIndicator
-              :agent="currentAgent"
+              :agent="assignedAgent"
               :warning="warning"
               :currentUser="localCurrentUser"
               @clear-warning="warning = ''"
@@ -61,7 +61,7 @@
             </div>
             
             <!-- File Management Options for Authenticated Users -->
-            <div v-if="currentAgent && currentAgent.type === 'assigned'" class="q-mb-lg">
+            <div v-if="assignedAgent && assignedAgent.type === 'assigned'" class="q-mb-lg">
               <div class="text-h6 q-mb-md">📁 File Management</div>
               <div class="row q-gutter-md">
                 <q-btn
@@ -117,7 +117,7 @@
         <!-- Workflow Progress Section - Only for authenticated users -->
         <div v-else-if="isAuthenticated" class="q-mb-lg">
           <!-- Show detailed progress list only when no agent or no KBs -->
-          <div v-if="!currentAgent || !currentAgent.knowledgeBases || currentAgent.knowledgeBases.length === 0">
+          <div v-if="!assignedAgent || !assignedAgent.knowledgeBases || assignedAgent.knowledgeBases.length === 0">
           <h6 class="q-mb-sm">🔐 Private AI Setup Progress</h6>
           <div class="workflow-steps">
             <div 
@@ -166,7 +166,7 @@
         </div>
 
           <!-- Request Administrator Approval Button (below first step) -->
-          <div v-if="!currentAgent && !hasRequestedApproval" class="q-mt-md text-center">
+          <div v-if="!assignedAgent && !hasRequestedApproval" class="q-mt-md text-center">
             <q-btn
               label="Request Administrator Approval"
               color="primary"
@@ -177,7 +177,7 @@
           </div>
 
           <!-- Choose Files Button (when agent is assigned) - Only for authenticated users (not deep link users) -->
-          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
+          <div v-if="assignedAgent && assignedAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CREATE KNOWLEDGE BASE"
               color="positive"
@@ -222,7 +222,7 @@
               </div>
 
           <!-- Show manage button when agent and KBs are ready - Only for authenticated users (not deep link users) -->
-          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0 && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
+          <div v-else-if="assignedAgent && assignedAgent.knowledgeBases && assignedAgent.knowledgeBases.length > 0 && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="MANAGE HEALTH RECORDS KNOWLEDGE BASES"
               color="primary"
@@ -250,7 +250,7 @@
         </div>
 
         <!-- Agent Actions (if agent exists) - Only for authenticated users (not deep link users) -->
-        <div v-if="currentAgent && isAuthenticated && !isDeepLinkUser" class="q-mb-md">
+        <div v-if="assignedAgent && isAuthenticated && !isDeepLinkUser" class="q-mb-md">
           <div class="row q-gutter-md">
             <q-btn
               label="Update Agent"
@@ -293,10 +293,10 @@
           </div>
 
           <!-- Assigned Agent Display (for authenticated users, not deep link users) -->
-          <div v-if="isAuthenticated && !isDeepLinkUser && currentAgent && currentAgent.type === 'assigned'" class="text-center q-pa-md">
+          <div v-if="isAuthenticated && !isDeepLinkUser && assignedAgent && assignedAgent.type === 'assigned'" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="positive" />
             <div class="text-h6 q-mt-md text-positive">Agent Assigned!</div>
-            <div class="text-subtitle1 q-mb-sm">{{ currentAgent.name }}</div>
+            <div class="text-subtitle1 q-mb-sm">{{ assignedAgent.name }}</div>
             <div class="text-caption q-mb-md text-grey">
               Your private AI agent has been created and is ready for use.
             </div>
@@ -313,7 +313,7 @@
           </div>
 
           <!-- Agent Management (if agent exists) -->
-          <div v-if="currentAgent">
+          <div v-if="assignedAgent">
           </div>
 
           <!-- Knowledge Base Section - Only show for authenticated users (not deep link users) -->
@@ -808,7 +808,7 @@
         <q-card-section>
           <div class="text-h6">Delete Agent</div>
           <div class="text-body2 q-mt-sm">
-            Are you sure you want to delete "{{ currentAgent?.name }}"? This
+            Are you sure you want to delete "{{ assignedAgent?.name }}"? This
             action cannot be undone.
           </div>
         </q-card-section>
@@ -1714,7 +1714,7 @@ export default defineComponent({
       // Step 2: Private AI agent requested
       // This will be updated when the user actually requests approval
       // For now, we'll check if they have any agents (which means they were approved)
-      if (currentAgent.value) {
+      if (assignedAgent.value) {
         workflowSteps.value[1].completed = true;
         workflowSteps.value[2].completed = true;
         
@@ -1753,7 +1753,7 @@ export default defineComponent({
       }
 
       // Step 3: Private AI agent created
-      // This is handled above when currentAgent exists
+      // This is handled above when assignedAgent exists
 
       // Step 6: Knowledge base indexing status
       // Check if KB exists and start monitoring indexing
@@ -1922,6 +1922,7 @@ export default defineComponent({
           // Update the UI with the agent data from the save response
           if (result.agent) {
             currentAgent.value = result.agent;
+            assignedAgent.value = result.agent;
 
           // Emit agent update event
           emit("agent-updated", result.agent);
@@ -1971,6 +1972,7 @@ export default defineComponent({
         const result = await response.json();
 
         currentAgent.value = result.agent;
+        assignedAgent.value = result.agent;
         knowledgeBase.value = result.knowledgeBase;
 
         $q.notify({
@@ -2005,11 +2007,11 @@ export default defineComponent({
     };
 
     const deleteAgent = async () => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       isDeleting.value = true;
       try {
-        const response = await fetch(`/api/agents/${currentAgent.value.id}`, {
+        const response = await fetch(`/api/agents/${assignedAgent.value.id}`, {
           method: "DELETE",
         });
 
@@ -2018,6 +2020,7 @@ export default defineComponent({
         }
 
         currentAgent.value = null;
+        assignedAgent.value = null;
         knowledgeBase.value = null;
 
         $q.notify({
@@ -2084,9 +2087,9 @@ export default defineComponent({
       
       // Try to connect the KB again now that ownership is transferred
       try {
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           const response = await fetch(
-            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${transferData.kbId}`,
+            `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${transferData.kbId}`,
             { method: "POST" }
           );
           
@@ -2171,6 +2174,13 @@ export default defineComponent({
         currentAgent.value = null;
       }
       
+      // Set assigned agent from props (if available)
+      if (props.assignedAgent) {
+        assignedAgent.value = props.assignedAgent;
+      } else {
+        assignedAgent.value = null;
+      }
+      
       // Set current knowledge base from props (if available)
       if (props.currentKnowledgeBase) {
         knowledgeBase.value = props.currentKnowledgeBase;
@@ -2212,6 +2222,16 @@ export default defineComponent({
       if (newAgent && currentAgent.value?.id !== newAgent.id) {
         console.log(`🤖 Agent updated in dialog: ${newAgent.name}`);
         currentAgent.value = newAgent;
+        assignedAgent.value = newAgent;
+      }
+    });
+    
+    // Watch for assigned agent changes to update dialog state
+    watch(() => props.assignedAgent, (newAgent) => {
+      if (newAgent && assignedAgent.value?.id !== newAgent.id) {
+        console.log(`🤖 Assigned agent updated in dialog: ${newAgent.name}`);
+        assignedAgent.value = newAgent;
+        currentAgent.value = newAgent;
       }
     });
 
@@ -2228,6 +2248,7 @@ export default defineComponent({
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
+      assignedAgent.value = agent;
       knowledgeBase.value = null; // No direct knowledge base creation here, it's part of the wizard
       showWizard.value = false;
       $q.notify({
@@ -2242,7 +2263,7 @@ export default defineComponent({
 
     // Handle knowledge base selection
     const handleKnowledgeBaseClick = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       // If clicking on the current KB, show add document dialog
       if (kb === knowledgeBase.value) {
@@ -2257,7 +2278,7 @@ export default defineComponent({
 
     // Handle KB switch confirmation
     const confirmSwitchKnowledgeBase = async () => {
-      if (!selectedKnowledgeBase.value || !currentAgent.value) return;
+      if (!selectedKnowledgeBase.value || !assignedAgent.value) return;
 
       try {
         console.log(
@@ -2265,9 +2286,9 @@ export default defineComponent({
         );
 
         // First, detach current KB from agent
-        if (knowledgeBase.value && currentAgent.value) {
+        if (knowledgeBase.value && assignedAgent.value) {
           const deleteResponse = await fetch(
-            `/api/agents/${currentAgent.value.id}/knowledge-bases/${knowledgeBase.value.uuid}`,
+            `/api/agents/${assignedAgent.value.id}/knowledge-bases/${knowledgeBase.value.uuid}`,
             {
               method: "DELETE",
             }
@@ -2281,9 +2302,9 @@ export default defineComponent({
         }
 
         // Then associate new KB with agent
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           const postResponse = await fetch(
-            `/api/agents/${currentAgent.value.id}/knowledge-bases/${selectedKnowledgeBase.value.uuid}`,
+            `/api/agents/${assignedAgent.value.id}/knowledge-bases/${selectedKnowledgeBase.value.uuid}`,
             {
               method: "POST",
             }
@@ -2324,12 +2345,13 @@ export default defineComponent({
 
         // Update local state with the verified data
         knowledgeBase.value = actualKb;
-        if (currentAgent.value) {
-          currentAgent.value.knowledgeBase = actualKb;
+        if (assignedAgent.value) {
+          assignedAgent.value.knowledgeBase = actualKb;
+          currentAgent.value = assignedAgent.value;
         }
 
         // Emit event to parent to update agent badge
-        emit("agent-updated", currentAgent.value);
+        emit("agent-updated", assignedAgent.value);
 
         // Refresh the knowledge base list to reflect the change
         await refreshKnowledgeBases();
@@ -2376,10 +2398,10 @@ export default defineComponent({
           const knowledgeBases: DigitalOceanKnowledgeBase[] =
             await kbResponse.json();
 
-          // Get all connected KBs from the current agent
-          const connectedKBs = currentAgent.value?.knowledgeBases ||
-            (currentAgent.value?.knowledgeBase
-            ? [currentAgent.value.knowledgeBase]
+          // Get all connected KBs from the assigned agent
+          const connectedKBs = assignedAgent.value?.knowledgeBases ||
+            (assignedAgent.value?.knowledgeBase
+            ? [assignedAgent.value.knowledgeBase]
               : []);
 
           // Combine available KBs with connected KBs, avoiding duplicates
@@ -2396,7 +2418,7 @@ export default defineComponent({
           );
 
           // Update the current knowledge base to reflect the switch
-          if (currentAgent.value && selectedKnowledgeBase.value) {
+          if (assignedAgent.value && selectedKnowledgeBase.value) {
             knowledgeBase.value = selectedKnowledgeBase.value;
           }
         }
@@ -3404,19 +3426,19 @@ export default defineComponent({
     // Attach knowledge base to current agent
     const attachKnowledgeBaseToAgent = async (kbId: string, jobStatus: any) => {
       try {
-        if (!currentAgent.value) {
-          console.warn('⚠️ No current agent to attach KB to');
+        if (!assignedAgent.value) {
+          console.warn('⚠️ No assigned agent to attach KB to');
           return;
         }
         
-        // Checking current agent values
+        // Checking assigned agent values
         
-        if (!currentAgent.value.uuid && !currentAgent.value.id) {
-          console.warn('⚠️ Current agent has no UUID or ID');
+        if (!assignedAgent.value.uuid && !assignedAgent.value.id) {
+          console.warn('⚠️ Assigned agent has no UUID or ID');
           return;
         }
         
-        const agentId = currentAgent.value.uuid || currentAgent.value.id;
+        const agentId = assignedAgent.value.uuid || assignedAgent.value.id;
         console.log(`🔗 Attaching knowledge base ${kbId} to agent ${agentId}`);
         
         // Call the backend to attach the KB to the agent
@@ -3461,18 +3483,18 @@ export default defineComponent({
       }
     };
 
-    // Helper to check if a KB is connected to the current agent
+    // Helper to check if a KB is connected to the assigned agent
     const isKnowledgeBaseConnected = (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) {
-        // No current agent
+      if (!assignedAgent.value) {
+        // No assigned agent
         return false;
       }
 
       // Check against all connected KBs
       const connectedKBs =
-        currentAgent.value.knowledgeBases ||
-        (currentAgent.value.knowledgeBase
-          ? [currentAgent.value.knowledgeBase]
+        assignedAgent.value.knowledgeBases ||
+        (assignedAgent.value.knowledgeBase
+          ? [assignedAgent.value.knowledgeBase]
           : []);
       
       const isConnected = connectedKBs.some((connectedKB) => connectedKB.uuid === kb.uuid);
@@ -3484,7 +3506,7 @@ export default defineComponent({
     const confirmDetachKnowledgeBase = async (
       kb: DigitalOceanKnowledgeBase
     ) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       confirmTitle.value = "Confirm Detach";
       confirmMessage.value = `Are you sure you want to detach the knowledge base "${kb.name}" from the agent?`;
@@ -3496,7 +3518,7 @@ export default defineComponent({
     const confirmConnectKnowledgeBase = async (
       kb: DigitalOceanKnowledgeBase
     ) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       confirmTitle.value = "Confirm Connect";
       confirmMessage.value = `Are you sure you want to connect the knowledge base "${kb.name}" to the agent?`;
@@ -3506,7 +3528,7 @@ export default defineComponent({
 
     // Handle KB detachment
     const detachKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
       
       // Prevent rapid successive calls
       if (isUpdating.value) {
@@ -3517,7 +3539,7 @@ export default defineComponent({
       isUpdating.value = true;
       try {
         const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+          `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${kb.uuid}`,
           {
             method: "DELETE",
           }
@@ -3534,24 +3556,26 @@ export default defineComponent({
         });
 
         // Update local agent state to reflect KB detachment
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           // Remove the KB from the agent's knowledgeBases array
-          if (currentAgent.value.knowledgeBases) {
-            currentAgent.value.knowledgeBases = currentAgent.value.knowledgeBases.filter(
+          if (assignedAgent.value.knowledgeBases) {
+            assignedAgent.value.knowledgeBases = assignedAgent.value.knowledgeBases.filter(
               (agentKb: any) => agentKb.uuid !== kb.uuid
             );
           }
           // Clear the single knowledgeBase property if it matches
-          if (currentAgent.value.knowledgeBase && currentAgent.value.knowledgeBase.uuid === kb.uuid) {
-            currentAgent.value.knowledgeBase = null;
+          if (assignedAgent.value.knowledgeBase && assignedAgent.value.knowledgeBase.uuid === kb.uuid) {
+            assignedAgent.value.knowledgeBase = null;
           }
+          // Update currentAgent to match assignedAgent
+          currentAgent.value = assignedAgent.value;
         }
         
         // Update local knowledge base state
         knowledgeBase.value = null;
         
         // Emit event to parent to update agent badge
-        emit("agent-updated", currentAgent.value);
+        emit("agent-updated", assignedAgent.value);
         
         // Don't emit refresh-agent-data to prevent overriding the current agent
         // emit("refresh-agent-data");
@@ -3568,8 +3592,8 @@ export default defineComponent({
 
     // Handle KB connection
     const connectKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) {
-        // No current agent
+      if (!assignedAgent.value) {
+        // No assigned agent
         return;
       }
       
@@ -3579,11 +3603,11 @@ export default defineComponent({
         return;
       }
 
-      console.log(`[*] Connecting KB "${kb.name}" to agent "${currentAgent.value.name}"`);
+      console.log(`[*] Connecting KB "${kb.name}" to agent "${assignedAgent.value.name}"`);
       isUpdating.value = true;
       try {
         const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+          `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${kb.uuid}`,
           {
             method: "POST",
           }
@@ -3652,27 +3676,29 @@ export default defineComponent({
         }
 
         // Update local agent state to reflect KB connection
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           // Add the KB to the agent's knowledgeBases array
-          if (!currentAgent.value.knowledgeBases) {
-            currentAgent.value.knowledgeBases = [];
+          if (!assignedAgent.value.knowledgeBases) {
+            assignedAgent.value.knowledgeBases = [];
           }
           // Check if KB is not already in the array
-          const existingKb = currentAgent.value.knowledgeBases.find(
+          const existingKb = assignedAgent.value.knowledgeBases.find(
             (agentKb: any) => agentKb.uuid === kb.uuid
           );
           if (!existingKb) {
-            currentAgent.value.knowledgeBases.push(kb);
+            assignedAgent.value.knowledgeBases.push(kb);
           }
           // Set as single knowledgeBase property
-          currentAgent.value.knowledgeBase = kb;
+          assignedAgent.value.knowledgeBase = kb;
+          // Update currentAgent to match assignedAgent
+          currentAgent.value = assignedAgent.value;
         }
         
         // Update local knowledge base state
         knowledgeBase.value = kb;
         
         // Emit event to parent to update agent badge
-        emit("agent-updated", currentAgent.value);
+        emit("agent-updated", assignedAgent.value);
         
         // Don't emit refresh-agent-data to prevent overriding the current agent
         // emit("refresh-agent-data");
