@@ -751,30 +751,30 @@
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <div class="text-subtitle2 q-mb-md">
+            <div class="text-subtitle2 q-mb-md">
             Create knowledge base from your existing bucket files:
-          </div>
+            </div>
 
-          <q-form
+            <q-form
             @submit="handleCreateKbSubmit"
-            class="q-gutter-md"
-          >
-            <q-input
-              v-model="newKbName"
-              label="Knowledge Base Name"
-              outlined
-              :rules="[(val) => !!val || 'Name is required']"
-              hint="Enter a descriptive name for your knowledge base"
+              class="q-gutter-md"
+            >
+              <q-input
+                v-model="newKbName"
+                label="Knowledge Base Name"
+                outlined
+                :rules="[(val) => !!val || 'Name is required']"
+                hint="Enter a descriptive name for your knowledge base"
               readonly
-            />
+              />
 
-            <q-input
-              v-model="newKbDescription"
-              label="Description"
-              outlined
-              type="textarea"
-              rows="3"
-              hint="Optional description of the knowledge base contents"
+              <q-input
+                v-model="newKbDescription"
+                label="Description"
+                outlined
+                type="textarea"
+                rows="3"
+                hint="Optional description of the knowledge base contents"
               readonly
             />
 
@@ -1370,6 +1370,14 @@ export default defineComponent({
       type: Array,
       default: () => [],
     },
+    currentAgent: {
+      type: Object,
+      default: null,
+    },
+    currentKnowledgeBase: {
+      type: Object,
+      default: null,
+    },
   },
   emits: [
     "update:modelValue",
@@ -1872,44 +1880,44 @@ export default defineComponent({
       return []
     };
 
-    // Load current agent info with debouncing
-    const loadAgentInfo = async () => {
-      console.log(`🔐 [DEBUG] loadAgentInfo called at: ${new Date().toISOString()}`);
+    // Note: loadAgentInfo function removed - replaced with clean approach
+    // const loadAgentInfo = async () => {
+      // console.log(`🔐 [DEBUG] loadAgentInfo called at: ${new Date().toISOString()}`);
       
-      // Clear any existing debounce timer
-      if (loadAgentInfoDebounceTimer.value) {
-        console.log(`🔐 [DEBUG] Clearing existing debounce timer`);
-        clearTimeout(loadAgentInfoDebounceTimer.value);
-      }
+      // // Clear any existing debounce timer
+      // if (loadAgentInfoDebounceTimer.value) {
+      //   console.log(`🔐 [DEBUG] Clearing existing debounce timer`);
+      //   clearTimeout(loadAgentInfoDebounceTimer.value);
+      // }
       
-      // Set a new debounce timer
-      console.log(`🔐 [DEBUG] Setting 300ms debounce timer`);
-      loadAgentInfoDebounceTimer.value = setTimeout(async () => {
-        console.log(`🔐 [DEBUG] Debounce timer fired, calling performLoadAgentInfo`);
-        await performLoadAgentInfo();
-      }, 300); // 300ms debounce
-    };
+      // // Set a new debounce timer
+      // console.log(`🔐 [DEBUG] Setting 300ms debounce timer`);
+      // loadAgentInfoDebounceTimer.value = setTimeout(async () => {
+      //   console.log(`🔐 [DEBUG] Debounce timer fired, calling performLoadAgentInfo`);
+      //   await performLoadAgentInfo();
+      // }, 300); // 300ms debounce
+    // };
     
-    // Actual load agent info implementation
-    const performLoadAgentInfo = async () => {
-      console.log(`🔐 [DEBUG] performLoadAgentInfo called at: ${new Date().toISOString()}`);
+    // Note: performLoadAgentInfo function removed - replaced with clean approach
+    // const performLoadAgentInfo = async () => {
+      // console.log(`🔐 [DEBUG] performLoadAgentInfo called at: ${new Date().toISOString()}`);
       
-      // Prevent multiple simultaneous calls
-      if (isLoading.value) {
-        console.log("Skipping duplicate loadAgentInfo request");
-        return;
-      }
+      // // Prevent multiple simultaneous calls
+      // if (isLoading.value) {
+      //   console.log("Skipping duplicate loadAgentInfo request");
+      //   return;
+      // }
       
-      // Add delay to avoid 429 errors during app initialization
-      console.log(`🔐 [DEBUG] Adding 500ms delay before API calls`);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // // Add delay to avoid 429 errors during app initialization
+      // console.log(`🔐 [DEBUG] Adding 500ms delay before API calls`);
+      // await new Promise(resolve => setTimeout(resolve, 500));
       
-      isLoading.value = true;
+      // isLoading.value = true;
       
-      try {
-        // For authenticated users, only load current agent if they have been approved
-        // For unauthenticated users (legacy) and deep link users, load current agent from legacy system
-        if (!isAuthenticated.value || (localCurrentUser.value?.userId?.startsWith('deep_link_'))) {
+      // try {
+      //   // For authenticated users, only load current agent if they have been approved
+      //   // For unauthenticated users (legacy) and deep link users, load current agent from legacy system
+      //   if (!isAuthenticated.value || (localCurrentUser.value?.userId?.startsWith('deep_link_'))) {
           // Load current agent info from legacy system
         const currentAgentResponse = await fetch(
             `${API_BASE_URL}/current-agent`,
@@ -2103,9 +2111,9 @@ export default defineComponent({
         });
       } finally {
         
-        isLoading.value = false;
-      }
-    };
+        // isLoading.value = false;
+      // }
+    // };
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
@@ -2132,12 +2140,12 @@ export default defineComponent({
           // Update the UI with the agent data from the save response
           if (result.agent) {
             currentAgent.value = result.agent;
-            
-            // Emit agent update event
-            emit("agent-updated", result.agent);
 
-            $q.notify({
-              type: "positive",
+          // Emit agent update event
+          emit("agent-updated", result.agent);
+
+          $q.notify({
+            type: "positive",
               message: `Agent "${result.agent.name}" selected successfully!`,
               timeout: 3000,
             });
@@ -2336,37 +2344,85 @@ export default defineComponent({
       isDialogLoading.value = true;
     };
 
-    // Load agent info when dialog opens
+    // Load available agents from DO API
+    const loadAvailableAgents = async () => {
+      try {
+        const currentUsername = localCurrentUser.value?.userId || 'Public User';
+        const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
+        if (agentsResponse.ok) {
+          const agents = await agentsResponse.json();
+          availableAgents.value = agents;
+          console.log(`🤖 Loaded ${agents.length} available agents for ${currentUsername}`);
+        }
+      } catch (error) {
+        console.error('❌ Error loading available agents:', error);
+        availableAgents.value = [];
+      }
+    };
+
+    // Load available knowledge bases from DO API
+    const loadAvailableKnowledgeBases = async () => {
+      try {
+        let kbResponse;
+        if (isAuthenticated.value && localCurrentUser.value?.userId) {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases?user=${localCurrentUser.value.userId}`);
+        } else {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+        }
+        
+        if (kbResponse.ok) {
+          const allKnowledgeBases = await kbResponse.json();
+          availableKnowledgeBases.value = allKnowledgeBases;
+          console.log(`📚 Loaded ${allKnowledgeBases.length} available knowledge bases`);
+        }
+      } catch (error) {
+        console.error('❌ Error loading available knowledge bases:', error);
+        availableKnowledgeBases.value = [];
+      }
+    };
+
+    // Load current user state from props/session (no API calls needed)
+    const loadCurrentUserState = () => {
+      // Set authentication status from props
+      isAuthenticated.value = !!(props.currentUser && props.currentUser.userId && props.currentUser.userId !== 'Public User');
+      localCurrentUser.value = props.currentUser;
+      
+      // Set current agent from props (if available)
+      if (props.currentAgent) {
+        currentAgent.value = props.currentAgent;
+        console.log(`🤖 Current agent from props: ${props.currentAgent.name}`);
+      } else {
+        currentAgent.value = null;
+        console.log(`🤖 No current agent in props`);
+      }
+      
+      // Set current knowledge base from props (if available)
+      if (props.currentKnowledgeBase) {
+        knowledgeBase.value = props.currentKnowledgeBase;
+        console.log(`📚 Current KB from props: ${props.currentKnowledgeBase.name}`);
+      } else {
+        knowledgeBase.value = null;
+        console.log(`📚 No current KB in props`);
+      }
+    };
+
+    // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
       try {
-        console.log(`🔐 [DEBUG] Dialog opening - checking authentication status...`);
-        console.log(`🔐 [DEBUG] onDialogOpen called at: ${new Date().toISOString()}`);
+        console.log(`🔐 Dialog opening - loading data from DO API only`);
         
-        console.log(`🔐 [DEBUG] Calling checkAuthenticationStatus`);
-        await checkAuthenticationStatus();
-        console.log(`🔐 [DEBUG] checkAuthenticationStatus completed`);
+        // Load current user state first (no API calls)
+        loadCurrentUserState();
         
-        console.log(`🔐 [DEBUG] Calling loadAgentInfo`);
-        await loadAgentInfo();
-        console.log(`🔐 [DEBUG] loadAgentInfo completed`);
+        // Load available data from DO API in parallel
+        await Promise.all([
+          loadAvailableAgents(),
+          loadAvailableKnowledgeBases()
+        ]);
         
-        // Check user files for authenticated users (consolidated from watcher)
-        if (isAuthenticated.value && !isDeepLinkUser.value) {
-          console.log(`🔐 [DEBUG] Calling checkUserFiles for authenticated user`);
-          await checkUserFiles();
-          console.log(`🔐 [DEBUG] checkUserFiles completed`);
-        }
-        
-        // Display current agent information (only if not already logged)
-        if (currentAgent.value && !hasLoggedAgentAssignment.value) {
-          console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
-        }
-        
-        console.log(`🔐 [DEBUG] Calling updateWorkflowProgress`);
-        await updateWorkflowProgress(); // Update workflow progress after loading data
-        console.log(`🔐 [DEBUG] updateWorkflowProgress completed`);
-        
-        console.log(`🔐 [DEBUG] onDialogOpen completed at: ${new Date().toISOString()}`);
+        console.log(`✅ Dialog data loaded successfully`);
+      } catch (error) {
+        console.error('❌ Error loading dialog data:', error);
       } finally {
         isDialogLoading.value = false;
       }
@@ -2823,10 +2879,10 @@ export default defineComponent({
             
             const uploadResponse = await fetch('/api/upload-to-bucket', {
               method: 'POST',
-              headers: {
+          headers: {
                 'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
+          },
+          body: JSON.stringify({
                 fileName: fileName,
                 content: aiContent,
                 fileType: fileType
@@ -2859,8 +2915,8 @@ export default defineComponent({
         // Step 2: Create knowledge base with uploaded files
         console.log('📚 NEW CODE - Creating knowledge base...')
         const requestBody = {
-          name: newKbName.value,
-          description: newKbDescription.value,
+            name: newKbName.value,
+            description: newKbDescription.value,
           documents: uploadedFiles
         };
         console.log(`📚 NEW CODE - Creating KB with ${uploadedFiles.length} documents`);
