@@ -94,6 +94,7 @@ import {
   QSpace,
 } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 
 export default defineComponent({
   name: "SignInDialog",
@@ -260,10 +261,7 @@ export default defineComponent({
         console.log(`🔍 [SignInDialog] Authentication result:`, result);
 
         if (result.success) {
-          const userInfo = {
-            username: userId.value,
-            displayName: userId.value,
-          };
+          const userInfo = UserService.createAuthenticatedUser(userId.value, userId.value);
 
           console.log(`✅ [SignInDialog] Authentication successful for user:`, userInfo);
           

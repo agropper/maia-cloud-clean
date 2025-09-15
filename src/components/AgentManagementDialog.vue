@@ -1270,6 +1270,7 @@ import { defineComponent, ref, computed, watch, nextTick, onMounted, onUnmounted
 import type { PropType } from "vue";
 import { useQuasar } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 import {
   QDialog,
   QCard,
@@ -2056,13 +2057,11 @@ export default defineComponent({
 
     // Handle user authenticated from PasskeyAuthDialog
     const handleUserAuthenticated = (userData: {
+      userId: string;
       username: string;
       displayName: string;
     }) => {
-      const userInfo = {
-        username: userData.username,
-        displayName: userData.displayName,
-      };
+      const userInfo = UserService.normalizeUserObject(userData);
       localCurrentUser.value = userInfo;
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
@@ -2142,12 +2141,12 @@ export default defineComponent({
     // Load available agents from DO API
     const loadAvailableAgents = async () => {
       try {
-        const currentUsername = localCurrentUser.value?.userId || 'Public User';
-        const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUsername}`);
+        const currentUserId = UserService.getUserId(localCurrentUser.value);
+        const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
         if (agentsResponse.ok) {
           const agents = await agentsResponse.json();
           availableAgents.value = agents;
-          console.log(`🤖 Loaded ${agents.length} available agents for ${currentUsername}`);
+          console.log(`🤖 Loaded ${agents.length} available agents for ${currentUserId}`);
         }
       } catch (error) {
         console.error('❌ Error loading available agents:', error);
@@ -2178,9 +2177,10 @@ export default defineComponent({
 
     // Load current user state from props/session (no API calls needed)
     const loadCurrentUserState = () => {
-      // Set authentication status from props
-      isAuthenticated.value = !!(props.currentUser && props.currentUser.userId && props.currentUser.userId !== 'Public User');
-      localCurrentUser.value = props.currentUser;
+      // Normalize the user object to ensure consistent structure
+      const normalizedUser = UserService.normalizeUserObject(props.currentUser);
+      localCurrentUser.value = normalizedUser;
+      isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
       
       // Set current agent from props (if available)
       if (props.currentAgent) {

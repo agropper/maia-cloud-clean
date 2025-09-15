@@ -20,6 +20,7 @@ import SavedChatsDialog from "./SavedChatsDialog.vue";
 import { useCouchDB, type SavedChat } from "../composables/useCouchDB";
 import { useGroupChat } from "../composables/useGroupChat";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
@@ -94,7 +95,7 @@ export default defineComponent({
     const currentAgent = ref<any>(null);
     const currentKnowledgeBase = ref<any>(null);
     const agentWarning = ref<string>("");
-    const currentUser = ref<any>({ userId: 'Public User', displayName: 'Public User' });
+    const currentUser = ref<any>(UserService.createPublicUser());
     const pendingShareId = ref<string | null>(null);
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
@@ -346,13 +347,12 @@ export default defineComponent({
         appState.currentChatId = groupChat.id;
         
         // Set current user to the identified user (this will update the Agent badge)
-        currentUser.value = { 
-          userId: userData.userId, 
-          displayName: userData.name,
-          email: userData.email,
-          isDeepLinkUser: true,
-          shareId: userData.shareId
-        };
+        currentUser.value = UserService.createDeepLinkUser(
+          userData.userId, 
+          userData.name, 
+          userData.email, 
+          userData.shareId
+        );
         
         // Clear any existing query and active question (don't set active question name - it should use current user)
         appState.currentQuery = '';
@@ -413,7 +413,7 @@ export default defineComponent({
 
     const handleUserAuthenticated = async (userData: any) => {
       // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
-      currentUser.value = userData;
+      currentUser.value = UserService.normalizeUserObject(userData);
       
       // No need to call checkExistingSession() - we already know user is authenticated
       // await checkExistingSession();
@@ -442,7 +442,7 @@ export default defineComponent({
       }
       
       // Set to Public User instead of null (there should never be "no user")
-      currentUser.value = { userId: 'Public User', displayName: 'Public User' };
+      currentUser.value = UserService.createPublicUser();
     };
 
     const handleSignInCancelled = () => {
