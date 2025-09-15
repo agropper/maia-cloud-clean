@@ -3646,7 +3646,7 @@ app.get('/api/current-agent', async (req, res) => {
     // Get agent details including associated knowledge bases
     let agentData;
     try {
-      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
       agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
     } catch (error) {
       console.error(`❌ Get current agent error:`, error);
@@ -3735,12 +3735,47 @@ app.get('/api/current-agent', async (req, res) => {
     
 
 
-    // SECURITY CHECK: Validate agent ownership for non-deep-link users
-    if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_')) {
-      const agentName = agentData.name;
+    // SECURITY CHECK: Validate agent ownership based on user type
+    const agentName = agentData.name;
+    
+    if (currentUser === 'Public User') {
+      // Public User can only see agents that start with 'public-'
+      if (!agentName.startsWith('public-')) {
+        console.error(`🚨 SECURITY VIOLATION: Public User assigned agent ${agentName} does not start with 'public-'`);
+        
+        // Clear the invalid agent assignment
+        try {
+          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+          if (userDoc) {
+            const updatedUserDoc = {
+              ...userDoc,
+              currentAgentId: null,
+              currentAgentName: null,
+              currentAgentEndpoint: null,
+              currentAgentSetAt: null,
+              assignedAgentId: null,
+              assignedAgentName: null,
+              updatedAt: new Date().toISOString()
+            };
+            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            
+            // Clear from cache
+            UserStateManager.removeUser('Public User');
+          }
+        } catch (clearError) {
+          console.error(`❌ Failed to clear invalid agent assignment:`, clearError.message);
+        }
+        
+        return res.status(403).json({ 
+          agent: null,
+          message: 'Security violation detected: Public User can only access public agents. Please contact administrator.',
+          requiresAgentSelection: true
+        });
+      }
+    } else if (currentUser !== 'Unknown User' && !currentUser.startsWith('deep_link_')) {
+      // Authenticated users can only see agents that match their user ID pattern
       const expectedPrefix = `${currentUser}-agent-`;
       
-      // Check if agent name matches the expected pattern for this user
       if (!agentName.startsWith(expectedPrefix)) {
         console.error(`🚨 SECURITY VIOLATION: User ${currentUser} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
         
