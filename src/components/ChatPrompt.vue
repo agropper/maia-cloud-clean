@@ -395,6 +395,8 @@ export default defineComponent({
         // Fetch current agent data to get updated warning information
         try {
           console.log(`🔍 [DEBUG] handleAgentUpdated calling fetchCurrentAgent (cached)`);
+          // Clear the API call cache to force a fresh request
+          apiCallCache.delete('current-agent');
           await fetchCurrentAgent();
           // fetchCurrentAgent() already handles updating currentAgent, currentKnowledgeBase, and agentWarning
         } catch (error) {
