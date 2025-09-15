@@ -71,8 +71,14 @@ export class UserService {
    * @returns {string} The user ID
    */
   static getUserId(userObject) {
-    if (!userObject) return 'Public User';
-    return userObject.userId || userObject.username || 'Public User';
+    console.log(`🔍 [DEBUG] UserService.getUserId - userObject:`, userObject);
+    if (!userObject) {
+      console.log(`🔍 [DEBUG] UserService.getUserId - no userObject, returning 'Public User'`);
+      return 'Public User';
+    }
+    const userId = userObject.userId || userObject.username || 'Public User';
+    console.log(`🔍 [DEBUG] UserService.getUserId - extracted userId:`, userId);
+    return userId;
   }
 
   /**
@@ -104,17 +110,23 @@ export class UserService {
    * @returns {Object} Normalized user object
    */
   static normalizeUserObject(userObject) {
-    if (!userObject) return this.createPublicUser();
+    console.log(`🔍 [DEBUG] UserService.normalizeUserObject - input userObject:`, userObject);
+    if (!userObject) {
+      console.log(`🔍 [DEBUG] UserService.normalizeUserObject - no userObject, creating Public User`);
+      return this.createPublicUser();
+    }
     
     const userId = this.getUserId(userObject);
     const displayName = userObject.displayName || userObject.username || userId;
     
-    return this.createUserObject(userId, displayName, {
+    const normalized = this.createUserObject(userId, displayName, {
       email: userObject.email,
       isDeepLinkUser: userObject.isDeepLinkUser,
       shareId: userObject.shareId,
       ...userObject
     });
+    console.log(`🔍 [DEBUG] UserService.normalizeUserObject - normalized result:`, normalized);
+    return normalized;
   }
 }
 

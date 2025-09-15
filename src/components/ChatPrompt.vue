@@ -412,8 +412,10 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
-      currentUser.value = UserService.normalizeUserObject(userData);
+      console.log(`🔍 [DEBUG] handleUserAuthenticated - userData:`, userData);
+      const normalizedUser = UserService.normalizeUserObject(userData);
+      console.log(`🔍 [DEBUG] handleUserAuthenticated - normalizedUser:`, normalizedUser);
+      currentUser.value = normalizedUser;
       
       // No need to call checkExistingSession() - we already know user is authenticated
       // await checkExistingSession();
