@@ -3390,6 +3390,7 @@ app.get('/api/current-agent', async (req, res) => {
   try {
     // Get current user from session if available
     let currentUser = req.session?.userId || 'Public User';
+    console.log(`🔍 [BACKEND DEBUG] /current-agent endpoint called for user: ${currentUser} at ${new Date().toISOString()}`);
     // console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
 //     console.log(`🔍 [current-agent] Session data:`, {
 //       hasSession: !!req.session,
@@ -3455,6 +3456,7 @@ app.get('/api/current-agent', async (req, res) => {
               // console.log(`🔗 [DEBUG] Step 4: Getting assigned agent for patient: ${patientUser}`);
               
               // Get the assigned agent for this patient
+              console.log(`🔍 [BACKEND DEBUG] /current-agent making internal call to assigned-agent for patient: ${patientUser}`);
               const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${patientUser}/assigned-agent`);
               // console.log(`🔗 [DEBUG] Step 4a: Assigned agent response status: ${assignedAgentResponse.status}`);
               
@@ -3495,6 +3497,7 @@ app.get('/api/current-agent', async (req, res) => {
         }
       } else {
         // Regular authenticated user - check assigned agent
+        console.log(`🔍 [BACKEND DEBUG] /current-agent making internal call to assigned-agent for regular user: ${currentUser}`);
         try {
           // Checking assigned agent for user
           const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
