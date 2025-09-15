@@ -379,8 +379,8 @@ router.post("/register-verify", async (req, res) => {
         success: true,
         message: "Passkey registration successful",
         user: {
-          userId: updatedUser.userId,
-          displayName: updatedUser.displayName,
+          userId: updatedUser._id, // Use _id instead of userId
+          displayName: updatedUser.displayName || updatedUser._id,
         },
       });
     } else {
@@ -546,8 +546,8 @@ router.post("/authenticate-verify", async (req, res) => {
         success: true,
         message: "Authentication successful",
         user: {
-          userId: updatedUser.userId,
-          displayName: updatedUser.displayName,
+          userId: updatedUser._id, // Use _id instead of userId
+          displayName: updatedUser.displayName || updatedUser._id,
         },
       };
       
