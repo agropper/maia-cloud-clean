@@ -631,8 +631,9 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
         const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
         const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
         
-        // Only log once per session to prevent spam
-        if (!req.session.assignedAgentLogged) {
+        // Only log once per user per session to prevent spam
+        const logKey = `assignedAgentLogged_${userId}`;
+        if (!req.session[logKey]) {
           console.log(`🔍 [CACHED] assigned-agent endpoint for ${userId}:`, {
             assignedAgentId: cachedAgentData.assignedAgentId,
             currentAgentId: cachedAgentData.currentAgentId,
@@ -642,7 +643,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
             finalAssignedAgentName: assignedAgentName,
             source: 'cache'
           });
-          req.session.assignedAgentLogged = true;
+          req.session[logKey] = true;
         }
         
         return res.json({

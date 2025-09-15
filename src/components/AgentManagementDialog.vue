@@ -1502,6 +1502,9 @@ export default defineComponent({
     const executionInProgress = ref(false);
     const executionComplete = ref(false);
     const selectedFileAction = ref('');
+    
+    // Debounce timer for loadAgentInfo calls
+    const loadAgentInfoDebounceTimer = ref(null);
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -1869,8 +1872,21 @@ export default defineComponent({
       return []
     };
 
-    // Load current agent info
+    // Load current agent info with debouncing
     const loadAgentInfo = async () => {
+      // Clear any existing debounce timer
+      if (loadAgentInfoDebounceTimer.value) {
+        clearTimeout(loadAgentInfoDebounceTimer.value);
+      }
+      
+      // Set a new debounce timer
+      loadAgentInfoDebounceTimer.value = setTimeout(async () => {
+        await performLoadAgentInfo();
+      }, 300); // 300ms debounce
+    };
+    
+    // Actual load agent info implementation
+    const performLoadAgentInfo = async () => {
       // Prevent multiple simultaneous calls
       if (isLoading.value) {
         console.log("Skipping duplicate loadAgentInfo request");
