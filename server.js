@@ -1553,21 +1553,57 @@ app.post('/api/personal-chat', async (req, res) => {
         try {
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
           
-          if (userDoc && userDoc.currentAgentId) {
-            // Get the agent's deployment URL from DigitalOcean API
-            const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
-            const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+          // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
+          const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
+          
+          if (userDoc && userAgentId) {
+            // Check if the selected agent is still available to Public User (not owned by authenticated users)
+            const isAgentAvailable = await isAgentAvailableToPublicUser(userAgentId);
             
-            if (agentData && agentData.deployment?.url) {
-              agentModel = agentData.name;  // Use agent name for DigitalOcean API
-              agentName = agentData.name;
-              agentId = userDoc.currentAgentId;
-              agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's deployment URL
+            if (isAgentAvailable) {
+              // Get the agent's deployment URL from DigitalOcean API
+              const agentResponse = await doRequest(`/v2/gen-ai/agents/${userAgentId}`);
+              const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
               
-              // Get knowledge base info for this agent
-              if (agentData.knowledge_bases) {
-                knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+              if (agentData && agentData.deployment?.url) {
+                agentModel = agentData.name;  // Use agent name for DigitalOcean API
+                agentName = agentData.name;
+                agentId = userAgentId;
+                agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's deployment URL
+                
+                // Get knowledge base info for this agent
+                if (agentData.knowledge_bases) {
+                  knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
+                }
+              } else {
+                // console.log(`🔍 [personal-chat] Public User's agent ${userDoc.currentAgentName || userDoc.assignedAgentName} has no deployment URL`);
               }
+            } else {
+              // Agent is no longer available to Public User (now owned by authenticated user)
+              // Clear the invalid agent selection
+              const updatedUserDoc = {
+                ...userDoc,
+                currentAgentId: null,
+                currentAgentName: null,
+                currentAgentEndpoint: null,
+                currentAgentSetAt: null,
+                assignedAgentId: null,
+                assignedAgentName: null,
+                updatedAt: new Date().toISOString()
+              };
+              await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+              
+              // Update the cache to reflect the cleared assignment
+              UserStateManager.updateUserStateSection('Public User', 'agent', {
+                currentAgentId: null,
+                currentAgentName: null,
+                currentAgentEndpoint: null,
+                currentAgentSetAt: null,
+                assignedAgentId: null,
+                assignedAgentName: null
+              });
+              
+              // console.log(`🔍 [personal-chat] Public User's selected agent is now owned by an authenticated user, cleared selection`);
             }
           } else {
             // console.log(`🔍 [personal-chat] No current agent selection found for Public User`);
@@ -3565,8 +3601,8 @@ app.get('/api/current-agent', async (req, res) => {
         try {
           // First try UserStateManager cache (updated by POST endpoint)
           const cachedUser = UserStateManager.getUserState(currentUser);
-          if (cachedUser && cachedUser.currentAgentId) {
-            agentId = cachedUser.currentAgentId;
+          if (cachedUser && (cachedUser.currentAgentId || cachedUser.assignedAgentId)) {
+            agentId = cachedUser.currentAgentId || cachedUser.assignedAgentId;
           } else {
             // Fallback to database if not in UserStateManager cache
             let userDoc = getCache('users', currentUser);
@@ -3576,8 +3612,8 @@ app.get('/api/current-agent', async (req, res) => {
                 setCache('users', currentUser, userDoc);
               }
             }
-            if (userDoc && userDoc.currentAgentId) {
-              agentId = userDoc.currentAgentId;
+            if (userDoc && (userDoc.currentAgentId || userDoc.assignedAgentId)) {
+              agentId = userDoc.currentAgentId || userDoc.assignedAgentId;
             } else {
               // No current agent selection found for user
               return res.json({ 
@@ -3601,15 +3637,19 @@ app.get('/api/current-agent', async (req, res) => {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
 //           console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
-          if (userDoc && userDoc.currentAgentId) {
+          
+          // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
+          const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
+          
+          if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
-            // console.log(`🔍 [current-agent] Validating agent availability for Public User: ${userDoc.currentAgentId}`);
-            const isAgentAvailable = await isAgentAvailableToPublicUser(userDoc.currentAgentId);
-            // console.log(`🔍 [current-agent] Agent ${userDoc.currentAgentId} available to Public User: ${isAgentAvailable}`);
+            // console.log(`🔍 [current-agent] Validating agent availability for Public User: ${userAgentId}`);
+            const isAgentAvailable = await isAgentAvailableToPublicUser(userAgentId);
+            // console.log(`🔍 [current-agent] Agent ${userAgentId} available to Public User: ${isAgentAvailable}`);
             
             if (isAgentAvailable) {
-              agentId = userDoc.currentAgentId;
-              // console.log(`🔐 [current-agent] Using Public User's current agent selection: ${userDoc.currentAgentName} (${agentId})`);
+              agentId = userAgentId;
+              // console.log(`🔐 [current-agent] Using Public User's agent selection: ${userDoc.currentAgentName || userDoc.assignedAgentName} (${agentId})`);
             } else {
               // Agent is no longer available to Public User (now owned by authenticated user)
               // console.log(`🔍 [current-agent] Public User's selected agent ${userDoc.currentAgentName} is now owned by an authenticated user, clearing selection`);
@@ -3620,6 +3660,8 @@ app.get('/api/current-agent', async (req, res) => {
                 currentAgentName: null,
                 currentAgentEndpoint: null,
                 currentAgentSetAt: null,
+                assignedAgentId: null,
+                assignedAgentName: null,
                 updatedAt: new Date().toISOString()
               };
               await couchDBClient.saveDocument('maia_users', updatedUserDoc);

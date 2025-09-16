@@ -72,8 +72,6 @@ const updateUserActivity = (userId) => {
     needsDbUpdate: true // Mark for database update
   });
   
-  console.log(`[*] [User Activity] Updated activity for user ${userId} at ${now.toISOString()}`);
-  
   // Sync immediately for new users, then every minute for existing users
   if (wasNewUser || Date.now() - lastDatabaseSync > SYNC_INTERVAL) {
     syncActivityToDatabase();
@@ -85,8 +83,6 @@ const syncActivityToDatabase = async () => {
   if (!couchDBClient || userActivityTracker.size === 0) return;
   
   try {
-    console.log(`[*] [User Activity] Syncing ${userActivityTracker.size} user activities to database`);
-    
     for (const [userId, data] of userActivityTracker.entries()) {
       if (!data.needsDbUpdate) continue; // Skip users that don't need updates
       
@@ -112,19 +108,14 @@ const syncActivityToDatabase = async () => {
           userResult = await couchDBClient.findDocuments('maia_users', userQuery);
         }
         
-        console.log(`🔍 [DEBUG] Looking for user ${userId} in database, found ${userResult.docs.length} documents`);
-        
         if (userResult.docs.length > 0) {
           const userDoc = userResult.docs[0];
-          console.log(`🔍 [DEBUG] Found user document:`, { _id: userDoc._id, userId: userDoc.userId, displayName: userDoc.displayName });
-          
           const updatedDoc = {
             ...userDoc,
             lastActivity: data.lastActivity.toISOString()
           };
           
           await couchDBClient.saveDocument('maia_users', updatedDoc);
-          console.log(`[*] [User Activity] Updated lastActivity for user ${userId} at ${data.lastActivity.toISOString()}`);
           
           // Mark as synced
           data.needsDbUpdate = false;
@@ -137,7 +128,6 @@ const syncActivityToDatabase = async () => {
     }
     
     lastDatabaseSync = Date.now();
-    console.log(`✅ [User Activity] Database sync completed`);
   } catch (error) {
     console.error('❌ Error syncing user activities to database:', error);
   }
@@ -176,13 +166,50 @@ const getAgentActivity = async (agentId) => {
 const getAllUserActivities = async () => {
   const activities = [];
   
-  // Add in-memory activities (most recent)
+  // First, get all users from database to ensure we have complete data
+  if (couchDBClient) {
+    try {
+      const result = await couchDBClient.findDocuments('maia_users', {
+        selector: {
+          _id: { $exists: true }
+        }
+      });
+      
+      // Add database activities (source of truth)
+      for (const userDoc of result.docs) {
+        if (userDoc.lastActivity) {
+          activities.push({
+            userId: userDoc._id, // Use _id as userId for consistency
+            lastActivity: userDoc.lastActivity,
+            source: 'database'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading activities from database:', error);
+    }
+  }
+  
+  // Add in-memory activities (most recent) - these will override database if newer
   for (const [userId, data] of userActivityTracker.entries()) {
-    activities.push({
-      userId: userId,
-      lastActivity: data.lastActivity,
-      needsDbUpdate: data.needsDbUpdate
-    });
+    const existingIndex = activities.findIndex(a => a.userId === userId);
+    if (existingIndex >= 0) {
+      // Update existing entry with in-memory data if it's newer
+      activities[existingIndex] = {
+        userId: userId,
+        lastActivity: data.lastActivity,
+        needsDbUpdate: data.needsDbUpdate,
+        source: 'memory'
+      };
+    } else {
+      // Add new in-memory activity
+      activities.push({
+        userId: userId,
+        lastActivity: data.lastActivity,
+        needsDbUpdate: data.needsDbUpdate,
+        source: 'memory'
+      });
+    }
   }
   
   return activities;
@@ -208,8 +235,6 @@ const loadUserActivityFromDatabase = async () => {
         });
       }
     }
-    
-    console.log(`[*] [User Activity] Loaded ${userActivityTracker.size} user activities from database on startup`);
   } catch (error) {
     console.error('Error loading user activity from database:', error);
   }
@@ -226,7 +251,6 @@ export const setCouchDBClient = (client) => {
 const requireAdminAuth = async (req, res, next) => {
   try {
     // TEMPORARY: Bypass authentication for testing
-    console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
     req.adminUser = { _id: 'admin', isAdmin: true };
     return next();
     
@@ -280,7 +304,6 @@ router.get('/health', requireAdminAuth, async (req, res) => {
     
     // Try to access the maia_users database
     const users = await couchDBClient.getAllDocuments('maia_users');
-    console.log('✅ Admin management health check - system ready, user count:', users.length);
     res.json({ 
       status: 'ready',
       message: 'Admin management system is ready',
@@ -328,7 +351,6 @@ const checkDatabaseReady = async (req, res, next) => {
     
     // Try to get a small sample of users to verify system is ready
     const users = await couchDBClient.getAllDocuments('maia_users');
-    console.log('✅ Database system ready, can access users');
     next();
   } catch (error) {
     console.log('⏳ Database system readiness check failed:', error.message);
@@ -371,7 +393,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       if (existingUser) {
         if (existingUser.isAdmin) {
           // Admin user exists - allow new passkey registration (replaces old one)
-          console.log('✅ Admin user exists, allowing new passkey registration:', username);
           return res.json({ 
             message: 'Admin user verified. You can now register a new passkey (this will replace your existing one).',
             username: existingUser._id,
@@ -381,7 +402,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
           });
         } else {
           // User exists but isn't admin - upgrade them to admin
-          console.log('✅ Upgrading existing user to admin:', username);
           const updatedUser = {
             ...existingUser,
             isAdmin: true,
@@ -399,7 +419,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       }
     } catch (error) {
       // User doesn't exist - create new admin user
-      console.log('✅ Creating new admin user:', username);
       const adminUser = {
         _id: username,
         type: 'admin',
@@ -408,7 +427,6 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
       };
       
       await couchDBClient.saveDocument('maia_users', adminUser);
-      console.log('✅ New admin user created successfully');
       
       return res.json({
         message: 'New admin user created successfully. You can now register your passkey.',
@@ -439,7 +457,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const userStateManager = req.app.locals.userStateManager;
     if (userStateManager) {
       userStateManager.clearCache();
-      console.log('🔍 [CACHE] Cleared UserStateManager cache for fresh Admin Panel data');
     }
     
     // Get all users from maia_users database
@@ -502,8 +519,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
-    // Admin Panel data loaded
-    
     res.json({ users });
     
   } catch (error) {
@@ -539,16 +554,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // DEBUG: Log the full user document to see what we're working with
-    console.log(`🔍 [DEBUG] User details for ${userId}:`, {
-      _id: userDoc._id,
-      ownedAgents: userDoc.ownedAgents,
-      currentAgentId: userDoc.currentAgentId,
-      currentAgentName: userDoc.currentAgentName,
-      agentAssignedAt: userDoc.agentAssignedAt,
-      approvalStatus: userDoc.approvalStatus,
-      workflowStage: determineWorkflowStage(userDoc)
-    });
     
     // Extract current agent information from ownedAgents if available
     let currentAgentId = userDoc.currentAgentId || null;
@@ -561,11 +566,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       currentAgentId = firstAgent.id;
       currentAgentName = firstAgent.name;
       agentAssignedAt = firstAgent.assignedAt;
-      console.log(`🔍 [DEBUG] Extracted current agent from ownedAgents:`, {
-        currentAgentId,
-        currentAgentName,
-        agentAssignedAt
-      });
     }
     
     // If we have currentAgentId but no agentAssignedAt, try to get it from ownedAgents
@@ -573,7 +573,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       const matchingAgent = userDoc.ownedAgents.find(agent => agent.id === currentAgentId);
       if (matchingAgent && matchingAgent.assignedAt) {
         agentAssignedAt = matchingAgent.assignedAt;
-        console.log(`🔍 [DEBUG] Extracted agentAssignedAt from ownedAgents:`, agentAssignedAt);
       }
     }
     
@@ -611,12 +610,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
     };
     
-    console.log(`🔍 [DEBUG] Final user info for ${userId}:`, {
-      currentAgentId: userInfo.currentAgentId,
-      currentAgentName: userInfo.currentAgentName,
-      agentAssignedAt: userInfo.agentAssignedAt,
-      ownedAgents: userInfo.ownedAgents
-    });
     
     res.json(userInfo);
     
@@ -677,7 +670,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     };
     
     // Validate consistency before saving
-    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
     validateWorkflowConsistency(updatedUser);
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
@@ -685,8 +677,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     // If approved, trigger resource creation workflow
     if (action === 'approve') {
       // TODO: Implement automatic agent and KB creation
-      // For now, just log that resources should be created
-      console.log(`🚀 User ${userId} approved - should create private AI agent and knowledge base`);
     }
     
     res.json({ 
@@ -785,7 +775,6 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
 router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`🔍 [BACKEND DEBUG] assigned-agent endpoint called for user: ${userId} at ${new Date().toISOString()}`);
     
     // First try to get from UserStateManager cache
     const userStateManager = req.app.locals.userStateManager;
@@ -797,21 +786,6 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
         const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
         const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
         
-        // Only log once per user per session to prevent spam
-        const logKey = `assignedAgentLogged_${userId}`;
-        if (!req.session[logKey]) {
-          console.log(`🔍 [CACHED] assigned-agent endpoint for ${userId}:`, {
-            assignedAgentId: cachedAgentData.assignedAgentId,
-            currentAgentId: cachedAgentData.currentAgentId,
-            assignedAgentName: cachedAgentData.assignedAgentName,
-            currentAgentName: cachedAgentData.currentAgentName,
-            finalAssignedAgentId: assignedAgentId,
-            finalAssignedAgentName: assignedAgentName,
-            source: 'cache'
-          });
-          req.session[logKey] = true;
-        }
-        
         return res.json({
           userId: userId,
           assignedAgentId: assignedAgentId,
@@ -822,7 +796,6 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     }
     
     // Fallback to database if cache miss
-    console.log(`🔍 [DB] assigned-agent endpoint for ${userId} - cache miss, fetching from database`);
     
     // Get user document with retry logic for rate limits
     let userDoc = null;
@@ -835,7 +808,6 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
         break;
       } catch (error) {
         if (error.statusCode === 429 && retries < maxRetries - 1) {
-          console.warn(`Rate limit hit for getUserByUsername, retrying in ${(retries + 1) * 2} seconds...`);
           await new Promise(resolve => setTimeout(resolve, (retries + 1) * 2000));
           retries++;
         } else {
@@ -886,26 +858,18 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
 router.post('/fix-user-data/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`🔧 [FIX] Fixing user data for: ${userId}`);
     
     // Get the user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
-    console.log(`🔍 [FIX] Current user data:`, {
-      _id: userDoc._id,
-      workflowStage: userDoc.workflowStage,
-      approvalStatus: userDoc.approvalStatus
-    });
     
     // Fix the inconsistency
     if (userDoc.workflowStage === 'approved' && !userDoc.approvalStatus) {
-      console.log(`🔧 [FIX] Setting approvalStatus to 'approved' for user ${userId}`);
       userDoc.approvalStatus = 'approved';
       userDoc.updatedAt = new Date().toISOString();
       userDoc.fixNotes = 'Fixed workflow inconsistency: set approvalStatus to match workflowStage';
       
       // Save the updated document
       await couchDBClient.saveDocument('maia_users', userDoc);
-      console.log(`✅ [FIX] User ${userId} fixed successfully`);
       
       res.json({ 
         message: `User ${userId} data fixed successfully`,
@@ -914,7 +878,6 @@ router.post('/fix-user-data/:userId', async (req, res) => {
         approvalStatus: userDoc.approvalStatus
       });
     } else {
-      console.log(`ℹ️ [FIX] No inconsistency found for user ${userId}`);
       res.json({ 
         message: `No inconsistency found for user ${userId}`,
         userId: userId,
@@ -957,7 +920,6 @@ function validateWorkflowConsistency(user) {
     throw error;
   }
   
-  console.log(`✅ [WORKFLOW VALIDATION] User ${user._id}: workflowStage="${workflowStage}" ✓ approvalStatus="${approvalStatus}" ✓`);
 }
 
 function determineWorkflowStage(user) {
@@ -1295,9 +1257,14 @@ router.get('/agent-activities', async (req, res) => {
 router.post('/agent-activities', async (req, res) => {
   try {
     const { agentId, userId, action } = req.body;
+    console.log(`🔍 [DEBUG] POST /agent-activities called with:`, { agentId, userId, action });
+    
     if (userId) {
       // Track general user activity (any frontend interaction)
       updateUserActivity(userId);
+      console.log(`✅ [DEBUG] Activity tracked for user: ${userId}, action: ${action}`);
+    } else {
+      console.log(`❌ [DEBUG] No userId provided in activity tracking request`);
     }
     
     res.json({ success: true });
@@ -1536,6 +1503,173 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
   } catch (error) {
     console.error('Error checking user agent status:', error);
     res.status(500).json({ error: 'Failed to check user agent status' });
+  }
+});
+
+// Fix consistency issues endpoint
+router.post('/database/fix-consistency', async (req, res) => {
+  try {
+    const { inconsistencies } = req.body;
+    
+    if (!inconsistencies || !Array.isArray(inconsistencies)) {
+      return res.status(400).json({ error: 'Invalid inconsistencies data' });
+    }
+    
+    console.log(`🔧 [CONSISTENCY FIX] Processing ${inconsistencies.length} inconsistencies...`);
+    
+    const results = [];
+    
+    for (const issue of inconsistencies) {
+      try {
+        if (issue.type === 'agent_assignment_mismatch') {
+          // Find user and update their agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: issue.expectedAgentId,
+              assignedAgentName: issue.agentName
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Assigned agent ${issue.agentName} to user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              agentId: issue.expectedAgentId,
+              agentName: issue.agentName,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        } else if (issue.type === 'orphaned_agent') {
+          // Remove orphaned agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: null,
+              assignedAgentName: null
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        } else if (issue.type === 'security_violation') {
+          // Remove invalid agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: null,
+              assignedAgentName: null
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Removed invalid agent from user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [CONSISTENCY FIX] Error fixing issue for user ${issue.userId}:`, error);
+        results.push({
+          type: issue.type,
+          userId: issue.userId,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.status === 'fixed').length;
+    const failCount = results.filter(r => r.status === 'failed').length;
+    
+    console.log(`🔧 [CONSISTENCY FIX] Completed: ${successCount} fixed, ${failCount} failed`);
+    
+    res.json({
+      success: true,
+      results: results,
+      summary: {
+        total: inconsistencies.length,
+        fixed: successCount,
+        failed: failCount
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [CONSISTENCY FIX] Error fixing consistency issues:', error);
+    res.status(500).json({ error: 'Failed to fix consistency issues' });
   }
 });
 
