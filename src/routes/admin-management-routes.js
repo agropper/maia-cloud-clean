@@ -1055,7 +1055,8 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Clear the passkey information
+    // Set passkey reset flag and clear the passkey information
+    const resetExpiryTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
     const updatedUser = {
       ...userDoc,
       credentialID: undefined,
@@ -1063,18 +1064,40 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
       counter: undefined,
       transports: undefined,
       challenge: undefined,
+      passkeyResetFlag: true,
+      passkeyResetExpiry: resetExpiryTime.toISOString(),
       updatedAt: new Date().toISOString()
     };
     
     // Save the updated user document
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    console.log(`✅ Admin reset passkey for user: ${userId}`);
+    // Set a timer to clear the reset flag after 1 hour
+    setTimeout(async () => {
+      try {
+        const currentUserDoc = await couchDBClient.getDocument('maia_users', userId);
+        if (currentUserDoc && currentUserDoc.passkeyResetFlag) {
+          const clearedUser = {
+            ...currentUserDoc,
+            passkeyResetFlag: undefined,
+            passkeyResetExpiry: undefined,
+            updatedAt: new Date().toISOString()
+          };
+          await couchDBClient.saveDocument('maia_users', clearedUser);
+          console.log(`⏰ Passkey reset flag expired and cleared for user: ${userId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error clearing passkey reset flag for user ${userId}:`, error);
+      }
+    }, 60 * 60 * 1000); // 1 hour
+    
+    console.log(`✅ Admin reset passkey for user: ${userId} - Reset flag set for 1 hour`);
     
     res.json({
       success: true,
-      message: `Passkey reset successfully for user ${userId}`,
+      message: `Passkey reset successfully for user ${userId}. They have 1 hour to register a new passkey.`,
       userId: userId,
+      resetExpiry: resetExpiryTime.toISOString(),
       timestamp: new Date().toISOString()
     });
     

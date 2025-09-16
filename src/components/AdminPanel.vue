@@ -410,7 +410,13 @@
                 <p><strong>Created:</strong> {{ formatDate(selectedUser.createdAt) }}</p>
               </div>
               <div class="col-6">
-                <p><strong>Has Passkey:</strong> {{ selectedUser.hasPasskey ? '✅ Yes' : '❌ No' }}</p>
+                <p><strong>Passkey Status:</strong> 
+                  <span v-if="selectedUser.hasPasskey" class="text-positive">✅ Registered</span>
+                  <span v-else class="text-negative">❌ Not Registered</span>
+                </p>
+                <p v-if="selectedUser.passkeyResetFlag" class="text-warning">
+                  <strong>Reset Status:</strong> 🔄 Passkey reset active until {{ formatDate(selectedUser.passkeyResetExpiry) }}
+                </p>
                 <p><strong>Workflow Stage:</strong> 
                   <QChip
                     :color="getWorkflowStageColor(selectedUser.workflowStage)"
@@ -522,12 +528,19 @@
               />
               
               <QBtn
-                v-if="selectedUser.hasPasskey"
+                v-if="selectedUser.hasPasskey && !selectedUser.passkeyResetFlag"
                 color="warning"
                 icon="key_off"
                 label="Reset Passkey"
                 @click="resetUserPasskey"
                 :loading="isResettingPasskey"
+              />
+              <QBtn
+                v-if="selectedUser.passkeyResetFlag"
+                color="info"
+                icon="schedule"
+                :label="`Reset Active (${getTimeRemaining(selectedUser.passkeyResetExpiry)})`"
+                disabled
               />
             </div>
           </div>
@@ -1253,106 +1266,92 @@ export default defineComponent({
       if (!selectedUser.value) return;
       
       // Show confirmation dialog
-      $q.dialog({
-        title: 'Reset User Passkey',
-        message: `Are you sure you want to reset the passkey for user "${selectedUser.value.displayName}"? This will require them to register a new passkey.`,
-        cancel: true,
-        persistent: true,
-        ok: {
-          label: 'Reset Passkey',
-          color: 'warning'
-        }
-      }).onOk(async () => {
-        isResettingPasskey.value = true;
-        try {
-          const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/reset-passkey`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              adminSecret: 'admin' // TODO: Get this from admin session or prompt
-            })
+      const confirmed = confirm(`Are you sure you want to reset the passkey for user "${selectedUser.value.displayName}"? This will require them to register a new passkey.`);
+      
+      if (!confirmed) return;
+      
+      isResettingPasskey.value = true;
+      try {
+        const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/reset-passkey`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            adminSecret: 'admin' // TODO: Get this from admin session or prompt
+          })
+        });
+        
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: `Passkey reset successfully for user "${selectedUser.value.displayName}". They have 1 hour to register a new passkey.`
           });
           
-          if (response.ok) {
-            $q.notify({
-              type: 'positive',
-              message: `Passkey reset successfully for user "${selectedUser.value.displayName}". They can now register a new passkey.`
-            });
-            
-            // Refresh user details to show updated status
-            await viewUserDetails(selectedUser.value);
-            
-            // Refresh users list
-            await loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to reset passkey');
-          }
-        } catch (error) {
-          $q.notify({
-            type: 'negative',
-            message: `Failed to reset passkey: ${error.message}`
-          });
-        } finally {
-          isResettingPasskey.value = false;
+          // Refresh user details to show updated status
+          await viewUserDetails(selectedUser.value);
+          
+          // Refresh users list
+          await loadUsers();
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to reset passkey');
         }
-      });
+      } catch (error) {
+        $q.notify({
+          type: 'negative',
+          message: `Failed to reset passkey: ${error.message}`
+        });
+      } finally {
+        isResettingPasskey.value = false;
+      }
     };
     
     const fixDataInconsistency = async () => {
       if (!selectedUser.value) return;
       
       // Show confirmation dialog
-      $q.dialog({
-        title: 'Fix Data Inconsistency',
-        message: `This will reset the workflow stage for user "${selectedUser.value.displayName}" to "awaiting_approval" to fix the data inconsistency. Continue?`,
-        cancel: true,
-        persistent: true,
-        ok: {
-          label: 'Fix Inconsistency',
-          color: 'purple'
-        }
-      }).onOk(async () => {
-        isProcessingApproval.value = true;
-        try {
-          // Reset the user's workflow stage to awaiting_approval
-          const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/workflow-stage`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              workflowStage: 'awaiting_approval',
-              approvalStatus: 'pending'
-            })
+      const confirmed = confirm(`This will reset the workflow stage for user "${selectedUser.value.displayName}" to "awaiting_approval" to fix the data inconsistency. Continue?`);
+      
+      if (!confirmed) return;
+      
+      isProcessingApproval.value = true;
+      try {
+        // Reset the user's workflow stage to awaiting_approval
+        const response = await fetch(`/api/admin-management/users/${selectedUser.value.userId}/workflow-stage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            workflowStage: 'awaiting_approval',
+            approvalStatus: 'pending'
+          })
+        });
+        
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: `Data inconsistency fixed for user "${selectedUser.value.displayName}". Workflow stage reset to "awaiting_approval".`
           });
           
-          if (response.ok) {
-            $q.notify({
-              type: 'positive',
-              message: `Data inconsistency fixed for user "${selectedUser.value.displayName}". Workflow stage reset to "awaiting_approval".`
-            });
-            
-            // Refresh user details to show updated status
-            await viewUserDetails(selectedUser.value);
-            
-            // Refresh users list
-            await loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to fix data inconsistency');
-          }
-        } catch (error) {
-          $q.notify({
-            type: 'negative',
-            message: `Failed to fix data inconsistency: ${error.message}`
-          });
-        } finally {
-          isProcessingApproval.value = false;
+          // Refresh user details to show updated status
+          await viewUserDetails(selectedUser.value);
+          
+          // Refresh users list
+          await loadUsers();
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fix data inconsistency');
         }
-      });
+      } catch (error) {
+        $q.notify({
+          type: 'negative',
+          message: `Failed to fix data inconsistency: ${error.message}`
+        });
+      } finally {
+        isProcessingApproval.value = false;
+      }
     };
     
     const saveNotes = async () => {
@@ -1505,6 +1504,25 @@ export default defineComponent({
       const sizes = ['B', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+    
+    const getTimeRemaining = (expiryTime) => {
+      if (!expiryTime) return 'Unknown';
+      const now = new Date();
+      const expiry = new Date(expiryTime);
+      const diffMs = expiry - now;
+      
+      if (diffMs <= 0) return 'Expired';
+      
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMinutes / 60);
+      const remainingMinutes = diffMinutes % 60;
+      
+      if (diffHours > 0) {
+        return `${diffHours}h ${remainingMinutes}m`;
+      } else {
+        return `${remainingMinutes}m`;
+      }
     };
     
     const goToAdminRegistration = () => {
@@ -1919,37 +1937,14 @@ export default defineComponent({
     // Show consistency check results dialog
     const showConsistencyCheckDialog = (inconsistencies) => {
       try {
-        if (!$q || !$q.dialog) {
-          console.error('❌ [Admin Panel] $q.dialog not available');
-          $q.notify({
-            type: 'negative',
-            message: 'Dialog system not available. Please refresh the page.',
-            timeout: 5000
-          });
-          return;
-        }
-
-        $q.dialog({
-          title: '🔍 Database Consistency Check Results',
-          message: `Found ${inconsistencies.length} inconsistency(ies):`,
-          html: true,
-          ok: {
-            label: 'CANCEL',
-            color: 'grey',
-            flat: true
-          },
-          cancel: {
-            label: 'FIX ISSUES',
-            color: 'warning',
-            icon: 'build'
-          }
-        }).onOk(() => {
-          // User cancelled
-          console.log('User cancelled consistency check fixes');
-        }).onCancel(() => {
-          // User wants to fix issues
+        const message = `Found ${inconsistencies.length} inconsistency(ies). Do you want to fix them?`;
+        const confirmed = confirm(message);
+        
+        if (confirmed) {
           fixConsistencyIssues(inconsistencies);
-        });
+        } else {
+          console.log('User cancelled consistency check fixes');
+        }
       } catch (error) {
         console.error('❌ [Admin Panel] Error showing dialog:', error);
         $q.notify({
@@ -2156,6 +2151,7 @@ export default defineComponent({
       formatWorkflowStage,
       formatDate,
       formatFileSize,
+      getTimeRemaining,
       goToAdminRegistration,
       goToAdminSignIn,
       goToMainApp,

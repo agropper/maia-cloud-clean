@@ -207,10 +207,36 @@ router.post("/register", async (req, res) => {
 
     if (existingUser) {
       
-      // If user already has a passkey, check for admin replacement
+      // If user already has a passkey, check for admin replacement or reset flag
       if (existingUser.credentialID) {
+        // Check if user has an active passkey reset flag
+        if (existingUser.passkeyResetFlag && existingUser.passkeyResetExpiry) {
+          const resetExpiry = new Date(existingUser.passkeyResetExpiry);
+          const now = new Date();
+          
+          if (now < resetExpiry) {
+            console.log("✅ User has active passkey reset flag, allowing registration:", userId);
+            // Continue with registration (replace existing passkey)
+          } else {
+            // Reset flag has expired, clear it and deny registration
+            const clearedUser = {
+              ...existingUser,
+              passkeyResetFlag: undefined,
+              passkeyResetExpiry: undefined,
+              updatedAt: new Date().toISOString()
+            };
+            await couchDBClient.saveDocument("maia_users", clearedUser);
+            console.log("❌ Passkey reset flag expired for user:", userId);
+            return res.status(400).json({ 
+              error: "Passkey reset window has expired. Contact admin to reset again.",
+              hasExistingPasskey: true,
+              resetExpired: true,
+              userId: userId
+            });
+          }
+        }
         // Special case: Allow admin to replace passkey (admin has already been verified in admin panel)
-        if (userId === 'admin') {
+        else if (userId === 'admin') {
           console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
@@ -367,6 +393,8 @@ router.post("/register-verify", async (req, res) => {
         counter: verification.registrationInfo.credential.counter,
         transports: response.response.transports || [],
         challenge: undefined, // Remove the challenge
+        passkeyResetFlag: undefined, // Clear the reset flag on successful registration
+        passkeyResetExpiry: undefined, // Clear the reset expiry
         updatedAt: new Date().toISOString(),
       };
 
