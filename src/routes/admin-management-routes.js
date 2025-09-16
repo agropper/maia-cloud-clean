@@ -91,28 +91,45 @@ const syncActivityToDatabase = async () => {
       if (!data.needsDbUpdate) continue; // Skip users that don't need updates
       
       try {
-        // Find user document by userId
-        const userQuery = {
+        // Find user document by _id first (most users are stored this way)
+        let userQuery = {
           selector: {
-            userId: userId
+            _id: userId
           },
           limit: 1
         };
         
-        const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        let userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        
+        // If not found by _id, try userId field (for deep_link users)
+        if (userResult.docs.length === 0) {
+          userQuery = {
+            selector: {
+              userId: userId
+            },
+            limit: 1
+          };
+          userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        }
+        
+        console.log(`🔍 [DEBUG] Looking for user ${userId} in database, found ${userResult.docs.length} documents`);
         
         if (userResult.docs.length > 0) {
           const userDoc = userResult.docs[0];
+          console.log(`🔍 [DEBUG] Found user document:`, { _id: userDoc._id, userId: userDoc.userId, displayName: userDoc.displayName });
+          
           const updatedDoc = {
             ...userDoc,
             lastActivity: data.lastActivity.toISOString()
           };
           
-          await couchDBClient.updateDocument('maia_users', updatedDoc);
+          await couchDBClient.saveDocument('maia_users', updatedDoc);
           console.log(`[*] [User Activity] Updated lastActivity for user ${userId} at ${data.lastActivity.toISOString()}`);
           
           // Mark as synced
           data.needsDbUpdate = false;
+        } else {
+          console.log(`❌ [User Activity] User ${userId} not found in database - cannot update lastActivity`);
         }
       } catch (userError) {
         console.error(`❌ Error updating user activity for ${userId}:`, userError);
