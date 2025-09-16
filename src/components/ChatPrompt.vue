@@ -213,6 +213,9 @@ export default defineComponent({
             console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has NO agent assigned`);
             console.log(`🔍 [DEBUG] Agent Badge will show: "No Agent Selected" for user ${userId}`);
             
+    // Track activity for users without agents
+    trackUserActivity('no_agent_detected');
+            
             // Check if agent selection is required
             if (data.requiresAgentSelection) {
               // Show modal dialog to select agent
@@ -318,6 +321,45 @@ export default defineComponent({
     
     // Initialize the app
     initializeApp();
+    
+    // Track user activity for Admin Panel analytics
+    const trackUserActivity = async (action = 'user_interaction') => {
+      try {
+        const userId = currentUser.value?.userId || currentUser.value?.displayName || 'Public User';
+
+        const response = await fetch('/api/admin-management/agent-activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, action })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (activityError) {
+        console.error('❌ [Frontend] Activity tracking failed:', activityError.message);
+      }
+    };
+    
+    // Track app usage when component mounts
+    trackUserActivity('app_loaded');
+    
+    // Track activity on any user interaction
+    const setupActivityTracking = () => {
+      // Track mouse clicks
+      document.addEventListener('click', () => trackUserActivity('mouse_click'));
+      
+      // Track keyboard input
+      document.addEventListener('keydown', () => trackUserActivity('keyboard_input'));
+      
+      // Track window focus (user returned to tab)
+      window.addEventListener('focus', () => trackUserActivity('window_focus'));
+      
+      // Track scroll events
+      window.addEventListener('scroll', () => trackUserActivity('scroll'));
+    };
+    
+    setupActivityTracking();
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
@@ -565,6 +607,9 @@ export default defineComponent({
         // Prevent sending empty messages
         return;
       }
+
+      // Track user activity for Admin Panel (any query attempt)
+      trackUserActivity('query_attempt');
 
       try {
         appState.isLoading = true;

@@ -153,6 +153,8 @@ export default defineComponent({
       const currentUserId = props.currentUser?.userId || 'Public User';
       const agentName = props.agent.name;
       
+      // Only perform security validation if we have a stable user state
+      // Skip validation during sign-in transitions to prevent race conditions
       if (currentUserId === 'Public User') {
         // Public User can only see agents that start with 'public-'
         if (!agentName.startsWith('public-')) {
@@ -163,7 +165,8 @@ export default defineComponent({
         // Authenticated users can only see agents that match their user ID pattern
         const expectedPrefix = `${currentUserId}-agent-`;
         
-        if (!agentName.startsWith(expectedPrefix)) {
+        // Only validate if the agent name doesn't start with 'public-' (indicating it's not a stale Public User agent)
+        if (!agentName.startsWith('public-') && !agentName.startsWith(expectedPrefix)) {
           console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
           throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
         }

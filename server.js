@@ -1642,6 +1642,11 @@ app.post('/api/personal-chat', async (req, res) => {
       response = await agentClient.chat.completions.create(params);
     const responseTime = Date.now() - startTime;
       console.log(`[*] AI Response time: ${responseTime}ms`);
+      
+      // Track user activity for Admin Panel
+      if (currentUser) {
+        updateUserActivity(currentUser);
+      }
     } catch (agentError) {
       console.error(`❌ Agent-specific endpoint failed: ${agentError.message}`);
       
@@ -1678,8 +1683,8 @@ app.post('/api/personal-chat', async (req, res) => {
     // console.log('  - new length:', newChatHistory.length);
     // console.log('  - last message:', newChatHistory[newChatHistory.length - 1]);
 
-    // Update agent activity
-    updateAgentActivity(agentId, currentUser);
+    // Update user activity
+    updateUserActivity(currentUser);
 
     // Invalidate chat cache since we may have modified chat data
     invalidateCache('chats');
@@ -5958,7 +5963,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateAgentActivity } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity } from './src/routes/admin-management-routes.js';
 
 // In-memory caching system to prevent redundant Cloudant calls
 const dataCache = {

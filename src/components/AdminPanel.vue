@@ -1633,31 +1633,30 @@ export default defineComponent({
           }
         }
         
-        // Try to get in-memory activity data (optional, don't fail if it doesn't work)
+        // Get persistent activity data from database
         try {
-          const response = await fetch('/api/admin-management/agent-activities');
+          const response = await fetch(`/api/admin-management/agent-activities?_t=${Date.now()}&_nocache=true`);
           if (response.ok) {
             const data = await response.json();
-            const inMemoryActivities = data.activities || [];
+            const dbActivities = data.activities || [];
             
-            // Update with in-memory activity if more recent
+            
+            // Update with database activity if more recent than chat data
             for (const agent of agents) {
-              const inMemoryActivity = inMemoryActivities.find(activity => activity.agentId === agent.id);
-              if (inMemoryActivity) {
-                const inMemoryTime = new Date(inMemoryActivity.lastActivity);
-                const currentTime = agent.lastActivity === 'Never' ? null : new Date();
-                
-                if (currentTime && inMemoryTime > currentTime) {
-                  const now = new Date();
-                  const diffMs = now - inMemoryTime;
-                  agent.lastActivity = formatTimeAgo(diffMs);
-                }
+              const ownerName = agent.owner || 'Public User';
+              const dbActivity = dbActivities.find(activity => activity.userId === ownerName);
+              
+              if (dbActivity) {
+                // Always use database time since it's the source of truth for user activity
+                const dbTime = new Date(dbActivity.lastActivity);
+                const now = new Date();
+                const diffMs = now - dbTime;
+                agent.lastActivity = formatTimeAgo(diffMs);
               }
             }
           }
-        } catch (inMemoryError) {
-          // Silently ignore in-memory activity errors
-          console.log('In-memory activity not available, using chat data only');
+        } catch (dbError) {
+          console.log('Database activity not available, using chat data only');
         }
         
       } catch (error) {
@@ -1711,14 +1710,19 @@ export default defineComponent({
       }
       
       isLoadingAgentsPatients.value = true;
+      
+      // Add a small delay to ensure activity data is available
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       try {
-        // Use the same API call as Agent Badge - get ALL agents without filtering
-        // Add cache-busting parameter to ensure fresh data
-        const agentsResponse = await fetch(`/api/agents?user=admin&_t=${Date.now()}`);
+        // Force fresh data from DO API - no caching, direct call
+        const agentsResponse = await fetch(`/api/agents?user=admin&_t=${Date.now()}&_nocache=true`);
         if (!agentsResponse.ok) {
           throw new Error('Failed to load agents');
         }
         const agentsData = await agentsResponse.json();
+        
+        console.log(`🔍 [ADMIN] Fresh DO API data loaded: ${agentsData.length} agents`);
         
         // DO API agents and KBs state loaded
         
@@ -1751,6 +1755,8 @@ export default defineComponent({
           } else {
             owner = 'Unknown';
           }
+          
+          console.log(`🔍 [ADMIN] Processing agent: ${agent.name} -> owner: ${owner}`);
           
           return {
             id: agent.id,

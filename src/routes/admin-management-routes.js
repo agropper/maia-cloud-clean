@@ -55,36 +55,154 @@ const router = express.Router();
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
-// In-memory agent activity tracking
-const agentActivityTracker = new Map(); // agentId -> { lastActivity: Date, userId: string }
+// General user activity tracking: in-memory + periodic database sync
+const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean }
+let lastDatabaseSync = 0;
+const SYNC_INTERVAL = 60 * 1000; // 1 minute
 
-// Update agent activity when user interacts with agent
-const updateAgentActivity = (agentId, userId) => {
-  if (agentId) {
-    agentActivityTracker.set(agentId, {
-      lastActivity: new Date(),
-      userId: userId
-    });
-    console.log(`[*] [Agent Activity] Updated activity for agent ${agentId} by user ${userId}`);
+// Update user activity in memory (fast, no database writes)
+const updateUserActivity = (userId) => {
+  if (!userId) return;
+  
+  const now = new Date();
+  const wasNewUser = !userActivityTracker.has(userId);
+  
+  userActivityTracker.set(userId, {
+    lastActivity: now,
+    needsDbUpdate: true // Mark for database update
+  });
+  
+  console.log(`[*] [User Activity] Updated activity for user ${userId} at ${now.toISOString()}`);
+  
+  // Sync immediately for new users, then every minute for existing users
+  if (wasNewUser || Date.now() - lastDatabaseSync > SYNC_INTERVAL) {
+    syncActivityToDatabase();
   }
 };
 
-// Get agent activity
-const getAgentActivity = (agentId) => {
-  return agentActivityTracker.get(agentId);
+// Sync activity data to database (periodic, not on every interaction)
+const syncActivityToDatabase = async () => {
+  if (!couchDBClient || userActivityTracker.size === 0) return;
+  
+  try {
+    console.log(`[*] [User Activity] Syncing ${userActivityTracker.size} user activities to database`);
+    
+    for (const [userId, data] of userActivityTracker.entries()) {
+      if (!data.needsDbUpdate) continue; // Skip users that don't need updates
+      
+      try {
+        // Find user document by userId
+        const userQuery = {
+          selector: {
+            userId: userId
+          },
+          limit: 1
+        };
+        
+        const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        
+        if (userResult.docs.length > 0) {
+          const userDoc = userResult.docs[0];
+          const updatedDoc = {
+            ...userDoc,
+            lastActivity: data.lastActivity.toISOString()
+          };
+          
+          await couchDBClient.updateDocument('maia_users', updatedDoc);
+          console.log(`[*] [User Activity] Updated lastActivity for user ${userId} at ${data.lastActivity.toISOString()}`);
+          
+          // Mark as synced
+          data.needsDbUpdate = false;
+        }
+      } catch (userError) {
+        console.error(`❌ Error updating user activity for ${userId}:`, userError);
+      }
+    }
+    
+    lastDatabaseSync = Date.now();
+    console.log(`✅ [User Activity] Database sync completed`);
+  } catch (error) {
+    console.error('❌ Error syncing user activities to database:', error);
+  }
 };
 
-// Get all agent activities
-const getAllAgentActivities = () => {
-  return Array.from(agentActivityTracker.entries()).map(([agentId, data]) => ({
-    agentId,
-    ...data
-  }));
+// Get agent activity (in-memory first, fallback to database)
+const getAgentActivity = async (agentId) => {
+  if (!agentId) return null;
+  
+  // Check in-memory first (most recent)
+  const inMemory = agentActivityTracker.get(agentId);
+  if (inMemory) {
+    return {
+      agentId: agentId,
+      userId: inMemory.userId,
+      lastActivity: inMemory.lastActivity
+    };
+  }
+  
+  // Fallback to database
+  if (!couchDBClient) return null;
+  
+  try {
+    const doc = await couchDBClient.get('maia_users', `agent_activity_${agentId}`);
+    return {
+      agentId: doc.agentId,
+      userId: doc.userId,
+      lastActivity: new Date(doc.lastActivity)
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+// Get all user activities (in-memory + database)
+const getAllUserActivities = async () => {
+  const activities = [];
+  
+  // Add in-memory activities (most recent)
+  for (const [userId, data] of userActivityTracker.entries()) {
+    activities.push({
+      userId: userId,
+      lastActivity: data.lastActivity,
+      needsDbUpdate: data.needsDbUpdate
+    });
+  }
+  
+  return activities;
+};
+
+// Load activity data from database on startup
+const loadUserActivityFromDatabase = async () => {
+  if (!couchDBClient) return;
+  
+  try {
+    // Load all users and their lastActivity times
+    const result = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        userId: { $exists: true }
+      }
+    });
+    
+    for (const userDoc of result.docs) {
+      if (userDoc.userId && userDoc.lastActivity) {
+        userActivityTracker.set(userDoc.userId, {
+          lastActivity: new Date(userDoc.lastActivity),
+          needsDbUpdate: false // Don't update on startup
+        });
+      }
+    }
+    
+    console.log(`[*] [User Activity] Loaded ${userActivityTracker.size} user activities from database on startup`);
+  } catch (error) {
+    console.error('Error loading user activity from database:', error);
+  }
 };
 
 // Function to set the client (called from main server)
 export const setCouchDBClient = (client) => {
   couchDBClient = client;
+  // Load existing user activity data when client is set
+  loadUserActivityFromDatabase();
 };
 
 // Admin authentication middleware
@@ -1142,19 +1260,33 @@ router.get('/sessions/active-check', requireAdminAuth, async (req, res) => {
   }
 });
 
-// API endpoint to get agent activities for Admin Panel
-router.get('/agent-activities', (req, res) => {
+// API endpoint to get user activities for Admin Panel
+router.get('/agent-activities', async (req, res) => {
   try {
-    console.log('[*] [Agent Activities] Endpoint called');
-    const activities = getAllAgentActivities();
-    console.log('[*] [Agent Activities] Returning activities:', activities);
+    const activities = await getAllUserActivities();
     res.json({
       success: true,
       activities: activities
     });
   } catch (error) {
-    console.error('Error getting agent activities:', error);
-    res.status(500).json({ error: 'Failed to get agent activities' });
+    console.error('Error getting user activities:', error);
+    res.status(500).json({ error: 'Failed to get user activities' });
+  }
+});
+
+// API endpoint to track user activities from frontend
+router.post('/agent-activities', async (req, res) => {
+  try {
+    const { agentId, userId, action } = req.body;
+    if (userId) {
+      // Track general user activity (any frontend interaction)
+      updateUserActivity(userId);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking activity:', error);
+    res.status(500).json({ error: 'Failed to track activity' });
   }
 });
 
@@ -1391,6 +1523,6 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
 });
 
 // Export functions for use in main server
-export { updateAgentActivity, getAgentActivity, getAllAgentActivities };
+export { updateUserActivity, getAllUserActivities };
 
 export default router;
