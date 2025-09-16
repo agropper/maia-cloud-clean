@@ -3024,12 +3024,12 @@ const isAgentAvailableToPublicUser = async (agentId) => {
     const agentArray = agents.agents || [];
     const selectedAgent = agentArray.find(agent => agent.uuid === agentId);
     
-//     console.log(`🔍 [isAgentAvailableToPublicUser] Selected agent:`, selectedAgent ? selectedAgent.name : 'Not found');
+    // console.log(`🔍 [isAgentAvailableToPublicUser] Selected agent:`, selectedAgent ? selectedAgent.name : 'Not found');
     
     if (selectedAgent) {
       const agentNamePattern = /^([a-z0-9]+)-agent-/;
       const nameMatch = selectedAgent.name.match(agentNamePattern);
-//       console.log(`🔍 [isAgentAvailableToPublicUser] Agent name pattern match:`, nameMatch);
+      // console.log(`🔍 [isAgentAvailableToPublicUser] Agent name pattern match:`, nameMatch);
       
       if (nameMatch) {
         const potentialOwner = nameMatch[1];
@@ -3640,12 +3640,13 @@ app.get('/api/current-agent', async (req, res) => {
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
+          // console.log(`🔍 [DEBUG-current-agent] Public User document:`, { currentAgentId: userDoc?.currentAgentId, assignedAgentId: userDoc?.assignedAgentId, selectedAgentId: userAgentId });
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
-            console.log(`🔍 [DEBUG-current-agent] Validating agent availability for Public User: ${userAgentId}`);
+            // console.log(`🔍 [DEBUG-current-agent] Validating agent availability for Public User: ${userAgentId}`);
             const isAgentAvailable = await isAgentAvailableToPublicUser(userAgentId);
-            console.log(`🔍 [DEBUG-current-agent] Agent ${userAgentId} available to Public User: ${isAgentAvailable}`);
+            // console.log(`🔍 [DEBUG-current-agent] Agent ${userAgentId} available to Public User: ${isAgentAvailable}`);
             
             if (isAgentAvailable) {
               agentId = userAgentId;
@@ -3796,6 +3797,7 @@ app.get('/api/current-agent', async (req, res) => {
 
     // SECURITY CHECK: Validate agent ownership based on user type
     const agentName = agentData.name;
+    // console.log(`🔍 [SECURITY CHECK] Checking agent name: "${agentName}" for user: ${currentUser}`);
     
     if (currentUser === 'Public User') {
       // Public User can only see agents that start with 'public-'
