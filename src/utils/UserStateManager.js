@@ -80,11 +80,11 @@ class UserStateManager {
     this.userStateCache.set(userId, updatedState);
     this.lastCacheUpdate = now;
     
-    console.log('[*] [UserStateManager] Updated user state:', {
-      currentAgent: updatedState.currentAgentName,
-      assignedKBs: updatedState.assignedKnowledgeBases?.length || 0,
-      workflowStage: updatedState.workflowStage
-    });
+    // console.log(`🔄 [UserStateManager] Updated cache for user ${userId}:`, {
+    //   currentAgent: updatedState.currentAgentName,
+    //   assignedKBs: updatedState.assignedKnowledgeBases?.length || 0,
+    //   workflowStage: updatedState.workflowStage
+    // });
   }
 
   /**
@@ -242,6 +242,7 @@ class UserStateManager {
       userState.lastUpdated = new Date().toISOString();
       
       this.userStateCache.set(userId, userState);
+      // console.log(`📁 [UserStateManager] Updated bucket status for ${userId}: hasBucket=${userState.hasBucket}, files=${userState.bucketFileCount}`);
     }
   }
 
@@ -268,6 +269,7 @@ class UserStateManager {
    */
   removeUser(userId) {
     this.userStateCache.delete(userId);
+    // console.log(`🗑️ [UserStateManager] Removed user ${userId} from cache`);
   }
 
   /**
@@ -283,6 +285,7 @@ class UserStateManager {
    * @returns {Promise<void>}
    */
   async ensureAllUserBuckets() {
+    // console.log('📁 [UserStateManager] Ensuring bucket folders for all users...');
     
     const userIds = Array.from(this.userStateCache.keys());
     const bucketChecks = [];
@@ -298,6 +301,7 @@ class UserStateManager {
     
     try {
       await Promise.all(bucketChecks);
+      // console.log(`✅ [UserStateManager] Completed bucket checks for ${bucketChecks.length} users`);
     } catch (error) {
       console.error('❌ [UserStateManager] Error ensuring user buckets:', error);
     }
@@ -328,6 +332,7 @@ class UserStateManager {
       if (createResponse.ok) {
         const createData = await createResponse.json();
         this.updateBucketStatus(userId, createData);
+        // console.log(`✅ [UserStateManager] Created bucket folder for ${userId}`);
       }
     } catch (error) {
       console.error(`❌ [UserStateManager] Error ensuring bucket for ${userId}:`, error);
@@ -353,6 +358,7 @@ class UserStateManager {
   clearCache() {
     this.userStateCache.clear();
     this.lastCacheUpdate = new Date();
+    // console.log(`🧹 [UserStateManager] Cache cleared`);
   }
 
   /**
@@ -363,12 +369,14 @@ class UserStateManager {
    */
   async initializeCache(getUserDocs, getKBAssignments) {
     try {
+      // console.log(`🔄 [UserStateManager] Initializing cache from database...`);
       
       const userDocs = await getUserDocs();
       let initializedCount = 0;
       
       for (const userDoc of userDocs) {
         try {
+          // console.log(`🔍 [UserStateManager] Processing user: ${userDoc.userId || userDoc._id}, type: ${userDoc.type}`);
           // Get KB assignments for this user
           const assignedKBs = await getKBAssignments(userDoc.userId || userDoc._id);
           const availableKBs = []; // TODO: Implement available KBs logic
@@ -379,12 +387,14 @@ class UserStateManager {
           // Add to cache
           this.userStateCache.set(userDoc.userId || userDoc._id, userState);
           initializedCount++;
+          // console.log(`✅ [UserStateManager] Successfully initialized user: ${userDoc.userId || userDoc._id}`);
         } catch (error) {
           console.error(`❌ [UserStateManager] Error initializing user ${userDoc.userId || userDoc._id}:`, error.message);
           console.error(`❌ [UserStateManager] User document:`, userDoc);
         }
       }
       
+      console.log(`✅ [UserStateManager] Cache initialized with ${initializedCount} users`);
     } catch (error) {
       console.error(`❌ [UserStateManager] Error initializing cache:`, error.message);
     }

@@ -5,40 +5,246 @@ import UserStateManagerClass from '../utils/UserStateManager.js';
 // Create singleton instance
 const UserStateManager = new UserStateManagerClass();
 
+// DigitalOcean API configuration
+const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+const DIGITALOCEAN_BASE_URL = 'https://api.digitalocean.com';
+
+// DigitalOcean API request function
+const doRequest = async (endpoint, options = {}) => {
+  if (!DIGITALOCEAN_API_KEY) {
+    throw new Error('DigitalOcean API key not configured');
+  }
+
+  const url = `${DIGITALOCEAN_BASE_URL}${endpoint}`;
+  
+  const requestOptions = {
+    method: options.method || 'GET',
+    headers: {
+      'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    },
+    ...options
+  };
+
+  if (options.body) {
+    requestOptions.body = options.body;
+  }
+
+  try {
+    const response = await fetch(url, requestOptions);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ DigitalOcean API Error Response:`);
+      console.error(`Status: ${response.status}`);
+      console.error(`Headers:`, Object.fromEntries(response.headers.entries()));
+      console.error(`Body: ${errorText}`);
+      throw new Error(`DigitalOcean API error: ${response.status} - ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`❌ DigitalOcean API request failed:`, error.message);
+    throw error;
+  }
+};
+
 const router = express.Router();
 
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
-// In-memory agent activity tracking
-const agentActivityTracker = new Map(); // agentId -> { lastActivity: Date, userId: string }
+// General user activity tracking: in-memory + periodic database sync
+const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean }
+let lastDatabaseSync = 0;
+const SYNC_INTERVAL = 60 * 1000; // 1 minute
 
-// Update agent activity when user interacts with agent
-const updateAgentActivity = (agentId, userId) => {
-  if (agentId) {
-    agentActivityTracker.set(agentId, {
-      lastActivity: new Date(),
-      userId: userId
-    });
+// Update user activity in memory (fast, no database writes)
+const updateUserActivity = (userId) => {
+  if (!userId) return;
+  
+  const now = new Date();
+  const wasNewUser = !userActivityTracker.has(userId);
+  
+  userActivityTracker.set(userId, {
+    lastActivity: now,
+    needsDbUpdate: true // Mark for database update
+  });
+  
+  // Sync immediately for new users, then every minute for existing users
+  if (wasNewUser || Date.now() - lastDatabaseSync > SYNC_INTERVAL) {
+    syncActivityToDatabase();
   }
 };
 
-// Get agent activity
-const getAgentActivity = (agentId) => {
-  return agentActivityTracker.get(agentId);
+// Sync activity data to database (periodic, not on every interaction)
+const syncActivityToDatabase = async () => {
+  if (!couchDBClient || userActivityTracker.size === 0) return;
+  
+  try {
+    for (const [userId, data] of userActivityTracker.entries()) {
+      if (!data.needsDbUpdate) continue; // Skip users that don't need updates
+      
+      try {
+        // Find user document by _id first (most users are stored this way)
+        let userQuery = {
+          selector: {
+            _id: userId
+          },
+          limit: 1
+        };
+        
+        let userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        
+        // If not found by _id, try userId field (for deep_link users)
+        if (userResult.docs.length === 0) {
+          userQuery = {
+            selector: {
+              userId: userId
+            },
+            limit: 1
+          };
+          userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+        }
+        
+        if (userResult.docs.length > 0) {
+          const userDoc = userResult.docs[0];
+          const updatedDoc = {
+            ...userDoc,
+            lastActivity: data.lastActivity.toISOString()
+          };
+          
+          await couchDBClient.saveDocument('maia_users', updatedDoc);
+          
+          // Mark as synced
+          data.needsDbUpdate = false;
+        } else {
+          console.log(`❌ [User Activity] User ${userId} not found in database - cannot update lastActivity`);
+        }
+      } catch (userError) {
+        console.error(`❌ Error updating user activity for ${userId}:`, userError);
+      }
+    }
+    
+    lastDatabaseSync = Date.now();
+  } catch (error) {
+    console.error('❌ Error syncing user activities to database:', error);
+  }
 };
 
-// Get all agent activities
-const getAllAgentActivities = () => {
-  return Array.from(agentActivityTracker.entries()).map(([agentId, data]) => ({
-    agentId,
-    ...data
-  }));
+// Get agent activity (in-memory first, fallback to database)
+const getAgentActivity = async (agentId) => {
+  if (!agentId) return null;
+  
+  // Check in-memory first (most recent)
+  const inMemory = agentActivityTracker.get(agentId);
+  if (inMemory) {
+    return {
+      agentId: agentId,
+      userId: inMemory.userId,
+      lastActivity: inMemory.lastActivity
+    };
+  }
+  
+  // Fallback to database
+  if (!couchDBClient) return null;
+  
+  try {
+    const doc = await couchDBClient.get('maia_users', `agent_activity_${agentId}`);
+    return {
+      agentId: doc.agentId,
+      userId: doc.userId,
+      lastActivity: new Date(doc.lastActivity)
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
+// Get all user activities (in-memory + database)
+const getAllUserActivities = async () => {
+  const activities = [];
+  
+  // First, get all users from database to ensure we have complete data
+  if (couchDBClient) {
+    try {
+      const result = await couchDBClient.findDocuments('maia_users', {
+        selector: {
+          _id: { $exists: true }
+        }
+      });
+      
+      // Add database activities (source of truth)
+      for (const userDoc of result.docs) {
+        if (userDoc.lastActivity) {
+          activities.push({
+            userId: userDoc._id, // Use _id as userId for consistency
+            lastActivity: userDoc.lastActivity,
+            source: 'database'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading activities from database:', error);
+    }
+  }
+  
+  // Add in-memory activities (most recent) - these will override database if newer
+  for (const [userId, data] of userActivityTracker.entries()) {
+    const existingIndex = activities.findIndex(a => a.userId === userId);
+    if (existingIndex >= 0) {
+      // Update existing entry with in-memory data if it's newer
+      activities[existingIndex] = {
+        userId: userId,
+        lastActivity: data.lastActivity,
+        needsDbUpdate: data.needsDbUpdate,
+        source: 'memory'
+      };
+    } else {
+      // Add new in-memory activity
+      activities.push({
+        userId: userId,
+        lastActivity: data.lastActivity,
+        needsDbUpdate: data.needsDbUpdate,
+        source: 'memory'
+      });
+    }
+  }
+  
+  return activities;
+};
+
+// Load activity data from database on startup
+const loadUserActivityFromDatabase = async () => {
+  if (!couchDBClient) return;
+  
+  try {
+    // Load all users and their lastActivity times
+    const result = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        userId: { $exists: true }
+      }
+    });
+    
+    for (const userDoc of result.docs) {
+      if (userDoc.userId && userDoc.lastActivity) {
+        userActivityTracker.set(userDoc.userId, {
+          lastActivity: new Date(userDoc.lastActivity),
+          needsDbUpdate: false // Don't update on startup
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error loading user activity from database:', error);
+  }
 };
 
 // Function to set the client (called from main server)
 export const setCouchDBClient = (client) => {
   couchDBClient = client;
+  // Load existing user activity data when client is set
+  loadUserActivityFromDatabase();
 };
 
 // Admin authentication middleware
@@ -105,9 +311,11 @@ router.get('/health', requireAdminAuth, async (req, res) => {
       userCount: users.length
     });
   } catch (error) {
+    console.log('⏳ Admin management health check failed:', error.message);
     
     // Handle Cloudant rate limiting specifically - this is NOT a system readiness issue
     if (error.statusCode === 429 || error.error === 'too_many_requests') {
+      console.log('📊 Rate limiting detected during health check - system is ready, just busy');
       // System is ready, just rate limited - return ready status
       res.json({ 
         status: 'ready',
@@ -145,9 +353,11 @@ const checkDatabaseReady = async (req, res, next) => {
     const users = await couchDBClient.getAllDocuments('maia_users');
     next();
   } catch (error) {
+    console.log('⏳ Database system readiness check failed:', error.message);
     
     // Handle Cloudant rate limiting specifically - this is NOT a system readiness issue
     if (error.statusCode === 429 || error.error === 'too_many_requests') {
+      console.log('📊 Rate limiting detected during readiness check - system is ready, just busy');
       // System is ready, just rate limited - allow the request to proceed
       next();
       return;
@@ -243,16 +453,14 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
+    // Clear UserStateManager cache to ensure fresh data
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      userStateManager.clearCache();
+    }
+    
     // Get all users from maia_users database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
-    
-    // Log some sample documents to understand what we're getting
-    const sampleDocs = allUsers.slice(0, 5).map(doc => ({
-      _id: doc._id,
-      isAdmin: doc.isAdmin,
-      hasCredentialID: !!doc.credentialID,
-      type: doc.type || 'unknown'
-    }));
     
     const users = allUsers
       .filter(user => {
@@ -262,16 +470,10 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         }
         // For wed271, allow it through even if it has isAdmin: true (special case)
         if (user._id === 'wed271') {
-          console.log('🔍 [admin] Special case for wed271:', {
-            userId: user._id,
-            isAdmin: user.isAdmin
-          });
           return true;
         }
         // For all other users, exclude admin users
         const isAdmin = user.isAdmin;
-        if (isAdmin) {
-        }
         return !isAdmin;
       })
       .map(user => {
@@ -317,14 +519,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
-    // Count workflow stages
-    const workflowStageCounts = users.reduce((acc, user) => {
-      acc[user.workflowStage] = (acc[user.workflowStage] || 0) + 1;
-      return acc;
-    }, {});
-    
-    console.log('🔍 [admin] Workflow stage counts:', workflowStageCounts);
-    
     res.json({ users });
     
   } catch (error) {
@@ -360,16 +554,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // DEBUG: Log the full user document to see what we're working with
-    console.log('🔍 [admin] User document details:', {
-      _id: userDoc._id,
-      ownedAgents: userDoc.ownedAgents,
-      currentAgentId: userDoc.currentAgentId,
-      currentAgentName: userDoc.currentAgentName,
-      agentAssignedAt: userDoc.agentAssignedAt,
-      approvalStatus: userDoc.approvalStatus,
-      workflowStage: determineWorkflowStage(userDoc)
-    });
     
     // Extract current agent information from ownedAgents if available
     let currentAgentId = userDoc.currentAgentId || null;
@@ -382,11 +566,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       currentAgentId = firstAgent.id;
       currentAgentName = firstAgent.name;
       agentAssignedAt = firstAgent.assignedAt;
-      console.log('🔍 [admin] Using first owned agent:', {
-        currentAgentId,
-        currentAgentName,
-        agentAssignedAt
-      });
     }
     
     // If we have currentAgentId but no agentAssignedAt, try to get it from ownedAgents
@@ -431,12 +610,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
     };
     
-    console.log('🔍 [admin] Final user info:', {
-      currentAgentId: userInfo.currentAgentId,
-      currentAgentName: userInfo.currentAgentName,
-      agentAssignedAt: userInfo.agentAssignedAt,
-      ownedAgents: userInfo.ownedAgents
-    });
     
     res.json(userInfo);
     
@@ -504,7 +677,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     // If approved, trigger resource creation workflow
     if (action === 'approve') {
       // TODO: Implement automatic agent and KB creation
-      // For now, just log that resources should be created
     }
     
     res.json({ 
@@ -604,6 +776,27 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
   try {
     const { userId } = req.params;
     
+    // First try to get from UserStateManager cache
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      const cachedAgentData = userStateManager.getUserStateSection(userId, 'agent');
+      if (cachedAgentData) {
+        // Return cached data without hitting database
+        const assignedAgentId = cachedAgentData.assignedAgentId || cachedAgentData.currentAgentId || null;
+        const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
+        const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
+        
+        return res.json({
+          userId: userId,
+          assignedAgentId: assignedAgentId,
+          assignedAgentName: assignedAgentName,
+          agentAssignedAt: agentAssignedAt
+        });
+      }
+    }
+    
+    // Fallback to database if cache miss
+    
     // Get user document with retry logic for rate limits
     let userDoc = null;
     let retries = 0;
@@ -615,7 +808,6 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
         break;
       } catch (error) {
         if (error.statusCode === 429 && retries < maxRetries - 1) {
-          console.warn(`Rate limit hit for getUserByUsername, retrying in ${(retries + 1) * 2} seconds...`);
           await new Promise(resolve => setTimeout(resolve, (retries + 1) * 2000));
           retries++;
         } else {
@@ -633,15 +825,17 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
     const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
     
-    // Debug logging
-    console.log('🔍 [admin] Agent assignment debug:', {
-      assignedAgentId: userDoc.assignedAgentId,
-      currentAgentId: userDoc.currentAgentId,
-      assignedAgentName: userDoc.assignedAgentName,
-      currentAgentName: userDoc.currentAgentName,
-      finalAssignedAgentId: assignedAgentId,
-      finalAssignedAgentName: assignedAgentName
-    });
+    // Update cache with fresh data
+    if (userStateManager) {
+      userStateManager.updateUserStateSection(userId, 'agent', {
+        assignedAgentId: userDoc.assignedAgentId,
+        assignedAgentName: userDoc.assignedAgentName,
+        currentAgentId: userDoc.currentAgentId,
+        currentAgentName: userDoc.currentAgentName,
+        agentAssignedAt: userDoc.agentAssignedAt,
+        currentAgentSetAt: userDoc.currentAgentSetAt
+      });
+    }
     
     res.json({
       userId: userId,
@@ -667,11 +861,6 @@ router.post('/fix-user-data/:userId', async (req, res) => {
     
     // Get the user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
-    console.log('🔍 [admin] Fix user data - current state:', {
-      _id: userDoc._id,
-      workflowStage: userDoc.workflowStage,
-      approvalStatus: userDoc.approvalStatus
-    });
     
     // Fix the inconsistency
     if (userDoc.workflowStage === 'approved' && !userDoc.approvalStatus) {
@@ -722,7 +911,7 @@ function validateWorkflowConsistency(user) {
   if (!validApprovalStatuses.includes(approvalStatus)) {
     const error = new Error(`Workflow state inconsistency detected for user ${user._id}: workflowStage="${workflowStage}" but approvalStatus="${approvalStatus}". Valid combinations: ${JSON.stringify(validCombinations)}`);
     console.error('❌ [WORKFLOW VALIDATION ERROR]', error.message);
-    console.error('🔍 [DEBUG] User data:', {
+    console.error('🔍 User data:', {
       _id: user._id,
       workflowStage,
       approvalStatus,
@@ -800,11 +989,6 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       return res.status(404).json({ error: 'User not found' });
     }
     
-    console.log('🔍 [admin] Workflow stage update - current state:', {
-      userId: userDoc._id, 
-      currentWorkflowStage: userDoc.workflowStage,
-      approvalStatus: userDoc.approvalStatus 
-    });
     
     // Update user workflow stage
     const updatedUser = {
@@ -885,6 +1069,7 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     // Save the updated user document
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
+    console.log(`✅ Admin reset passkey for user: ${userId}`);
     
     res.json({
       success: true,
@@ -989,6 +1174,7 @@ router.post('/sessions/:sessionId/signout', requireAdminAuth, async (req, res) =
   try {
     const { sessionId } = req.params;
     
+    console.log(`🔓 [Admin] Signing out session: ${sessionId}`);
     await sessionManager.deactivateSession(sessionId, 'admin_signout');
     
     res.json({
@@ -1039,21 +1225,438 @@ router.get('/sessions/active-check', requireAdminAuth, async (req, res) => {
   }
 });
 
-// API endpoint to get agent activities for Admin Panel
-router.get('/agent-activities', (req, res) => {
+// API endpoint to get user activities for Admin Panel
+router.get('/agent-activities', async (req, res) => {
   try {
-    const activities = getAllAgentActivities();
+    const activities = await getAllUserActivities();
     res.json({
       success: true,
       activities: activities
     });
   } catch (error) {
-    console.error('Error getting agent activities:', error);
-    res.status(500).json({ error: 'Failed to get agent activities' });
+    console.error('Error getting user activities:', error);
+    res.status(500).json({ error: 'Failed to get user activities' });
+  }
+});
+
+// API endpoint to track user activities from frontend
+router.post('/agent-activities', async (req, res) => {
+  try {
+    const { agentId, userId, action } = req.body;
+    
+    if (userId) {
+      // Track general user activity (any frontend interaction)
+      updateUserActivity(userId);
+    } else {
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking activity:', error);
+    res.status(500).json({ error: 'Failed to track activity' });
+  }
+});
+
+// Database Management Endpoints
+
+// Update user's assigned agent in maia_users
+router.post('/database/update-user-agent', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId, agentId, agentName } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'Missing required field: userId' 
+      });
+    }
+    
+    // Allow clearing agent by setting agentId and agentName to null
+    if (agentId === null && agentName === null) {
+      // Clearing agent assignment
+    } else if (!agentId || !agentName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: agentId, agentName (or set both to null to clear)' 
+      });
+    }
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update assigned agent fields
+    const updatedUserDoc = {
+      ...userDoc,
+      assignedAgentId: agentId,
+      assignedAgentName: agentName,
+      currentAgentId: agentId, // Set current to match assigned
+      currentAgentName: agentName,
+      agentAssignedAt: agentId ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save updated document
+    await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+    
+    // Update UserStateManager cache
+    const userStateManager = req.app.locals.userStateManager;
+    if (userStateManager) {
+      userStateManager.updateUserStateSection(userId, 'agent', {
+        assignedAgentId: agentId,
+        assignedAgentName: agentName,
+        currentAgentId: agentId,
+        currentAgentName: agentName,
+        agentAssignedAt: updatedUserDoc.agentAssignedAt
+      });
+    }
+    
+    
+    res.json({
+      success: true,
+      message: `Agent ${agentName} assigned to user ${userId}`,
+      userId: userId,
+      assignedAgentId: agentId,
+      assignedAgentName: agentName
+    });
+    
+  } catch (error) {
+    console.error('Error updating user agent:', error);
+    res.status(500).json({ error: 'Failed to update user agent' });
+  }
+});
+
+// Sync agent names with DO API
+router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => {
+  try {
+    console.log(`🔄 [DB] Starting agent name sync with DO API`);
+    
+    // Get all agents from DO API
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const agents = agentsResponse.agents || [];
+    
+    console.log(`🔍 [DB] Found ${agents.length} agents in DO API`);
+    
+    const syncResults = [];
+    
+    // Get all users from database
+    const usersResponse = await couchDBClient.findDocuments('maia_users', {
+      selector: {
+        assignedAgentId: { $exists: true }
+      }
+    });
+    
+    console.log(`🔍 [DB] Found ${usersResponse.docs.length} users with assigned agents`);
+    
+    for (const user of usersResponse.docs) {
+      if (!user.assignedAgentId) continue;
+      
+      // Find matching agent in DO API
+      const matchingAgent = agents.find(agent => agent.uuid === user.assignedAgentId);
+      
+      if (matchingAgent) {
+        const expectedName = `${user.displayName || user._id}-agent-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+        
+        if (matchingAgent.name !== expectedName) {
+          console.log(`🔄 [DB] Updating agent name for user ${user._id}: ${matchingAgent.name} → ${expectedName}`);
+          
+          // Update agent name in DO API
+          try {
+            await doRequest(`/v2/gen-ai/agents/${matchingAgent.uuid}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                name: expectedName
+              })
+            });
+            
+            // Update user document
+            const updatedUserDoc = {
+              ...user,
+              assignedAgentName: expectedName,
+              currentAgentName: expectedName,
+              updatedAt: new Date().toISOString()
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            
+            // Update cache
+            const userStateManager = req.app.locals.userStateManager;
+            if (userStateManager) {
+              userStateManager.updateUserStateSection(user._id, 'agent', {
+                assignedAgentName: expectedName,
+                currentAgentName: expectedName
+              });
+            }
+            
+            syncResults.push({
+              userId: user._id,
+              agentId: matchingAgent.uuid,
+              oldName: matchingAgent.name,
+              newName: expectedName,
+              status: 'updated'
+            });
+            
+          } catch (updateError) {
+            console.error(`❌ [DB] Failed to update agent name for user ${user._id}:`, updateError.message);
+            syncResults.push({
+              userId: user._id,
+              agentId: matchingAgent.uuid,
+              oldName: matchingAgent.name,
+              newName: expectedName,
+              status: 'failed',
+              error: updateError.message
+            });
+          }
+        } else {
+          syncResults.push({
+            userId: user._id,
+            agentId: matchingAgent.uuid,
+            name: matchingAgent.name,
+            status: 'already_correct'
+          });
+        }
+      } else {
+        console.warn(`⚠️ [DB] Agent ${user.assignedAgentId} not found in DO API for user ${user._id}`);
+        syncResults.push({
+          userId: user._id,
+          agentId: user.assignedAgentId,
+          status: 'not_found_in_do_api'
+        });
+      }
+    }
+    
+    console.log(`✅ [DB] Agent name sync completed. ${syncResults.length} agents processed`);
+    
+    res.json({
+      success: true,
+      message: `Agent name sync completed. ${syncResults.length} agents processed`,
+      results: syncResults
+    });
+    
+  } catch (error) {
+    console.error('Error syncing agent names:', error);
+    res.status(500).json({ error: 'Failed to sync agent names' });
+  }
+});
+
+// Check user-agent assignment status
+router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId query parameter is required' });
+    }
+    
+    // Get user document
+    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const status = {
+      userId: userId,
+      hasAssignedAgent: !!userDoc.assignedAgentId,
+      assignedAgentId: userDoc.assignedAgentId || null,
+      assignedAgentName: userDoc.assignedAgentName || null,
+      currentAgentId: userDoc.currentAgentId || null,
+      currentAgentName: userDoc.currentAgentName || null,
+      agentAssignedAt: userDoc.agentAssignedAt || null,
+      isConsistent: userDoc.assignedAgentId === userDoc.currentAgentId
+    };
+    
+    // If user has an assigned agent, verify it exists in DO API
+    if (userDoc.assignedAgentId) {
+      try {
+        const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
+        status.agentExistsInDO = true;
+        status.agentStatus = agentResponse.agent?.deployment?.status || 'unknown';
+      } catch (error) {
+        status.agentExistsInDO = false;
+        status.agentError = error.message;
+      }
+    }
+    
+    
+    res.json({
+      success: true,
+      status: status
+    });
+    
+  } catch (error) {
+    console.error('Error checking user agent status:', error);
+    res.status(500).json({ error: 'Failed to check user agent status' });
+  }
+});
+
+// Fix consistency issues endpoint
+router.post('/database/fix-consistency', async (req, res) => {
+  try {
+    const { inconsistencies } = req.body;
+    
+    if (!inconsistencies || !Array.isArray(inconsistencies)) {
+      return res.status(400).json({ error: 'Invalid inconsistencies data' });
+    }
+    
+    console.log(`🔧 [CONSISTENCY FIX] Processing ${inconsistencies.length} inconsistencies...`);
+    
+    const results = [];
+    
+    for (const issue of inconsistencies) {
+      try {
+        if (issue.type === 'agent_assignment_mismatch') {
+          // Find user and update their agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: issue.expectedAgentId,
+              assignedAgentName: issue.agentName
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Assigned agent ${issue.agentName} to user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              agentId: issue.expectedAgentId,
+              agentName: issue.agentName,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        } else if (issue.type === 'orphaned_agent') {
+          // Remove orphaned agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: null,
+              assignedAgentName: null
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        } else if (issue.type === 'security_violation') {
+          // Remove invalid agent assignment
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              assignedAgentId: null,
+              assignedAgentName: null
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            console.log(`✅ [CONSISTENCY FIX] Removed invalid agent from user ${issue.userId}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [CONSISTENCY FIX] Error fixing issue for user ${issue.userId}:`, error);
+        results.push({
+          type: issue.type,
+          userId: issue.userId,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.status === 'fixed').length;
+    const failCount = results.filter(r => r.status === 'failed').length;
+    
+    console.log(`🔧 [CONSISTENCY FIX] Completed: ${successCount} fixed, ${failCount} failed`);
+    
+    res.json({
+      success: true,
+      results: results,
+      summary: {
+        total: inconsistencies.length,
+        fixed: successCount,
+        failed: failCount
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [CONSISTENCY FIX] Error fixing consistency issues:', error);
+    res.status(500).json({ error: 'Failed to fix consistency issues' });
   }
 });
 
 // Export functions for use in main server
-export { updateAgentActivity, getAgentActivity, getAllAgentActivities };
+export { updateUserActivity, getAllUserActivities };
 
 export default router;

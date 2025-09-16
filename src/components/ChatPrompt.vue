@@ -20,6 +20,7 @@ import SavedChatsDialog from "./SavedChatsDialog.vue";
 import { useCouchDB, type SavedChat } from "../composables/useCouchDB";
 import { useGroupChat } from "../composables/useGroupChat";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
@@ -92,8 +93,10 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
     const currentAgent = ref<any>(null);
+    const currentKnowledgeBase = ref<any>(null);
+    const assignedAgent = ref<any>(null);
     const agentWarning = ref<string>("");
-    const currentUser = ref<any>({ userId: 'Public User', displayName: 'Public User' });
+    const currentUser = ref<any>(UserService.createPublicUser());
     const pendingShareId = ref<string | null>(null);
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
@@ -159,10 +162,12 @@ export default defineComponent({
     
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
+      // Add stack trace to debug where calls are coming from
+      
       // Check if we already have a pending request for this endpoint
-      const cacheKey = 'current-agent';
+      const userId = currentUser.value?.userId || 'Public User';
+      const cacheKey = `current-agent-${userId}`;
       if (apiCallCache.has(cacheKey)) {
-        console.log(`Skipping duplicate current-agent request`);
         return await apiCallCache.get(cacheKey);
       }
       
@@ -174,9 +179,11 @@ export default defineComponent({
 
           if (data.agent) {
             currentAgent.value = data.agent;
-
+            assignedAgent.value = data.agent; // Set assigned agent for dialog display
             if (data.agent.knowledgeBase) {
+              currentKnowledgeBase.value = data.agent.knowledgeBase;
             } else {
+              currentKnowledgeBase.value = null;
             }
 
             // Handle warnings from the API
@@ -188,6 +195,11 @@ export default defineComponent({
             }
           } else {
             currentAgent.value = null;
+            currentKnowledgeBase.value = null;
+            assignedAgent.value = null; // Clear assigned agent
+            
+    // Track activity for users without agents
+    trackUserActivity('no_agent_detected');
             
             // Check if agent selection is required
             if (data.requiresAgentSelection) {
@@ -212,8 +224,12 @@ export default defineComponent({
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
+        // console.log(`🔍 [ChatPrompt] Checking existing session...`);
+        // console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
         
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+        // console.log(`🔍 [ChatPrompt] Response status:`, response.status);
+        // console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
         
         if (!response.ok) {
           console.error(`❌ [ChatPrompt] HTTP error! status: ${response.status}`);
@@ -223,8 +239,10 @@ export default defineComponent({
         }
         
         const data = await response.json();
+        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
+          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
           
           // Now that user is authenticated, get session verification
@@ -236,9 +254,11 @@ export default defineComponent({
           }
         } else if (data.redirectTo) {
           // Deep link user detected on main app - redirect them to their deep link page
+          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
           window.location.href = data.redirectTo;
           return;
         } else {
+          // console.log(`❌ [ChatPrompt] No authenticated user found`);
           // currentUser.value is already set to Public User by default
         }
       } catch (error) {
@@ -259,6 +279,7 @@ export default defineComponent({
         // Step 1: Check if this is a deep link page first
         const path = window.location.pathname;
         if (path.startsWith('/shared/')) {
+          console.log('🔗 [ChatPrompt] Deep link page detected, skipping authentication');
           // Skip authentication for deep link pages
           await handleDeepLink();
           return;
@@ -285,6 +306,45 @@ export default defineComponent({
     
     // Initialize the app
     initializeApp();
+    
+    // Track user activity for Admin Panel analytics
+    const trackUserActivity = async (action = 'user_interaction') => {
+      try {
+        const userId = currentUser.value?.userId || currentUser.value?.displayName || 'Public User';
+
+        const response = await fetch('/api/admin-management/agent-activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, action })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (activityError) {
+        console.error('❌ [Frontend] Activity tracking failed:', activityError.message);
+      }
+    };
+    
+    // Track app usage when component mounts
+    trackUserActivity('app_loaded');
+    
+    // Track activity on any user interaction
+    const setupActivityTracking = () => {
+      // Track mouse clicks
+      document.addEventListener('click', () => trackUserActivity('mouse_click'));
+      
+      // Track keyboard input
+      document.addEventListener('keydown', () => trackUserActivity('keyboard_input'));
+      
+      // Track window focus (user returned to tab)
+      window.addEventListener('focus', () => trackUserActivity('window_focus'));
+      
+      // Track scroll events
+      window.addEventListener('scroll', () => trackUserActivity('scroll'));
+    };
+    
+    setupActivityTracking();
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
@@ -328,13 +388,12 @@ export default defineComponent({
         appState.currentChatId = groupChat.id;
         
         // Set current user to the identified user (this will update the Agent badge)
-        currentUser.value = { 
-          userId: userData.userId, 
-          displayName: userData.name,
-          email: userData.email,
-          isDeepLinkUser: true,
-          shareId: userData.shareId
-        };
+        currentUser.value = UserService.createDeepLinkUser(
+          userData.userId, 
+          userData.name, 
+          userData.email, 
+          userData.shareId
+        );
         
         // Clear any existing query and active question (don't set active question name - it should use current user)
         appState.currentQuery = '';
@@ -371,24 +430,14 @@ export default defineComponent({
           personalChatOption.value = agentInfo.endpoint;
         }
 
+        console.log("✅ Agent updated in ChatPrompt:", agentInfo.name);
         
         // Fetch current agent data to get updated warning information
         try {
-          const response = await fetch(`${API_BASE_URL}/current-agent`);
-          const data = await response.json();
-          
-          if (data.agent) {
-            // Update with fresh data from server (including warning)
-            currentAgent.value = data.agent;
-            
-            // Handle warnings from the API
-            if (data.warning) {
-              console.warn(data.warning);
-              agentWarning.value = data.warning;
-            } else {
-              agentWarning.value = "";
-            }
-          }
+          // Clear the API call cache to force a fresh request
+          apiCallCache.delete('current-agent');
+          await fetchCurrentAgent();
+          // fetchCurrentAgent() already handles updating currentAgent, currentKnowledgeBase, and agentWarning
         } catch (error) {
           console.error("❌ Failed to fetch updated agent data:", error);
           // Clear warning if fetch fails
@@ -404,10 +453,15 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      currentUser.value = userData;
+      // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
       
-      // Refresh the session status to ensure we have the latest data
-      await checkExistingSession();
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
+      
+      currentUser.value = UserService.normalizeUserObject(userData);
+      
+      // Fetch the user's current agent and KB from API to update Agent Badge
+      await fetchCurrentAgent();
       
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
@@ -432,8 +486,14 @@ export default defineComponent({
         console.error('❌ Backend logout failed:', error);
       }
       
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
+      
       // Set to Public User instead of null (there should never be "no user")
-      currentUser.value = { userId: 'Public User', displayName: 'Public User' };
+      currentUser.value = UserService.createPublicUser();
+      
+      // Fetch the Public User's agent to update the UI
+      await fetchCurrentAgent();
     };
 
     const handleSignInCancelled = () => {
@@ -531,6 +591,9 @@ export default defineComponent({
         // Prevent sending empty messages
         return;
       }
+
+      // Track user activity for Admin Panel (any query attempt)
+      trackUserActivity('query_attempt');
 
       try {
         appState.isLoading = true;
@@ -743,6 +806,8 @@ export default defineComponent({
       showAgentManagementDialog,
       showAgentSelectionModal,
       currentAgent,
+      currentKnowledgeBase,
+      assignedAgent,
       agentWarning,
       currentUser,
       groupCount,
@@ -864,6 +929,9 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :uploadedFiles="appState.uploadedFiles"
     :currentUser="currentUser"
+    :currentAgent="currentAgent"
+    :currentKnowledgeBase="currentKnowledgeBase"
+    :assignedAgent="assignedAgent"
     :warning="agentWarning"
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"
