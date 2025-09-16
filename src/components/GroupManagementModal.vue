@@ -317,6 +317,7 @@ export default defineComponent({
       
       deleting.value = true
       try {
+        console.log('🗑️ [GroupManagement] Deleting group:', {
           groupToDelete: groupToDelete.value,
           groupId: groupToDelete.value.id,
           groupIdType: typeof groupToDelete.value.id
