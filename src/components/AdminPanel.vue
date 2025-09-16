@@ -3,6 +3,23 @@
     <div class="admin-header">
       <h2>🔧 MAIA2 Administration Panel</h2>
       <p class="admin-subtitle">Manage Private AI Users and Workflow Approvals</p>
+      
+      <!-- Test Button for Welcome Modal -->
+      <div class="q-mt-md">
+        <q-btn 
+          color="secondary" 
+          size="sm" 
+          label="Reset Welcome Modal (Test)"
+          @click="resetWelcomeModal"
+          class="q-mr-sm"
+        />
+        <q-btn 
+          color="info" 
+          size="sm" 
+          label="Go to Main App"
+          @click="goToMainApp"
+        />
+      </div>
     </div>
 
           <!-- Admin Registration Section -->
@@ -2015,6 +2032,18 @@ export default defineComponent({
       }
     };
     
+    // Test functions for welcome modal
+    const resetWelcomeModal = () => {
+      localStorage.removeItem('maia-welcome-seen')
+      localStorage.removeItem('maia-welcome-seen-timestamp')
+      $q.notify({
+        type: 'positive',
+        message: 'Welcome modal reset! Refresh the main app to see it.',
+        timeout: 3000
+      })
+    }
+    
+    
     // Lifecycle
     onMounted(async () => {
       checkUrlParameters();
@@ -2133,7 +2162,8 @@ export default defineComponent({
       signOut,
       cloudantDashboardUrl,
       runDatabaseConsistencyCheck,
-      runManualConsistencyCheck
+      runManualConsistencyCheck,
+      resetWelcomeModal
     };
   }
 });

@@ -2,6 +2,7 @@
 import ChatPrompt from '../components/ChatPrompt.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
+import WelcomeModal from '../components/WelcomeModal.vue'
 import { computed, watch, ref } from 'vue'
 
 // Check if we're on the tooltip test route
@@ -77,6 +78,9 @@ const getAdminErrorMessage = () => {
       </div>
     </div>
     <ChatPrompt v-else />
+    
+    <!-- Welcome Modal - shown to all users on first visit -->
+    <WelcomeModal />
   </div>
 </template>
 
