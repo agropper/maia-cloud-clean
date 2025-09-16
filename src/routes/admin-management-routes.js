@@ -911,7 +911,7 @@ function validateWorkflowConsistency(user) {
   if (!validApprovalStatuses.includes(approvalStatus)) {
     const error = new Error(`Workflow state inconsistency detected for user ${user._id}: workflowStage="${workflowStage}" but approvalStatus="${approvalStatus}". Valid combinations: ${JSON.stringify(validCombinations)}`);
     console.error('❌ [WORKFLOW VALIDATION ERROR]', error.message);
-    console.error('🔍 [DEBUG] User data:', {
+    console.error('🔍 User data:', {
       _id: user._id,
       workflowStage,
       approvalStatus,
@@ -974,30 +974,21 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     const { userId } = req.params;
     const { workflowStage, notes } = req.body;
     
-    console.log(`🔄 [DEBUG] Workflow stage update request for user ${userId}:`, { workflowStage, notes });
     
     // Validate workflow stage
     const validStages = ['no_passkey', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
     if (!validStages.includes(workflowStage)) {
-      console.log(`❌ [DEBUG] Invalid workflow stage: ${workflowStage}. Valid stages: ${validStages.join(', ')}`);
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
       });
     }
     
     // Get user document
-    console.log(`🔄 [DEBUG] Getting user document for ${userId}`);
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
     if (!userDoc) {
-      console.log(`❌ [DEBUG] User not found: ${userId}`);
       return res.status(404).json({ error: 'User not found' });
     }
     
-    console.log(`🔄 [DEBUG] User document found:`, { 
-      userId: userDoc._id, 
-      currentWorkflowStage: userDoc.workflowStage,
-      approvalStatus: userDoc.approvalStatus 
-    });
     
     // Update user workflow stage
     const updatedUser = {
@@ -1008,18 +999,15 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     };
     
     // Validate consistency before saving
-    console.log(`🔍 [DEBUG] Validating workflow consistency before saving...`);
     try {
       validateWorkflowConsistency(updatedUser);
     } catch (error) {
       console.error(`❌ [WORKFLOW VALIDATION] Inconsistent data detected for user ${userId}:`, error.message);
       // Handle specific workflow transitions
       if (workflowStage === 'awaiting_approval' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'approved') {
-        console.log(`🔧 [DEBUG] Allowing workflow stage update to fix inconsistent data`);
         // Update approvalStatus to match the new workflow stage
         updatedUser.approvalStatus = 'pending';
       } else if (workflowStage === 'waiting_for_deployment' && userDoc.workflowStage === 'awaiting_approval' && userDoc.approvalStatus === 'pending') {
-        console.log(`🔧 [DEBUG] Allowing workflow stage update to waiting_for_deployment after agent creation`);
         // Update approvalStatus to match the new workflow stage
         updatedUser.approvalStatus = 'approved';
       } else {
@@ -1027,7 +1015,6 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       }
     }
     
-    console.log(`🔄 [DEBUG] Updating user document with new workflow stage: ${workflowStage}`);
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
     // Update user state cache
@@ -1037,7 +1024,6 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       adminNotes: updatedUser.adminNotes
     });
     
-    console.log(`✅ [DEBUG] User workflow stage updated successfully`);
     
     res.json({ 
       message: `User workflow stage updated to ${workflowStage}`,
@@ -1257,14 +1243,11 @@ router.get('/agent-activities', async (req, res) => {
 router.post('/agent-activities', async (req, res) => {
   try {
     const { agentId, userId, action } = req.body;
-    console.log(`🔍 [DEBUG] POST /agent-activities called with:`, { agentId, userId, action });
     
     if (userId) {
       // Track general user activity (any frontend interaction)
       updateUserActivity(userId);
-      console.log(`✅ [DEBUG] Activity tracked for user: ${userId}, action: ${action}`);
     } else {
-      console.log(`❌ [DEBUG] No userId provided in activity tracking request`);
     }
     
     res.json({ success: true });

@@ -492,7 +492,7 @@ app.get('/debug/sessions', async (req, res) => {
       directDatabaseResults: result.docs
     });
   } catch (error) {
-    console.error('❌ [DEBUG] Error testing sessions:', error);
+    console.error('❌ Error testing sessions:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3643,9 +3643,9 @@ app.get('/api/current-agent', async (req, res) => {
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
-            // console.log(`🔍 [current-agent] Validating agent availability for Public User: ${userAgentId}`);
+            console.log(`🔍 [DEBUG-current-agent] Validating agent availability for Public User: ${userAgentId}`);
             const isAgentAvailable = await isAgentAvailableToPublicUser(userAgentId);
-            // console.log(`🔍 [current-agent] Agent ${userAgentId} available to Public User: ${isAgentAvailable}`);
+            console.log(`🔍 [DEBUG-current-agent] Agent ${userAgentId} available to Public User: ${isAgentAvailable}`);
             
             if (isAgentAvailable) {
               agentId = userAgentId;
@@ -3800,30 +3800,7 @@ app.get('/api/current-agent', async (req, res) => {
     if (currentUser === 'Public User') {
       // Public User can only see agents that start with 'public-'
       if (!agentName.startsWith('public-')) {
-        console.error(`🚨 SECURITY VIOLATION: Public User assigned agent ${agentName} does not start with 'public-'`);
-        
-        // Clear the invalid agent assignment
-        try {
-          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-          if (userDoc) {
-            const updatedUserDoc = {
-              ...userDoc,
-              currentAgentId: null,
-              currentAgentName: null,
-              currentAgentEndpoint: null,
-              currentAgentSetAt: null,
-              assignedAgentId: null,
-              assignedAgentName: null,
-              updatedAt: new Date().toISOString()
-            };
-            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
-            
-            // Clear from cache
-            UserStateManager.removeUser('Public User');
-          }
-        } catch (clearError) {
-          console.error(`❌ Failed to clear invalid agent assignment:`, clearError.message);
-        }
+        console.error(`🚨 SECURITY VIOLATION: Public User assigned agent ${agentName} does not start with 'public-' - Admin intervention required`);
         
         return res.status(403).json({ 
           agent: null,
@@ -3836,30 +3813,7 @@ app.get('/api/current-agent', async (req, res) => {
       const expectedPrefix = `${currentUser}-agent-`;
       
       if (!agentName.startsWith(expectedPrefix)) {
-        console.error(`🚨 SECURITY VIOLATION: User ${currentUser} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
-        
-        // Clear the invalid agent assignment
-        try {
-          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
-          if (userDoc) {
-            const updatedUserDoc = {
-              ...userDoc,
-              currentAgentId: null,
-              currentAgentName: null,
-              currentAgentEndpoint: null,
-              currentAgentSetAt: null,
-              assignedAgentId: null,
-              assignedAgentName: null,
-              updatedAt: new Date().toISOString()
-            };
-            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
-            
-            // Clear from cache
-            UserStateManager.removeUser(currentUser);
-          }
-        } catch (clearError) {
-          console.error(`❌ Failed to clear invalid agent assignment:`, clearError.message);
-        }
+        console.error(`🚨 SECURITY VIOLATION: User ${currentUser} assigned agent ${agentName} does not match expected pattern ${expectedPrefix} - Admin intervention required`);
         
         return res.status(403).json({ 
           agent: null,

@@ -507,9 +507,7 @@ export default defineComponent({
 
         if (result.success) {
           // Store the user data for later use
-          console.log(`🔍 [DEBUG] PasskeyAuthDialog - result.user:`, result.user);
           registrationUserData.value = result.user;
-          console.log(`🔍 [DEBUG] PasskeyAuthDialog - registrationUserData.value:`, registrationUserData.value);
           currentStep.value = "success";
         } else {
           currentStep.value = "error";
@@ -535,9 +533,7 @@ export default defineComponent({
 
     const onSuccess = () => {
       // Use the stored user data if available, otherwise fall back to just userId
-      console.log(`🔍 [DEBUG] PasskeyAuthDialog onSuccess - registrationUserData.value:`, registrationUserData.value);
       const userData = registrationUserData.value || { userId: userId.value };
-      console.log(`🔍 [DEBUG] PasskeyAuthDialog onSuccess - userData:`, userData);
       emit("authenticated", userData);
 
       showDialog.value = false;

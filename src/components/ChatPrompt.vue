@@ -168,35 +168,22 @@ export default defineComponent({
       const userId = currentUser.value?.userId || 'Public User';
       const cacheKey = `current-agent-${userId}`;
       if (apiCallCache.has(cacheKey)) {
-        console.log(`🔍 [DEBUG] fetchCurrentAgent - Using cached result for user: ${userId}`);
         return await apiCallCache.get(cacheKey);
       }
       
       // Create a promise and cache it
       const promise = (async () => {
         try {
-          console.log(`🔍 [DEBUG] fetchCurrentAgent - Making API call to /current-agent for user: ${userId}`);
           const response = await fetch(`${API_BASE_URL}/current-agent`);
-          console.log(`🔍 [DEBUG] fetchCurrentAgent - API response status: ${response.status}`);
           const data = await response.json();
-          console.log(`🔍 [DEBUG] fetchCurrentAgent - API response data:`, data);
 
           if (data.agent) {
             currentAgent.value = data.agent;
             assignedAgent.value = data.agent; // Set assigned agent for dialog display
-            console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has agent assigned:`, data.agent.name);
-            console.log(`🔍 [DEBUG] DO Agent Assignment API - Agent details:`, {
-              id: data.agent.id,
-              name: data.agent.name,
-              endpoint: data.endpoint
-            });
-
             if (data.agent.knowledgeBase) {
               currentKnowledgeBase.value = data.agent.knowledgeBase;
-              console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has KB attached:`, data.agent.knowledgeBase.name);
             } else {
               currentKnowledgeBase.value = null;
-              console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has no KB attached`);
             }
 
             // Handle warnings from the API
@@ -210,8 +197,6 @@ export default defineComponent({
             currentAgent.value = null;
             currentKnowledgeBase.value = null;
             assignedAgent.value = null; // Clear assigned agent
-            console.log(`🔍 [DEBUG] DO Agent Assignment API - User ${userId} has NO agent assigned`);
-            console.log(`🔍 [DEBUG] Agent Badge will show: "No Agent Selected" for user ${userId}`);
             
     // Track activity for users without agents
     trackUserActivity('no_agent_detected');
@@ -476,7 +461,6 @@ export default defineComponent({
       currentUser.value = UserService.normalizeUserObject(userData);
       
       // Fetch the user's current agent and KB from API to update Agent Badge
-      console.log(`🔍 [DEBUG] handleUserAuthenticated - fetching current agent for user:`, currentUser.value.userId);
       await fetchCurrentAgent();
       
       // Force a reactive update by triggering a re-render
