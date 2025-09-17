@@ -173,6 +173,15 @@ export const sendQuery = async (
     const responseTime = Date.now() - startTime
     const contextKB = Math.round(contextSize / 1024 * 100) / 100
     
+    // Add essential console messages to browser console
+    const contextSizeKB = contextKB;
+    const uploadedFilesCount = appState.uploadedFiles?.length || 0;
+    const agentName = currentUser?.assignedAgent?.name || 'No Agent';
+    const knowledgeBases = currentUser?.assignedAgent?.knowledgeBases?.map(kb => kb.name).join(', ') || 'None';
+    
+    console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSizeKB}KB context, ${uploadedFilesCount} files`);
+    console.log(`[*] Current user: ${userInfo}, Agent: ${agentName}, Connected KBs: [${knowledgeBases}]`);
+    console.log(`[*] AI Response time: ${responseTime}ms`);
 
     return response;
   } catch (error: any) {
