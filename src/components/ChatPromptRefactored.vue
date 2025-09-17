@@ -289,8 +289,15 @@ export default defineComponent({
     const handleChatSelected = () => {};
     const handleAgentUpdated = () => {};
     const handleManageAgent = () => {};
-    const handleSignIn = () => {};
-    const handleSignInCancelled = () => {};
+    const handleSignIn = () => {
+      // Open the passkey authentication dialog
+      showPasskeyAuthDialog.value = true;
+    };
+    
+    const handleSignInCancelled = () => {
+      // Close the passkey authentication dialog
+      showPasskeyAuthDialog.value = false;
+    };
     const groupCount = ref(0);
     const updateGroupCount = () => {};
     const handleChatLoaded = () => {};
@@ -392,7 +399,12 @@ export default defineComponent({
       :appState="appState"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
+      :warning="agentWarning"
       :AIoptions="AIoptions"
+      @manage-agent="triggerAgentManagement"
+      @sign-in="handleSignIn"
+      @sign-out="handleSignOut"
+      @clear-warning="agentWarning = ''"
     />
 
     <!-- Bottom Toolbar -->
@@ -413,6 +425,8 @@ export default defineComponent({
       @show-saved-chats="showSavedChatsDialog = true"
       @trigger-agent-management="triggerAgentManagement"
       @show-popup="showPopup"
+      @sign-in="handleSignIn"
+      @sign-out="handleSignOut"
     />
 
     <!-- Modals and Dialogs -->
