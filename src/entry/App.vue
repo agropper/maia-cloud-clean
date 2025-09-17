@@ -1,9 +1,28 @@
 <script setup lang="ts">
-import ChatPrompt from '../components/ChatPrompt.vue'
+import ChatPrompt from '../components/ChatPromptRefactored.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
 import WelcomeModal from '../components/WelcomeModal.vue'
-import { computed, watch, ref } from 'vue'
+import AppLoadingState from '../components/AppLoadingState.vue'
+import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
+import { appInitializer } from '../utils/AppInitializer.js'
+import { appStateManager } from '../utils/AppStateManager.js'
+
+// Application state
+const isInitialized = ref(false)
+const isLoading = ref(true)
+const initializationError = ref(null)
+const currentUser = ref(null)
+const currentAgent = ref(null)
+const userType = ref('public')
+
+// Loading state
+const loadingSteps = ref([
+  { text: 'Detecting user type...', completed: false, current: true, error: false },
+  { text: 'Loading user session...', completed: false, current: false, error: false },
+  { text: 'Initializing agent...', completed: false, current: false, error: false },
+  { text: 'Setting up interface...', completed: false, current: false, error: false }
+])
 
 // Check if we're on the tooltip test route
 const isTooltipTest = computed(() => {
@@ -27,12 +46,10 @@ const hasAdminError = computed(() => {
   return error && error.startsWith('admin_');
 })
 
-
 // Check if we should show a blank page (admin errors)
 const shouldShowBlankPage = computed(() => {
   return hasAdminError.value;
 })
-
 
 // Get human-readable admin error message
 const getAdminErrorMessage = () => {
@@ -54,33 +71,175 @@ const getAdminErrorMessage = () => {
       return 'Access denied for administrative reasons.';
   }
 }
+
+// Initialize application
+const initializeApp = async () => {
+  try {
+    console.log('🚀 [App] Starting application initialization...')
+    
+    // Update loading step
+    updateLoadingStep(0, true)
+    updateLoadingStep(1, false, true)
+    
+    // Initialize the application
+    const result = await appInitializer.initialize()
+    
+    // Update state from initialization result
+    currentUser.value = result.user
+    currentAgent.value = result.agent
+    userType.value = result.userType
+    
+    // Update app state manager
+    appStateManager.setUser(result.user)
+    if (result.agent) {
+      appStateManager.setAgent(result.agent)
+    }
+    
+    // Handle agent selection requirement
+    if (result.requiresAgentSelection) {
+      appStateManager.setModal('showAgentSelectionModal', true)
+    }
+    
+    // Handle no private agent modal for authenticated users
+    if (result.showNoPrivateAgentModal) {
+      appStateManager.setModal('showNoPrivateAgentModal', true)
+    }
+    
+    // Update loading steps
+    updateLoadingStep(1, true)
+    updateLoadingStep(2, true)
+    updateLoadingStep(3, false, true)
+    
+    // Mark as initialized
+    isInitialized.value = true
+    isLoading.value = false
+    
+    console.log('✅ [App] Application initialized successfully:', {
+      userType: result.userType,
+      user: result.user?.userId || 'None',
+      agent: result.agent?.name || 'None'
+    })
+    
+  } catch (error: any) {
+    console.error('❌ [App] Initialization failed:', error)
+    initializationError.value = error.message || 'Initialization failed'
+    isLoading.value = false
+    
+    // Mark all steps as failed
+    loadingSteps.value.forEach(step => {
+      step.completed = false
+      step.current = false
+      step.error = true
+    })
+  }
+}
+
+// Update loading step
+const updateLoadingStep = (index: number, completed: boolean, current: boolean = false) => {
+  if (loadingSteps.value[index]) {
+    loadingSteps.value[index].completed = completed
+    loadingSteps.value[index].current = current
+    loadingSteps.value[index].error = false
+  }
+}
+
+// Handle retry
+const handleRetry = async () => {
+  initializationError.value = null
+  isLoading.value = true
+  
+  // Reset loading steps
+  loadingSteps.value.forEach((step, index) => {
+    step.completed = false
+    step.current = index === 0
+    step.error = false
+  })
+  
+  await initializeApp()
+}
+
+// Listen to state changes
+const stateListenerId = appStateManager.addListener((newState: any, oldState: any) => {
+  // Update local state when app state changes
+  if (newState.currentUser !== oldState.currentUser) {
+    currentUser.value = newState.currentUser
+  }
+  if (newState.currentAgent !== oldState.currentAgent) {
+    currentAgent.value = newState.currentAgent
+  }
+})
+
+// Initialize on mount
+onMounted(() => {
+  initializeApp()
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  appStateManager.removeListener(stateListenerId)
+})
+
+// Loading state helpers
+const getLoadingTitle = () => {
+  if (initializationError.value) {
+    return 'Initialization Failed'
+  }
+  return 'Loading Application'
+}
+
+const getLoadingMessage = () => {
+  if (initializationError.value) {
+    return 'An error occurred while initializing the application. Please try again.'
+  }
+  return 'Please wait while we initialize your session...'
+}
+
+const getLoadingProgress = () => {
+  const completedSteps = loadingSteps.value.filter(step => step.completed).length
+  return Math.round((completedSteps / loadingSteps.value.length) * 100)
+}
 </script>
 
 <template>
   <div class="wrapper">
-    <TooltipTest v-if="isTooltipTest" />
-    <AdminPanel v-else-if="isAdminRoute" :isRegistrationRoute="isAdminRegisterRoute" />
-    <div v-else-if="shouldShowBlankPage" class="admin-error-page">
-      <div class="error-content">
-        <h2>🚫 Admin Access Denied</h2>
-        <p>You do not have permission to access the admin panel.</p>
-        
-        <div v-if="hasAdminError" class="error-details">
-          <p><strong>Reason:</strong> 
-            <span v-if="getAdminErrorMessage()" class="error-message">{{ getAdminErrorMessage() }}</span>
-          </p>
-        </div>
-        
-        <div class="action-buttons">
-          <a href="/admin/register" class="btn btn-primary">Register as Admin</a>
-          <a href="/" class="btn btn-secondary">Return to Main App</a>
+    <!-- Loading State -->
+    <AppLoadingState
+      :isLoading="isLoading"
+      :loadingTitle="getLoadingTitle()"
+      :loadingMessage="getLoadingMessage()"
+      :showProgress="true"
+      :progress="getLoadingProgress()"
+      :loadingSteps="loadingSteps"
+      :error="initializationError"
+      @retry="handleRetry"
+    />
+    
+    <!-- Main Application Content -->
+    <div v-if="isInitialized && !isLoading" class="app-content">
+      <TooltipTest v-if="isTooltipTest" />
+      <AdminPanel v-else-if="isAdminRoute" :isRegistrationRoute="isAdminRegisterRoute" />
+      <div v-else-if="shouldShowBlankPage" class="admin-error-page">
+        <div class="error-content">
+          <h2>🚫 Admin Access Denied</h2>
+          <p>You do not have permission to access the admin panel.</p>
+          
+          <div v-if="hasAdminError" class="error-details">
+            <p><strong>Reason:</strong> 
+              <span v-if="getAdminErrorMessage()" class="error-message">{{ getAdminErrorMessage() }}</span>
+            </p>
+          </div>
+          
+          <div class="action-buttons">
+            <a href="/admin/register" class="btn btn-primary">Register as Admin</a>
+            <a href="/" class="btn btn-secondary">Return to Main App</a>
+          </div>
         </div>
       </div>
+      <ChatPrompt v-else />
+      
+      <!-- Welcome Modal - shown to all users on first visit -->
+      <WelcomeModal />
     </div>
-    <ChatPrompt v-else />
-    
-    <!-- Welcome Modal - shown to all users on first visit -->
-    <WelcomeModal />
   </div>
 </template>
 
