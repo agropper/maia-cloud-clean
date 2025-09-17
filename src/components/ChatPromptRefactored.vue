@@ -438,7 +438,7 @@ export default defineComponent({
 
     <DeepLinkUserModal
       v-model="showDeepLinkUserModal"
-      :shareId="pendingShareId"
+      :shareId="pendingShareId || ''"
       @user-identified="handleDeepLinkUserIdentified"
     />
 
