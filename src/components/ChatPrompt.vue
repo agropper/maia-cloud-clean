@@ -644,7 +644,9 @@ export default defineComponent({
           appState.chatHistory,
           appState,
           currentUser.value, // Pass the current user identity
-          () => { showAgentSelectionModal.value = true; } // Callback for agent selection required
+          () => { showAgentSelectionModal.value = true; }, // Callback for agent selection required
+          currentAgent.value, // Pass current agent
+          assignedAgent.value // Pass assigned agent
         );
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";

@@ -67,19 +67,13 @@ export const sendQuery = async (
   chatHistory: ChatHistoryItem[],
   appState: AppState,
   currentUser?: any,
-  onAgentSelectionRequired?: () => void
+  onAgentSelectionRequired?: () => void,
+  currentAgent?: any,
+  assignedAgent?: any
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
   
-  // Debug logging to identify the issue
-  console.log('🔍 [sendQuery] Debug info:', {
-    uri: uri,
-    uriType: typeof uri,
-    appState: appState,
-    appStateType: typeof appState,
-    selectedAI: appState?.selectedAI,
-    selectedAIType: typeof appState?.selectedAI
-  });
+  // Debug logging removed
   
   // Defensive check for appState
   if (!appState) {
@@ -176,8 +170,12 @@ export const sendQuery = async (
     // Add essential console messages to browser console
     const contextSizeKB = contextKB;
     const uploadedFilesCount = appState.uploadedFiles?.length || 0;
-    const agentName = currentUser?.assignedAgentName || currentUser?.currentAgentName || 'No Agent';
-    const knowledgeBases = currentUser?.assignedKnowledgeBases?.map(kb => kb.name || kb).join(', ') || 'None';
+    
+    // Debug messages removed
+    
+    const agentName = assignedAgent?.name || currentAgent?.name || 'No Agent';
+    const knowledgeBases = assignedAgent?.knowledgeBases?.map(kb => kb.name || kb).join(', ') || 
+                          currentAgent?.knowledgeBases?.map(kb => kb.name || kb).join(', ') || 'None';
     
     console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSizeKB}KB context, ${uploadedFilesCount} files`);
     console.log(`[*] Current user: ${userInfo}, Agent: ${agentName}, Connected KBs: [${knowledgeBases}]`);
