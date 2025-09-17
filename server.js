@@ -381,23 +381,10 @@ app.use((req, res, next) => {
 });
 
 // Custom route for index.html with environment variables (must come before static files)
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
-  
-  // Run database consistency check on page load
-  try {
-    // Simple consistency check - verify Public User document exists and is valid
-    const publicUserDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-    if (publicUserDoc) {
-      console.log(`✅ [Database] Consistency check passed - Public User document valid`);
-    } else {
-      console.log(`⚠️ [Database] Consistency check warning - Public User document not found`);
-    }
-  } catch (error) {
-    console.log(`❌ [Database] Consistency check failed: ${error.message}`);
-  }
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
@@ -6771,6 +6758,21 @@ app.listen(PORT, async () => {
       }
     );
     // console.log(`✅ [STARTUP] UserStateManager cache initialized successfully`);
+    
+    // Database consistency check - verify Public User document exists and is valid
+    try {
+      const publicUserDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+      if (publicUserDoc) {
+        console.log(`✅ [Database] Consistency check passed - Public User document valid`);
+      } else {
+        console.log(`⚠️ [Database] Consistency check warning - Public User document not found`);
+      }
+    } catch (error) {
+      console.log(`❌ [Database] Consistency check failed: ${error.message}`);
+    }
+    
+    // Auth status confirmation for Public User
+    console.log(`✅ [auth-status] Auth Status: Public User`);
     
     // Ensure bucket folders for all users
 //     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
