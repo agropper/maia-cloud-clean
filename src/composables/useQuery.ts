@@ -71,6 +71,14 @@ export const sendQuery = async (
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
   
+  // Debug logging to identify the issue
+  console.log('🔍 [sendQuery] Debug info:', {
+    uri: uri,
+    uriType: typeof uri,
+    selectedAI: appState.selectedAI,
+    selectedAIType: typeof appState.selectedAI
+  });
+  
   try {
     // Add the user's message to chat history with correct display name
     const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Public User'
@@ -124,11 +132,13 @@ export const sendQuery = async (
     totalTokens += historyTokens
 
     // Log which agent and knowledge base will be used for this query
-    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
-                      uri.includes('anthropic-chat') ? 'Anthropic' :
-                      uri.includes('gemini-chat') ? 'Gemini' :
-                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
-                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    // Safety check to prevent includes error
+    const uriString = typeof uri === 'string' ? uri : String(uri || '');
+    const aiProvider = uriString.includes('personal-chat') ? 'Personal AI' :
+                      uriString.includes('anthropic-chat') ? 'Anthropic' :
+                      uriString.includes('gemini-chat') ? 'Gemini' :
+                      uriString.includes('chatgpt-chat') ? 'ChatGPT' :
+                      uriString.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     const userInfo = currentUser?.displayName || currentUser?.userId || 'Public User'
     
@@ -154,11 +164,12 @@ export const sendQuery = async (
     return response;
   } catch (error: any) {
     const responseTime = Date.now() - startTime
-    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
-                      uri.includes('anthropic-chat') ? 'Anthropic' :
-                      uri.includes('gemini-chat') ? 'Gemini' :
-                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
-                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    const uriString = typeof uri === 'string' ? uri : String(uri || '');
+    const aiProvider = uriString.includes('personal-chat') ? 'Personal AI' :
+                      uriString.includes('anthropic-chat') ? 'Anthropic' :
+                      uriString.includes('gemini-chat') ? 'Gemini' :
+                      uriString.includes('chatgpt-chat') ? 'ChatGPT' :
+                      uriString.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     
     // Check if this is an agent selection required error
