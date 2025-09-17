@@ -278,7 +278,92 @@ export default defineComponent({
     const triggerJWT = showJWT;
     const triggerSaveToNosh = saveToNosh;
     const triggerSaveToCouchDB = saveChat;
-    const triggerSendQuery = sendQuery;
+    const triggerSendQuery = async () => {
+      // Prevent multiple simultaneous calls
+      if (appState.isLoading) {
+        return;
+      }
+      
+      // Process query
+      
+      // If Private AI is selected and chatHistory is empty, only use the default if the input is empty or matches the default
+      const privateAIValue = AIoptions.find(
+        (option) => option.label === "Private AI"
+      )?.value;
+      const defaultPrompt = "Show patient summary";
+      if (
+        appState.selectedAI === privateAIValue &&
+        appState.chatHistory.length === 0
+      ) {
+        // If the user has typed something, use that instead of the default
+        if (
+          !appState.currentQuery ||
+          appState.currentQuery.trim() === "" ||
+          appState.currentQuery.trim() === defaultPrompt
+        ) {
+          appState.currentQuery = defaultPrompt;
+        }
+        // Otherwise, use what the user typed (do nothing)
+      }
+      
+      // Prevent sending empty messages (after default prompt logic)
+      if (!appState.currentQuery || appState.currentQuery.trim() === '') {
+        return;
+      }
+
+      // Track user activity for Admin Panel (any query attempt)
+      trackUserActivity('query_attempt');
+
+      try {
+        appState.isLoading = true;
+        const newChatHistory = await sendQuery(
+          appState.selectedAI,
+          appState.chatHistory,
+          appState,
+          currentUser.value, // Pass the current user identity
+          () => { showAgentSelectionModal.value = true; } // Callback for agent selection required
+        );
+        appState.chatHistory = newChatHistory;
+        appState.currentQuery = "";
+        appState.isLoading = false;
+      } catch (error: any) {
+        console.error("Query failed:", error);
+        
+        // Show specific error messages based on error type
+        let errorMessage = "Failed to send query";
+        let warningMessage = "Query failed. Please try again.";
+        
+        if (error.message) {
+          errorMessage = error.message;
+          warningMessage = error.message;
+        }
+        
+        // Add specific handling for rate limits and size limits
+        if (error.status === 429 || (error.errorType === 'RATE_LIMIT')) {
+          // Extract token count from error message if available
+          const tokenMatch = error.message?.match(/\((\d+) tokens sent\)/);
+          const tokenCount = tokenMatch ? tokenMatch[1] : (error.tokenCount || 'unknown');
+          errorMessage = `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`;
+          warningMessage = `Rate limit exceeded (${tokenCount} tokens). Try Personal AI for large documents.`;
+        } else if (error.status === 413 || (error.errorType === 'TOO_LARGE')) {
+          // Extract token count from error message if available
+          const tokenMatch = error.message?.match(/\((\d+) tokens sent\)/);
+          const tokenCount = tokenMatch ? tokenMatch[1] : (error.tokenCount || 'unknown');
+          errorMessage = `Document too large (${tokenCount} tokens sent). Please use Personal AI for large documents.`;
+          warningMessage = `Document too large (${tokenCount} tokens). Use Personal AI instead.`;
+        }
+        
+        writeMessage(errorMessage, "error");
+        // Also set agent warning to show error in AgentStatusIndicator
+        agentWarning.value = warningMessage;
+        appState.isLoading = false;
+      }
+
+      logMessage({
+        role: "user",
+        content: `Sent query to ${appState.selectedAI}`,
+      });
+    };
     const triggerUploadFile = uploadFile;
     const saveMessage = () => {};
     const saveToFile = () => {};
