@@ -89,6 +89,20 @@ export class CouchDBClient {
   async saveDocument(databaseName, document) {
     return this.handleCloudantError(async () => {
       const db = this.db.use(databaseName)
+      
+      // If document has _id but no _rev, try to get the current revision first
+      if (document._id && !document._rev) {
+        try {
+          const existing = await db.get(document._id)
+          document._rev = existing._rev
+        } catch (error) {
+          // Document doesn't exist, that's fine - we'll create it
+          if (error.statusCode !== 404) {
+            throw error
+          }
+        }
+      }
+      
       const result = await db.insert(document)
       return {
         id: result.id,

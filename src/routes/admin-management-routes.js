@@ -56,20 +56,28 @@ const router = express.Router();
 let couchDBClient = null;
 
 // General user activity tracking: in-memory + periodic database sync
-const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean }
+const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean, lastDbUpdate: Date }
 let lastDatabaseSync = 0;
 const SYNC_INTERVAL = 60 * 1000; // 1 minute
+const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database updates for same user
 
 // Update user activity in memory (fast, no database writes)
 const updateUserActivity = (userId) => {
   if (!userId) return;
   
   const now = new Date();
-  const wasNewUser = !userActivityTracker.has(userId);
+  const existingData = userActivityTracker.get(userId);
+  const wasNewUser = !existingData;
+  
+  // Only update if enough time has passed since last database update
+  const shouldUpdateDb = wasNewUser || 
+    !existingData.lastDbUpdate || 
+    (now - existingData.lastDbUpdate) > MIN_UPDATE_INTERVAL;
   
   userActivityTracker.set(userId, {
     lastActivity: now,
-    needsDbUpdate: true // Mark for database update
+    needsDbUpdate: shouldUpdateDb,
+    lastDbUpdate: existingData?.lastDbUpdate || null
   });
   
   // Sync immediately for new users, then every minute for existing users
@@ -110,15 +118,58 @@ const syncActivityToDatabase = async () => {
         
         if (userResult.docs.length > 0) {
           const userDoc = userResult.docs[0];
+          
+          // Use atomic update approach to avoid conflicts
           const updatedDoc = {
             ...userDoc,
-            lastActivity: data.lastActivity.toISOString()
+            lastActivity: data.lastActivity.toISOString(),
+            updatedAt: new Date().toISOString()
           };
           
-          await couchDBClient.saveDocument('maia_users', updatedDoc);
+          // Retry logic for document conflicts
+          let retryCount = 0;
+          const maxRetries = 3;
+          let success = false;
           
-          // Mark as synced
-          data.needsDbUpdate = false;
+          while (retryCount < maxRetries && !success) {
+            try {
+              await couchDBClient.saveDocument('maia_users', updatedDoc);
+              success = true;
+              // Mark as synced and update lastDbUpdate time
+              data.needsDbUpdate = false;
+              data.lastDbUpdate = new Date();
+            } catch (conflictError) {
+              if (conflictError.statusCode === 409) {
+                // Document conflict - get the latest version and retry
+                retryCount++;
+                console.log(`🔄 [User Activity] Document conflict for ${userId}, retry ${retryCount}/${maxRetries}`);
+                
+                // Add small delay between retries to reduce conflict probability
+                if (retryCount < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+                }
+                
+                // Get the latest version of the document
+                const latestDoc = await couchDBClient.getDocument('maia_users', userDoc._id);
+                if (latestDoc) {
+                  // Update with the latest revision and our activity data
+                  updatedDoc._rev = latestDoc._rev;
+                  updatedDoc.lastActivity = data.lastActivity.toISOString();
+                  updatedDoc.updatedAt = new Date().toISOString();
+                } else {
+                  console.log(`❌ [User Activity] Could not retrieve latest document for ${userId}`);
+                  break;
+                }
+              } else {
+                // Non-conflict error, don't retry
+                throw conflictError;
+              }
+            }
+          }
+          
+          if (!success) {
+            console.log(`❌ [User Activity] Failed to update ${userId} after ${maxRetries} retries`);
+          }
         } else {
           console.log(`❌ [User Activity] User ${userId} not found in database - cannot update lastActivity`);
         }
