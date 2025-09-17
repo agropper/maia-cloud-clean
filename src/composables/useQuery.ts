@@ -176,8 +176,8 @@ export const sendQuery = async (
     // Add essential console messages to browser console
     const contextSizeKB = contextKB;
     const uploadedFilesCount = appState.uploadedFiles?.length || 0;
-    const agentName = currentUser?.assignedAgent?.name || 'No Agent';
-    const knowledgeBases = currentUser?.assignedAgent?.knowledgeBases?.map(kb => kb.name).join(', ') || 'None';
+    const agentName = currentUser?.assignedAgentName || currentUser?.currentAgentName || 'No Agent';
+    const knowledgeBases = currentUser?.assignedKnowledgeBases?.map(kb => kb.name || kb).join(', ') || 'None';
     
     console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSizeKB}KB context, ${uploadedFilesCount} files`);
     console.log(`[*] Current user: ${userInfo}, Agent: ${agentName}, Connected KBs: [${knowledgeBases}]`);
