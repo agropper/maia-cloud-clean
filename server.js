@@ -1725,17 +1725,7 @@ app.post('/api/personal-chat', async (req, res) => {
     // Invalidate chat cache since we may have modified chat data
     invalidateCache('chats');
 
-    // Add essential console messages to response for browser console
-    const responseWithConsoleMessages = {
-      chatHistory: newChatHistory,
-      consoleMessages: [
-        `[*] AI Query: ${totalTokens} tokens, ${contextSize}KB context, ${uploadedFiles?.length || 0} files`,
-        `[*] Current user: ${currentUser}, Agent: ${agentName}, Connected KBs: [${knowledgeBases.join(', ')}]`,
-        `[*] AI Response time: ${responseTime}ms`
-      ]
-    };
-
-    res.json(responseWithConsoleMessages);
+    res.json(newChatHistory);
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Personal AI error (${responseTime}ms):`, error.message);
