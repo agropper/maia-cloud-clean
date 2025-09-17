@@ -75,7 +75,7 @@ const getAdminErrorMessage = () => {
 // Initialize application
 const initializeApp = async () => {
   try {
-    console.log('🚀 [App] Starting application initialization...')
+    // console.log('🚀 [App] Starting application initialization...')
     
     // Update loading step
     updateLoadingStep(0, true)
@@ -114,11 +114,11 @@ const initializeApp = async () => {
     isInitialized.value = true
     isLoading.value = false
     
-    console.log('✅ [App] Application initialized successfully:', {
-      userType: result.userType,
-      user: result.user?.userId || 'None',
-      agent: result.agent?.name || 'None'
-    })
+    // console.log('✅ [App] Application initialized successfully:', {
+    //   userType: result.userType,
+    //   user: result.user?.userId || 'None',
+    //   agent: result.agent?.name || 'None'
+    // })
     
   } catch (error: any) {
     console.error('❌ [App] Initialization failed:', error)

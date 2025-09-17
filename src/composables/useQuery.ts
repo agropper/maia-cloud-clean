@@ -55,7 +55,18 @@ export const postData = async (uri: string, data: any): Promise<any> => {
       throw error;
     }
 
-    return await response.json();
+    const responseData = await response.json();
+    
+    // Handle new response format with console messages
+    if (responseData.consoleMessages && Array.isArray(responseData.consoleMessages)) {
+      responseData.consoleMessages.forEach((message: string) => {
+        console.log(message);
+      });
+      return responseData.chatHistory;
+    }
+    
+    // Handle legacy response format (just chat history)
+    return responseData;
   } catch (error) {
     console.error('API request failed:', error);
     throw error;
@@ -70,16 +81,6 @@ export const sendQuery = async (
   onAgentSelectionRequired?: () => void
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
-  
-  // Debug logging to identify the issue
-  console.log('🔍 [sendQuery] Debug info:', {
-    uri: uri,
-    uriType: typeof uri,
-    appState: appState,
-    appStateType: typeof appState,
-    selectedAI: appState?.selectedAI,
-    selectedAIType: typeof appState?.selectedAI
-  });
   
   // Defensive check for appState
   if (!appState) {

@@ -45,7 +45,7 @@ export class AppInitializer {
     this.initializationState.error = null;
 
     try {
-      console.log('🚀 [App] Starting application initialization...');
+      // console.log('🚀 [App] Starting application initialization...');
       
       // Step 1: Determine user type and context
       const context = await this.determineContext();
@@ -58,11 +58,11 @@ export class AppInitializer {
       this.initializationState.isInitializing = false;
       this.retryAttempts = 0; // Reset retry count on success
 
-      console.log('✅ [App] Application initialized successfully:', {
-        userType: result.userType,
-        user: result.user?.userId || result.user,
-        agent: result.agent?.name || result.agent
-      });
+      // console.log('✅ [App] Application initialized successfully:', {
+      //   userType: result.userType,
+      //   user: result.user?.userId || result.user,
+      //   agent: result.agent?.name || result.agent
+      // });
 
       this.notifyListeners('initialized', result);
       return result;
