@@ -394,7 +394,10 @@ class UserStateManager {
         }
       }
       
-      console.log(`✅ [UserStateManager] Cache initialized with ${initializedCount} users`);
+      // Only log in development mode
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`✅ [UserStateManager] Cache initialized with ${initializedCount} users`);
+      }
     } catch (error) {
       console.error(`❌ [UserStateManager] Error initializing cache:`, error.message);
     }

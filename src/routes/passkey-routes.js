@@ -39,13 +39,15 @@ const rpName = "HIEofOne.org";
 const isLocalhost = process.env.NODE_ENV !== 'production' && (!process.env.DOMAIN && !process.env.PASSKEY_RPID);
 const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NODE_ENV === 'production';
 
-// Log environment detection for debugging
-console.log('🔍 Environment Detection Logic:');
-console.log('  - NODE_ENV:', process.env.NODE_ENV);
-console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
-console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
-console.log('  - isLocalhost:', isLocalhost);
-console.log('  - isCloud:', isCloud);
+// Environment detection (essential for debugging)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('🔍 Environment Detection Logic:');
+  console.log('  - NODE_ENV:', process.env.NODE_ENV);
+  console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
+  console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
+  console.log('  - isLocalhost:', isLocalhost);
+  console.log('  - isCloud:', isCloud);
+}
 
 // Automatic rpID configuration
 const rpID = (() => {
@@ -81,19 +83,21 @@ const origin = (() => {
   return `http://localhost:${port}`;
 })();
 
-// Log configuration for debugging
-console.log("🔍 Passkey Configuration:");
-console.log("  - NODE_ENV:", process.env.NODE_ENV);
-console.log("  - Environment Detection:");
-console.log("    - isLocalhost:", isLocalhost);
-console.log("    - isCloud:", isCloud);
-console.log("  - rpID:", rpID);
-console.log("  - origin:", origin);
-console.log("  - Auto-detected from:");
-console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
-console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
-console.log("    - PORT:", process.env.PORT || '3001 (default)');
-console.log("    - HTTPS:", process.env.HTTPS || 'not set');
+// Passkey configuration (essential for debugging)
+if (process.env.NODE_ENV !== 'production') {
+  console.log("🔍 Passkey Configuration:");
+  console.log("  - NODE_ENV:", process.env.NODE_ENV);
+  console.log("  - Environment Detection:");
+  console.log("    - isLocalhost:", isLocalhost);
+  console.log("    - isCloud:", isCloud);
+  console.log("  - rpID:", rpID);
+  console.log("  - origin:", origin);
+  console.log("  - Auto-detected from:");
+  console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
+  console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
+  console.log("    - PORT:", process.env.PORT || '3001 (default)');
+  console.log("    - HTTPS:", process.env.HTTPS || 'not set');
+}
 
 // Configuration summary and recommendations
 console.log("📋 Configuration Summary:");
@@ -703,7 +707,10 @@ router.get("/auth-status", async (req, res) => {
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
-      console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
+      // Only log in development mode
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
+      }
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
