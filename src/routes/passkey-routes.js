@@ -13,7 +13,7 @@ let couchDBClient = null;
 
 // Function to set the CouchDB client (will be called from server.js)
 export const setCouchDBClient = (client) => {
-  console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
+  // console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
   couchDBClient = client;
 };
 

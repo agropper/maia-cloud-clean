@@ -199,12 +199,12 @@ const sessionConfig = {
 // console.log('[*] [Session] Session store configured with database:', couchDBSessionStore.dbName);
 
 // sessionConfig.store = couchDBSessionStore;
-console.log('[*] [Session] Using default memory session store (maia_sessions disabled)');
+// console.log('[*] [Session] Using default memory session store (maia_sessions disabled)');
 
 // Memory cache to track session creation events
 const sessionEventCache = new Map();
 const writtenSessions = new Set(); // Track which sessions have been written to database
-console.log('[*] [Session] Memory cache initialized for session event tracking');
+// console.log('[*] [Session] Memory cache initialized for session event tracking');
 
 app.use(session(sessionConfig));
 
