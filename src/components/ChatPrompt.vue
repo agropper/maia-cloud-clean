@@ -24,6 +24,8 @@ import { UserService } from "../utils/UserService";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
+import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
+import { WorkflowUtils } from "../utils/workflow-utils.js";
 
 
 const AIoptions = [
@@ -47,6 +49,7 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
+    NoPrivateAgentModal,
     QDialog,
     QCard,
     QCardSection,
@@ -92,6 +95,8 @@ export default defineComponent({
     const showPasskeyAuthDialog = ref(false);
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
+    const showNoPrivateAgentModal = ref(false);
+    const noPrivateAgentModalRef = ref<any>(null);
     const currentAgent = ref<any>(null);
     const currentKnowledgeBase = ref<any>(null);
     const assignedAgent = ref<any>(null);
@@ -162,8 +167,6 @@ export default defineComponent({
     
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
-      // Add stack trace to debug where calls are coming from
-      
       // Check if we already have a pending request for this endpoint
       const userId = currentUser.value?.userId || 'Public User';
       const cacheKey = `current-agent-${userId}`;
@@ -198,15 +201,20 @@ export default defineComponent({
             currentKnowledgeBase.value = null;
             assignedAgent.value = null; // Clear assigned agent
             
-    // Track activity for users without agents
-    trackUserActivity('no_agent_detected');
+            // Track activity for users without agents
+            trackUserActivity('no_agent_detected');
             
-            // Check if agent selection is required
-            if (data.requiresAgentSelection) {
-              // Show modal dialog to select agent
+            // Check if user should see the "No Private Agent" modal using new workflow system
+            if (WorkflowUtils.shouldShowNoAgentModal(currentUser.value, null)) {
+              // Show modal for workflow users without private agents
+              if (noPrivateAgentModalRef.value) {
+                noPrivateAgentModalRef.value.show();
+              }
+            } else if (data.requiresAgentSelection && !WorkflowUtils.isWorkflowUser(currentUser.value)) {
+              // Only show agent selection modal for non-workflow users (like Public User)
               showAgentSelectionModal.value = true;
+            }
           }
-        }
         } catch (error) {
           console.error("❌ Error fetching current agent:", error);
           currentAgent.value = null;
@@ -418,6 +426,8 @@ export default defineComponent({
     };
 
     const handleAgentUpdated = async (agentInfo: any) => {
+      console.log(`🔍 [ChatPrompt] handleAgentUpdated called with:`, agentInfo?.name, `for user:`, currentUser.value?.userId);
+      
       if (agentInfo) {
         // Update the current agent with the new information
         currentAgent.value = agentInfo;
@@ -453,15 +463,27 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
-      // console.log(`🔍 [ChatPrompt] User authenticated:`, userData);
-      
       // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
       apiCallCache.clear();
+      
+      // Clear chat area when user signs in (prevents stale data from previous user)
+      appState.chatHistory = [];
+      appState.uploadedFiles = [];
+      appState.currentViewingFile = null;
+      appState.popupContent = '';
       
       currentUser.value = UserService.normalizeUserObject(userData);
       
       // Fetch the user's current agent and KB from API to update Agent Badge
       await fetchCurrentAgent();
+      
+      // Check if user should see the "No Private Agent" modal after authentication
+      if (WorkflowUtils.shouldShowNoAgentModal(currentUser.value, currentAgent.value)) {
+        // Show modal for workflow users without private agents
+        if (noPrivateAgentModalRef.value) {
+          noPrivateAgentModalRef.value.show();
+        }
+      }
       
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
@@ -489,11 +511,31 @@ export default defineComponent({
       // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
       apiCallCache.clear();
       
+      // Clear all agent data before switching to Public User
+      currentAgent.value = null;
+      currentKnowledgeBase.value = null;
+      assignedAgent.value = null;
+      agentWarning.value = "";
+      
       // Set to Public User instead of null (there should never be "no user")
       currentUser.value = UserService.createPublicUser();
       
+      // Clear the backend cache for Public User to prevent contamination
+      try {
+        await fetch(`${API_BASE_URL}/api/admin/clear-public-user-agent`, { method: "POST" });
+      } catch (error) {
+        console.error('❌ Failed to clear Public User cache:', error);
+      }
+      
       // Fetch the Public User's agent to update the UI
       await fetchCurrentAgent();
+    };
+
+    const handleRequestPrivateAgent = () => {
+      // For now, just show a notification
+      // In the future, this could open a form or redirect to admin panel
+      console.log("User requested private agent");
+      // You could implement a request system here
     };
 
     const handleSignInCancelled = () => {
@@ -818,6 +860,7 @@ export default defineComponent({
       handleSignIn,
       handleSignOut,
       handleSignInCancelled,
+      handleRequestPrivateAgent,
       showPasskeyAuthDialog,
       showDeepLinkUserModal,
       pendingShareId,
@@ -936,6 +979,13 @@ export default defineComponent({
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"
     @user-authenticated="handleUserAuthenticated"
+  />
+
+  <!-- No Private Agent Modal -->
+  <NoPrivateAgentModal
+    ref="noPrivateAgentModalRef"
+    @sign-out="handleSignOut"
+    @request="handleRequestPrivateAgent"
   />
 
   <!-- Agent Selection Required Modal -->

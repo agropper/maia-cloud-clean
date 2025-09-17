@@ -240,8 +240,8 @@
                          Patient: <strong>{{ agent.patientName }}</strong> |
                          Current User: {{ agent.owner }} |
                          
-                         <!-- Chats Button - Same style as Bottom Toolbar -->
-                         <div class="tooltip-wrapper" style="display: inline-block; margin: 0 8px;">
+                         <!-- Chats Button - Only show for actual agents, not user flow entries -->
+                         <div v-if="!agent.isUserFlow" class="tooltip-wrapper" style="display: inline-block; margin: 0 8px;">
                            <q-btn
                              flat
                              round
@@ -260,10 +260,12 @@
                        </div>
                   </div>
                   <div class="col-auto">
+                    <!-- Flow Step -->
                     <QChip
-                      :color="agent.status === 'running' ? 'positive' : 'warning'"
+                      :color="getFlowStepColor(agent.flowStep)"
+                      text-color="white"
                       size="sm"
-                      :label="agent.status"
+                      :label="`Running: step ${agent.flowStep}`"
                     />
                   </div>
                 </div>
@@ -708,6 +710,8 @@ import {
 } from 'quasar';
 import { useGroupChat } from '../composables/useGroupChat';
 import GroupManagementModal from './GroupManagementModal.vue';
+import { WorkflowUtils } from '../utils/workflow-utils.js';
+import { getWorkflowStageConfig } from '../config/workflow-config.js';
 
 export default defineComponent({
   name: 'AdminPanel',
@@ -766,6 +770,29 @@ export default defineComponent({
     const agentsAndPatients = ref([]);
     const showGroupModal = ref(false);
     const selectedAgentForChats = ref(null);
+    
+    
+    // Determine current flow step for an agent/user (backward compatible)
+    const getFlowStep = (agent, user) => {
+      // Use the new workflow system
+      const flowStep = WorkflowUtils.getFlowStep(user, agent);
+      return flowStep ? flowStep.step : 0;
+    };
+    
+    // Get color for flow step chip (backward compatible)
+    const getFlowStepColor = (step) => {
+      // Fallback to hardcoded colors for backward compatibility
+      switch (step) {
+        case 1: return 'orange'; // Create Passkey
+        case 2: return 'blue'; // Request Pending
+        case 3: return 'purple'; // Agent Creation
+        case 4: return 'teal'; // Knowledge Base Creation
+        case 5: return 'indigo'; // Agent Deployment
+        case 6: return 'green'; // Complete
+        case 7: return 'green'; // Complete
+        default: return 'grey';
+      }
+    };
     
     // Admin registration form
     const adminForm = ref({
@@ -1706,6 +1733,7 @@ export default defineComponent({
         const processedAgents = agentsData.map((agent) => {
           let patientName = 'No Knowledge Base';
           let owner = 'Public User'; // Default for agents without assigned users
+          let userId = null;
           
           // Knowledge bases are already included in the agent data from DigitalOcean API
           if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
@@ -1725,21 +1753,31 @@ export default defineComponent({
             owner = 'Public User';
           } else if (agent.name.includes('-agent-')) {
             // Extract user ID from agent name pattern: {userId}-agent-{date}
-            const userId = agent.name.split('-agent-')[0];
+            userId = agent.name.split('-agent-')[0];
             owner = userId;
           } else {
             owner = 'Unknown';
           }
+          
+          // Find matching user for flow step calculation
+          const matchingUser = users.value.find(u => u.userId === userId);
+          const flowStep = getFlowStep(agent, matchingUser);
+          
+          // Get workflow stage from user data
+          const workflowStage = matchingUser?.workflowStage || 'no_passkey';
           
           return {
             id: agent.id,
             name: agent.name,
             patientName: patientName,
             owner: owner,
+            userId: userId,
             chatCount: 0, // Will be updated with actual count
             lastActivity: 'Unknown', // Placeholder - will be updated later
             status: agent.status,
-            knowledgeBases: agent.knowledgeBases || []
+            knowledgeBases: agent.knowledgeBases || [],
+            flowStep: flowStep,
+            flowStepName: getWorkflowStageConfig(workflowStage).name
           };
         });
         
@@ -1749,7 +1787,34 @@ export default defineComponent({
         // Load last activity for each agent
         await loadLastActivityForAgents(processedAgents);
         
-        agentsAndPatients.value = processedAgents;
+        // Add users who are in the flow but don't have agents yet
+        const usersInFlow = users.value.filter(user => {
+          // Include users who are in the flow but don't have an agent yet
+          const hasAgent = processedAgents.some(agent => agent.userId === user.userId);
+          return !hasAgent && (user.workflowStage === 'awaiting_approval' || user.workflowStage === 'approved');
+        });
+        
+        // Add flow entries for users without agents
+        const userFlowEntries = usersInFlow.map(user => {
+          const flowStep = getFlowStep(null, user);
+          return {
+            id: `user-${user.userId}`,
+            name: `${user.userId}-agent-pending`,
+            patientName: 'No Knowledge Base',
+            owner: user.userId,
+            userId: user.userId,
+            chatCount: 0,
+            lastActivity: 'Unknown',
+            status: 'pending',
+            knowledgeBases: [],
+            flowStep: flowStep,
+            flowStepName: getWorkflowStageConfig(user.workflowStage || 'no_passkey').name,
+            isUserFlow: true // Flag to indicate this is a user flow entry, not an actual agent
+          };
+        });
+        
+        // Combine agents and user flow entries
+        agentsAndPatients.value = [...processedAgents, ...userFlowEntries];
         
       } catch (error) {
         console.error('Error loading agents and patients:', error);
@@ -2152,6 +2217,8 @@ export default defineComponent({
       formatDate,
       formatFileSize,
       getTimeRemaining,
+      getFlowStep,
+      getFlowStepColor,
       goToAdminRegistration,
       goToAdminSignIn,
       goToMainApp,
