@@ -427,6 +427,11 @@ export default defineComponent({
       v-model="showAgentManagementDialog"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
+      :assignedAgent="assignedAgent"
+      :currentKnowledgeBase="currentKnowledgeBase"
+      :warning="agentWarning"
+      :uploadedFiles="appState.uploadedFiles"
+      :AIoptions="AIoptions"
       @refresh-agent-data="refreshAgentData"
     />
 
