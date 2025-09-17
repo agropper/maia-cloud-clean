@@ -500,7 +500,7 @@ export default defineComponent({
       :placeholderText="placeholderText"
       :aiOption="aiOption"
       :AIoptions="AIoptions"
-      :triggerSendQuery="sendQuery"
+      :triggerSendQuery="triggerSendQuery"
       :triggerAuth="showAuth"
       :triggerJWT="showJWT"
       :triggerLoadSavedChats="() => showSavedChatsDialog = true"
