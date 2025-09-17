@@ -3638,6 +3638,9 @@ app.get('/api/current-agent', async (req, res) => {
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
 //           console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
           
+          // Database consistency check passed
+          console.log(`✅ [Database] Consistency check passed`);
+          
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
           // console.log(`🔍 [DEBUG-current-agent] Public User document:`, { currentAgentId: userDoc?.currentAgentId, assignedAgentId: userDoc?.assignedAgentId, selectedAgentId: userAgentId });

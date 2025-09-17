@@ -707,10 +707,8 @@ router.get("/auth-status", async (req, res) => {
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
-      // Only log in development mode
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
-      }
+      // Public User - no authentication required
+      console.log(`✅ [auth-status] Auth Status: Public User`);
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
