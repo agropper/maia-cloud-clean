@@ -45,6 +45,43 @@ This document provides a comprehensive analysis of the current state of agents, 
   - Create KB: `POST /knowledge_bases`
   - Get KB details: `GET /knowledge_bases/{kb_id}`
 
+### 3. DigitalOcean Agent API Keys
+- **Endpoint**: `https://api.digitalocean.com/v2/gen-ai/agents/{agent_uuid}/api_keys`
+- **Purpose**: Manage agent-specific API keys for authentication
+- **Usage**:
+  - List API keys: `GET /agents/{agent_uuid}/api_keys` (returns metadata only)
+  - Create API key: `POST /agents/{agent_uuid}/api_keys` (returns actual key)
+- **Implementation**: 
+  - Each agent requires its own API key for authentication
+  - Keys are created via POST request and stored securely in server configuration
+  - Keys are retrieved using `getAgentApiKey(agentId)` function
+  - Fallback to global `DIGITALOCEAN_PERSONAL_API_KEY` if agent-specific key not found
+
+## Agent-Specific Authentication Implementation
+
+### Current Agent API Keys (Hardcoded in server.js)
+```javascript
+const agentApiKeys = {
+  '2960ae8d-8514-11f0-b074-4e013e2ddde4': 'fnCsOfehzcEemiTKdowBFbjAIf7jSFwz', // agent-08292025
+  '059fc237-7077-11f0-b056-36d958d30bcf': 'QDb19YdQi2adFlF76VLCg7qSk6BzS8sS', // agent-08032025
+  '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4': '6_LUNA_A-MVAxNkuaPbE3FnErmcBF7JK'  // agent-05102025
+};
+```
+
+### Authentication Flow
+1. **Agent Selection**: User selects agent via Agent Management dialog
+2. **Agent Storage**: Agent ID stored in Cloudant (`maia_users` database)
+3. **API Key Retrieval**: `getAgentApiKey(agentId)` function looks up agent-specific key
+4. **OpenAI Client Creation**: Agent-specific OpenAI client created with:
+   - `baseURL`: Agent's deployment URL (`https://{agent-id}.agents.do-ai.run/api/v1`)
+   - `apiKey`: Agent-specific API key from `agentApiKeys` map
+5. **Query Execution**: Chat completion request sent to agent-specific endpoint
+
+### Error Handling
+- **No API Key**: Returns 400 error with message "No API key available for the selected agent"
+- **Authentication Failed (401)**: Returns 400 error with message "Authentication failed for the selected agent"
+- **Access Denied (403)**: Returns 400 error with message "Access denied for the selected agent"
+
 ## Current State Analysis
 
 ### DigitalOcean Knowledge Bases (14 total)
@@ -132,27 +169,17 @@ This suggests the protection document lookup is failing or the logic is incorrec
 4. ✅ **Verified migration** - maia_users now contains all user data with proper structure
 
 ### **CURRENT DATABASE STATUS**
-**PRIMARY DATABASES (Active):**
-- `maia_users` - ✅ **ACTIVE** - 69 users with design document
+**ACTIVE DATABASES:**
+- `maia_users` - ✅ **ACTIVE** - User authentication and management
 - `maia_knowledge_bases` - ✅ **ACTIVE** - KB protection metadata
-- `maia_chats` - ✅ **ACTIVE** - Chat history
+- `maia3_chats` - ✅ **ACTIVE** - Chat history and conversations
 
-**LEGACY DATABASES (To be cleaned up):**
-- `maia2_users` - ⚠️ **LEGACY** - Data migrated to maia_users
-- `maia2_agents` - ⚠️ **LEGACY** - Agent management
-- `maia2_knowledge_bases` - ⚠️ **LEGACY** - KB protection
-- `maia2_user_resources` - ⚠️ **LEGACY** - User resources
-- `maia2_admin_approvals` - ⚠️ **LEGACY** - Admin approvals
-- `maia2_audit_logs` - ⚠️ **LEGACY** - Audit logs
-- `maia3_users` - ⚠️ **LEGACY** - 2 users (superseded by maia_users)
-- `maia3_knowledge_bases` - ⚠️ **LEGACY** - 11 KBs
-- `maia3_chats` - ⚠️ **LEGACY** - 13 chats
-
-### **NEXT STEPS**
-1. 🔄 **Update code references** - Change maia2Client to use maia_users instead of maia2_users
-2. 🔄 **Migrate KB data** - Ensure KB protection data is consistent
-3. 🔄 **Update .env file** - Ensure CLOUDANT_DATABASE points to maia_chats
-4. 🔄 **Clean up legacy databases** - Delete maia2_* and maia3_* databases after migration
+**CLEANUP COMPLETED:**
+- ✅ **Removed legacy database setup files** - maia2-database-setup.js, maia3-database-setup.js
+- ✅ **Removed legacy migration files** - database-migration.js, maia2-api-routes.js
+- ✅ **Removed legacy scripts** - All migration and inspection scripts
+- ✅ **Updated code references** - maia2Client now uses maia_users database
+- ✅ **Updated documentation** - Removed references to legacy databases
 
 ### **BENEFITS**
 - ✅ **Avoids database limit** - Only 3 databases instead of 9+

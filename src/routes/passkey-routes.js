@@ -17,6 +17,12 @@ export const setCouchDBClient = (client) => {
   couchDBClient = client;
 };
 
+// Pass cache functions to the routes
+let cacheFunctions = null;
+export const setCacheFunctions = (functions) => {
+  cacheFunctions = functions;
+};
+
 // Relying party configuration
 const rpName = "HIEofOne.org";
 
@@ -107,7 +113,6 @@ if (isCloud && rpID === 'localhost') {
 
 // Add a function to log config on each request for debugging
 const logPasskeyConfig = () => {
-  console.log("🔍 [REQUEST] Passkey Config - rpID:", rpID, "origin:", origin, "NODE_ENV:", process.env.NODE_ENV);
 };
 
 // Check if user ID is available
@@ -122,15 +127,35 @@ router.post("/check-user", async (req, res) => {
     // Check if user exists in Cloudant
     try {
       const existingUser = await couchDBClient.getDocument(
-        "maia2_users",
+        "maia_users",
         userId
       );
-      res.json({
-        available: !existingUser,
-        message: existingUser
-          ? "User ID already exists"
-          : "User ID is available",
-      });
+      
+      if (existingUser) {
+        // User exists - check if they have a valid passkey
+        const hasValidPasskey = !!(existingUser.credentialID && 
+          existingUser.credentialID !== 'test-credential-id-wed271' && 
+          existingUser.credentialPublicKey && 
+          existingUser.counter !== undefined);
+        
+        
+        res.json({
+          available: !hasValidPasskey, // Available if no valid passkey
+          message: hasValidPasskey 
+            ? "User ID already exists with valid passkey"
+            : "User ID exists but can register new passkey",
+          hasValidPasskey: hasValidPasskey,
+          canRegister: !hasValidPasskey
+        });
+      } else {
+        // User doesn't exist - available for new registration
+        res.json({
+          available: true,
+          message: "User ID is available",
+          hasValidPasskey: false,
+          canRegister: true
+        });
+      }
     } catch (error) {
       console.log("🔍 Database error:", error.message);
       // If database doesn't exist or document not found, user ID is available
@@ -142,6 +167,8 @@ router.post("/check-user", async (req, res) => {
         res.json({
           available: true,
           message: "User ID is available (database not initialized)",
+          hasValidPasskey: false,
+          canRegister: true
         });
       } else {
         throw error;
@@ -157,20 +184,18 @@ router.post("/check-user", async (req, res) => {
 router.post("/register", async (req, res) => {
   try {
     logPasskeyConfig(); // Log config on each request
-    console.log("🔍 Registration request received");
-    const { userId, displayName } = req.body;
+    const { userId, displayName, adminSecret } = req.body;
 
     if (!userId || !displayName) {
       console.log("❌ Missing userId or displayName in request");
       return res.status(400).json({ error: "User ID and display name are required" });
     }
 
-    console.log("🔍 Checking if user exists:", userId);
 
     // Check if user already exists
     let existingUser;
     try {
-      existingUser = await couchDBClient.getDocument("maia2_users", userId);
+      existingUser = await couchDBClient.getDocument("maia_users", userId);
     } catch (error) {
       // If database doesn't exist, that's fine - user can register
       if (error.message.includes("error happened in your connection")) {
@@ -181,11 +206,57 @@ router.post("/register", async (req, res) => {
     }
 
     if (existingUser) {
-      console.log("❌ User already exists:", userId);
-      return res.status(400).json({ error: "User ID already exists" });
+      
+      // If user already has a passkey, check for admin replacement or reset flag
+      if (existingUser.credentialID) {
+        // Check if user has an active passkey reset flag
+        if (existingUser.passkeyResetFlag && existingUser.passkeyResetExpiry) {
+          const resetExpiry = new Date(existingUser.passkeyResetExpiry);
+          const now = new Date();
+          
+          if (now < resetExpiry) {
+            console.log("✅ User has active passkey reset flag, allowing registration:", userId);
+            // Continue with registration (replace existing passkey)
+          } else {
+            // Reset flag has expired, clear it and deny registration
+            const clearedUser = {
+              ...existingUser,
+              passkeyResetFlag: undefined,
+              passkeyResetExpiry: undefined,
+              updatedAt: new Date().toISOString()
+            };
+            await couchDBClient.saveDocument("maia_users", clearedUser);
+            console.log("❌ Passkey reset flag expired for user:", userId);
+            return res.status(400).json({ 
+              error: "Passkey reset window has expired. Contact admin to reset again.",
+              hasExistingPasskey: true,
+              resetExpired: true,
+              userId: userId
+            });
+          }
+        }
+        // Special case: Allow admin to replace passkey (admin has already been verified in admin panel)
+        else if (userId === 'admin') {
+          console.log("✅ Admin passkey replacement allowed (admin already verified)");
+          // Continue with registration (replace existing passkey)
+        } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
+          // Admin override: Allow admin to reset any user's passkey
+          console.log("✅ Admin override: Allowing passkey reset for user:", userId);
+          // Continue with registration (replace existing passkey)
+        } else {
+          console.log("❌ User already has a passkey:", userId);
+          return res.status(400).json({ 
+            error: "User already has a registered passkey. Contact admin to reset it.",
+            hasExistingPasskey: true,
+            userId: userId
+          });
+        }
+      } else {
+        // If user exists but doesn't have a passkey, allow registration
+        console.log("✅ User exists but no passkey, allowing registration:", userId);
+      }
     }
 
-    console.log("🔍 Generating registration options for:", userId);
 
     // Generate registration options
     const options = await generateRegistrationOptions({
@@ -202,11 +273,14 @@ router.post("/register", async (req, res) => {
       },
     });
 
-    console.log("🔍 Registration options generated successfully");
 
     // Store challenge in session or temporary storage
     // For now, we'll store it in the user document
-    const userDoc = {
+    const userDoc = existingUser ? {
+      ...existingUser,
+      challenge: options.challenge,
+      updatedAt: new Date().toISOString(),
+    } : {
       _id: userId,
       userId,
       displayName,
@@ -217,20 +291,18 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    console.log("🔍 Attempting to save user document");
 
     // Store user document with challenge for verification
     try {
-              await couchDBClient.saveDocument("maia2_users", userDoc);
+              await couchDBClient.saveDocument("maia_users", userDoc);
       console.log("✅ User document saved successfully");
     } catch (error) {
       console.error("❌ Failed to save user document:", error.message);
       // If database doesn't exist, create it first
       if (error.message.includes("error happened in your connection")) {
         try {
-                console.log("🔍 Creating maia2_users database...");
-      await couchDBClient.createDatabase("maia2_users");
-          await couchDBClient.saveDocument("maia2_users", userDoc);
+      await couchDBClient.createDatabase("maia_users");
+          await couchDBClient.saveDocument("maia_users", userDoc);
           console.log("✅ Database created and user document saved");
         } catch (createError) {
           console.error("❌ Failed to create database:", createError);
@@ -268,7 +340,7 @@ router.post("/register-verify", async (req, res) => {
     // Get the user document with the stored challenge
     let userDoc;
     try {
-              userDoc = await couchDBClient.getDocument("maia2_users", userId);
+              userDoc = await couchDBClient.getDocument("maia_users", userId);
       console.log("✅ User document retrieved successfully");
     } catch (error) {
       console.error("❌ Error getting user document:", error);
@@ -321,11 +393,13 @@ router.post("/register-verify", async (req, res) => {
         counter: verification.registrationInfo.credential.counter,
         transports: response.response.transports || [],
         challenge: undefined, // Remove the challenge
+        passkeyResetFlag: undefined, // Clear the reset flag on successful registration
+        passkeyResetExpiry: undefined, // Clear the reset expiry
         updatedAt: new Date().toISOString(),
       };
 
       // Save the updated user document to Cloudant
-      await couchDBClient.saveDocument("maia2_users", updatedUser);
+      await couchDBClient.saveDocument("maia_users", updatedUser);
 
       console.log("✅ Passkey registration successful for user:", userId);
 
@@ -333,8 +407,8 @@ router.post("/register-verify", async (req, res) => {
         success: true,
         message: "Passkey registration successful",
         user: {
-          userId: updatedUser.userId,
-          displayName: updatedUser.displayName,
+          userId: updatedUser._id, // Use _id instead of userId
+          displayName: updatedUser.displayName || updatedUser._id,
         },
       });
     } else {
@@ -360,7 +434,7 @@ router.post("/authenticate", async (req, res) => {
     // Get user document
     let userDoc;
     try {
-      userDoc = await couchDBClient.getDocument("maia2_users", userId);
+      userDoc = await couchDBClient.getDocument("maia_users", userId);
     } catch (error) {
       console.error("❌ Error getting user document:", error.message);
       if (error.message.includes("error happened in your connection")) {
@@ -411,7 +485,7 @@ router.post("/authenticate", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await couchDBClient.saveDocument("maia2_users", updatedUser);
+    await couchDBClient.saveDocument("maia_users", updatedUser);
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating authentication options:", error);
@@ -433,7 +507,7 @@ router.post("/authenticate-verify", async (req, res) => {
     }
 
     // Get user document with challenge
-    const userDoc = await couchDBClient.getDocument("maia2_users", userId);
+    const userDoc = await couchDBClient.getDocument("maia_users", userId);
     if (!userDoc) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -461,31 +535,63 @@ router.post("/authenticate-verify", async (req, res) => {
         updatedAt: new Date().toISOString(),
       };
 
-      await couchDBClient.saveDocument("maia2_users", updatedUser);
+      await couchDBClient.saveDocument("maia_users", updatedUser);
 
       // Set session data for authenticated user
-      req.session.userId = updatedUser.userId;
-      req.session.username = updatedUser.userId;
-      req.session.displayName = updatedUser.displayName;
+      req.session.userId = updatedUser._id;
+      req.session.username = updatedUser._id;
+      req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
 
-      console.log(`✅ Session created for user: ${updatedUser.userId}`);
+      console.log(`✅ Session created for user: ${updatedUser._id}`);
       
-      // GroupFilter: Log user sign in and group chat count
+      // Set the user's assigned agent as current when they sign in
       try {
-        const allChats = await couchDBClient.getAllChats();
-        const userChats = allChats.filter(chat => {
-          if (typeof chat.currentUser === 'string') {
-            return chat.currentUser === updatedUser.userId;
-          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
-            return chat.currentUser.userId === updatedUser.userId || chat.currentUser.displayName === updatedUser.userId;
+        console.log(`🔍 [AUTH] Setting assigned agent as current for user: ${updatedUser._id}`);
+        
+        // Get the user's assigned agent from admin management
+        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${updatedUser._id}/assigned-agent`);
+        if (assignedAgentResponse.ok) {
+          const assignedAgentData = await assignedAgentResponse.json();
+          if (assignedAgentData.assignedAgentId) {
+            console.log(`🔍 [AUTH] Found assigned agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId})`);
+            
+            // Set this agent as the current agent for the user
+            const currentAgentResponse = await fetch(`http://localhost:3001/api/current-agent`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `maia.sid=${req.sessionID}` // Use the same session
+              },
+              body: JSON.stringify({
+                agentId: assignedAgentData.assignedAgentId,
+                agentName: assignedAgentData.assignedAgentName
+              })
+            });
+            
+            if (currentAgentResponse.ok) {
+              console.log(`✅ [AUTH] Successfully set current agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName}`);
+            } else {
+              console.warn(`⚠️ [AUTH] Failed to set current agent for ${updatedUser._id}: ${currentAgentResponse.status}`);
+            }
+          } else {
+            console.log(`🔍 [AUTH] No assigned agent found for ${updatedUser._id} - will show "No Agent Selected"`);
           }
-          return false;
-        });
-        console.log(`GroupFilter: SIGN_IN - User: ${updatedUser.userId} - Chats visible: ${userChats.length}`);
+        } else {
+          console.warn(`⚠️ [AUTH] Failed to get assigned agent for ${updatedUser._id}: ${assignedAgentResponse.status}`);
+        }
       } catch (error) {
-        console.error("GroupFilter: Error getting group chats:", error);
+        console.error(`❌ [AUTH] Error setting current agent for ${updatedUser._id}:`, error.message);
       }
+      
+      // Explicitly save the session
+      req.session.save((err) => {
+        if (err) {
+          console.error('❌ [passkey] Error saving session:', err);
+        }
+      });
+      
+      // Group chat filtering is handled by the frontend
       
       // Set the session cookie BEFORE sending response
       res.cookie('maia.sid', req.sessionID, {
@@ -503,14 +609,17 @@ router.post("/authenticate-verify", async (req, res) => {
         }
       });
 
-      res.json({
+      const responseData = {
         success: true,
         message: "Authentication successful",
         user: {
-          userId: updatedUser.userId,
-          displayName: updatedUser.displayName,
+          userId: updatedUser._id, // Use _id instead of userId
+          displayName: updatedUser.displayName || updatedUser._id,
         },
-      });
+      };
+      
+      // Sending authentication response
+      res.json(responseData);
     } else {
       res.status(400).json({ error: "Authentication verification failed" });
     }
@@ -525,15 +634,15 @@ router.get("/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const userDoc = await couchDBClient.getDocument("maia2_users", userId);
+    const userDoc = await couchDBClient.getDocument("maia_users", userId);
     if (!userDoc) {
       return res.status(404).json({ error: "User not found" });
     }
 
     // Don't return sensitive credential data
     res.json({
-      userId: userDoc.userId,
-      displayName: userDoc.displayName,
+      userId: userDoc._id, // Use _id instead of userId
+      displayName: userDoc.displayName || userDoc._id,
       domain: userDoc.domain,
       createdAt: userDoc.createdAt,
       updatedAt: userDoc.updatedAt,
@@ -548,30 +657,81 @@ router.get("/user/:userId", async (req, res) => {
 router.get("/auth-status", async (req, res) => {
   try {
     if (req.session && req.session.userId) {
-      // User is authenticated, get current user info
-      const userDoc = await couchDBClient.getDocument("maia2_users", req.session.userId);
+      // Check if this is a deep link user - they should not be authenticated on main app
+      if (req.session.userId.startsWith('deep_link_')) {
+        // Store deepLinkId before destroying session
+        const deepLinkId = req.session.deepLinkId;
+        
+        // Clear the session for deep link users on main app
+        req.session.destroy();
+        res.json({ 
+          authenticated: false, 
+          message: "Deep link users should only access shared pages",
+          redirectTo: deepLinkId ? `/shared/${deepLinkId}` : '/'
+        });
+        return;
+      }
+      
+      // Only authenticate passkey users (not deep link users)
+      let userDoc = null;
+      if (cacheFunctions) {
+        userDoc = cacheFunctions.getCache('users', req.session.userId);
+        if (!cacheFunctions.isCacheValid('users', req.session.userId)) {
+          userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+          if (userDoc) {
+            cacheFunctions.setCache('users', req.session.userId, userDoc);
+          }
+        }
+      } else {
+        userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+      }
       if (userDoc) {
         // Echo current user to backend console
-        console.log(`Current user: ${userDoc.userId}`);
+        console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
         
         res.json({
           authenticated: true,
           user: {
-            userId: userDoc.userId,
-            displayName: userDoc.displayName,
+            userId: userDoc._id, // Use _id instead of userId
+            displayName: userDoc.displayName || userDoc._id,
           },
         });
       } else {
+        console.log(`❌ [auth-status] User document not found for userId: ${req.session.userId}`);
         // Session exists but user document not found, clear session
         req.session.destroy();
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
+      console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
-    console.error("❌ Error checking auth status:", error);
+    console.error("❌ [auth-status] Error checking auth status:", error);
     res.status(500).json({ error: "Failed to check authentication status" });
+  }
+});
+
+// Get session verification data
+router.get("/session-verification", async (req, res) => {
+  try {
+    if (global.sessionVerification) {
+      const verification = global.sessionVerification;
+      
+      if (verification.error) {
+        res.setHeader('X-Session-Error', 'Session verification failed');
+      } else {
+        res.setHeader('X-Session-Verified', 'Session verified');
+      }
+      
+      // Clear the verification data after sending
+      global.sessionVerification = null;
+    }
+    
+    res.json({ status: 'ok' });
+  } catch (error) {
+    console.error("❌ [session-verification] Error:", error);
+    res.status(500).json({ error: "Failed to get session verification" });
   }
 });
 
@@ -584,28 +744,17 @@ router.post("/logout", async (req, res) => {
       const userId = req.session.userId;
       console.log(`👋 User signed out: ${userId}`);
       
-      // GroupFilter: Log user sign out and group chat count before destroying session
-      try {
-        const allChats = await couchDBClient.getAllChats();
-        const userChats = allChats.filter(chat => {
-          if (typeof chat.currentUser === 'string') {
-            return chat.currentUser === userId;
-          } else if (typeof chat.currentUser === 'object' && chat.currentUser !== null) {
-            return chat.currentUser.userId === userId || chat.currentUser.displayName === userId;
-          }
-          return false;
-        });
-        console.log(`GroupFilter: SIGN_OUT - User: ${userId} - Chats visible: ${userChats.length}`);
-      } catch (error) {
-        console.error("GroupFilter: Error getting group chats:", error);
-      }
+      // Group chat filtering is handled by the frontend
       
-      req.session.destroy((err) => {
+      req.session.destroy(async (err) => {
         if (err) {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
+        
+        // Session management is now in-memory only (maia_sessions database removed)
+        console.log('[*] [Session Delete] Session destroyed (in-memory only)');
         
         // Send a message to the browser console after session destruction
         res.json({ 

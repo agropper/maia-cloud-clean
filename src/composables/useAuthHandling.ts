@@ -374,7 +374,6 @@ export const uploadFile = async (
   const content = await file.text()
   const fileType = detectFileType(file.name, content)
   
-  console.log(`📁 File upload: ${file.name} (${fileType}) - ${Math.round(file.size / 1024)}KB`)
   
   switch (fileType) {
     case 'transcript':

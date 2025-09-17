@@ -46,7 +46,6 @@ export const useGroupChat = () => {
             // Convert to base64 using a binary-safe approach
             const base64 = arrayBufferToBase64(arrayBuffer);
             
-            console.log(`🔍 [PDF] Converted ${file.name} to base64: ${base64.length} chars`);
             
             return {
               ...file,
@@ -63,7 +62,6 @@ export const useGroupChat = () => {
           }
         } else if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
           // Database-loaded PDF file with existing base64 data - preserve it
-          console.log(`🔍 [PDF] Preserving existing base64 data for ${file.name}: ${file.originalFile.base64.length} chars`);
           return file; // Return as-is, already has the correct structure
         } else {
           // PDF file without base64 data - this shouldn't happen, but handle gracefully
@@ -81,7 +79,8 @@ export const useGroupChat = () => {
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
     currentUser: string,
-    connectedKB: string
+    connectedKB: string,
+    displayName?: string
   ): Promise<SaveGroupChatResponse> => {
     try {
       // Process files before sending to server
@@ -96,7 +95,8 @@ export const useGroupChat = () => {
           chatHistory,
           uploadedFiles: processedFiles,
           currentUser,
-          connectedKB
+          connectedKB,
+          displayName
         }),
       })
 
@@ -143,15 +143,25 @@ export const useGroupChat = () => {
 
   const getAllGroupChats = async (): Promise<GroupChat[]> => {
     try {
+      
       const response = await fetch(`${API_BASE_URL}/group-chats`)
       
       if (!response.ok) {
+        console.error(`❌ [useGroupChat] HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ [useGroupChat] Error response body:`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return await response.json()
+      const data = await response.json();
+      return data;
     } catch (error) {
-      console.error('Failed to load all group chats:', error)
+      console.error('❌ [useGroupChat] Failed to load all group chats:', error);
+      console.error('❌ [useGroupChat] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       throw error
     }
   }
@@ -161,7 +171,8 @@ export const useGroupChat = () => {
     chatHistory: ChatHistoryItem[],
     uploadedFiles: UploadedFile[],
     currentUser: string,
-    connectedKB: string
+    connectedKB: string,
+    displayName?: string
   ): Promise<SaveGroupChatResponse> => {
     try {
       // Process files before sending to server
@@ -176,7 +187,8 @@ export const useGroupChat = () => {
           chatHistory,
           uploadedFiles: processedFiles,
           currentUser,
-          connectedKB
+          connectedKB,
+          displayName
         }),
       })
 

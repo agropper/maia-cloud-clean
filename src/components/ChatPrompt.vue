@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { QFile, QIcon, QBtnToggle } from "quasar";
+import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
@@ -20,9 +20,12 @@ import SavedChatsDialog from "./SavedChatsDialog.vue";
 import { useCouchDB, type SavedChat } from "../composables/useCouchDB";
 import { useGroupChat } from "../composables/useGroupChat";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
+import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
+import { WorkflowUtils } from "../utils/workflow-utils.js";
 
 
 const AIoptions = [
@@ -46,6 +49,13 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
+    NoPrivateAgentModal,
+    QDialog,
+    QCard,
+    QCardSection,
+    QAvatar,
+    QBtn,
+    QCardActions,
 
   },
   computed: {
@@ -84,9 +94,14 @@ export default defineComponent({
     const showAgentManagementDialog = ref(false);
     const showPasskeyAuthDialog = ref(false);
     const showDeepLinkUserModal = ref(false);
+    const showAgentSelectionModal = ref(false);
+    const showNoPrivateAgentModal = ref(false);
+    const noPrivateAgentModalRef = ref<any>(null);
     const currentAgent = ref<any>(null);
+    const currentKnowledgeBase = ref<any>(null);
+    const assignedAgent = ref<any>(null);
     const agentWarning = ref<string>("");
-    const currentUser = ref<any>({ userId: 'Unknown User', displayName: 'Unknown User' });
+    const currentUser = ref<any>(UserService.createPublicUser());
     const pendingShareId = ref<string | null>(null);
     const groupCount = ref<number>(0);
     const chatAreaRef = ref<any>(null);
@@ -143,71 +158,211 @@ export default defineComponent({
           // Store the share ID and show the user identification modal
           pendingShareId.value = shareId;
           showDeepLinkUserModal.value = true;
-        } else {
         }
-      } else {
       }
     };
 
+    // API call deduplication
+    const apiCallCache = new Map();
+    
     // Fetch current agent information on component mount
     const fetchCurrentAgent = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/current-agent`);
-        const data = await response.json();
-
-        if (data.agent) {
-          currentAgent.value = data.agent;
-
-          if (data.agent.knowledgeBase) {
-          } else {
-          }
-
-          // Handle warnings from the API
-          if (data.warning) {
-            console.warn(data.warning);
-            agentWarning.value = data.warning;
-          } else {
-            agentWarning.value = "";
-          }
-        } else {
-          currentAgent.value = null;
-        }
-      } catch (error) {
-        console.error("❌ Error fetching current agent:", error);
-        currentAgent.value = null;
+      // Check if we already have a pending request for this endpoint
+      const userId = currentUser.value?.userId || 'Public User';
+      const cacheKey = `current-agent-${userId}`;
+      if (apiCallCache.has(cacheKey)) {
+        return await apiCallCache.get(cacheKey);
       }
+      
+      // Create a promise and cache it
+      const promise = (async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/current-agent`);
+          const data = await response.json();
+
+          if (data.agent) {
+            currentAgent.value = data.agent;
+            assignedAgent.value = data.agent; // Set assigned agent for dialog display
+            if (data.agent.knowledgeBase) {
+              currentKnowledgeBase.value = data.agent.knowledgeBase;
+            } else {
+              currentKnowledgeBase.value = null;
+            }
+
+            // Handle warnings from the API
+            if (data.warning) {
+              console.warn(data.warning);
+              agentWarning.value = data.warning;
+            } else {
+              agentWarning.value = "";
+            }
+          } else {
+            currentAgent.value = null;
+            currentKnowledgeBase.value = null;
+            assignedAgent.value = null; // Clear assigned agent
+            
+            // Track activity for users without agents
+            trackUserActivity('no_agent_detected');
+            
+            // Check if user should see the "No Private Agent" modal using new workflow system
+            if (WorkflowUtils.shouldShowNoAgentModal(currentUser.value, null)) {
+              // Show modal for workflow users without private agents
+              if (noPrivateAgentModalRef.value) {
+                noPrivateAgentModalRef.value.show();
+              }
+            } else if (data.requiresAgentSelection && !WorkflowUtils.isWorkflowUser(currentUser.value)) {
+              // Only show agent selection modal for non-workflow users (like Public User)
+              showAgentSelectionModal.value = true;
+            }
+          }
+        } catch (error) {
+          console.error("❌ Error fetching current agent:", error);
+          currentAgent.value = null;
+        } finally {
+          // Remove from cache when done
+          apiCallCache.delete(cacheKey);
+        }
+      })();
+      
+      // Cache the promise
+      apiCallCache.set(cacheKey, promise);
+      return await promise;
     };
 
     // Check for existing session on component mount
     const checkExistingSession = async () => {
       try {
+        // console.log(`🔍 [ChatPrompt] Checking existing session...`);
+        // console.log(`🔍 [ChatPrompt] Making request to: ${API_BASE_URL}/passkey/auth-status`);
+        
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
+        // console.log(`🔍 [ChatPrompt] Response status:`, response.status);
+        // console.log(`🔍 [ChatPrompt] Response headers:`, Object.fromEntries(response.headers.entries()));
+        
+        if (!response.ok) {
+          console.error(`❌ [ChatPrompt] HTTP error! status: ${response.status}`);
+          const errorText = await response.text();
+          console.error(`❌ [ChatPrompt] Error response body:`, errorText);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
+          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
+          
+          // Now that user is authenticated, get session verification
+          try {
+            const verificationResponse = await fetch(`${API_BASE_URL}/passkey/session-verification`);
+            // The fetch interceptor will handle the session verification headers
+          } catch (error) {
+            console.error('❌ [ChatPrompt] Failed to get session verification:', error);
+          }
+        } else if (data.redirectTo) {
+          // Deep link user detected on main app - redirect them to their deep link page
+          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
+          window.location.href = data.redirectTo;
+          return;
         } else {
-          // currentUser.value is already set to Unknown User by default
+          // console.log(`❌ [ChatPrompt] No authenticated user found`);
+          // currentUser.value is already set to Public User by default
         }
       } catch (error) {
-        console.error('❌ Failed to check existing session:', error);
-        // currentUser.value is already set to Unknown User by default
+        console.error('❌ [ChatPrompt] Failed to check existing session:', error);
+        console.error('❌ [ChatPrompt] Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+        // currentUser.value is already set to Public User by default
         // No need to change it - it's already valid
       }
     };
     
-    // Call checkExistingSession when component mounts
-    checkExistingSession();
+    // Initialize components sequentially to avoid 429 errors
+    const initializeApp = async () => {
+      try {
+        // Step 1: Check if this is a deep link page first
+        const path = window.location.pathname;
+        if (path.startsWith('/shared/')) {
+          console.log('🔗 [ChatPrompt] Deep link page detected, skipping authentication');
+          // Skip authentication for deep link pages
+          await handleDeepLink();
+          return;
+        }
+        
+        // Step 2: Check existing session for main app pages
+        await checkExistingSession();
+        
+        // Step 3: Wait a moment to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Step 4: Fetch current agent
+        await fetchCurrentAgent();
+        
+        // Step 5: Wait a moment to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Step 6: Handle deep link loading (for main app pages)
+        await handleDeepLink();
+      } catch (error) {
+        console.error('❌ [ChatPrompt] Error during app initialization:', error);
+      }
+    };
     
-    // Call fetchCurrentAgent when component mounts
-    fetchCurrentAgent();
+    // Initialize the app
+    initializeApp();
     
-    // Handle deep link loading on component mount
-    handleDeepLink();
+    // Track user activity for Admin Panel analytics
+    const trackUserActivity = async (action = 'user_interaction') => {
+      try {
+        const userId = currentUser.value?.userId || currentUser.value?.displayName || 'Public User';
+
+        const response = await fetch('/api/admin-management/agent-activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, action })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (activityError) {
+        console.error('❌ [Frontend] Activity tracking failed:', activityError.message);
+      }
+    };
+    
+    // Track app usage when component mounts
+    trackUserActivity('app_loaded');
+    
+    // Track activity on any user interaction
+    const setupActivityTracking = () => {
+      // Track mouse clicks
+      document.addEventListener('click', () => trackUserActivity('mouse_click'));
+      
+      // Track keyboard input
+      document.addEventListener('keydown', () => trackUserActivity('keyboard_input'));
+      
+      // Track window focus (user returned to tab)
+      window.addEventListener('focus', () => trackUserActivity('window_focus'));
+      
+      // Track scroll events
+      window.addEventListener('scroll', () => trackUserActivity('scroll'));
+    };
+    
+    setupActivityTracking();
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      await fetchCurrentAgent();
+      // Only fetch if we don't already have an agent to prevent overriding
+      // the agent that was just selected
+      if (!currentAgent.value) {
+        await fetchCurrentAgent();
+      } else {
+        // Agent already exists, skipping fetch
+      }
     };
 
     const showPopup = () => {
@@ -241,13 +396,12 @@ export default defineComponent({
         appState.currentChatId = groupChat.id;
         
         // Set current user to the identified user (this will update the Agent badge)
-        currentUser.value = { 
-          userId: userData.userId, 
-          displayName: userData.name,
-          email: userData.email,
-          isDeepLinkUser: true,
-          shareId: userData.shareId
-        };
+        currentUser.value = UserService.createDeepLinkUser(
+          userData.userId, 
+          userData.name, 
+          userData.email, 
+          userData.shareId
+        );
         
         // Clear any existing query and active question (don't set active question name - it should use current user)
         appState.currentQuery = '';
@@ -257,6 +411,7 @@ export default defineComponent({
         await nextTick();
         
         // Trigger agent refresh to ensure the Agent badge updates with new user
+        // Always fetch for deep link users to get the patient's assigned agent
         await fetchCurrentAgent();
         
         writeMessage(`Welcome ${userData.name}! Loaded shared group chat from ${groupChat.currentUser}`, "success");
@@ -270,7 +425,9 @@ export default defineComponent({
       }
     };
 
-    const handleAgentUpdated = (agentInfo: any) => {
+    const handleAgentUpdated = async (agentInfo: any) => {
+      console.log(`🔍 [ChatPrompt] handleAgentUpdated called with:`, agentInfo?.name, `for user:`, currentUser.value?.userId);
+      
       if (agentInfo) {
         // Update the current agent with the new information
         currentAgent.value = agentInfo;
@@ -282,6 +439,20 @@ export default defineComponent({
         if (personalChatOption && agentInfo.endpoint) {
           personalChatOption.value = agentInfo.endpoint;
         }
+
+        console.log("✅ Agent updated in ChatPrompt:", agentInfo.name);
+        
+        // Fetch current agent data to get updated warning information
+        try {
+          // Clear the API call cache to force a fresh request
+          apiCallCache.delete('current-agent');
+          await fetchCurrentAgent();
+          // fetchCurrentAgent() already handles updating currentAgent, currentKnowledgeBase, and agentWarning
+        } catch (error) {
+          console.error("❌ Failed to fetch updated agent data:", error);
+          // Clear warning if fetch fails
+          agentWarning.value = "";
+        }
       } else {
         currentAgent.value = null;
       }
@@ -291,11 +462,29 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
-    const handleUserAuthenticated = (userData: any) => {
-      currentUser.value = userData;
-      // Show clean user authentication info
+    const handleUserAuthenticated = async (userData: any) => {
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
       
-
+      // Clear chat area when user signs in (prevents stale data from previous user)
+      appState.chatHistory = [];
+      appState.uploadedFiles = [];
+      appState.currentViewingFile = null;
+      appState.popupContent = '';
+      
+      currentUser.value = UserService.normalizeUserObject(userData);
+      
+      // Fetch the user's current agent and KB from API to update Agent Badge
+      await fetchCurrentAgent();
+      
+      // Check if user should see the "No Private Agent" modal after authentication
+      if (WorkflowUtils.shouldShowNoAgentModal(currentUser.value, currentAgent.value)) {
+        // Show modal for workflow users without private agents
+        if (noPrivateAgentModalRef.value) {
+          noPrivateAgentModalRef.value.show();
+        }
+      }
+      
       // Force a reactive update by triggering a re-render
       // This ensures the UI updates immediately
       setTimeout(() => {
@@ -314,26 +503,47 @@ export default defineComponent({
         const response = await fetch(`${API_BASE_URL}/passkey/logout`, { method: "POST" });
         const data = await response.json();
         
-        // Display backend console message if provided
-        if (data.consoleMessage) {
-          console.log(data.consoleMessage);
-        }
+        // Backend console messages removed - not essential for user experience
       } catch (error) {
         console.error('❌ Backend logout failed:', error);
       }
       
-      // Set to Unknown User instead of null (there should never be "no user")
-      currentUser.value = { userId: 'Unknown User', displayName: 'Unknown User' };
+      // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
+      apiCallCache.clear();
+      
+      // Clear all agent data before switching to Public User
+      currentAgent.value = null;
+      currentKnowledgeBase.value = null;
+      assignedAgent.value = null;
+      agentWarning.value = "";
+      
+      // Set to Public User instead of null (there should never be "no user")
+      currentUser.value = UserService.createPublicUser();
+      
+      // Clear the backend cache for Public User to prevent contamination
+      try {
+        await fetch(`${API_BASE_URL}/api/admin/clear-public-user-agent`, { method: "POST" });
+      } catch (error) {
+        console.error('❌ Failed to clear Public User cache:', error);
+      }
+      
+      // Fetch the Public User's agent to update the UI
+      await fetchCurrentAgent();
+    };
+
+    const handleRequestPrivateAgent = () => {
+      // For now, just show a notification
+      // In the future, this could open a form or redirect to admin panel
+      console.log("User requested private agent");
+      // You could implement a request system here
     };
 
     const handleSignInCancelled = () => {
       showPasskeyAuthDialog.value = false;
     };
 
-    // Refresh agent data when user changes
-    watch(currentUser, async () => {
-      await fetchCurrentAgent();
-    });
+    // Note: Agent data is fetched on component mount and when explicitly updated
+    // No need to watch user changes as this causes duplicate API calls
 
     const editMessage = (idx: number) => {
       appState.editBox.push(idx);
@@ -390,6 +600,14 @@ export default defineComponent({
     };
 
     const triggerSendQuery = async () => {
+      // Prevent multiple simultaneous calls
+      if (appState.isLoading) {
+        // Prevent multiple simultaneous calls
+        return;
+      }
+      
+      // Process query
+      
       // If Private AI is selected and chatHistory is empty, only use the default if the input is empty or matches the default
       const privateAIValue = AIoptions.find(
         (option) => option.label === "Private AI"
@@ -409,6 +627,15 @@ export default defineComponent({
         }
         // Otherwise, use what the user typed (do nothing)
       }
+      
+      // Prevent sending empty messages (after default prompt logic)
+      if (!appState.currentQuery || appState.currentQuery.trim() === '') {
+        // Prevent sending empty messages
+        return;
+      }
+
+      // Track user activity for Admin Panel (any query attempt)
+      trackUserActivity('query_attempt');
 
       try {
         appState.isLoading = true;
@@ -416,14 +643,42 @@ export default defineComponent({
           appState.selectedAI,
           appState.chatHistory,
           appState,
-          currentUser.value // Pass the current user identity
+          currentUser.value, // Pass the current user identity
+          () => { showAgentSelectionModal.value = true; } // Callback for agent selection required
         );
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
         appState.isLoading = false;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Query failed:", error);
-        writeMessage("Failed to send query", "error");
+        
+        // Show specific error messages based on error type
+        let errorMessage = "Failed to send query";
+        let warningMessage = "Query failed. Please try again.";
+        
+        if (error.message) {
+          errorMessage = error.message;
+          warningMessage = error.message;
+        }
+        
+        // Add specific handling for rate limits and size limits
+        if (error.status === 429 || (error.errorType === 'RATE_LIMIT')) {
+          // Extract token count from error message if available
+          const tokenMatch = error.message?.match(/\((\d+) tokens sent\)/);
+          const tokenCount = tokenMatch ? tokenMatch[1] : (error.tokenCount || 'unknown');
+          errorMessage = `Rate limit exceeded (${tokenCount} tokens sent). Please try again in a minute or use Personal AI for large documents.`;
+          warningMessage = `Rate limit exceeded (${tokenCount} tokens). Try Personal AI for large documents.`;
+        } else if (error.status === 413 || (error.errorType === 'TOO_LARGE')) {
+          // Extract token count from error message if available
+          const tokenMatch = error.message?.match(/\((\d+) tokens sent\)/);
+          const tokenCount = tokenMatch ? tokenMatch[1] : (error.tokenCount || 'unknown');
+          errorMessage = `Document too large (${tokenCount} tokens sent). Please use Personal AI for large documents.`;
+          warningMessage = `Document too large (${tokenCount} tokens). Use Personal AI instead.`;
+        }
+        
+        writeMessage(errorMessage, "error");
+        // Also set agent warning to show error in AgentStatusIndicator
+        agentWarning.value = warningMessage;
         appState.isLoading = false;
       }
 
@@ -591,7 +846,10 @@ export default defineComponent({
       triggerAgentManagement,
       handleAgentUpdated,
       showAgentManagementDialog,
+      showAgentSelectionModal,
       currentAgent,
+      currentKnowledgeBase,
+      assignedAgent,
       agentWarning,
       currentUser,
       groupCount,
@@ -602,6 +860,7 @@ export default defineComponent({
       handleSignIn,
       handleSignOut,
       handleSignInCancelled,
+      handleRequestPrivateAgent,
       showPasskeyAuthDialog,
       showDeepLinkUserModal,
       pendingShareId,
@@ -655,6 +914,7 @@ export default defineComponent({
     @save-to-file="saveToFile"
     @trigger-save-to-couchdb="triggerSaveToCouchDB"
     @close-no-save="closeNoSave"
+    @clear-warning="agentWarning = ''"
 
     :currentAgent="currentAgent"
     :warning="agentWarning"
@@ -682,7 +942,7 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :currentUser="currentUser"
     :groupCount="groupCount"
-    :deepLink="currentDeepLink"
+    :deepLink="currentDeepLink || undefined"
     @sign-in="handleSignIn"
     @sign-out="handleSignOut"
     @chat-loaded="handleChatLoaded"
@@ -712,11 +972,44 @@ export default defineComponent({
     :AIoptions="AIoptions"
     :uploadedFiles="appState.uploadedFiles"
     :currentUser="currentUser"
+    :currentAgent="currentAgent"
+    :currentKnowledgeBase="currentKnowledgeBase"
+    :assignedAgent="assignedAgent"
     :warning="agentWarning"
     @agent-updated="handleAgentUpdated"
     @refresh-agent-data="refreshAgentData"
     @user-authenticated="handleUserAuthenticated"
   />
+
+  <!-- No Private Agent Modal -->
+  <NoPrivateAgentModal
+    ref="noPrivateAgentModalRef"
+    @sign-out="handleSignOut"
+    @request="handleRequestPrivateAgent"
+  />
+
+  <!-- Agent Selection Required Modal -->
+  <q-dialog v-model="showAgentSelectionModal" persistent>
+    <q-card style="min-width: 400px">
+      <q-card-section class="row items-center">
+        <q-avatar icon="psychology" color="primary" text-color="white" />
+        <span class="q-ml-sm text-h6">Agent Selection Required</span>
+      </q-card-section>
+
+      <q-card-section>
+        <p>You need to select an AI agent before you can start chatting. Please choose an agent from the Agent Management dialog.</p>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn flat label="Cancel" color="primary" @click="showAgentSelectionModal = false" />
+        <q-btn 
+          label="Select Agent" 
+          color="primary" 
+          @click="() => { showAgentSelectionModal = false; showAgentManagementDialog = true; }"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 
   <!-- Sign In Dialog -->
   <PasskeyAuthDialog

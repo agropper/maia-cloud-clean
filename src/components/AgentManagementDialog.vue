@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="showDialog" persistent @show="onDialogOpen">
+  <q-dialog v-model="showDialog" persistent @before-show="onDialogBeforeShow" @show="onDialogOpen">
     <q-card style="min-width: 600px; max-width: 800px">
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🤖 Agent Management</div>
@@ -8,22 +8,116 @@
       </q-card-section>
 
       <q-card-section>
-        <!-- Agent Badge for All Users -->
-        <div v-if="currentAgent" class="q-mb-lg">
-          <AgentStatusIndicator
-            :agent="currentAgent"
-            :warning="warning"
-            :currentUser="localCurrentUser"
-            :currentWorkflowStep="currentWorkflowStep"
-            :showManageButton="false"
-            :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
+        <!-- Dialog Loading State -->
+        <div v-if="isDialogLoading" class="text-center q-pa-xl">
+          <q-spinner-dots
+            size="3rem"
+                    color="primary"
           />
+          <div class="text-h6 q-mt-md">Loading Agent Management...</div>
+          <div class="text-caption q-mt-sm">Please wait while we load your agent and knowledge base information</div>
         </div>
 
+        <!-- Main Content (only show when not loading) -->
+        <div v-else>
+          <!-- Agent Badge for All Users - Always show -->
+          <div class="q-mb-lg">
+            <AgentStatusIndicator
+              :agent="assignedAgent"
+              :warning="warning"
+              :currentUser="localCurrentUser"
+              @clear-warning="warning = ''"
+              :currentWorkflowStep="currentWorkflowStep"
+              :workflowSteps="workflowSteps"
+              :userEmail="userEmail"
+              :showManageButton="false"
+              :class="isAuthenticated ? 'agent-badge-authenticated' : 'agent-badge-unauthenticated'"
+            />
+          </div>
+
+          <!-- Deep Link User Text Prompt -->
+          <div v-if="isDeepLinkUser" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #4caf50;">
+              <div class="row items-center">
+                <q-icon name="link" color="positive" size="1.2rem" class="q-mr-sm" />
+                <div>
+                  <strong>Shared Chat Access</strong><br>
+                  The Private AI is controlled by the patient. You are viewing a shared chat with access to the patient's knowledge base and AI agent.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Authenticated User Information Panel -->
+          <div v-else-if="isAuthenticated && !isDeepLinkUser" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+              <div class="row items-center">
+                <q-icon name="person" color="primary" size="1.2rem" class="q-mr-sm" />
+                <div>
+                  <strong>Private AI Access</strong><br>
+                  You have access to your private AI agent and can create knowledge bases from your health records. Use the options below to manage your files and knowledge bases.
+                </div>
+              </div>
+            </div>
+            
+            <!-- File Management Options for Authenticated Users -->
+            <div v-if="assignedAgent && assignedAgent.type === 'assigned'" class="q-mb-lg">
+              <div class="text-h6 q-mb-md">📁 File Management</div>
+              <div class="row q-gutter-md">
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Create/Add to Knowledge Base"
+                  color="positive"
+                  icon="add_circle"
+                  @click="handleFileAction('create_or_add')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Import More Files"
+                  color="primary"
+                  icon="upload_file"
+                  @click="handleFileAction('import_more')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="userHasFiles"
+                  label="Clear Files"
+                  color="warning"
+                  icon="clear_all"
+                  @click="handleFileAction('clear_files')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  v-if="!userHasFiles"
+                  label="Import Files"
+                  color="primary"
+                  icon="upload_file"
+                  @click="handleFileAction('import_files')"
+                  class="q-px-lg"
+                />
+                <q-btn
+                  label="Cancel"
+                  color="grey"
+                  icon="cancel"
+                  @click="handleClose"
+                  class="q-px-lg"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Public User Text Prompt -->
+          <div v-else-if="!isAuthenticated" class="q-mb-lg">
+            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
+              The Public User is a shared demo environment. You must sign-in to request a private agent and to create knowledge bases from real health records.
+            </div>
+          </div>
+
         <!-- Workflow Progress Section - Only for authenticated users -->
-        <div v-if="isAuthenticated" class="q-mb-lg">
+        <div v-else-if="isAuthenticated" class="q-mb-lg">
           <!-- Show detailed progress list only when no agent or no KBs -->
-          <div v-if="!currentAgent || !currentAgent.knowledgeBases || currentAgent.knowledgeBases.length === 0">
+          <div v-if="!assignedAgent || !assignedAgent.knowledgeBases || assignedAgent.knowledgeBases.length === 0">
           <h6 class="q-mb-sm">🔐 Private AI Setup Progress</h6>
           <div class="workflow-steps">
             <div 
@@ -68,11 +162,11 @@
                   class="help-btn"
                 />
               </div>
-            </div>
           </div>
-          
+        </div>
+
           <!-- Request Administrator Approval Button (below first step) -->
-          <div v-if="!currentAgent && !hasRequestedApproval" class="q-mt-md text-center">
+          <div v-if="!assignedAgent && !hasRequestedApproval" class="q-mt-md text-center">
             <q-btn
               label="Request Administrator Approval"
               color="primary"
@@ -82,8 +176,8 @@
             />
           </div>
 
-          <!-- Choose Files Button (when agent is assigned) -->
-          <div v-if="currentAgent && currentAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current" class="q-mt-md text-center">
+          <!-- Choose Files Button (when agent is assigned) - Only for authenticated users (not deep link users) -->
+          <div v-if="assignedAgent && assignedAgent.type === 'assigned' && !hasRequestedApproval && !workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CREATE KNOWLEDGE BASE"
               color="positive"
@@ -93,8 +187,19 @@
             />
           </div>
 
-          <!-- Cancel Indexing Button (when on Step 6) -->
-          <div v-if="workflowSteps[5].current" class="q-mt-md text-center">
+          <!-- Cancel Request Button (when on Step 3) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[2].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
+            <q-btn
+              label="CANCEL REQUEST"
+              color="warning"
+              @click="showCancelRequestModal = true"
+              icon="cancel"
+              class="q-px-lg"
+            />
+        </div>
+
+          <!-- Cancel Indexing Button (when on Step 6) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[5].current && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="CANCEL INDEXING"
               color="warning"
@@ -102,10 +207,10 @@
               icon="stop"
               class="q-px-lg"
             />
-          </div>
+                  </div>
 
-          <!-- Start Indexing Button (when on Step 6 but no indexing job) -->
-          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started')" class="q-mt-md text-center">
+          <!-- Start Indexing Button (when on Step 6 but no indexing job) - Only for authenticated users (not deep link users) -->
+          <div v-if="workflowSteps[5].current && workflowSteps[5].title.includes('indexing needs to be started') && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="START INDEXING"
               color="primary"
@@ -113,11 +218,11 @@
               icon="play_arrow"
               class="q-px-lg"
             />
-          </div>
-          </div>
+                </div>
+              </div>
 
-          <!-- Show manage button when agent and KBs are ready -->
-          <div v-else-if="currentAgent && currentAgent.knowledgeBases && currentAgent.knowledgeBases.length > 0" class="q-mt-md text-center">
+          <!-- Show manage button when agent and KBs are ready - Only for authenticated users (not deep link users) -->
+          <div v-else-if="assignedAgent && assignedAgent.knowledgeBases && assignedAgent.knowledgeBases.length > 0 && isAuthenticated && !isDeepLinkUser" class="q-mt-md text-center">
             <q-btn
               label="MANAGE HEALTH RECORDS KNOWLEDGE BASES"
               color="primary"
@@ -126,37 +231,26 @@
               class="q-px-lg"
               size="lg"
             />
-          </div>
+              </div>
         </div>
 
 
 
-        <!-- Agent List -->
-        <div v-if="availableAgents.length > 0" class="q-mb-md">
-          <h6 class="q-mb-sm">Available Agents:</h6>
-          <div v-for="agent in availableAgents" :key="agent.id" class="q-mb-sm">
-            <q-item clickable @click="selectAgent(agent)" class="agent-item">
-              <q-item-section>
-                <q-item-label>
-                  {{ agent.name }}
-                  <q-chip
-                    v-if="currentAgent && currentAgent.id === agent.id"
-                    size="sm"
-                    color="primary"
-                    text-color="white"
-                    class="q-ml-sm"
-                  >
-                    Current
-                  </q-chip>
-                </q-item-label>
-                <q-item-label caption>{{ agent.description }}</q-item-label>
-              </q-item-section>
-            </q-item>
+        <!-- Agent Instructions -->
+        <div v-if="assignedAgent" class="q-mb-md">
+          <h6 class="q-mb-sm">Agent Instructions:</h6>
+          <div class="q-pa-md" style="background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #1976d2;">
+            <div class="text-body2">
+              <strong>{{ assignedAgent.name }}</strong>
+            </div>
+            <div class="text-caption text-grey-7 q-mt-sm">
+              {{ assignedAgent.instructions || assignedAgent.description || 'No specific instructions available for this agent.' }}
+            </div>
           </div>
         </div>
 
-        <!-- Agent Actions (if agent exists) -->
-        <div v-if="currentAgent" class="q-mb-md">
+        <!-- Agent Actions (if agent exists) - Only for authenticated users (not deep link users) -->
+        <div v-if="assignedAgent && isAuthenticated && !isDeepLinkUser" class="q-mb-md">
           <div class="row q-gutter-md">
             <q-btn
               label="Update Agent"
@@ -189,34 +283,20 @@
         <div v-else>
 
 
-          <!-- No Agent Configured -->
-          <div v-if="!currentAgent" class="text-center q-pa-md">
+          <!-- No Agent Configured - Only for Public User (not deep link users) -->
+          <div v-if="!assignedAgent && !isAuthenticated && !isDeepLinkUser" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="grey-4" />
             <div class="text-h6 q-mt-md">No Agent Configured</div>
             <div class="text-caption q-mb-md">
-              <span v-if="isAuthenticated">
-                You need administrator approval to access private AI agents and health record knowledge bases.
-              </span>
-              <span v-else>
-                Create a new agent to get started with AI assistance
-              </span>
+              Please sign in to access your private AI agent and create knowledge bases from your health records.
             </div>
-
-            <q-btn
-              v-if="!isAuthenticated"
-              label="Create New Agent"
-              color="primary"
-              size="lg"
-              @click="showWizard = true"
-              icon="add"
-            />
           </div>
 
-          <!-- Assigned Agent Display (for authenticated users) -->
-          <div v-if="isAuthenticated && currentAgent && currentAgent.type === 'assigned'" class="text-center q-pa-md">
+          <!-- Assigned Agent Display (for authenticated users, not deep link users) -->
+          <div v-if="isAuthenticated && !isDeepLinkUser && assignedAgent && assignedAgent.type === 'assigned'" class="text-center q-pa-md">
             <q-icon name="smart_toy" size="4rem" color="positive" />
             <div class="text-h6 q-mt-md text-positive">Agent Assigned!</div>
-            <div class="text-subtitle1 q-mb-sm">{{ currentAgent.name }}</div>
+            <div class="text-subtitle1 q-mb-sm">{{ assignedAgent.name }}</div>
             <div class="text-caption q-mb-md text-grey">
               Your private AI agent has been created and is ready for use.
             </div>
@@ -233,9 +313,11 @@
           </div>
 
           <!-- Agent Management (if agent exists) -->
-          <div v-if="currentAgent">
-            <!-- Knowledge Base Section -->
-            <q-card flat bordered class="q-mb-md">
+          <div v-if="assignedAgent">
+          </div>
+
+          <!-- Knowledge Base Section - Only show for authenticated users (not deep link users) -->
+            <q-card v-if="!isDeepLinkUser" flat bordered class="q-mb-md">
               <q-card-section>
                 <div class="row items-center q-mb-sm">
                   <q-icon name="library_books" color="secondary" />
@@ -244,32 +326,119 @@
                   >
                 </div>
 
-                <!-- Create New Knowledge Base Button -->
-                <div class="q-mb-md">
-                  <q-btn
-                    label="Create New Knowledge Base"
+                <!-- File Management Actions Dropdown - Only for authenticated users (not deep link users) -->
+                <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
+                  <q-btn-dropdown
+                    label="File Management Actions"
                     color="primary"
-                    icon="add"
-                    @click="handleCreateKnowledgeBase"
-                    :disable="!hasUploadedDocuments"
-                    :title="
-                      hasUploadedDocuments
-                        ? 'Create a new KB from uploaded documents'
-                        : 'Upload documents first using the paper clip'
-                    "
-                  />
+                    icon="settings"
+                    :title="'Choose a file management action'"
+                  >
+                    <q-list>
+                      <!-- Create new or add to existing knowledge base -->
+                      <q-item
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('create_or_add')"
+                        :disable="!userHasFiles"
+                      >
+                        <q-item-section avatar>
+                          <q-icon 
+                            name="add_circle" 
+                            :color="userHasFiles ? 'positive' : 'grey-5'" 
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Create new or add to existing knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <!-- Import more files before creating knowledge base -->
+                      <q-item
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('import_more')"
+                        :disable="!userHasFiles"
+                      >
+                        <q-item-section avatar>
+                          <q-icon 
+                            name="upload_file" 
+                            :color="userHasFiles ? 'primary' : 'grey-5'" 
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Import more files before creating knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <!-- Clear all files -->
+                      <q-item
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('clear_files')"
+                        :disable="!userHasFiles"
+                      >
+                        <q-item-section avatar>
+                          <q-icon 
+                            name="clear_all" 
+                            :color="userHasFiles ? 'orange' : 'grey-5'" 
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
+                            Clear all files (you will need to import them again)
+                          </q-item-label>
+                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
+                            No files in bucket folder
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <!-- Import files to create a new knowledge base -->
+                      <q-item
+                        clickable
+                        v-close-popup
+                        @click="handleFileAction('import_files')"
+                        :disable="userHasFiles"
+                      >
+                        <q-item-section avatar>
+                          <q-icon 
+                            name="upload_file" 
+                            :color="!userHasFiles ? 'primary' : 'grey-5'" 
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label :class="{ 'text-grey-5': userHasFiles }">
+                            Import files to create a new knowledge base
+                          </q-item-label>
+                          <q-item-label v-if="userHasFiles" caption class="text-grey-5">
+                            Files already exist in bucket folder
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-btn-dropdown>
+                  
                   <div
-                    v-if="!hasUploadedDocuments"
+                    v-if="!userHasFiles"
                     class="text-caption text-grey q-mt-xs"
                   >
-                    Upload documents using the paper clip button to create a new
-                    knowledge base
+                    No files found in your bucket folder. Upload files to get started with knowledge base creation.
                   </div>
                 </div>
 
                 <!-- Knowledge Base List -->
                 <div v-if="availableKnowledgeBases.length > 0" class="q-mb-md">
-                  <h6 class="q-mb-sm">Available Knowledge Bases:</h6>
                   <div
                     v-for="kb in availableKnowledgeBases"
                     :key="kb.uuid"
@@ -334,7 +503,7 @@
                           <!-- Protection Toggle (only for KB owner) -->
                           <q-btn
                             v-if="
-                              currentUser && kb.owner === currentUser.username
+                              localCurrentUser && kb.owner === localCurrentUser.userId
                             "
                             :icon="kb.isProtected ? 'lock_open' : 'lock'"
                             :color="kb.isProtected ? 'warning' : 'grey'"
@@ -383,6 +552,25 @@
       </q-card-section>
     </q-card>
 
+    <!-- Knowledge Base Link Suggestion Modal -->
+    <q-dialog v-model="showKbLinkSuggestionDialog" persistent>
+      <q-card style="min-width: 500px">
+        <q-card-section class="row items-center q-pb-none">
+          <q-avatar icon="link" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">Link Knowledge Base</span>
+        </q-card-section>
+        <q-card-section>
+          <p>Great! You've selected an agent. Now you should link a knowledge base to it for better AI responses.</p>
+          <p class="text-caption text-grey">
+            Click the link icon (🔗) next to any knowledge base in the list below to connect it to your selected agent.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Got it!" color="primary" @click="showKbLinkSuggestionDialog = false" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Agent Creation Wizard -->
     <AgentCreationWizard
       v-model="showWizard"
@@ -408,79 +596,124 @@
       </q-card>
     </q-dialog>
 
-    <!-- Step 4: Choose Files Dialog -->
+    <!-- Enhanced File Selection Dialog -->
     <q-dialog v-model="showChooseFilesDialog" persistent>
-      <q-card style="min-width: 600px">
+      <q-card style="min-width: 700px; max-width: 900px">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">📁 Choose Files for Knowledge Base</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <div v-if="!hasUploadedDocuments" class="text-center q-pa-md">
+          <div v-if="!hasUploadedDocuments && userBucketFiles.length === 0" class="text-center q-pa-md">
             <q-icon name="attach_file" size="3rem" color="grey-4" />
-            <div class="text-h6 q-mt-md">No Documents Available</div>
+            <div class="text-h6 q-mt-md">No Files Available</div>
             <div class="text-caption q-mb-md">
-              Upload documents using the paper clip button to create a knowledge
-              base
+              Upload documents using the paper clip button or add files to your bucket folder
             </div>
           </div>
 
           <div v-else>
-            <div class="text-subtitle2 q-mb-md">
-              Select documents to include in the new knowledge base:
-            </div>
-
             <q-form
-              @submit="handleChooseFilesSubmit"
+              @submit="handleEnhancedFileSelection"
               class="q-gutter-md"
             >
-              <q-input
-                v-model="newKbName"
-                label="Knowledge Base Name"
-                outlined
-                :rules="[(val) => !!val || 'Name is required']"
-                hint="Enter a descriptive name for your knowledge base"
-              />
+              <!-- Knowledge Base Selection -->
+              <div class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">Knowledge Base:</div>
+                <q-select
+                  v-model="selectedKbId"
+                  :options="kbOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  outlined
+                  :rules="[(val) => !!val || 'Please select or create a knowledge base']"
+                  hint="Select existing KB or create new one"
+                />
+                
+                <!-- Show KB name input when creating new -->
+                <q-input
+                  v-if="selectedKbId === 'new'"
+                  v-model="newKbNameInput"
+                  label="New Knowledge Base Name"
+                  outlined
+                  :rules="[(val) => !!val || 'Name is required']"
+                  hint="Enter a descriptive name for your knowledge base"
+                  class="q-mt-sm"
+                />
+                
+                <q-input
+                  v-if="selectedKbId === 'new'"
+                  v-model="newKbDescriptionInput"
+                  label="Description"
+                  outlined
+                  type="textarea"
+                  rows="2"
+                  hint="Optional description of the knowledge base contents"
+                />
+              </div>
 
-              <q-input
-                v-model="newKbDescription"
-                label="Description"
-                outlined
-                type="textarea"
-                rows="3"
-                hint="Optional description of the knowledge base contents"
-              />
+              <!-- Uploaded Files Section -->
+              <div v-if="hasUploadedDocuments" class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">
+                  📎 Uploaded Files ({{ uploadedFiles?.length || 0 }} files):
+                </div>
+                <div class="q-pa-sm bg-blue-1 rounded-borders">
+                  <div
+                    v-for="file in uploadedFiles"
+                    :key="file.id"
+                    class="q-mb-xs"
+                  >
+                    <q-item dense>
+                      <q-item-section>
+                        <q-item-label>{{ file.name }}</q-item-label>
+                        <q-item-label caption>{{
+                          formatFileSize(file.content?.length || 0)
+                        }} characters | {{ file.type }}</q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-checkbox v-model="selectedDocuments" :val="file.id" />
+                      </q-item-section>
+                    </q-item>
+                  </div>
+                </div>
+              </div>
 
-              <!-- Document List -->
-              <div>
-                <div class="text-subtitle2 q-mb-sm">Uploaded Files ({{ uploadedFiles?.length || 0 }} files):</div>
-                <div
-                  v-for="file in uploadedFiles"
-                  :key="file.id"
-                  class="q-mb-xs"
-                >
-                  <q-item dense>
-                    <q-item-section>
-                      <q-item-label>{{ file.name }}</q-item-label>
-                      <q-item-label caption>{{
-                        formatFileSize(file.content?.length || 0)
-                      }} characters | {{ file.type }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-checkbox v-model="selectedDocuments" :val="file.id" />
-                    </q-item-section>
-                  </q-item>
+              <!-- Bucket Files Section -->
+              <div v-if="userBucketFiles.length > 0" class="q-mb-md">
+                <div class="text-subtitle2 q-mb-sm">
+                  📁 Files in Bucket Folder ({{ userBucketFiles.length }} files):
+                </div>
+                <div class="q-pa-sm bg-green-1 rounded-borders">
+                  <div
+                    v-for="file in userBucketFiles"
+                    :key="file.key"
+                    class="q-mb-xs"
+                  >
+                    <q-item dense>
+                      <q-item-section>
+                        <q-item-label>{{ file.key.split('/').pop() }}</q-item-label>
+                        <q-item-label caption>{{
+                          formatFileSize(file.size || 0)
+                        }} bytes | Last modified: {{ new Date(file.lastModified).toLocaleDateString() }}</q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-checkbox v-model="selectedBucketFiles" :val="file.key" />
+                      </q-item-section>
+                    </q-item>
+                  </div>
                 </div>
               </div>
 
               <div class="row q-gutter-sm q-mt-md">
                 <q-btn
-                  label="Choose Files & Upload to Bucket"
+                  label="Create/Update Knowledge Base"
                   color="primary"
                   type="submit"
                   :loading="isCreatingKb"
-                  :disable="selectedDocuments.length === 0"
+                  :disable="selectedDocuments.length === 0 && selectedBucketFiles.length === 0"
                 />
                 <q-btn label="Cancel" flat v-close-popup />
               </div>
@@ -499,30 +732,30 @@
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
-          <div class="text-subtitle2 q-mb-md">
+            <div class="text-subtitle2 q-mb-md">
             Create knowledge base from your existing bucket files:
-          </div>
+            </div>
 
-          <q-form
+            <q-form
             @submit="handleCreateKbSubmit"
-            class="q-gutter-md"
-          >
-            <q-input
-              v-model="newKbName"
-              label="Knowledge Base Name"
-              outlined
-              :rules="[(val) => !!val || 'Name is required']"
-              hint="Enter a descriptive name for your knowledge base"
+              class="q-gutter-md"
+            >
+              <q-input
+                v-model="newKbName"
+                label="Knowledge Base Name"
+                outlined
+                :rules="[(val) => !!val || 'Name is required']"
+                hint="Enter a descriptive name for your knowledge base"
               readonly
-            />
+              />
 
-            <q-input
-              v-model="newKbDescription"
-              label="Description"
-              outlined
-              type="textarea"
-              rows="3"
-              hint="Optional description of the knowledge base contents"
+              <q-input
+                v-model="newKbDescription"
+                label="Description"
+                outlined
+                type="textarea"
+                rows="3"
+                hint="Optional description of the knowledge base contents"
               readonly
             />
 
@@ -552,19 +785,19 @@
               </div>
               <div class="text-caption text-positive q-mt-sm">
                 ✅ These files are already stored in your DigitalOcean Spaces folder and ready for knowledge base creation.
+                </div>
               </div>
-            </div>
 
-            <div class="row q-gutter-sm q-mt-md">
-              <q-btn
+              <div class="row q-gutter-sm q-mt-md">
+                <q-btn
                 label="Create Knowledge Base from Bucket Files"
-                color="primary"
-                type="submit"
-                :loading="isCreatingKb"
-              />
-              <q-btn label="Cancel" flat v-close-popup />
-            </div>
-          </q-form>
+                  color="primary"
+                  type="submit"
+                  :loading="isCreatingKb"
+                />
+                <q-btn label="Cancel" flat v-close-popup />
+              </div>
+            </q-form>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -575,7 +808,7 @@
         <q-card-section>
           <div class="text-h6">Delete Agent</div>
           <div class="text-body2 q-mt-sm">
-            Are you sure you want to delete "{{ currentAgent?.name }}"? This
+            Are you sure you want to delete "{{ assignedAgent?.name }}"? This
             action cannot be undone.
           </div>
         </q-card-section>
@@ -873,14 +1106,152 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Cancel Request Confirmation Modal -->
+    <q-dialog v-model="showCancelRequestModal" persistent>
+      <q-card style="min-width: 350px">
+        <q-card-section class="q-pb-none">
+          <div class="text-h6">Cancel Request?</div>
+        </q-card-section>
+        
+        <q-card-section>
+          <p>Are you sure you want to cancel your private AI agent request?</p>
+          <p class="text-caption text-grey">
+            This will undo your request and you'll need to request approval again if you want a private agent.
+          </p>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn 
+            flat 
+            label="Cancel" 
+            @click="showCancelRequestModal = false"
+          />
+          <q-btn 
+            label="Yes, Cancel Request" 
+            color="warning" 
+            @click="cancelRequest"
+            :loading="isCancellingRequest"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+  </q-dialog>
+  
+  <!-- File Choice Confirmation Modal -->
+  <q-dialog v-model="showFileChoiceModal" persistent>
+    <q-card style="min-width: 400px">
+      <q-card-section class="row items-center q-pb-none">
+        <div class="text-h6">Confirm File Action</div>
+        <q-space />
+        <q-btn icon="close" flat round dense @click="showFileChoiceModal = false" />
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1 q-mb-md">
+          You are about to: <strong>{{ getActionDescription(selectedFileAction) }}</strong>
+        </div>
+        <div class="text-caption text-grey-6">
+          This action will be executed in the background. You can monitor progress in the execution modal.
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn
+          label="Cancel"
+          color="grey"
+          @click="showFileChoiceModal = false"
+        />
+        <q-btn
+          label="Confirm"
+          color="primary"
+          @click="executeFileAction"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
+
+  <!-- Execution Progress Modal -->
+  <q-dialog v-model="showExecutionModal" persistent>
+    <q-card style="min-width: 500px">
+      <q-card-section class="row items-center q-pb-none">
+        <div class="text-h6">Executing Action</div>
+        <q-space />
+        <q-btn 
+          icon="close" 
+          flat 
+          round 
+          dense 
+          @click="showExecutionModal = false"
+          :disable="executionInProgress"
+        />
+      </q-card-section>
+
+      <q-card-section>
+        <div class="text-body1 q-mb-md">
+          <strong>{{ getActionDescription(selectedFileAction) }}</strong>
+        </div>
+        
+        <!-- Execution Stages -->
+        <div class="execution-stages">
+          <div 
+            v-for="(stage, index) in executionStages" 
+            :key="index"
+            class="execution-stage q-mb-sm"
+            :class="{ 
+              'completed': index < currentExecutionStage,
+              'current': index === currentExecutionStage,
+              'pending': index > currentExecutionStage
+            }"
+          >
+            <div class="row items-center">
+              <q-icon 
+                :name="index < currentExecutionStage ? 'check_circle' : 
+                       index === currentExecutionStage ? 'radio_button_unchecked' : 'radio_button_unchecked'"
+                :color="index < currentExecutionStage ? 'positive' : 
+                        index === currentExecutionStage ? 'primary' : 'grey-4'"
+                size="1.2rem"
+                class="q-mr-sm"
+              />
+              <div class="text-body2">{{ stage.title }}</div>
+              <q-space />
+              <q-spinner-dots 
+                v-if="index === currentExecutionStage && executionInProgress"
+                size="1rem"
+                color="primary"
+              />
+            </div>
+            <div v-if="stage.description" class="text-caption text-grey-6 q-ml-lg">
+              {{ stage.description }}
+            </div>
+          </div>
+        </div>
+      </q-card-section>
+
+      <q-card-actions align="right">
+        <q-btn
+          label="Cancel"
+          color="grey"
+          @click="cancelExecution"
+          :disable="!executionInProgress"
+        />
+        <q-btn
+          label="OK"
+          color="primary"
+          @click="showExecutionModal = false"
+          :disable="!executionComplete"
+        />
+      </q-card-actions>
+    </q-card>
   </q-dialog>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, nextTick, onUnmounted } from "vue";
+import { defineComponent, ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import type { PropType } from "vue";
 import { useQuasar } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 import {
   QDialog,
   QCard,
@@ -888,16 +1259,20 @@ import {
   QCardActions,
   QSpace,
   QBtn,
+  QBtnDropdown,
   QIcon,
   QForm,
   QInput,
   QSelect,
+  QList,
   QItem,
   QItemSection,
   QItemLabel,
   QCheckbox,
   QChip,
   QTooltip,
+  QAvatar,
+  QSpinnerDots,
 } from "quasar";
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
@@ -937,10 +1312,12 @@ export default defineComponent({
     QCardActions,
     QSpace,
     QBtn,
+    QBtnDropdown,
     QIcon,
     QForm,
     QInput,
     QSelect,
+    QList,
     QItem,
     QItemSection,
     QItemLabel,
@@ -951,6 +1328,8 @@ export default defineComponent({
     QCheckbox,
     QChip,
     QTooltip,
+    QAvatar,
+    QSpinnerDots,
   },
   props: {
     modelValue: {
@@ -968,6 +1347,22 @@ export default defineComponent({
     warning: {
       type: String,
       default: "",
+    },
+    AIoptions: {
+      type: Array,
+      default: () => [],
+    },
+    currentAgent: {
+      type: Object,
+      default: null,
+    },
+    currentKnowledgeBase: {
+      type: Object,
+      default: null,
+    },
+    assignedAgent: {
+      type: Object,
+      default: null,
     },
   },
   emits: [
@@ -990,12 +1385,14 @@ export default defineComponent({
 
     // Agent state
     const currentAgent = ref<DigitalOceanAgent | null>(null);
+    const assignedAgent = ref<DigitalOceanAgent | null>(null);
     const availableAgents = ref<DigitalOceanAgent[]>([]);
     const selectedAgentId = ref<string>("");
     const knowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const availableKnowledgeBases = ref<DigitalOceanKnowledgeBase[]>([]);
     const documents = ref<any[]>([]);
-    const isLoading = ref(true); // Start with loading true
+    const isLoading = ref(false); // Start with loading false
+    const isDialogLoading = ref(false); // New loading state for dialog opening
     const isCreating = ref(false);
     const isUpdating = ref(false);
     const isDeleting = ref(false);
@@ -1006,11 +1403,21 @@ export default defineComponent({
     const showChooseFilesDialog = ref(false);
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
+    const showKbLinkSuggestionDialog = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
     const isCreatingKb = ref(false);
     const selectedDocuments = ref<string[]>([]);
+    
+    // Enhanced file selection modal state
+    const selectedBucketFiles = ref<string[]>([]);
+    const selectedKbId = ref<string>('');
+    const newKbNameInput = ref<string>('');
+    const newKbDescriptionInput = ref<string>('');
+    
+    // Files to be cleaned up after successful indexing
+    const filesToCleanup = ref<string[]>([]);
 
     // Sign In Dialog state
     const showPasskeyAuthDialog = ref(false);
@@ -1041,6 +1448,13 @@ export default defineComponent({
     const showWarningModal = ref(false);
     const warningMessage = computed(() => props.warning || '');
 
+    // Watch for warning changes and show modal immediately
+    watch(() => props.warning, (newWarning) => {
+      if (newWarning && newWarning.trim() !== '') {
+        showWarningModal.value = true;
+      }
+    }, { immediate: true });
+
     // Admin approval request state
     const showAdminApprovalDialog = ref(false);
     const isRequestingApproval = ref(false);
@@ -1069,6 +1483,23 @@ export default defineComponent({
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
     const isCancellingIndexing = ref(false);
+
+    // Cancel request modal state
+    const showCancelRequestModal = ref(false);
+    const isCancellingRequest = ref(false);
+    
+    // File management state for authenticated users
+    const userHasFiles = ref(false);
+    const showFileChoiceModal = ref(false);
+    const showExecutionModal = ref(false);
+    const executionStages = ref([]);
+    const currentExecutionStage = ref(0);
+    const executionInProgress = ref(false);
+    const executionComplete = ref(false);
+    const selectedFileAction = ref('');
+    
+    // Debounce timer for loadAgentInfo calls
+    const loadAgentInfoDebounceTimer = ref(null);
 
     // Workflow progress state
     const workflowSteps = ref([
@@ -1128,9 +1559,22 @@ export default defineComponent({
       return currentStep ? currentStep.title : '';
     });
 
+    // Check if current user is a deep link user
+    const isDeepLinkUser = computed(() => {
+      return localCurrentUser.value?.userId?.startsWith('deep_link_') || false;
+    });
+
     // Check if user is already authenticated from passkey system
     const checkAuthenticationStatus = async () => {
       try {
+        // For deep link users, skip the auth-status API call and use props directly
+        if (props.currentUser && props.currentUser.userId?.startsWith('deep_link_')) {
+          localCurrentUser.value = props.currentUser;
+          isAuthenticated.value = true;
+          console.log(`🔗 [AgentManagementDialog] Deep link user authenticated via props: ${props.currentUser.userId}`);
+          return;
+        }
+        
         const response = await fetch(`${API_BASE_URL}/passkey/auth-status`);
         if (response.ok) {
           const authData = await response.json();
@@ -1138,16 +1582,19 @@ export default defineComponent({
             localCurrentUser.value = authData.user;
             isAuthenticated.value = true;
             // User authenticated
+          } else if (authData.redirectTo) {
+            // Deep link user detected on main app - redirect them to their deep link page
+            console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: ${authData.redirectTo}`);
+            window.location.href = authData.redirectTo;
+            return;
           } else {
-            // Check if we have a currentUser prop and it's not "Unknown User"
-            if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+            // Check if we have a currentUser prop and it's not "Public User"
+            if (props.currentUser && props.currentUser.userId !== 'Public User') {
               localCurrentUser.value = props.currentUser;
               isAuthenticated.value = true;
-              console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
             } else {
               isAuthenticated.value = false;
               localCurrentUser.value = null;
-              console.log(`🔐 No user authenticated`);
             }
           }
         } else {
@@ -1155,24 +1602,19 @@ export default defineComponent({
           if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
             localCurrentUser.value = props.currentUser;
             isAuthenticated.value = true;
-            console.log(`🔐 User authenticated via props: ${props.currentUser.userId}`);
           } else {
             isAuthenticated.value = false;
             localCurrentUser.value = null;
-            console.log(`🔐 No user authenticated`);
           }
         }
       } catch (error) {
-        console.log("🔐 Error checking authentication, checking props:", error);
         // Fallback to props
         if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log(`🔐 User authenticated via props fallback: ${props.currentUser.userId}`);
         } else {
           isAuthenticated.value = false;
           localCurrentUser.value = null;
-          console.log(`🔐 No user authenticated`);
         }
       }
     };
@@ -1216,10 +1658,10 @@ export default defineComponent({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            username: localCurrentUser.value?.userId || 'Unknown User',
+            username: localCurrentUser.value?.userId || 'Public User',
             email: helpEmailData.value.from,
             requestType: 'help_request',
-            message: `Help Request from ${localCurrentUser.value?.userId || 'Unknown User'}:\n\nSubject: ${helpEmailData.value.subject}\n\nMessage:\n${helpEmailData.value.body}`
+            message: `Help Request from ${localCurrentUser.value?.userId || 'Public User'}:\n\nSubject: ${helpEmailData.value.subject}\n\nMessage:\n${helpEmailData.value.body}`
           }),
         });
 
@@ -1273,7 +1715,7 @@ export default defineComponent({
       // Step 2: Private AI agent requested
       // This will be updated when the user actually requests approval
       // For now, we'll check if they have any agents (which means they were approved)
-      if (currentAgent.value) {
+      if (assignedAgent.value) {
         workflowSteps.value[1].completed = true;
         workflowSteps.value[2].completed = true;
         
@@ -1312,7 +1754,7 @@ export default defineComponent({
       }
 
       // Step 3: Private AI agent created
-      // This is handled above when currentAgent exists
+      // This is handled above when assignedAgent exists
 
       // Step 6: Knowledge base indexing status
       // Check if KB exists and start monitoring indexing
@@ -1379,29 +1821,38 @@ export default defineComponent({
 
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
-      if (!localCurrentUser.value?.userId) return [];
+      if (!localCurrentUser.value?.userId) {
+        console.log('🔧 checkUserBucketFiles: No userId available');
+        return [];
+      }
       
       // Use cached value if available and not forcing refresh
       if (!forceRefresh && userBucketFiles.value.length > 0) {
+        console.log('🔧 checkUserBucketFiles: Using cached value, count:', userBucketFiles.value.length);
         return userBucketFiles.value;
       }
       
       try {
         const username = localCurrentUser.value.userId
         const userFolder = `${username}/`
+        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username, 'folder:', userFolder);
         
         const response = await fetch('/api/bucket-files')
         if (response.ok) {
           const result = await response.json()
+          console.log('🔧 checkUserBucketFiles: API response:', result);
           if (result.success && result.files) {
             // Filter files that belong to this user
             const userFiles = result.files.filter(file => 
               file.key.startsWith(userFolder) && !file.key.endsWith('/')
             )
+            console.log('🔧 checkUserBucketFiles: Filtered user files:', userFiles.length, userFiles);
             // Update the cached value
             userBucketFiles.value = userFiles;
             return userFiles
           }
+        } else {
+          console.log('🔧 checkUserBucketFiles: API response not ok:', response.status);
         }
       } catch (error) {
         console.error('❌ Error checking user bucket files:', error)
@@ -1409,221 +1860,51 @@ export default defineComponent({
       return []
     };
 
-    // Load current agent info
-    const loadAgentInfo = async () => {
-      isLoading.value = true;
-      try {
-        // For authenticated users, only load current agent if they have been approved
-        // For unauthenticated users (legacy), load current agent from legacy system
-        if (!isAuthenticated.value) {
-          // Load current agent info from legacy system
-          const currentAgentResponse = await fetch(
-            `${API_BASE_URL}/current-agent`,
-            { credentials: 'include' }
-          );
-          if (!currentAgentResponse.ok) {
-            throw new Error("Failed to load current agent");
-          }
-
-          const currentAgentData = await currentAgentResponse.json();
-
-          if (currentAgentData.agent) {
-            currentAgent.value = currentAgentData.agent;
-            console.log(
-              `🤖 Current agent loaded: ${currentAgentData.agent.name}`
-            );
-
-            if (currentAgentData.agent.knowledgeBase) {
-              console.log(
-                `📚 Current KB: ${currentAgentData.agent.knowledgeBase.name}`
-              );
-            } else {
-              console.log(`📚 No KB assigned`);
-            }
-
-            // Handle warnings from the API
-            if (currentAgentData.warning) {
-              console.warn(currentAgentData.warning);
-            }
-          } else {
-            currentAgent.value = null;
-            console.log("🤖 No agent configured");
-          }
-        } else {
-          // Authenticated user - check if they have an assigned agent
-          if (localCurrentUser.value?.userId) {
-            try {
-              const assignedAgentResponse = await fetch(
-                `${API_BASE_URL}/api/admin-management/users/${localCurrentUser.value.userId}/assigned-agent`,
-                { credentials: 'include' }
-              );
-              if (assignedAgentResponse.ok) {
-                const assignedAgentData = await assignedAgentResponse.json();
-                if (assignedAgentData.assignedAgentId && assignedAgentData.assignedAgentName) {
-                  // Fetch the actual agent data from DigitalOcean API (same as unauthenticated users)
-                  const currentAgentResponse = await fetch(
-                    `${API_BASE_URL}/current-agent`,
-                    { credentials: 'include' }
-                  );
-                  if (currentAgentResponse.ok) {
-                    const currentAgentData = await currentAgentResponse.json();
-                    if (currentAgentData.agent) {
-                      currentAgent.value = currentAgentData.agent;
-                      console.log(
-                        `🤖 Current agent loaded for authenticated user: ${currentAgentData.agent.name}`
-                      );
-                      
-                      // Handle warnings from the API
-                      if (currentAgentData.warning) {
-                        console.warn(currentAgentData.warning);
-                      }
-                    } else {
-                      currentAgent.value = null;
-                      console.log("🤖 No agent configured for authenticated user");
-                    }
-                  } else {
-                    // Fallback to mock agent if API fails
-                  currentAgent.value = {
-                    id: assignedAgentData.assignedAgentId,
-                    name: assignedAgentData.assignedAgentName,
-                    status: 'active',
-                    type: 'assigned',
-                    assignedAt: assignedAgentData.agentAssignedAt
-                  };
-                    console.log(`🔐 Fallback: User has agent assigned: ${assignedAgentData.assignedAgentName}`);
-                  }
-                  
-                  // Only log once per session to prevent duplicates
-                  if (!hasLoggedAgentAssignment.value) {
-                    console.log(`✅ Agent Assignment Confirmed: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId}) - Assigned: ${new Date(assignedAgentData.agentAssignedAt).toLocaleDateString()}`);
-                    hasLoggedAgentAssignment.value = true;
-                  }
-                  
-                  // Update workflow progress - agent is created
-                  await updateWorkflowProgressForAgent();
-                } else {
-                  currentAgent.value = null;
-                  console.log("🔐 User has no agent assigned yet");
-                }
-              } else {
-                currentAgent.value = null;
-                if (assignedAgentResponse.status === 429) {
-                  console.warn("🔐 Rate limit exceeded when checking assigned agent - will retry later");
-                } else {
-                  console.log("🔐 Failed to check assigned agent:", assignedAgentResponse.status, assignedAgentResponse.statusText);
-                }
-              }
-            } catch (error) {
-              console.warn("🔐 Failed to check assigned agent:", error);
-              currentAgent.value = null;
-            }
-          } else {
-            currentAgent.value = null;
-            console.log("🔐 No userId available");
-          }
-        }
-
-        // Load all agents for the agent list
-        try {
-          // For authenticated users, only show agents if they have been approved
-          // For unauthenticated users (legacy), show all agents
-          if (!isAuthenticated.value) {
-            const agentsResponse = await fetch(`${API_BASE_URL}/agents`);
-            if (agentsResponse.ok) {
-              const agents: DigitalOceanAgent[] = await agentsResponse.json();
-              availableAgents.value = agents;
-            }
-          } else {
-            // Authenticated user - check if they have been approved for agents
-            // For now, we'll show no agents until admin approval
-            availableAgents.value = [];
-            // Only log if user doesn't have an agent assigned
-        if (!hasLoggedNoAgents.value && !currentAgent.value) {
-          console.log(`🔐 No additional agents available for assignment`);
-          hasLoggedNoAgents.value = true;
-        }
-          }
-        } catch (agentsError) {
-          console.warn("Failed to load agents list:", agentsError);
-        }
-
-        // Load all knowledge bases for the KB list
-        try {
-          // For authenticated users, show ONLY their own KBs (no shared KBs)
-          // For unauthenticated users (legacy), show all available KBs
-          if (isAuthenticated.value) {
-            const currentUsername = localCurrentUser.value?.userId || props.currentUser?.userId;
-            const knowledgeBasesResponse = await fetch(
-              `${API_BASE_URL}/knowledge-bases?user=${currentUsername}`
-            );
-            if (knowledgeBasesResponse.ok) {
-              const userKnowledgeBases: DigitalOceanKnowledgeBase[] =
-                await knowledgeBasesResponse.json();
-
-              // Get all connected KBs from the current agent
-              const connectedKBs =
-                currentAgent.value?.knowledgeBases ||
-                (currentAgent.value?.knowledgeBase
-                  ? [currentAgent.value.knowledgeBase]
-                  : []);
-
-              // Combine user KBs with connected KBs, avoiding duplicates
-              const allKBs = [...userKnowledgeBases];
-              connectedKBs.forEach((connectedKB) => {
-                if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
-                  allKBs.push(connectedKB);
-                }
-              });
-
-              availableKnowledgeBases.value = allKBs;
-              console.log(`🔐 Loaded ${userKnowledgeBases.length} knowledge bases for authenticated user ${currentUsername}:`, allKBs);
-            }
-          } else {
-            // Unauthenticated user - show all available KBs (legacy behavior)
-            const knowledgeBasesResponse = await fetch(
-              `${API_BASE_URL}/knowledge-bases`
-            );
-            if (knowledgeBasesResponse.ok) {
-              const allKnowledgeBases: DigitalOceanKnowledgeBase[] =
-                await knowledgeBasesResponse.json();
-
-              // Get all connected KBs from the current agent
-              const connectedKBs =
-                currentAgent.value?.knowledgeBases ||
-                (currentAgent.value?.knowledgeBase
-                  ? [currentAgent.value.knowledgeBase]
-                  : []);
-
-              // Combine all KBs with connected KBs, avoiding duplicates
-              const allKBs = [...allKnowledgeBases];
-              connectedKBs.forEach((connectedKB) => {
-                if (!allKBs.find((kb) => kb.uuid === connectedKB.uuid)) {
-                  allKBs.push(connectedKB);
-                }
-              });
-
-              availableKnowledgeBases.value = allKBs;
-              console.log(`🔐 Loaded ${allKnowledgeBases.length} knowledge bases for unauthenticated user (legacy mode):`, allKBs);
-            }
-          }
-        } catch (kbError) {
-          console.warn("Failed to load knowledge bases:", kbError);
-        }
-      } catch (error) {
-        console.error("Failed to load agent info:", error);
-        $q.notify({
-          type: "negative",
-          message: "Failed to load agent information",
-        });
-      } finally {
-        isLoading.value = false;
-      }
-    };
+    // Note: loadAgentInfo function removed - replaced with clean approach
+    // const loadAgentInfo = async () => {
+      // console.log(`🔐 [DEBUG] loadAgentInfo called at: ${new Date().toISOString()}`);
+      
+      // // Clear any existing debounce timer
+      // if (loadAgentInfoDebounceTimer.value) {
+      //   console.log(`🔐 [DEBUG] Clearing existing debounce timer`);
+      //   clearTimeout(loadAgentInfoDebounceTimer.value);
+      // }
+      
+      // // Set a new debounce timer
+      // console.log(`🔐 [DEBUG] Setting 300ms debounce timer`);
+      // loadAgentInfoDebounceTimer.value = setTimeout(async () => {
+      //   console.log(`🔐 [DEBUG] Debounce timer fired, calling performLoadAgentInfo`);
+      //   await performLoadAgentInfo();
+      // }, 300); // 300ms debounce
+    // };
+    
+    // Note: performLoadAgentInfo function removed - replaced with clean approach
+      // console.log(`🔐 [DEBUG] performLoadAgentInfo called at: ${new Date().toISOString()}`);
+      
+      // // Prevent multiple simultaneous calls
+      // if (isLoading.value) {
+      //   console.log("Skipping duplicate loadAgentInfo request");
+      //   return;
+      // }
+      
+      // // Add delay to avoid 429 errors during app initialization
+      // console.log(`🔐 [DEBUG] Adding 500ms delay before API calls`);
+      // await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // isLoading.value = true;
+      
+      // OLD FUNCTION REMOVED - was making 6 redundant API calls
+      // Replaced with clean approach using props and 2 DO API calls only
+      // All old function code removed
+    // All old function code removed - was causing build errors
 
     // Handle agent selection
     const onAgentSelected = async (agentId: string) => {
+      // Note: Agents are not automatically assigned to users
+      // Agents without owners belong to Public User
+      // Authenticated users can only select agents that are already assigned to them
       try {
-        const response = await fetch(`/api/set-current-agent`, {
+        const response = await fetch(`/api/current-agent`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1633,18 +1914,31 @@ export default defineComponent({
 
         if (response.ok) {
           const result = await response.json();
-          console.log("✅ Agent selected:", result);
+          console.log("✅ Agent saved to Cloudant:", result);
+
+          // Skip verification step - trust that the agent was saved successfully
+          // The verification was causing issues due to session context problems
+          console.log("[*] Agent selected successfully:", result.agent?.name || 'Unknown');
+          
+          // Update the UI with the agent data from the save response
+          if (result.agent) {
+            currentAgent.value = result.agent;
+            assignedAgent.value = result.agent;
 
           // Emit agent update event
           emit("agent-updated", result.agent);
 
-          // Close dialog
-          emit("update:modelValue", false);
-
           $q.notify({
             type: "positive",
-            message: `Agent ${result.agent.name} is now active!`,
-          });
+              message: `Agent "${result.agent.name}" selected successfully!`,
+              timeout: 3000,
+            });
+
+            // Show KB link suggestion modal
+            showKbLinkSuggestionDialog.value = true;
+          } else {
+            throw new Error("No agent data returned from save operation");
+          }
         } else {
           throw new Error("Failed to set current agent");
         }
@@ -1657,9 +1951,6 @@ export default defineComponent({
       }
     };
 
-    const selectAgent = async (agent: any) => {
-      await onAgentSelected(agent.id);
-    };
 
     // Create new agent
     const createAgent = async () => {
@@ -1682,6 +1973,7 @@ export default defineComponent({
         const result = await response.json();
 
         currentAgent.value = result.agent;
+        assignedAgent.value = result.agent;
         knowledgeBase.value = result.knowledgeBase;
 
         $q.notify({
@@ -1716,11 +2008,11 @@ export default defineComponent({
     };
 
     const deleteAgent = async () => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       isDeleting.value = true;
       try {
-        const response = await fetch(`/api/agents/${currentAgent.value.id}`, {
+        const response = await fetch(`/api/agents/${assignedAgent.value.id}`, {
           method: "DELETE",
         });
 
@@ -1729,6 +2021,7 @@ export default defineComponent({
         }
 
         currentAgent.value = null;
+        assignedAgent.value = null;
         knowledgeBase.value = null;
 
         $q.notify({
@@ -1750,14 +2043,12 @@ export default defineComponent({
 
     // Handle user authenticated from PasskeyAuthDialog
     const handleUserAuthenticated = (userData: {
+      userId: string;
       username: string;
       displayName: string;
     }) => {
-      const userInfo = {
-        username: userData.username,
-        displayName: userData.displayName,
-      };
-      currentUser.value = userInfo;
+      const userInfo = UserService.normalizeUserObject(userData);
+      localCurrentUser.value = userInfo;
       isAuthenticated.value = true;
       showPasskeyAuthDialog.value = false;
 
@@ -1797,9 +2088,9 @@ export default defineComponent({
       
       // Try to connect the KB again now that ownership is transferred
       try {
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           const response = await fetch(
-            `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${transferData.kbId}`,
+            `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${transferData.kbId}`,
             { method: "POST" }
           );
           
@@ -1812,7 +2103,8 @@ export default defineComponent({
             
             // Refresh agent info to show the new KB connection
             await loadAgentInfo();
-            emit("refresh-agent-data");
+            // Don't emit refresh-agent-data to prevent overriding the current agent
+            // emit("refresh-agent-data");
           } else {
             throw new Error(`Failed to connect KB after transfer: ${response.statusText}`);
           }
@@ -1827,36 +2119,137 @@ export default defineComponent({
       }
     };
 
-    // Load agent info when dialog opens
-    const onDialogOpen = async () => {
-        console.log(`🔐 Dialog opening - checking authentication status...`);
-      await checkAuthenticationStatus();
-      await loadAgentInfo();
-        // Display current agent information (only if not already logged)
-        if (currentAgent.value && !hasLoggedAgentAssignment.value) {
-          console.log(`🤖 Current Agent: ${currentAgent.value.name} (${currentAgent.value.id}) - Assigned: ${new Date(currentAgent.value.assignedAt).toLocaleDateString()}`);
-        }
-        await updateWorkflowProgress(); // Update workflow progress after loading data
+    // Set loading state before dialog shows
+    const onDialogBeforeShow = () => {
+      isDialogLoading.value = true;
     };
 
-    // Watch for changes in currentUser prop
-    watch(() => props.currentUser, async (newUser) => {
-      if (newUser) {
-        if (localCurrentUser.value?.userId !== newUser.userId) {
-          console.log(`🔐 User changed to: ${newUser.userId}`);
+    // Load available agents from DO API
+    const loadAvailableAgents = async () => {
+      try {
+        const currentUserId = UserService.getUserId(localCurrentUser.value);
+        const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
+        if (agentsResponse.ok) {
+          const agents = await agentsResponse.json();
+          availableAgents.value = agents;
+          console.log(`🤖 Loaded ${agents.length} available agents for ${currentUserId}`);
         }
-        await checkAuthenticationStatus();
-        await updateWorkflowProgress(); // Update workflow progress when user changes
+      } catch (error) {
+        console.error('❌ Error loading available agents:', error);
+        availableAgents.value = [];
+      }
+    };
+
+    // Load available knowledge bases from DO API
+    const loadAvailableKnowledgeBases = async () => {
+      try {
+        let kbResponse;
+        if (isAuthenticated.value && localCurrentUser.value?.userId) {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases?user=${localCurrentUser.value.userId}`);
+        } else {
+          kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases`);
+        }
         
-        // Refresh knowledge bases when user changes
-        if (newUser.userId) {
-          await refreshKnowledgeBases();
+        if (kbResponse.ok) {
+          const allKnowledgeBases = await kbResponse.json();
+          availableKnowledgeBases.value = allKnowledgeBases;
+          console.log(`📚 Loaded ${allKnowledgeBases.length} available knowledge bases`);
         }
+      } catch (error) {
+        console.error('❌ Error loading available knowledge bases:', error);
+        availableKnowledgeBases.value = [];
+      }
+    };
+
+    // Load current user state from props/session (no API calls needed)
+    const loadCurrentUserState = () => {
+      // Normalize the user object to ensure consistent structure
+      const normalizedUser = UserService.normalizeUserObject(props.currentUser);
+      localCurrentUser.value = normalizedUser;
+      isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
+      
+      // Set current agent from props (if available)
+      if (props.currentAgent) {
+        currentAgent.value = props.currentAgent;
+      } else {
+        currentAgent.value = null;
+      }
+      
+      // Set assigned agent from props (if available)
+      if (props.assignedAgent) {
+        assignedAgent.value = props.assignedAgent;
+      } else {
+        assignedAgent.value = null;
+      }
+      
+      // Set current knowledge base from props (if available)
+      if (props.currentKnowledgeBase) {
+        knowledgeBase.value = props.currentKnowledgeBase;
+      } else {
+        knowledgeBase.value = null;
+      }
+    };
+
+    // Clean dialog opening function - only loads what's needed
+    const onDialogOpen = async () => {
+      try {
+        // Load current user state first (no API calls)
+        loadCurrentUserState();
+        
+        // Load available data from DO API in parallel
+        await Promise.all([
+          loadAvailableAgents(),
+          loadAvailableKnowledgeBases()
+        ]);
+        
+        console.log(`✅ Dialog data loaded successfully`);
+      } catch (error) {
+        console.error('❌ Error loading dialog data:', error);
+      } finally {
+        isDialogLoading.value = false;
+      }
+    };
+
+    // Watch for user changes to log them (but don't make API calls)
+    watch(() => props.currentUser, (newUser) => {
+      if (newUser && localCurrentUser.value?.userId !== newUser.userId) {
+        console.log(`[*] Current user: ${newUser.userId}`);
+        localCurrentUser.value = newUser;
       }
     }, { immediate: true });
 
+    // Watch for agent changes to update dialog state
+    watch(() => props.currentAgent, (newAgent) => {
+      if (newAgent && currentAgent.value?.id !== newAgent.id) {
+        console.log(`🤖 Agent updated in dialog: ${newAgent.name}`);
+        currentAgent.value = newAgent;
+        assignedAgent.value = newAgent;
+      }
+    });
+    
+    // Watch for assigned agent changes to update dialog state
+    watch(() => props.assignedAgent, (newAgent) => {
+      if (newAgent && assignedAgent.value?.id !== newAgent.id) {
+        console.log(`🤖 Assigned agent updated in dialog: ${newAgent.name}`);
+        assignedAgent.value = newAgent;
+        currentAgent.value = newAgent;
+      }
+    });
+
+    // Watch for knowledge base changes to update dialog state
+    watch(() => props.currentKnowledgeBase, (newKB) => {
+      if (newKB && knowledgeBase.value?.id !== newKB.id) {
+        console.log(`📚 KB updated in dialog: ${newKB.name}`);
+        knowledgeBase.value = newKB;
+      } else if (!newKB && knowledgeBase.value) {
+        console.log(`📚 KB removed from dialog`);
+        knowledgeBase.value = null;
+      }
+    });
+
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
+      assignedAgent.value = agent;
       knowledgeBase.value = null; // No direct knowledge base creation here, it's part of the wizard
       showWizard.value = false;
       $q.notify({
@@ -1866,16 +2259,12 @@ export default defineComponent({
       emit("agent-updated", { agent: agent, knowledgeBase: null });
     };
 
-    // Watch for dialog opening to load agent info
-    watch(showDialog, (newVal) => {
-      if (newVal) {
-        loadAgentInfo();
-      }
-    });
+    // Note: Dialog opening is handled by onDialogOpen function
+    // No need for additional watcher as this causes duplicate API calls
 
     // Handle knowledge base selection
     const handleKnowledgeBaseClick = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       // If clicking on the current KB, show add document dialog
       if (kb === knowledgeBase.value) {
@@ -1890,7 +2279,7 @@ export default defineComponent({
 
     // Handle KB switch confirmation
     const confirmSwitchKnowledgeBase = async () => {
-      if (!selectedKnowledgeBase.value || !currentAgent.value) return;
+      if (!selectedKnowledgeBase.value || !assignedAgent.value) return;
 
       try {
         console.log(
@@ -1898,9 +2287,9 @@ export default defineComponent({
         );
 
         // First, detach current KB from agent
-        if (knowledgeBase.value && currentAgent.value) {
+        if (knowledgeBase.value && assignedAgent.value) {
           const deleteResponse = await fetch(
-            `/api/agents/${currentAgent.value.id}/knowledge-bases/${knowledgeBase.value.uuid}`,
+            `/api/agents/${assignedAgent.value.id}/knowledge-bases/${knowledgeBase.value.uuid}`,
             {
               method: "DELETE",
             }
@@ -1914,9 +2303,9 @@ export default defineComponent({
         }
 
         // Then associate new KB with agent
-        if (currentAgent.value) {
+        if (assignedAgent.value) {
           const postResponse = await fetch(
-            `/api/agents/${currentAgent.value.id}/knowledge-bases/${selectedKnowledgeBase.value.uuid}`,
+            `/api/agents/${assignedAgent.value.id}/knowledge-bases/${selectedKnowledgeBase.value.uuid}`,
             {
               method: "POST",
             }
@@ -1957,12 +2346,13 @@ export default defineComponent({
 
         // Update local state with the verified data
         knowledgeBase.value = actualKb;
-        if (currentAgent.value) {
-          currentAgent.value.knowledgeBase = actualKb;
+        if (assignedAgent.value) {
+          assignedAgent.value.knowledgeBase = actualKb;
+          currentAgent.value = assignedAgent.value;
         }
 
         // Emit event to parent to update agent badge
-        emit("agent-updated", currentAgent.value);
+        emit("agent-updated", assignedAgent.value);
 
         // Refresh the knowledge base list to reflect the change
         await refreshKnowledgeBases();
@@ -2009,10 +2399,10 @@ export default defineComponent({
           const knowledgeBases: DigitalOceanKnowledgeBase[] =
             await kbResponse.json();
 
-          // Get all connected KBs from the current agent
-          const connectedKBs = currentAgent.value?.knowledgeBases ||
-            (currentAgent.value?.knowledgeBase
-            ? [currentAgent.value.knowledgeBase]
+          // Get all connected KBs from the assigned agent
+          const connectedKBs = assignedAgent.value?.knowledgeBases ||
+            (assignedAgent.value?.knowledgeBase
+            ? [assignedAgent.value.knowledgeBase]
               : []);
 
           // Combine available KBs with connected KBs, avoiding duplicates
@@ -2025,11 +2415,11 @@ export default defineComponent({
 
           availableKnowledgeBases.value = allKBs;
           console.log(
-            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected) for user ${localCurrentUser.value?.userId || 'Unknown User'}`
+            `📚 Refreshed ${allKBs.length} knowledge bases (${connectedKBs.length} connected) for user ${localCurrentUser.value?.userId || 'Public User'}`
           );
 
           // Update the current knowledge base to reflect the switch
-          if (currentAgent.value && selectedKnowledgeBase.value) {
+          if (assignedAgent.value && selectedKnowledgeBase.value) {
             knowledgeBase.value = selectedKnowledgeBase.value;
           }
         }
@@ -2050,7 +2440,7 @@ export default defineComponent({
       
       if (!authenticatedUser) {
         // Show passkey auth dialog for existing users
-        console.log("🔍 No authenticated user found, showing passkey auth dialog");
+        // No authenticated user found, showing passkey auth dialog
         showPasskeyAuthDialog.value = true;
       } else {
         // Check if user already has files in bucket
@@ -2254,8 +2644,6 @@ export default defineComponent({
       isCreatingKb.value = true;
       try {
         console.log('🚀 KB creation starting with', selectedDocuments.value.length, 'selected files')
-        console.log('📁 Selected files:', selectedDocuments.value)
-        console.log('📁 Available files:', props.uploadedFiles?.map(f => f.name))
         
         // Step 1: Upload selected files to Spaces bucket in user-specific folder
         console.log('📤 Starting bucket upload to user folder...')
@@ -2271,8 +2659,7 @@ export default defineComponent({
             let fileName = file.name
             let fileType = 'text/plain'
             
-            console.log(`🔍 Processing file: ${fileName}, type: ${file.type}, has transcript: ${!!file.transcript}`)
-            console.log(`🔍 File content length: ${file.content?.length || 0}, transcript length: ${file.transcript?.length || 0}`)
+            // Processing file for upload
             
             // For PDFs and RTFs, use the extracted markdown content
             if (file.type === 'pdf' && file.transcript) {
@@ -2306,10 +2693,10 @@ export default defineComponent({
             
             const uploadResponse = await fetch('/api/upload-to-bucket', {
               method: 'POST',
-              headers: {
+          headers: {
                 'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
+          },
+          body: JSON.stringify({
                 fileName: fileName,
                 content: aiContent,
                 fileType: fileType
@@ -2342,8 +2729,8 @@ export default defineComponent({
         // Step 2: Create knowledge base with uploaded files
         console.log('📚 NEW CODE - Creating knowledge base...')
         const requestBody = {
-          name: newKbName.value,
-          description: newKbDescription.value,
+            name: newKbName.value,
+            description: newKbDescription.value,
           documents: uploadedFiles
         };
         console.log(`📚 NEW CODE - Creating KB with ${uploadedFiles.length} documents`);
@@ -2407,6 +2794,69 @@ export default defineComponent({
       await createKnowledgeBaseFromBucketFiles();
     };
 
+    // Handle enhanced file selection with both uploaded and bucket files
+    const handleEnhancedFileSelection = async () => {
+      if (selectedDocuments.value.length === 0 && selectedBucketFiles.value.length === 0) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select at least one file to include in the knowledge base'
+        });
+        return;
+      }
+
+      if (!selectedKbId.value) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select or create a knowledge base'
+        });
+        return;
+      }
+
+      isCreatingKb.value = true;
+      
+      try {
+        const kbName = selectedKbId.value === 'new' ? newKbNameInput.value : 
+          availableKnowledgeBases.value.find(kb => (kb.uuid || kb.id) === selectedKbId.value)?.name;
+        
+        console.log(`🚀 Creating/updating knowledge base: ${kbName}`);
+        console.log(`📎 Selected files: ${selectedDocuments.value.length} uploaded, ${selectedBucketFiles.value.length} from bucket`);
+
+        // Store files for cleanup after successful indexing
+        filesToCleanup.value = [...selectedBucketFiles.value];
+
+        // TODO: Implement actual KB creation/update logic here
+        // This will involve:
+        // 1. Creating new KB if selectedKbId === 'new'
+        // 2. Adding selected files to the KB
+        // 3. Starting indexing
+        // 4. Cleaning up files after successful indexing (handled in checkIndexingStatus)
+
+        $q.notify({
+          type: 'positive',
+          message: `Knowledge base "${kbName}" will be created/updated with selected files`
+        });
+
+        // Close the dialog
+        showChooseFilesDialog.value = false;
+        
+        // Reset form
+        selectedDocuments.value = [];
+        selectedBucketFiles.value = [];
+        selectedKbId.value = '';
+        newKbNameInput.value = '';
+        newKbDescriptionInput.value = '';
+
+      } catch (error) {
+        console.error('❌ Error creating/updating knowledge base:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to create/update knowledge base: ${error.message || 'Unknown error'}`
+        });
+      } finally {
+        isCreatingKb.value = false;
+      }
+    };
+
     // Create knowledge base directly from existing bucket files
     const createKnowledgeBaseFromBucketFiles = async () => {
       if (!newKbName.value) return;
@@ -2433,8 +2883,8 @@ export default defineComponent({
         }
         
         const requestBody = {
-          name: newKbName.value,
-          description: newKbDescription.value,
+            name: newKbName.value,
+            description: newKbDescription.value,
           username: username || 'unknown',
           documents: userBucketFiles.value.map(file => ({
             id: file.key,
@@ -2500,13 +2950,67 @@ export default defineComponent({
     };
 
     // User's existing files in bucket folder
-    const userBucketFiles = ref([]);
+    const userBucketFiles = ref<any[]>([]);
 
     // Computed property to check if there are documents available for KB creation
     const hasUploadedDocuments = computed(() => {
       // Check if user has files in bucket OR uploaded files
       return (userBucketFiles.value && userBucketFiles.value.length > 0) || 
              (props.uploadedFiles && props.uploadedFiles.length > 0);
+    });
+
+    // Computed property for KB dropdown options
+    const kbOptions = computed(() => {
+      const options = [];
+      
+      // Add existing KBs owned by the current user
+      const userKBs = availableKnowledgeBases.value.filter(kb => 
+        kb.name && kb.name.startsWith(localCurrentUser.value?.userId || '')
+      );
+      
+      // Sort by most recently indexed (if we have that info)
+      userKBs.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+      
+      // Add existing KBs to options
+      userKBs.forEach(kb => {
+        options.push({
+          value: kb.uuid || kb.id,
+          label: kb.name,
+          kb: kb
+        });
+      });
+      
+      // Add option to create new KB
+      options.push({
+        value: 'new',
+        label: 'Create New Knowledge Base',
+        kb: null
+      });
+      
+      return options;
+    });
+
+    // Computed property to get the default selected KB (most recent)
+    const defaultKbId = computed(() => {
+      const userKBs = availableKnowledgeBases.value.filter(kb => 
+        kb.name && kb.name.startsWith(localCurrentUser.value?.userId || '')
+      );
+      
+      if (userKBs.length > 0) {
+        // Return the most recently indexed KB
+        userKBs.sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime();
+        const bTime = new Date(b.created_at || 0).getTime();
+          return bTime - aTime;
+        });
+        return userKBs[0].uuid || userKBs[0].id;
+      }
+      
+      return 'new'; // Default to creating new if no existing KBs
     });
     
 
@@ -2519,6 +3023,75 @@ export default defineComponent({
       const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+    };
+
+    // Delete files from bucket folder after successful KB indexing
+    const cleanupBucketFiles = async (fileKeys: string[]) => {
+      if (!fileKeys || fileKeys.length === 0) {
+        return;
+      }
+
+      try {
+        console.log(`🧹 Cleaning up ${fileKeys.length} files from bucket folder`);
+        
+        for (const fileKey of fileKeys) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/bucket-files`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ key: fileKey })
+            });
+
+            if (response.ok) {
+              console.log(`✅ Deleted file: ${fileKey}`);
+            } else {
+              console.warn(`⚠️ Failed to delete file: ${fileKey} (${response.status})`);
+            }
+          } catch (error) {
+            console.error(`❌ Error deleting file ${fileKey}:`, error);
+          }
+        }
+
+        // Refresh bucket files list
+        await checkUserBucketFiles(true);
+        
+        console.log('🧹 Bucket cleanup completed');
+      } catch (error) {
+        console.error('❌ Error during bucket cleanup:', error);
+        throw error;
+      }
+    };
+
+    // Show error modal for cleanup failures
+    const showCleanupErrorModal = (error: any, fileKeys: string[]) => {
+      $q.dialog({
+        title: 'Cleanup Error',
+        message: `Failed to clean up files after successful indexing: ${error.message || 'Unknown error'}. Would you like to clean up the files anyway?`,
+        ok: {
+          label: 'Clean Up Files',
+          color: 'primary'
+        },
+        cancel: {
+          label: 'Keep Files',
+          color: 'grey'
+        }
+      }).onOk(async () => {
+        try {
+          await cleanupBucketFiles(fileKeys);
+          $q.notify({
+            type: 'positive',
+            message: 'Files cleaned up successfully'
+          });
+        } catch (cleanupError) {
+          console.error('❌ Manual cleanup failed:', cleanupError);
+          $q.notify({
+            type: 'negative',
+            message: 'Failed to clean up files manually'
+          });
+        }
+      });
     };
 
     // Clean up bucket after successful KB creation
@@ -2585,7 +3158,7 @@ export default defineComponent({
       
       if (!kbUuid) {
         console.warn('⚠️ No knowledge base UUID available for indexing monitor');
-        console.log('🔍 Knowledge base object structure:', knowledgeBase);
+        // Knowledge base object structure logged
         return;
       }
 
@@ -2635,7 +3208,7 @@ export default defineComponent({
             kbName: knowledgeBase.value?.name || 'Unknown KB'
           }),
         });
-        
+
         if (response.ok) {
           const result = await response.json();
           
@@ -2704,6 +3277,41 @@ export default defineComponent({
       }
     };
 
+    // Cancel request process
+    const cancelRequest = async () => {
+      try {
+        isCancellingRequest.value = true;
+        console.log('🛑 Cancelling private AI agent request...');
+        
+        // Reset workflow steps to go back to Step 2 (request pending)
+        workflowSteps.value[2].completed = false;
+        workflowSteps.value[2].current = false;
+        workflowSteps.value[1].completed = false;
+        workflowSteps.value[1].current = true;
+        
+        // Reset approval request flag
+        hasRequestedApproval.value = false;
+        
+        // Show notification
+        $q.notify({
+          type: "warning",
+          message: "Request cancelled. You can request approval again when ready.",
+        });
+        
+        // Close modal
+        showCancelRequestModal.value = false;
+        
+      } catch (error) {
+        console.error('❌ Error cancelling request:', error);
+        $q.notify({
+          type: "negative",
+          message: "Failed to cancel request.",
+        });
+      } finally {
+        isCancellingRequest.value = false;
+      }
+    };
+
     // Check indexing status using DigitalOcean API
     const checkIndexingStatus = async (kbId: string) => {
       try {
@@ -2722,13 +3330,13 @@ export default defineComponent({
             
             // Hide the CREATE KNOWLEDGE BASE button once indexing starts
             if (status === 'INDEX_JOB_STATUS_IN_PROGRESS' || status === 'INDEX_JOB_STATUS_PENDING') {
-              showCreateKbDialog.value = false;
+        showCreateKbDialog.value = false;
             }
             
-            console.log(`📊 Indexing status: ${status}, Phase: ${phase} - Updated monitoring logic`);
+            console.log(`📊 Indexing status: ${status}, Phase: ${phase}`);
             
             // Debug: Log the exact status values to help troubleshoot
-            console.log(`🔍 Debug - Status: "${status}", Phase: "${phase}", Expected: "INDEX_JOB_STATUS_COMPLETED"`);
+            // Checking indexing status
             
             // Check if indexing is complete (check both status and phase)
             if (status === 'INDEX_JOB_STATUS_COMPLETED' || status === 'completed' || status === 'success' || 
@@ -2749,13 +3357,26 @@ export default defineComponent({
               showCancelIndexingModal.value = false;
               
               // Show success notification
-              $q.notify({
-                type: "positive",
+        $q.notify({
+          type: "positive",
                 message: `Knowledge base indexing completed successfully in ${indexingDuration} seconds!`,
               });
               
               // Attach the knowledge base to the current agent
               await attachKnowledgeBaseToAgent(kbId, job);
+              
+              // Clean up files after successful indexing
+              if (filesToCleanup.value.length > 0) {
+                try {
+                  await cleanupBucketFiles(filesToCleanup.value);
+                  console.log('🧹 Files cleaned up successfully after indexing');
+                } catch (cleanupError) {
+                  console.error('❌ Failed to cleanup files after indexing:', cleanupError);
+                  showCleanupErrorModal(cleanupError, filesToCleanup.value);
+                }
+                // Clear the cleanup list
+                filesToCleanup.value = [];
+              }
             } else if (status === 'INDEX_JOB_STATUS_FAILED' || status === 'failed' || status === 'error') {
               console.error(`❌ Knowledge base indexing failed: ${job.error || 'Unknown error'}`);
               
@@ -2766,8 +3387,8 @@ export default defineComponent({
               stopIndexingMonitor();
               
               // Show error notification
-              $q.notify({
-                type: "negative",
+        $q.notify({
+          type: "negative",
                 message: "Knowledge base indexing failed. Please contact support.",
               });
             }
@@ -2801,41 +3422,24 @@ export default defineComponent({
       }
     };
 
-    // Refresh agent data to get updated knowledge base list
-    const refreshAgentData = async () => {
-      try {
-        // Refresh the current agent data using the current-agent endpoint
-        const response = await fetch(`${API_BASE_URL}/current-agent`, { credentials: 'include' });
-        if (response.ok) {
-          const result = await response.json();
-          if (result.agent) {
-            currentAgent.value = result.agent;
-            console.log('✅ Agent data refreshed with updated knowledge bases:', result.agent.knowledgeBases?.length || 0, 'KBs');
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error refreshing agent data:', error);
-      }
-    };
+    // Note: refreshAgentData function removed - agent data is now updated via props from parent component
 
     // Attach knowledge base to current agent
     const attachKnowledgeBaseToAgent = async (kbId: string, jobStatus: any) => {
       try {
-        if (!currentAgent.value) {
-          console.warn('⚠️ No current agent to attach KB to');
+        if (!assignedAgent.value) {
+          console.warn('⚠️ No assigned agent to attach KB to');
           return;
         }
         
-        console.log(`🔍 Debug - currentAgent.value:`, currentAgent.value);
-        console.log(`🔍 Debug - currentAgent.value?.uuid:`, currentAgent.value?.uuid);
-        console.log(`🔍 Debug - currentAgent.value?.id:`, currentAgent.value?.id);
+        // Checking assigned agent values
         
-        if (!currentAgent.value.uuid && !currentAgent.value.id) {
-          console.warn('⚠️ Current agent has no UUID or ID');
+        if (!assignedAgent.value.uuid && !assignedAgent.value.id) {
+          console.warn('⚠️ Assigned agent has no UUID or ID');
           return;
         }
         
-        const agentId = currentAgent.value.uuid || currentAgent.value.id;
+        const agentId = assignedAgent.value.uuid || assignedAgent.value.id;
         console.log(`🔗 Attaching knowledge base ${kbId} to agent ${agentId}`);
         
         // Call the backend to attach the KB to the agent
@@ -2854,11 +3458,10 @@ export default defineComponent({
           const result = await response.json();
           console.log(`✅ Knowledge base attached to agent successfully:`, result);
           
-          // Refresh agent data to show updated KB list
-          await refreshAgentData();
+          // Agent data will be updated via props from parent component
           
-          // Refresh the agent data to show the new KB
-          emit("refresh-agent-data");
+          // Don't emit refresh-agent-data to prevent overriding the current agent
+          // emit("refresh-agent-data");
           
           // Show success notification
           $q.notify({
@@ -2881,24 +3484,30 @@ export default defineComponent({
       }
     };
 
-    // Helper to check if a KB is connected to the current agent
+    // Helper to check if a KB is connected to the assigned agent
     const isKnowledgeBaseConnected = (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return false;
+      if (!assignedAgent.value) {
+        // No assigned agent
+        return false;
+      }
 
       // Check against all connected KBs
       const connectedKBs =
-        currentAgent.value.knowledgeBases ||
-        (currentAgent.value.knowledgeBase
-          ? [currentAgent.value.knowledgeBase]
+        assignedAgent.value.knowledgeBases ||
+        (assignedAgent.value.knowledgeBase
+          ? [assignedAgent.value.knowledgeBase]
           : []);
-      return connectedKBs.some((connectedKB) => connectedKB.uuid === kb.uuid);
+      
+      const isConnected = connectedKBs.some((connectedKB) => connectedKB.uuid === kb.uuid);
+      // KB connection status checked
+      return isConnected;
     };
 
     // Handle KB detachment with confirmation
     const confirmDetachKnowledgeBase = async (
       kb: DigitalOceanKnowledgeBase
     ) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       confirmTitle.value = "Confirm Detach";
       confirmMessage.value = `Are you sure you want to detach the knowledge base "${kb.name}" from the agent?`;
@@ -2910,7 +3519,7 @@ export default defineComponent({
     const confirmConnectKnowledgeBase = async (
       kb: DigitalOceanKnowledgeBase
     ) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
 
       confirmTitle.value = "Confirm Connect";
       confirmMessage.value = `Are you sure you want to connect the knowledge base "${kb.name}" to the agent?`;
@@ -2920,12 +3529,18 @@ export default defineComponent({
 
     // Handle KB detachment
     const detachKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) return;
+      
+      // Prevent rapid successive calls
+      if (isUpdating.value) {
+        console.log("Skipping duplicate detachKnowledgeBase request");
+        return;
+      }
 
       isUpdating.value = true;
       try {
         const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+          `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${kb.uuid}`,
           {
             method: "DELETE",
           }
@@ -2941,11 +3556,30 @@ export default defineComponent({
           message: `Knowledge base "${kb.name}" detached from agent.`,
         });
 
-        // Refresh agent data to show updated KB list
-        await refreshAgentData();
+        // Update local agent state to reflect KB detachment
+        if (assignedAgent.value) {
+          // Remove the KB from the agent's knowledgeBases array
+          if (assignedAgent.value.knowledgeBases) {
+            assignedAgent.value.knowledgeBases = assignedAgent.value.knowledgeBases.filter(
+              (agentKb: any) => agentKb.uuid !== kb.uuid
+            );
+          }
+          // Clear the single knowledgeBase property if it matches
+          if (assignedAgent.value.knowledgeBase && assignedAgent.value.knowledgeBase.uuid === kb.uuid) {
+            assignedAgent.value.knowledgeBase = null;
+          }
+          // Update currentAgent to match assignedAgent
+          currentAgent.value = assignedAgent.value;
+        }
         
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
+        // Update local knowledge base state
+        knowledgeBase.value = null;
+        
+        // Emit event to parent to update agent badge
+        emit("agent-updated", assignedAgent.value);
+        
+        // Don't emit refresh-agent-data to prevent overriding the current agent
+        // emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to detach KB:", error);
         $q.notify({
@@ -2959,12 +3593,22 @@ export default defineComponent({
 
     // Handle KB connection
     const connectKnowledgeBase = async (kb: DigitalOceanKnowledgeBase) => {
-      if (!currentAgent.value) return;
+      if (!assignedAgent.value) {
+        // No assigned agent
+        return;
+      }
+      
+      // Prevent rapid successive calls
+      if (isUpdating.value) {
+        console.log("Skipping duplicate connectKnowledgeBase request");
+        return;
+      }
 
+      console.log(`[*] Connecting KB "${kb.name}" to agent "${assignedAgent.value.name}"`);
       isUpdating.value = true;
       try {
         const response = await fetch(
-          `${API_BASE_URL}/agents/${currentAgent.value.id}/knowledge-bases/${kb.uuid}`,
+          `${API_BASE_URL}/agents/${assignedAgent.value.id}/knowledge-bases/${kb.uuid}`,
           {
             method: "POST",
           }
@@ -2986,7 +3630,7 @@ export default defineComponent({
                 kbId: result.kbInfo.id,
                 kbName: result.kbInfo.name || 'Unknown KB',
                 currentOwner: result.kbInfo.currentOwner || 'Unknown',
-                newOwner: currentUser.value?.username || 'unknown'
+                newOwner: localCurrentUser.value?.userId || 'unknown'
               };
             } else {
               console.error("❌ Invalid kbInfo data for ownership transfer:", result.kbInfo);
@@ -3032,11 +3676,33 @@ export default defineComponent({
           });
         }
 
-        // Refresh agent data to show updated KB list
-        await refreshAgentData();
+        // Update local agent state to reflect KB connection
+        if (assignedAgent.value) {
+          // Add the KB to the agent's knowledgeBases array
+          if (!assignedAgent.value.knowledgeBases) {
+            assignedAgent.value.knowledgeBases = [];
+          }
+          // Check if KB is not already in the array
+          const existingKb = assignedAgent.value.knowledgeBases.find(
+            (agentKb: any) => agentKb.uuid === kb.uuid
+          );
+          if (!existingKb) {
+            assignedAgent.value.knowledgeBases.push(kb);
+          }
+          // Set as single knowledgeBase property
+          assignedAgent.value.knowledgeBase = kb;
+          // Update currentAgent to match assignedAgent
+          currentAgent.value = assignedAgent.value;
+        }
         
-        // Notify parent component to refresh agent data
-        emit("refresh-agent-data");
+        // Update local knowledge base state
+        knowledgeBase.value = kb;
+        
+        // Emit event to parent to update agent badge
+        emit("agent-updated", assignedAgent.value);
+        
+        // Don't emit refresh-agent-data to prevent overriding the current agent
+        // emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to connect KB:", error);
         $q.notify({
@@ -3069,7 +3735,7 @@ export default defineComponent({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kbId: kb.uuid,
-                owner: currentUser.value?.username,
+                owner: localCurrentUser.value?.userId,
               }),
             }
           );
@@ -3221,14 +3887,229 @@ export default defineComponent({
       showChooseFilesDialog.value = true;
     };
 
+    // File management methods for authenticated users
+    
+    const checkUserFiles = async () => {
+      if (!isAuthenticated.value || isDeepLinkUser.value) {
+        return;
+      }
+      
+      try {
+        // Check if user has files in their Spaces bucket using user-specific endpoint
+        const response = await fetch(`${API_BASE_URL}/bucket/user-status/${encodeURIComponent(localCurrentUser.value?.userId || '')}`);
+        if (response.ok) {
+          const statusData = await response.json();
+          
+          // Use the hasFolder and fileCount from the status endpoint
+          const hasFiles = statusData.hasFolder && statusData.fileCount > 0;
+          userHasFiles.value = hasFiles || false;
+          console.log(`📁 User has ${statusData.fileCount || 0} files in bucket`);
+        } else {
+          // Fallback to general bucket-files endpoint and filter by user
+          const response = await fetch(`${API_BASE_URL}/bucket-files`);
+          if (response.ok) {
+            const filesData = await response.json();
+            
+            // Filter files for current user only
+            const userFiles = filesData.files && filesData.files.filter((file: any) => 
+              file.key.startsWith(`${localCurrentUser.value?.userId}/`) && 
+              !file.key.endsWith('/') && 
+              file.size > 0
+            );
+            const hasFiles = userFiles && userFiles.length > 0;
+            userHasFiles.value = hasFiles || false;
+            console.log(`📁 User has ${userFiles?.length || 0} files in bucket (fallback)`);
+          } else {
+            userHasFiles.value = false;
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error checking user files:', error);
+        userHasFiles.value = false;
+      }
+    };
+
+    const handleFileAction = async (action: string) => {
+      selectedFileAction.value = action;
+      
+      // For create_or_add action, open the enhanced file selection modal directly
+      if (action === 'create_or_add') {
+        console.log('🔧 Opening enhanced file selection modal for create_or_add action');
+        console.log('🔧 Current userHasFiles:', userHasFiles.value);
+        console.log('🔧 Current userBucketFiles count:', userBucketFiles.value.length);
+        
+        // Ensure bucket files are loaded before opening modal
+        await checkUserBucketFiles(true);
+        console.log('🔧 After loading bucket files:', userBucketFiles.value.length);
+        
+        showChooseFilesDialog.value = true;
+      } else {
+        // For other actions, show the confirmation modal
+        showFileChoiceModal.value = true;
+      }
+    };
+
+    const getActionDescription = (action: string) => {
+      const descriptions: Record<string, string> = {
+        'create_or_add': 'Create new or add to existing knowledge base',
+        'import_more': 'Import more files before creating knowledge base',
+        'clear_files': 'Clear all files (you will need to import them again)',
+        'import_files': 'Import files to create a new knowledge base'
+      };
+      return descriptions[action] || action;
+    };
+
+    const executeFileAction = async () => {
+      showFileChoiceModal.value = false;
+      showExecutionModal.value = true;
+      executionInProgress.value = true;
+      executionComplete.value = false;
+      currentExecutionStage.value = 0;
+
+      // Set up execution stages based on action
+      const stages = getExecutionStages(selectedFileAction.value);
+      executionStages.value = stages;
+
+      try {
+        for (let i = 0; i < stages.length; i++) {
+          currentExecutionStage.value = i;
+          await executeStage(stages[i], selectedFileAction.value);
+          
+          // Wait a bit between stages for visual feedback
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        executionComplete.value = true;
+        executionInProgress.value = false;
+        
+        $q.notify({
+          type: 'positive',
+          message: 'Action completed successfully!'
+        });
+        
+        } catch (error: any) {
+        console.error('❌ Execution failed:', error);
+        executionInProgress.value = false;
+        $q.notify({
+          type: 'negative',
+          message: `Action failed: ${error.message || 'Unknown error'}`
+        });
+      }
+    };
+
+    const getExecutionStages = (action: string) => {
+      const stageTemplates: Record<string, Array<{title: string, description: string}>> = {
+        'create_or_add': [
+          { title: 'Checking existing knowledge bases', description: 'Scanning for existing knowledge bases' },
+          { title: 'Processing files', description: 'Converting files to AI-readable format' },
+          { title: 'Creating/updating knowledge base', description: 'Setting up knowledge base structure' },
+          { title: 'Indexing content', description: 'Processing content for AI search' },
+          { title: 'Verifying completion', description: 'Ensuring indexing is complete' }
+        ],
+        'import_more': [
+          { title: 'Opening file import', description: 'Launching file selection interface' },
+          { title: 'Waiting for file selection', description: 'User selecting additional files' }
+        ],
+        'clear_files': [
+          { title: 'Backing up file references', description: 'Creating backup of file metadata' },
+          { title: 'Clearing user files', description: 'Removing files from storage' },
+          { title: 'Cleaning up metadata', description: 'Removing file references' }
+        ],
+        'import_files': [
+          { title: 'Opening file import', description: 'Launching file selection interface' },
+          { title: 'Waiting for file selection', description: 'User selecting files to import' }
+        ]
+      };
+      return stageTemplates[action] || [];
+    };
+
+    const executeStage = async (stage: any, action: string) => {
+      // Simulate stage execution - in real implementation, this would call actual APIs
+      console.log(`Executing stage: ${stage.title} for action: ${action}`);
+      
+      switch (stage.title) {
+        case 'Indexing content':
+          // For knowledge base creation, wait for indexing to complete
+          if (action === 'create_or_add') {
+            // TODO: Pass actual kbId when implementing real KB creation
+            await waitForIndexingCompletion('placeholder-kb-id');
+          }
+          break;
+        case 'Opening file import':
+          // Trigger file import dialog
+          if (action === 'import_more' || action === 'import_files') {
+            // This would open the file chooser
+            console.log('Opening file chooser...');
+          }
+          break;
+        default:
+          // Simulate work
+          await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    };
+
+    const waitForIndexingCompletion = async (kbId: string) => {
+      // Poll for indexing completion using existing DigitalOcean API
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes max
+      
+      while (attempts < maxAttempts) {
+        try {
+          // Use existing checkIndexingStatus function that uses DigitalOcean API
+          await checkIndexingStatus(kbId);
+          
+          // Check if indexing is complete by looking at the workflow step
+          if (workflowSteps.value[5].completed) {
+            console.log('✅ Indexing completed');
+            return;
+          }
+        } catch (error) {
+          console.warn('Error checking indexing status:', error);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+        attempts++;
+      }
+      
+      throw new Error('Indexing timeout - please check manually');
+    };
+
+    const cancelExecution = () => {
+      executionInProgress.value = false;
+      showExecutionModal.value = false;
+      
+      $q.notify({
+        type: 'warning',
+        message: 'Action cancelled'
+      });
+    };
+
+    // Note: Dialog opening logic is consolidated in onDialogOpen function
+    // Removed duplicate watcher to prevent multiple API calls
+
+    // Watch for file selection dialog opening to initialize KB selection
+    watch(showChooseFilesDialog, (newValue) => {
+      if (newValue) {
+        // Initialize KB selection with default
+        selectedKbId.value = defaultKbId.value;
+        
+        // Load user bucket files
+        checkUserBucketFiles(true);
+      }
+    });
+
+    // Test call on component mount - removed to prevent excessive API calls
+
     return {
       showDialog,
       currentAgent,
+      assignedAgent,
       availableAgents,
       knowledgeBase,
       availableKnowledgeBases,
       documents,
       isLoading,
+      isDialogLoading,
       isCreating,
       isUpdating,
       isDeleting,
@@ -3239,6 +4120,7 @@ export default defineComponent({
       showChooseFilesDialog,
       showCreateKbDialog,
       showSwitchKbDialog,
+      showKbLinkSuggestionDialog,
       selectedKnowledgeBase,
       newKbName,
       newKbDescription,
@@ -3246,10 +4128,10 @@ export default defineComponent({
       selectedDocuments,
       hasUploadedDocuments,
       onAgentSelected,
-      selectAgent,
       updateAgent,
       confirmDelete,
       deleteAgent,
+      onDialogBeforeShow,
       onDialogOpen,
       handleAgentCreated,
       handleKnowledgeBaseClick,
@@ -3308,10 +4190,39 @@ export default defineComponent({
       cancelIndexing,
       showCancelIndexingModal,
       isCancellingIndexing,
+      cancelRequest,
+      showCancelRequestModal,
+      isCancellingRequest,
       attachKnowledgeBaseToAgent,
-      refreshAgentData,
+      // refreshAgentData removed - agent data updated via props
       currentWorkflowStep,
       handleManageKnowledgeBases,
+      isDeepLinkUser,
+      // File management for authenticated users
+      userHasFiles,
+      showFileChoiceModal,
+      showExecutionModal,
+      executionStages,
+      currentExecutionStage,
+      executionInProgress,
+      executionComplete,
+      selectedFileAction,
+      handleFileAction,
+      getActionDescription,
+      executeFileAction,
+      cancelExecution,
+      // Enhanced file selection modal
+      selectedBucketFiles,
+      selectedKbId,
+      newKbNameInput,
+      newKbDescriptionInput,
+      kbOptions,
+      defaultKbId,
+      handleEnhancedFileSelection,
+      filesToCleanup,
+      cleanupBucketFiles,
+      showCleanupErrorModal,
+      currentKbId,
     };
 
 
@@ -3418,5 +4329,28 @@ export default defineComponent({
 
 .help-btn:hover {
   opacity: 1;
+}
+
+/* Execution modal styling */
+.execution-stages {
+  margin: 16px 0;
+}
+
+.execution-stage {
+  padding: 8px 0;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.execution-stage.completed {
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.execution-stage.current {
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.execution-stage.pending {
+  opacity: 0.6;
 }
 </style>

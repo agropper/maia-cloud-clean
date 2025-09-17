@@ -14,7 +14,7 @@
               {{ agentName }}
               <!-- Sign-in/Sign-out buttons -->
               <q-btn
-                v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
+                v-if="!currentUser || (currentUser && (currentUser.userId === 'Public User' || currentUser.displayName === 'Public User'))"
                 flat
                 dense
                 size="sm"
@@ -39,6 +39,16 @@
             <div v-if="warning" class="text-caption text-warning q-mt-xs warning-text">
               <q-icon name="warning" size="1rem" class="q-mr-xs" />
               {{ warning }}
+              <q-btn
+                flat
+                round
+                dense
+                size="sm"
+                icon="close"
+                color="white"
+                @click="$emit('clear-warning')"
+                class="q-ml-sm"
+              />
             </div>
           </div>
           <q-btn
@@ -117,21 +127,53 @@ export default defineComponent({
     currentWorkflowStep: {
       type: String,
       default: ''
+    },
+    workflowSteps: {
+      type: Array as () => any[],
+      default: () => []
+    },
+    userEmail: {
+      type: String,
+      default: ''
     }
   },
   emits: ['manage', 'sign-in', 'sign-out'],
   setup(props) {
     const agentName = computed(() => {
       if (!props.agent) {
-        // For authenticated users, show "Agent: none" instead of "No Agent Configured"
-        if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
-          return 'Agent: none'
+        // For authenticated users, show "Agent: none" with user info
+        if (props.currentUser && props.currentUser.userId !== 'Public User') {
+          const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Public User'
+          return `Agent: none • User: ${userName}`
         }
         return 'No Agent Configured'
       }
       
+      // SECURITY CHECK: Validate agent ownership based on user type
+      const currentUserId = props.currentUser?.userId || 'Public User';
+      const agentName = props.agent.name;
+      
+      // Only perform security validation if we have a stable user state
+      // Skip validation during sign-in transitions to prevent race conditions
+      if (currentUserId === 'Public User') {
+        // Public User can only see agents that start with 'public-'
+        if (!agentName.startsWith('public-')) {
+          console.error(`🚨 SECURITY VIOLATION: Public User assigned agent ${agentName} does not start with 'public-'`);
+          throw new Error(`Security violation: Public User can only access public agents. Agent: ${agentName}`);
+        }
+      } else if (currentUserId !== 'Unknown User' && !currentUserId.startsWith('deep_link_')) {
+        // Authenticated users can only see agents that match their user ID pattern
+        const expectedPrefix = `${currentUserId}-agent-`;
+        
+        // Only validate if the agent name doesn't start with 'public-' (indicating it's not a stale Public User agent)
+        if (!agentName.startsWith('public-') && !agentName.startsWith(expectedPrefix)) {
+          console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
+          throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
+        }
+      }
+      
       // Get current user from props - prioritize displayName over userId
-      const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Unknown User'
+      const userName = props.currentUser?.displayName || props.currentUser?.userId || 'Public User'
       
       return `Personal AI ${props.agent.name} for User: ${userName}`
     })
@@ -139,7 +181,17 @@ export default defineComponent({
     const statusText = computed(() => {
       if (!props.agent) {
         // For authenticated users, show progress information
-        if (props.currentUser && props.currentUser.userId !== 'Unknown User' && props.currentWorkflowStep) {
+        if (props.currentUser && props.currentUser.userId !== 'Public User' && props.currentWorkflowStep) {
+          // Check if Step 2 is completed (not just current)
+          const step2 = props.workflowSteps.find(step => step.title === 'Private AI agent requested');
+          if (step2 && step2.completed) {
+            return `Progress: Private AI agent requested for email ${props.userEmail || 'unknown'}`
+          }
+          
+          // Special case for Step 2 (Private AI agent requested) when current
+          if (props.currentWorkflowStep === 'Private AI agent requested') {
+            return 'Progress: Send an administrator request.'
+          }
           return `Progress: ${props.currentWorkflowStep}`
         }
         return 'Create an agent to get started'
@@ -172,7 +224,7 @@ export default defineComponent({
       }
       
       // For authenticated users, always show the AI agent icon regardless of status
-      if (props.currentUser && props.currentUser.userId !== 'Unknown User') {
+      if (props.currentUser && props.currentUser.userId !== 'Public User') {
         return 'smart_toy'
       }
       
@@ -205,21 +257,9 @@ export default defineComponent({
       }
     })
 
-    // Watch for agent prop changes to display backend console message
-    watch(() => props.agent, (newAgent) => {
-      // If we have an agent, log the backend console message
-      if (newAgent && newAgent.consoleMessage) {
-        console.log(newAgent.consoleMessage);
-      }
-    }, { immediate: true });
+    // Note: Backend console messages removed - not essential for user experience
 
-    // Watch for currentUser changes to trigger agent refresh
-    watch(() => props.currentUser, (newUser, oldUser) => {
-      
-      // When user changes, we need to refresh the agent data to get updated console message
-      // This will trigger the parent component to re-fetch agent data
-      
-    }, { immediate: true });
+    // Note: Agent status updates are handled by parent component via props
 
     return {
       agentName,

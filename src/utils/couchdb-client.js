@@ -7,7 +7,7 @@ export class CouchDBClient {
     const url = config.url || process.env.CLOUDANT_URL || process.env.COUCHDB_URL || 'http://localhost:5984'
     const username = config.username || process.env.CLOUDANT_USERNAME || process.env.COUCHDB_USER || 'maia_admin'
     const password = config.password || process.env.CLOUDANT_PASSWORD || process.env.COUCHDB_PASSWORD || 'MaiaSecure2024!'
-    const database = config.database || process.env.CLOUDANT_DATABASE || process.env.COUCHDB_DATABASE || 'maia3_chats'
+    const database = config.database || process.env.CLOUDANT_DATABASE || process.env.COUCHDB_DATABASE || 'maia_chats'
 
     // Build connection string for Cloudant/CouchDB
     let connectionString
@@ -31,13 +31,40 @@ export class CouchDBClient {
     this.isCloudant = url.includes('cloudant') || url.includes('bluemix')
   }
 
+  // Helper method to handle 429 errors with retry logic
+  async handleCloudantError(operation, retryCount = 0) {
+    try {
+      return await operation()
+    } catch (error) {
+      // Check for 429 rate limiting errors
+      if (error.statusCode === 429 || error.error === 'too_many_requests') {
+        const retryAfter = error.headers?.['retry-after'] || 30
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000) // Exponential backoff, max 30s
+        
+        console.warn(`🚨 [429] Cloudant Rate Limit Exceeded (attempt ${retryCount + 1}):`, {
+          operation: operation.name || 'unknown',
+          retryAfter: `${retryAfter}s`,
+          delay: `${delay}ms`,
+          suggestion: 'Retrying with exponential backoff...'
+        })
+        
+        if (retryCount < 3) { // Max 3 retries
+          await new Promise(resolve => setTimeout(resolve, delay))
+          return this.handleCloudantError(operation, retryCount + 1)
+        } else {
+          console.error(`❌ [429] Max retries exceeded for operation:`, operation.name || 'unknown')
+          throw new Error(`Cloudant rate limit exceeded. Please try again in ${retryAfter} seconds.`)
+        }
+      }
+      throw error
+    }
+  }
+
   async initializeDatabase() {
     try {
       await this.db.db.create(this.databaseName)
-      console.log(`✅ Database '${this.databaseName}' created`)
     } catch (error) {
       if (error.statusCode === 412) {
-        console.log(`✅ Database '${this.databaseName}' already exists`)
       } else {
         console.error('❌ Failed to create database:', error)
         throw error
@@ -48,11 +75,9 @@ export class CouchDBClient {
   async createDatabase(databaseName) {
     try {
       await this.db.db.create(databaseName)
-      console.log(`✅ Database '${databaseName}' created`)
       return true
     } catch (error) {
       if (error.statusCode === 412) {
-        console.log(`✅ Database '${databaseName}' already exists`)
         return true
       } else {
         console.error('❌ Failed to create database:', error)
@@ -62,29 +87,49 @@ export class CouchDBClient {
   }
 
   async saveDocument(databaseName, document) {
-    try {
+    return this.handleCloudantError(async () => {
       const db = this.db.use(databaseName)
+      
+      // If document has _id but no _rev, try to get the current revision first
+      if (document._id && !document._rev) {
+        try {
+          const existing = await db.get(document._id)
+          document._rev = existing._rev
+        } catch (error) {
+          // Document doesn't exist, that's fine - we'll create it
+          if (error.statusCode !== 404) {
+            throw error
+          }
+        }
+      }
+      
       const result = await db.insert(document)
       return {
         id: result.id,
         rev: result.rev,
         ok: result.ok
       }
-    } catch (error) {
-      console.error('❌ Failed to save document:', error)
-      throw error
-    }
+    })
   }
 
   async getDocument(databaseName, documentId) {
-    try {
+    return this.handleCloudantError(async () => {
       const db = this.db.use(databaseName)
       return await db.get(documentId)
-    } catch (error) {
+    }).catch(error => {
       if (error.statusCode === 404) {
         return null
       }
-      console.error('❌ Failed to get document:', error)
+      throw error
+    })
+  }
+
+  async findDocuments(databaseName, query) {
+    try {
+      const db = this.db.use(databaseName)
+      return await db.find(query)
+    } catch (error) {
+      console.error('❌ Failed to find documents:', error)
       throw error
     }
   }
@@ -116,7 +161,6 @@ export class CouchDBClient {
     try {
       const info = await this.db.info()
       const serviceType = this.isCloudant ? 'Cloudant' : 'CouchDB'
-      console.log(`✅ Connected to ${serviceType}: ${info.version}`)
       return true
     } catch (error) {
       console.error('❌ Connection failed:', error)
@@ -126,9 +170,9 @@ export class CouchDBClient {
 
   // Chat operations
   async saveChat(chatData) {
-    try {
+    return this.handleCloudantError(async () => {
       // Debug: Log what's being saved
-      console.log(`🔍 [COUCHDB] Saving chat document:`, {
+      console.log('🔍 [CouchDB] Saving chat data:', {
         _id: chatData._id,
         type: chatData.type,
         uploadedFilesCount: chatData.uploadedFiles?.length || 0,
@@ -152,40 +196,32 @@ export class CouchDBClient {
       }
 
       const result = await this.database.insert(chatData)
-      console.log(`🔍 [COUCHDB] Chat saved successfully: ${result.id}`);
       return {
         id: result.id,
         rev: result.rev,
         ok: result.ok
       }
-    } catch (error) {
-      console.error('❌ Failed to save chat:', error)
-      throw error
-    }
+    })
   }
 
   async getChat(chatId) {
-    try {
+    return this.handleCloudantError(async () => {
       return await this.database.get(chatId)
-    } catch (error) {
+    }).catch(error => {
       if (error.statusCode === 404) {
         return null
       }
-      console.error('❌ Failed to get chat:', error)
       throw error
-    }
+    })
   }
 
   async getAllChats() {
-    try {
+    return this.handleCloudantError(async () => {
       const result = await this.database.list({ include_docs: true })
       return result.rows
         .filter(row => !row.id.startsWith('_design/'))
         .map(row => row.doc)
-    } catch (error) {
-      console.error('❌ Failed to get all chats:', error)
-      throw error
-    }
+    })
   }
 
   async deleteChat(chatId) {
@@ -212,7 +248,6 @@ export class CouchDBClient {
       return null
     } catch (error) {
       // If view doesn't exist, fall back to scanning all documents
-      console.log('📄 Share ID view not found, scanning all documents...')
       try {
         const allChats = await this.getAllChats()
         return allChats.find(chat => chat.shareId === shareId) || null
@@ -247,7 +282,6 @@ export class CouchDBClient {
       }
       
       await this.database.insert(designDoc)
-      console.log('✅ Share ID view created successfully')
     } catch (error) {
       console.error('❌ Failed to create share ID view:', error)
       // Don't throw error, fallback scanning will work

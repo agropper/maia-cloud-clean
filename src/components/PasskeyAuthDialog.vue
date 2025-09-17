@@ -304,15 +304,15 @@ export default defineComponent({
         // Remove verbose logging - keep only essential info
 
         if (isCreatingNewUser.value) {
-          // Creating new user - user ID should be available
-          if (result.available) {
+          // Creating new user - user ID should be available or allow registration
+          if (result.available || result.canRegister) {
             userIdError.value = false;
             userIdErrorMessage.value = "";
             currentStep.value = "register";
           } else {
             userIdError.value = true;
             userIdErrorMessage.value =
-              "User ID already exists. Please choose a different one.";
+              "User ID already exists with valid passkey. Please choose a different one or contact admin to reset.";
             // Stay on the same step, don't close dialog
           }
         } else {

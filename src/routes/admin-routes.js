@@ -35,14 +35,12 @@ const verifyAdminPassword = (req, res, next) => {
   }
   
   if (adminPassword !== expectedPassword) {
-    console.log('🚨 Invalid admin password attempt');
     return res.status(403).json({ 
       error: 'Invalid admin password',
       requiresAdminAuth: true
     });
   }
   
-  console.log('✅ Admin password verified successfully');
   next();
 };
 
@@ -59,7 +57,6 @@ router.post('/transfer-kb-ownership', verifyAdminPassword, async (req, res) => {
       });
     }
     
-    console.log(`🔄 [ADMIN] Transferring KB ${kbId} ownership to ${newOwner}`);
     
     // Get the current KB document
     let kbDoc;
@@ -108,7 +105,6 @@ router.post('/transfer-kb-ownership', verifyAdminPassword, async (req, res) => {
     await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
     await couchDBClient.saveDocument("maia_kb_transfers", transferRecord);
     
-    console.log(`✅ [ADMIN] KB ${kbId} ownership transferred from ${kbDoc.owner || 'unknown'} to ${newOwner}`);
     
     res.json({
       success: true,
@@ -281,7 +277,6 @@ router.post('/request-approval', async (req, res) => {
     }
 
     const resendResult = await resendResponse.json();
-    console.log('✅ Admin approval request email sent:', resendResult);
 
     // Log the approval request in the database (optional)
     try {
@@ -301,7 +296,6 @@ router.post('/request-approval', async (req, res) => {
         };
 
         await couchDBClient.saveDocument('maia2_admin_approvals', approvalRequest);
-        console.log('✅ Approval request logged to database');
       }
     } catch (dbError) {
       console.warn('⚠️ Failed to log approval request to database:', dbError.message);

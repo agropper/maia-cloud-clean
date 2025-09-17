@@ -27,7 +27,6 @@ class Maia2Client {
       const serviceInfo = this.couchDBClient.getServiceInfo();
       this.isInitialized = true;
       
-      console.log(`✅ MAIA2 Client initialized successfully with ${serviceInfo.isCloudant ? 'Cloudant' : 'CouchDB'}`);
       return true;
     } catch (error) {
       console.error('❌ Failed to initialize MAIA2 Client:', error.message);
@@ -104,7 +103,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia_users', user);
 
-      console.log(`✅ User created: ${user.username}`);
       return { ...user, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to create user:', error.message);
@@ -122,18 +120,13 @@ class Maia2Client {
       // For now, get all users and filter by username
       // In production, this would use a proper CouchDB view
       const allUsers = await this.couchDBClient.getAllDocuments('maia_users');
-      console.log('🔍 getAllUsers returned:', allUsers.length, 'documents');
       
       // Filter for users with type='user' OR users without type field (legacy users)
       const filteredUsers = allUsers.filter(u => (u.type === 'user' || !u.type));
-      console.log('🔍 Filtered users:', filteredUsers.length, 'documents');
       
       // Look for user by username or _id
       const user = filteredUsers.find(u => u.username === username || u._id === username);
-      console.log('🔍 Looking for username:', username);
-      console.log('🔍 Found user:', user ? 'YES' : 'NO');
       if (user) {
-        console.log('🔍 User details:', JSON.stringify(user, null, 2));
       }
       
       return user || null;
@@ -161,7 +154,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia_users', updatedUser);
 
-      console.log(`✅ User updated: ${userId}`);
       return { ...updatedUser, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to update user:', error.message);
@@ -200,7 +192,6 @@ class Maia2Client {
 
       const result = await this.updateUser(user._id, updates);
 
-      console.log(`✅ User ${username} approval status updated to: ${approvalStatus}`);
       return result;
     } catch (error) {
       console.error('❌ Failed to update user approval status:', error.message);
@@ -278,7 +269,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_agents', agent);
 
-      console.log(`✅ Agent created: ${agent.name}`);
       return { ...agent, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to create agent:', error.message);
@@ -327,7 +317,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_agents', updatedAgent);
 
-      console.log(`✅ Agent updated: ${agentId}`);
       return { ...updatedAgent, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to update agent:', error.message);
@@ -367,7 +356,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_knowledge_bases', knowledgeBase);
 
-      console.log(`✅ Knowledge base created: ${knowledgeBase.name}`);
       return { ...knowledgeBase, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to create knowledge base:', error.message);
@@ -422,7 +410,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_user_resources', resource);
 
-      console.log(`✅ Resource allocation requested: ${resource.resourceType}`);
       return { ...resource, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to request resource allocation:', error.message);
@@ -460,7 +447,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_admin_approvals', approval);
 
-      console.log(`✅ Approval request submitted: ${approval.approvalType}`);
       return { ...approval, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to submit approval request:', error.message);
@@ -506,7 +492,6 @@ class Maia2Client {
 
       const result = await this.couchDBClient.saveDocument('maia2_audit_logs', auditLog);
 
-      console.log(`✅ Audit event logged: ${auditLog.action}`);
       return { ...auditLog, _id: result.id, _rev: result.rev };
     } catch (error) {
       console.error('❌ Failed to log audit event:', error.message);

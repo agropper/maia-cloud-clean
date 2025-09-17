@@ -94,6 +94,7 @@ import {
   QSpace,
 } from "quasar";
 import { API_BASE_URL } from "../utils/apiBase";
+import { UserService } from "../utils/UserService";
 
 export default defineComponent({
   name: "SignInDialog",
@@ -259,11 +260,9 @@ export default defineComponent({
         const result = await verifyResponse.json();
 
         if (result.success) {
-          const userInfo = {
-            username: userId.value,
-            displayName: userId.value,
-          };
+          const userInfo = UserService.createAuthenticatedUser(userId.value, userId.value);
 
+          
           // Emit the authenticated user
           emit("user-authenticated", userInfo);
 
@@ -275,7 +274,7 @@ export default defineComponent({
           throw new Error(result.error || "Authentication failed");
         }
       } catch (error: any) {
-        console.error("Authentication error:", error);
+        console.error("❌ [SignInDialog] Authentication error:", error);
         currentStep.value = "error";
         errorMessage.value =
           error.message || "Authentication failed. Please try again.";

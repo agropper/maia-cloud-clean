@@ -2,7 +2,8 @@
 import ChatPrompt from '../components/ChatPrompt.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
-import { computed } from 'vue'
+import WelcomeModal from '../components/WelcomeModal.vue'
+import { computed, watch, ref } from 'vue'
 
 // Check if we're on the tooltip test route
 const isTooltipTest = computed(() => {
@@ -26,10 +27,12 @@ const hasAdminError = computed(() => {
   return error && error.startsWith('admin_');
 })
 
+
 // Check if we should show a blank page (admin errors)
 const shouldShowBlankPage = computed(() => {
   return hasAdminError.value;
 })
+
 
 // Get human-readable admin error message
 const getAdminErrorMessage = () => {
@@ -75,6 +78,9 @@ const getAdminErrorMessage = () => {
       </div>
     </div>
     <ChatPrompt v-else />
+    
+    <!-- Welcome Modal - shown to all users on first visit -->
+    <WelcomeModal />
   </div>
 </template>
 

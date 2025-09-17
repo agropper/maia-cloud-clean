@@ -10,6 +10,7 @@
         @manage="$emit('manage-agent')"
         @sign-in="$emit('sign-in')"
         @sign-out="$emit('sign-out')"
+        @clear-warning="$emit('clear-warning')"
         style="display: none;"
       />
       
@@ -272,8 +273,10 @@ export default defineComponent({
                         
                         // Always refresh group count when user changes (for sign-in/sign-out)
                         if (this.isUserReady) {
-                  
-                          this.loadGroupCount()
+                          // Add delay to avoid 429 errors during rapid user changes
+                          setTimeout(() => {
+                            this.loadGroupCount()
+                          }, 300);
                         }
                       }
                     },
@@ -283,8 +286,10 @@ export default defineComponent({
                         
                         // Only load data when user becomes ready (not when becoming unready)
                         if (isReady && !wasReady) {
-                  
-                          this.loadInitialData()
+                          // Delay loading to avoid 429 errors during app initialization
+                          setTimeout(() => {
+                            this.loadInitialData()
+                          }, 500);
                         }
                       },
                       immediate: true
@@ -346,7 +351,8 @@ export default defineComponent({
     'sign-in',
     'sign-out',
     'group-count-updated',
-    'deep-link-updated'
+    'deep-link-updated',
+    'clear-warning'
   ],
   methods: {
     editMessage(index: number) {
@@ -380,7 +386,7 @@ export default defineComponent({
       if (idx === -1) return
       
       // Log the deletion for debugging
-      console.log('🗑️ Deleting message:', {
+      console.log('🗑️ [ChatArea] Deleting message:', {
         index: idx,
         role: this.messageToDelete.role,
         content: this.messageToDelete.content?.substring(0, 100) + '...',
@@ -394,7 +400,7 @@ export default defineComponent({
       if (this.precedingUserMessage && idx > 0) {
         const userIdx = idx - 1
         if (this.appState.chatHistory[userIdx]?.role === 'user') {
-          console.log('🗑️ Also deleting preceding user message:', {
+          console.log('🗑️ [ChatArea] Deleting preceding user message:', {
             index: userIdx,
             content: this.precedingUserMessage.content?.substring(0, 100) + '...'
           })
@@ -416,7 +422,6 @@ export default defineComponent({
       this.messageToDelete = null
       this.precedingUserMessage = null
       
-      console.log('✅ Message deletion completed. New chat history length:', this.appState.chatHistory.length)
     },
     viewSystemMessage(content: string) {
       if (typeof content === 'string') {
@@ -490,25 +495,27 @@ export default defineComponent({
           // Update existing group chat
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
-          console.log('🔄 Updating existing group chat:', this.appState.currentChatId)
+          const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
           result = await updateGroupChat(
             this.appState.currentChatId,
             this.appState.chatHistory,
             this.appState.uploadedFiles,
             userId,
-            connectedKB
+            connectedKB,
+            displayName
           )
         } else {
           // Create new group chat for signed-in user (not deep link users)
           // Extract user ID string for consistent filtering
           const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
-          console.log('🆕 Creating new group chat for user:', userId)
+          const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
   
           result = await saveGroupChat(
             this.appState.chatHistory,
             this.appState.uploadedFiles,
             userId,
-            connectedKB
+            connectedKB,
+            displayName
           )
           
           // Store the new chat ID for future updates
@@ -519,12 +526,9 @@ export default defineComponent({
         const baseUrl = window.location.origin;
         const deepLink = `${baseUrl}/shared/${result.shareId}`
         
-        console.log('🔗 Generated deep link:', deepLink)
-        console.log('📊 Result from saveGroupChat:', result)
         
         // Set the deep link in the GroupSharingBadge
         if (this.$refs.groupSharingBadgeRef) {
-          console.log('🎯 Setting deep link in GroupSharingBadge')
           const badgeRef = this.$refs.groupSharingBadgeRef as any
           if (badgeRef.setDeepLink) {
             badgeRef.setDeepLink(deepLink)
@@ -543,12 +547,10 @@ export default defineComponent({
         
         // Reset status to Current
         this.updateChatStatus('Current')
-        console.log('✅ Chat status updated to Current')
         
         // Refresh group count after creating/updating group chat
         this.loadGroupCount()
         
-        console.log('✅ Group chat saved successfully:', result)
         
       } catch (error) {
         console.error('❌ Error posting to Cloudant:', error)
@@ -572,7 +574,6 @@ export default defineComponent({
         
         // This function is now a fallback for edge cases
         // Most group chat creation now happens directly in handlePostToCloudant
-        console.log('🔄 Fallback group chat creation triggered')
         
         // Validate chat history has user messages (not just system messages)
         if (!this.appState.chatHistory || this.appState.chatHistory.length === 0) {
@@ -594,6 +595,7 @@ export default defineComponent({
         
         // Extract user ID string for consistent filtering
         const userId = typeof currentUser === 'object' ? currentUser.userId : currentUser
+        const displayName = typeof currentUser === 'object' ? currentUser.displayName : undefined
         
         // Get connected KB info
         const connectedKB = this.appState.selectedAI || 'No KB connected'
@@ -604,7 +606,8 @@ export default defineComponent({
           this.appState.chatHistory,
           this.appState.uploadedFiles,
           userId,
-          connectedKB
+          connectedKB,
+          displayName
         )
         
         // Store the new chat ID for future updates
@@ -631,7 +634,6 @@ export default defineComponent({
         // Refresh group count after creating group chat
         this.loadGroupCount()
         
-        console.log('✅ Fallback group chat created successfully')
         
       } catch (error) {
         console.error('❌ Error creating fallback group chat:', error)
@@ -704,9 +706,9 @@ export default defineComponent({
                     },
                     async loadGroupCount() {
                       try {
+                        
                         // Only proceed if user is ready
                         if (!this.isUserReady) {
-                  
                           return
                         }
                         
@@ -715,7 +717,7 @@ export default defineComponent({
                         const allGroups = await getAllGroupChats()
                         
                         // Apply the same filtering logic as GroupManagementModal
-                        // Filter groups by current user (including "Unknown User")
+                        // Filter groups by current user (including "Public User")
                         let currentUserName: string
                         let isDeepLinkUser = false
                         let deepLinkShareId = null
@@ -761,11 +763,9 @@ export default defineComponent({
                     async handleNewChat(loadedChat?: any) {
                       if (loadedChat) {
                         // Load the specific chat data
-                        console.log('📂 Loading chat data into ChatArea:', loadedChat)
                         this.appState.chatHistory = loadedChat.chatHistory || []
                         this.appState.uploadedFiles = loadedChat.uploadedFiles || []
                         this.appState.currentChatId = loadedChat.id
-                        console.log('✅ Chat loaded successfully in ChatArea')
                       } else {
                         // Clear current chat and start fresh
                         this.appState.chatHistory = []

@@ -176,7 +176,7 @@ export default defineComponent({
       try {
         const allGroups = await getAllGroupChats()
         
-        // Filter groups by current user (including "Unknown User")
+        // Filter groups by current user (including "Public User")
         let currentUserName: string
         let isDeepLinkUser = false
         let deepLinkShareId = null
@@ -302,7 +302,6 @@ export default defineComponent({
           }
         }, 1000)
         
-        console.log('✅ Group link copied:', groupLink)
       } catch (error) {
         console.error('❌ Failed to copy group link:', error)
       }
@@ -318,14 +317,13 @@ export default defineComponent({
       
       deleting.value = true
       try {
-        console.log('🗑️ Attempting to delete group:', {
+        console.log('🗑️ [GroupManagement] Deleting group:', {
           groupToDelete: groupToDelete.value,
           groupId: groupToDelete.value.id,
           groupIdType: typeof groupToDelete.value.id
         })
         
         await deleteGroupChat(groupToDelete.value.id)
-        console.log('🗑️ Group deleted successfully')
         
         // Remove from local list
         groups.value = groups.value.filter(g => g.id !== groupToDelete.value!.id)
@@ -346,11 +344,9 @@ export default defineComponent({
 
     const loadChat = async (group: GroupChat) => {
       try {
-        console.log('📂 Loading group chat:', group.id)
         
         // Load the chat data
         const loadedChat = await loadGroupChat(group.id)
-        console.log('✅ Chat loaded successfully:', loadedChat)
         
         // Emit the loaded chat to parent component
         emit('chatLoaded', loadedChat)

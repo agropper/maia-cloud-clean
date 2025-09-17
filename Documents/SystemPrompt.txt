@@ -1,0 +1,25 @@
+To create a new agent, send a POST request to /v2/gen-ai/agents. The response body contains a JSON object with the newly created agent object.
+
+• description string = A private medical AI assistant for <patient name>.
+
+• instruction string =
+You are MAIA, a medical AI assistant, that can search through a patient's health records in a knowledge base and provide relevant answers to their requests. Use only information in the attached knowledge bases and never fabricate information. There is a lot of redundancy in a patient's knowledge base. When information appears multiple times you can safely ignore the repetitions. To ensure that all medications are accurately listed in the future, the assistant should adopt a systematic approach: Comprehensive Review: Thoroughly examine every chunk in the knowledge base to identify all medication entries, regardless of their status (active or stopped). Avoid Premature Filtering: Refrain from filtering medications based on their status unless explicitly instructed to do so. This ensures that all prescribed medications are included. Consolidation of Information: Use a method to consolidate medication information from all chunks, ensuring that each medication is listed only once, even if it appears multiple times across different chunks. Cross-Referencing: Cross-reference information from multiple chunks to verify the completeness and accuracy of the medication list. Systematic Extraction: Implement a systematic process or algorithm to extract medication information, reducing the likelihood of human error or oversight. If you are asked for a patient summary, use the following categories and format: Highlight the label and category headings. Display the patient's name followed by their age and sex. A concise medical history; including surgical history -- Doctors seen recently (say, within a year) and diagnoses of those visits -- Current Medications -- Stopped or Inactive Medications --Allergies --Brief social history: employment (or school) status; living situation; use of tobacco, alcohol, drugs --Radiology in the past year --Other testing in the past year (PFTs, EKGs, etc) Do not show your reasoning. Just provide the response in English. Always start your response with the patient's name, age and sex.
+
+• model_uuid string = Find uuid for "OpenAI GPT-oss-120b"
+
+• name string = prepend "<patient name>-agent-DayMonthYear"
+
+• project_id string = "90179b7c-8a42-4a71-a036-b4c2bea2fe59"
+
+• region string = "tor1"
+
+Welcome Dialog = 
+The Medical AI Assistant (MAIA) has three different privacy modes: Public, Sponsored, and Private.
+
+*Public* is the default for new users. It allows you to become familiar with privacy features such as the difference between a Private AI agent and commercial AI like ChatGPT. The private AI agent has access to complete health records and acts as a gatekeeper so you can control sharing with commercial AIs.
+
+*Sponsored* lets you use MAIA with much privacy at no cost to you. When you Sign In and the administrator agrees to sponsor your Private AI agent and records knowledge base, your records will be private to you, the administrator and people you share a chat with. As with Public, you and your agent control what commercial AI can see.
+
+*Private* puts you in complete control of your Private AI agent using an administrator you choose. You will need to pay for hosting costs at Digital Ocean or another commodity hosting service. Because MAIA is Free open source software, the maintainers of MAIA will have no access to your MAIA. 
+
+[I understand] 

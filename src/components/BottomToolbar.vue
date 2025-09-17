@@ -113,7 +113,7 @@
           <div class="status-line">
             <!-- SIGN IN/SIGN OUT Toggle -->
             <q-btn
-              v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
+              v-if="!currentUser || (currentUser && (currentUser.userId === 'Public User' || currentUser.displayName === 'Public User'))"
               flat
               dense
               size="sm"
@@ -191,8 +191,20 @@
       </div>
     </div>
 
-    <div :class="'message ' + appState.messageType">
-      <p v-if="appState.isMessage">{{ appState.message }}</p>
+    <div :class="'message ' + appState.messageType" v-if="appState.isMessage">
+      <div class="message-content">
+        <p>{{ appState.message }}</p>
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="close"
+          color="white"
+          @click="appState.isMessage = false"
+          class="q-ml-sm"
+        />
+      </div>
     </div>
 
     <!-- Group Management Modal -->
@@ -385,15 +397,15 @@ export default defineComponent({
     }
 
     const getCurrentUserName = () => {
-      if (!props.currentUser) return 'Unknown User'
+      if (!props.currentUser) return 'Public User'
       if (typeof props.currentUser === 'string') return props.currentUser
-      return props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
+      return props.currentUser.displayName || props.currentUser.userId || 'Public User'
     }
 
     const isUserUnknown = computed(() => {
       if (!props.currentUser) return true
-      if (typeof props.currentUser === 'string') return props.currentUser === 'Unknown User'
-      return props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
+      if (typeof props.currentUser === 'string') return props.currentUser === 'Public User'
+      return props.currentUser.userId === 'Public User' || props.currentUser.displayName === 'Public User'
     })
 
     const openGroupModal = () => {
@@ -412,7 +424,6 @@ export default defineComponent({
         const file = files[0] // Take the first file for now
         if (file) {
           try {
-            console.log(`📁 Processing file: ${file.name} (${Math.round(file.size / 1024)}KB)`)
             
             // Process file through the proper upload pipeline (which handles bucket upload)
             await uploadFile(file, props.appState, (message: string, type: string) => {
@@ -658,6 +669,12 @@ export default defineComponent({
   padding: 8px 16px;
   text-align: center;
   font-size: 14px;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .message.info {

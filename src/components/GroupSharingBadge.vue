@@ -308,7 +308,6 @@ export default defineComponent({
     })
 
     const handleChatLoaded = (groupChat: any) => {
-      console.log('📂 Group chat loaded in badge:', groupChat)
       
       // Emit the loaded chat to the parent component using the dedicated prop
       if (props.onChatLoaded) {
