@@ -75,9 +75,22 @@ export const sendQuery = async (
   console.log('🔍 [sendQuery] Debug info:', {
     uri: uri,
     uriType: typeof uri,
-    selectedAI: appState.selectedAI,
-    selectedAIType: typeof appState.selectedAI
+    appState: appState,
+    appStateType: typeof appState,
+    selectedAI: appState?.selectedAI,
+    selectedAIType: typeof appState?.selectedAI
   });
+  
+  // Defensive check for appState
+  if (!appState) {
+    console.error('❌ [sendQuery] appState is undefined');
+    throw new Error('AppState is undefined');
+  }
+  
+  if (!appState.selectedAI) {
+    console.error('❌ [sendQuery] appState.selectedAI is undefined');
+    throw new Error('AppState.selectedAI is undefined');
+  }
   
   try {
     // Add the user's message to chat history with correct display name
