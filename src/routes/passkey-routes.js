@@ -660,6 +660,9 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
+    // Debug: Show session state
+    console.log(`🔍 [auth-status] Session exists: ${!!req.session}, userId: ${req.session?.userId}`);
+    
     if (req.session && req.session.userId) {
       // Check if this is a deep link user - they should not be authenticated on main app
       if (req.session.userId.startsWith('deep_link_')) {

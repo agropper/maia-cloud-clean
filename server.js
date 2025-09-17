@@ -381,10 +381,23 @@ app.use((req, res, next) => {
 });
 
 // Custom route for index.html with environment variables (must come before static files)
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  
+  // Run database consistency check on page load
+  try {
+    // Simple consistency check - verify Public User document exists and is valid
+    const publicUserDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+    if (publicUserDoc) {
+      console.log(`✅ [Database] Consistency check passed - Public User document valid`);
+    } else {
+      console.log(`⚠️ [Database] Consistency check warning - Public User document not found`);
+    }
+  } catch (error) {
+    console.log(`❌ [Database] Consistency check failed: ${error.message}`);
+  }
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
@@ -3637,9 +3650,6 @@ app.get('/api/current-agent', async (req, res) => {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
 //           console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
-          
-          // Database consistency check passed
-          console.log(`✅ [Database] Consistency check passed`);
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
