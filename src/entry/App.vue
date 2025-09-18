@@ -89,16 +89,10 @@ const initializeApp = async () => {
     currentAgent.value = result.agent
     userType.value = result.userType
     
-    console.log('🔍 [App] Initialization result:', result);
-    console.log('🔍 [App] Setting currentAgent to:', result.agent);
-    
     // Update app state manager
     appStateManager.setUser(result.user)
     if (result.agent) {
-      console.log('🔍 [App] Setting agent in AppStateManager:', result.agent);
       appStateManager.setAgent(result.agent)
-    } else {
-      console.log('🔍 [App] No agent to set in AppStateManager');
     }
     
     // Handle agent selection requirement

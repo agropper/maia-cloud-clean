@@ -8,6 +8,7 @@
 
 import { UserService } from './UserService.js';
 import { WorkflowUtils } from './workflow-utils.js';
+import { executionLogger } from './ExecutionLogger.js';
 
 export class AppInitializer {
   constructor() {
@@ -33,11 +34,18 @@ export class AppInitializer {
    * @returns {Promise<Object>} - Initialization result
    */
   async initialize(options = {}) {
+    executionLogger.startFlow('App Initialization');
+    
     if (this.initializationState.isInitializing) {
-      return this.waitForInitialization();
+      executionLogger.step('Initialization in progress, waiting...');
+      const result = await this.waitForInitialization();
+      executionLogger.endFlow(true);
+      return result;
     }
 
     if (this.initializationState.isInitialized) {
+      executionLogger.step('Already initialized, returning cached result');
+      executionLogger.endFlow(true);
       return this.initializationState;
     }
 
@@ -45,26 +53,26 @@ export class AppInitializer {
     this.initializationState.error = null;
 
     try {
-      // console.log('🚀 [App] Starting application initialization...');
-      
-      // Step 1: Determine user type and context
+      executionLogger.step('Determining user type and context');
       const context = await this.determineContext();
       this.initializationState.userType = context.userType;
+      executionLogger.step('User context determined', { userType: context.userType, userId: context.user?.userId });
 
-      // Step 2: Initialize based on user type
+      executionLogger.step('Initializing based on user type');
       const result = await this.initializeByUserType(context, options);
+      executionLogger.step('User type initialization completed', { 
+        hasAgent: !!result.agent, 
+        agentName: result.agent?.name,
+        requiresAgentSelection: result.requiresAgentSelection 
+      });
       
       this.initializationState.isInitialized = true;
       this.initializationState.isInitializing = false;
       this.retryAttempts = 0; // Reset retry count on success
 
-      // console.log('✅ [App] Application initialized successfully:', {
-      //   userType: result.userType,
-      //   user: result.user?.userId || result.user,
-      //   agent: result.agent?.name || result.agent
-      // });
-
+      executionLogger.success('Application initialization completed successfully');
       this.notifyListeners('initialized', result);
+      executionLogger.endFlow(true);
       return result;
 
     } catch (error) {
@@ -169,28 +177,36 @@ export class AppInitializer {
    * Initialize for Public User
    */
   async initializePublicUser(context, options) {
-    console.log('🌐 [AppInitializer] Initializing Public User');
-    console.log('🔍 [AppInitializer] Context:', context);
+    executionLogger.startFlow('Public User Initialization');
     
     const user = context.user;
     this.initializationState.currentUser = user;
+    executionLogger.step('Public User context set', { userId: user.userId });
 
-    // Load public agent
+    executionLogger.step('Loading public agent');
     const agent = await this.loadPublicAgent();
     this.initializationState.currentAgent = agent;
-    
-    console.log('🔍 [AppInitializer] Public User agent result:', agent);
+    executionLogger.step('Public agent loaded', { 
+      hasAgent: !!agent, 
+      agentName: agent?.name,
+      agentId: agent?.id 
+    });
 
     // If no agent is available due to security violation, show agent selection
     const requiresAgentSelection = !agent;
+    executionLogger.step('Agent selection requirement determined', { requiresAgentSelection });
 
-    return {
+    const result = {
       user,
       agent,
       knowledgeBase: agent?.knowledgeBase || null,
       userType: 'public',
       requiresAgentSelection
     };
+
+    executionLogger.success('Public User initialization completed');
+    executionLogger.endFlow(true);
+    return result;
   }
 
   /**
@@ -266,34 +282,47 @@ export class AppInitializer {
    * Load public agent
    */
   async loadPublicAgent() {
+    executionLogger.startFlow('Load Public Agent');
+    
     try {
+      executionLogger.step('Calling /api/current-agent endpoint');
       const response = await fetch('/api/current-agent', {
         credentials: 'include'
       });
+      executionLogger.step('API response received', { status: response.status, statusText: response.statusText });
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 [AppInitializer] Public User agent response:', data);
-        console.log('🔍 [AppInitializer] Response status:', response.status);
-        console.log('🔍 [AppInitializer] Response headers:', response.headers);
+        executionLogger.step('Response data parsed', { hasAgent: !!data.agent, agentName: data.agent?.name });
+        
         if (data.agent) {
-          console.log('🔍 [AppInitializer] Public User got agent:', data.agent.name);
-          console.log('🔍 [AppInitializer] Agent details:', data.agent);
+          executionLogger.step('Performing security check on agent');
           // SECURITY CHECK: Public User should only get public agents
           if (!data.agent.name.startsWith('public-')) {
-            console.error(`🚨 SECURITY VIOLATION: Public User got non-public agent: ${data.agent.name}`);
+            executionLogger.error('Security violation detected', { 
+              agentName: data.agent.name, 
+              expectedPrefix: 'public-' 
+            });
+            executionLogger.endFlow(false);
             return null; // Don't return the agent if it's not public
           }
+          executionLogger.step('Security check passed');
         }
+        
+        executionLogger.success('Public agent loaded successfully');
+        executionLogger.endFlow(true);
         return data.agent;
       } else if (response.status === 403) {
-        console.log('🔒 [AppInitializer] Public User access denied - this is expected for security');
+        executionLogger.step('Access denied (403) - this is expected for security');
+        executionLogger.endFlow(true);
         return null;
       } else {
-        console.warn('⚠️ [AppInitializer] Failed to load public agent:', response.status, response.statusText);
+        executionLogger.error('Failed to load public agent', { status: response.status, statusText: response.statusText });
+        executionLogger.endFlow(false);
       }
     } catch (error) {
-      console.warn('⚠️ [AppInitializer] Failed to load public agent:', error.message);
+      executionLogger.error('Exception while loading public agent', error);
+      executionLogger.endFlow(false);
     }
     return null;
   }

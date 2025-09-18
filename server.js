@@ -3439,12 +3439,37 @@ app.get('/api/test', (req, res) => {
 
 // Get current agent
 app.get('/api/current-agent', async (req, res) => {
+  // Debug: Show request details
+  const hasSession = !!req.session;
+  const sessionUserId = req.session?.userId;
+  const hasCookie = !!req.headers.cookie;
+  const userAgent = req.headers['user-agent'];
+  const referer = req.headers.referer;
+  
+  console.log(`🚀 [BACKEND] /api/current-agent called`);
+  console.log(`📋 [BACKEND] Request details:`, {
+    hasSession,
+    sessionUserId,
+    hasCookie,
+    userAgent: userAgent?.substring(0, 50) + '...',
+    referer: referer?.substring(0, 50) + '...'
+  });
   
   try {
-    // Get current user from session if available
-    let currentUser = req.session?.userId || 'Public User';
-    console.log(`🚨 [CURRENT-AGENT] ENDPOINT CALLED - Current user: ${currentUser}`);
-    // console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
+    // Get current user from session if available and valid
+    let currentUser = 'Public User';
+    
+    // Check if there's a valid session with a userId
+    if (req.session && req.session.userId) {
+      currentUser = req.session.userId;
+      console.log(`📋 [BACKEND] Valid session found for user: ${currentUser}`);
+    } else if (req.session) {
+      console.log(`📋 [BACKEND] Stale session found (no userId), treating as Public User`);
+    } else {
+      console.log(`📋 [BACKEND] No session found, treating as Public User`);
+    }
+    
+    console.log(`📋 [BACKEND] Identified user: ${currentUser}`);
 //     console.log(`🔍 [current-agent] Session data:`, {
 //       hasSession: !!req.session,
 //       userId: req.session?.userId,
@@ -3453,7 +3478,10 @@ app.get('/api/current-agent', async (req, res) => {
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
+    console.log(`📋 [BACKEND] Checking user type: ${currentUser}`);
+    
     if (currentUser !== 'Public User') {
+      console.log(`📋 [BACKEND] Processing authenticated user: ${currentUser}`);
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
       if (currentUser.startsWith('deep_link_')) {
 //         console.log(`🔗 [current-agent] Deep link user detected: ${currentUser}, finding patient's agent`);
@@ -3602,8 +3630,16 @@ app.get('/api/current-agent', async (req, res) => {
         try {
           // First try UserStateManager cache (updated by POST endpoint)
           const cachedUser = UserStateManager.getUserState(currentUser);
+          console.log(`📋 [BACKEND] UserStateManager cache for ${currentUser}:`, cachedUser);
           if (cachedUser && (cachedUser.currentAgentId || cachedUser.assignedAgentId)) {
-            agentId = cachedUser.currentAgentId || cachedUser.assignedAgentId;
+            // For Public User, prefer assignedAgentId over currentAgentId
+            if (currentUser === 'Public User') {
+              agentId = cachedUser.assignedAgentId || cachedUser.currentAgentId;
+              console.log(`📋 [BACKEND] Using assignedAgentId for Public User: ${agentId}`);
+            } else {
+              agentId = cachedUser.currentAgentId || cachedUser.assignedAgentId;
+              console.log(`📋 [BACKEND] Using cached agentId: ${agentId}`);
+            }
           } else {
             // Fallback to database if not in UserStateManager cache
             let userDoc = getCache('users', currentUser);
@@ -3633,12 +3669,13 @@ app.get('/api/current-agent', async (req, res) => {
           });
         }
       } else {
+        console.log(`📋 [BACKEND] Processing Public User - retrieving document from database`);
         // For Public User, check if they have a current agent selection stored in Cloudant
         try {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-          console.log(`🔍 [DEBUG] Public User document:`, { 
-            currentAgentId: userDoc?.currentAgentId, 
+          console.log(`📋 [BACKEND] Public User document retrieved:`, {
+            currentAgentId: userDoc?.currentAgentId,
             assignedAgentId: userDoc?.assignedAgentId,
             currentAgentName: userDoc?.currentAgentName,
             assignedAgentName: userDoc?.assignedAgentName
@@ -3646,11 +3683,7 @@ app.get('/api/current-agent', async (req, res) => {
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
-          console.log(`🔍 [DEBUG] Selected agent ID for Public User: ${userAgentId}`);
-          
-          if (userAgentId) {
-            console.log(`🔍 [DEBUG] About to call DO API for agent: ${userAgentId}`);
-          }
+          console.log(`📋 [BACKEND] Selected agent ID for Public User: ${userAgentId}`);
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
@@ -3711,13 +3744,19 @@ app.get('/api/current-agent', async (req, res) => {
         }
       }
     }
-    // console.log(`🔍 Found matching agent: ${matchingAgent.name} (${agentId})`);
+    console.log(`📋 [BACKEND] Final agentId determined: ${agentId}`);
     
     // Get agent details including associated knowledge bases
     let agentData;
     try {
-    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      console.log(`📋 [BACKEND] Calling DO API for agent: ${agentId}`);
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
       agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data || agentResponse;
+      console.log(`📋 [BACKEND] DO API response:`, {
+        agentName: agentData?.name,
+        agentUuid: agentData?.uuid,
+        hasDeployment: !!agentData?.deployment
+      });
     } catch (error) {
       console.error(`❌ Get current agent error:`, error);
       
@@ -3807,8 +3846,6 @@ app.get('/api/current-agent', async (req, res) => {
 
     // SECURITY CHECK: Validate agent ownership based on user type
     const agentName = agentData.name;
-    console.log(`🔍 [DEBUG] SECURITY CHECK - Agent name: "${agentName}" for user: ${currentUser}`);
-    console.log(`🔍 [DEBUG] Agent data:`, { name: agentData.name, uuid: agentData.uuid });
     
     if (currentUser === 'Public User') {
       // Public User can only see agents that start with 'public-'

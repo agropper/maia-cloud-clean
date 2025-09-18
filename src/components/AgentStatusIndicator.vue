@@ -140,8 +140,6 @@ export default defineComponent({
   emits: ['manage', 'sign-in', 'sign-out'],
   setup(props) {
     const agentName = computed(() => {
-      console.log('🔍 [AgentStatusIndicator] Props:', { agent: props.agent, currentUser: props.currentUser });
-      
       if (!props.agent) {
         // For authenticated users, show "Agent: none" with user info
         if (props.currentUser && props.currentUser.userId !== 'Public User') {
@@ -154,8 +152,6 @@ export default defineComponent({
       // SECURITY CHECK: Validate agent ownership based on user type
       const currentUserId = props.currentUser?.userId || 'Public User';
       const agentName = props.agent.name;
-      
-      console.log('🔍 [AgentStatusIndicator] Security check:', { currentUserId, agentName });
       
       // Only perform security validation if we have a stable user state
       // Skip validation during sign-in transitions to prevent race conditions

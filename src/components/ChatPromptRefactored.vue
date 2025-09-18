@@ -101,9 +101,7 @@ export default defineComponent({
     const currentAgent = computed(() => appStateManager.getStateProperty('currentAgent'));
     const currentKnowledgeBase = computed(() => appStateManager.getStateProperty('currentKnowledgeBase'));
     const assignedAgent = computed(() => {
-      const agent = appStateManager.getStateProperty('assignedAgent');
-      console.log('🔍 [ChatPromptRefactored] assignedAgent from AppStateManager:', agent);
-      return agent;
+      return appStateManager.getStateProperty('assignedAgent');
     });
     const userType = computed(() => appStateManager.getStateProperty('userType'));
     const workflowStage = computed(() => appStateManager.getStateProperty('workflowStage'));
