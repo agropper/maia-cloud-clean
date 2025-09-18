@@ -204,6 +204,26 @@ export default defineComponent({
       }
     };
 
+    // Fetch current agent information
+    const fetchCurrentAgent = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/current-agent`);
+        const data = await response.json();
+
+        if (data.agent) {
+          appStateManager.setAgent(data.agent);
+          if (data.agent.knowledgeBase) {
+            appStateManager.setState({ currentKnowledgeBase: data.agent.knowledgeBase });
+          }
+        } else {
+          appStateManager.clearAgent();
+        }
+      } catch (error) {
+        console.error("❌ Error fetching current agent:", error);
+        appStateManager.clearAgent();
+      }
+    };
+
     // Handle user authentication
     const handleUserAuthenticated = async (userData: any) => {
       console.log('🔐 [ChatPrompt] User authenticated:', userData);
@@ -216,6 +236,9 @@ export default defineComponent({
       
       // Update centralized state
       appStateManager.setUser(userData);
+      
+      // Fetch the user's current agent and KB from API
+      await fetchCurrentAgent();
       
       // Check if user should see no private agent modal
       if (WorkflowUtils.shouldShowNoAgentModal(userData, currentAgent.value)) {
