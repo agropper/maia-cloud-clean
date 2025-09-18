@@ -236,18 +236,14 @@ export default defineComponent({
       appState.currentViewingFile = null;
       appState.popupContent = '';
       
-      // Update centralized state
-      appStateManager.setUser(userData);
-      
-      // Fetch the user's current agent and KB from API
-      await fetchCurrentAgent();
-      
-      // Check if user should see no private agent modal
-      if (WorkflowUtils.shouldShowNoAgentModal(userData, currentAgent.value)) {
-        if (noPrivateAgentModalRef.value) {
-          noPrivateAgentModalRef.value.show();
-        }
+      // Clear all caches to prevent cross-user contamination
+      if (window.apiCallCache) {
+        window.apiCallCache.clear();
       }
+      
+      // Force a page reload to ensure complete re-initialization
+      console.log('🔄 [DEBUG] Reloading page for complete re-initialization...');
+      window.location.reload();
     };
 
     // Handle sign out
