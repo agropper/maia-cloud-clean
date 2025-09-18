@@ -3765,7 +3765,7 @@ app.get('/api/current-agent', async (req, res) => {
             await couchDBClient.saveDocument('maia_users', updatedUserDoc);
             
             // Clear from cache
-            clearCache('users', currentUser);
+            invalidateCache('users', currentUser);
             
             console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser}`);
           }
@@ -4630,7 +4630,7 @@ app.post('/api/current-agent', async (req, res) => {
 //         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
         
         // Clear the user from cache first to force fresh data on next GET request
-        clearCache('users', currentUser);
+        invalidateCache('users', currentUser);
         
         // Update cache with new agent selection
         setCache('users', currentUser, updatedUserDoc);
@@ -4670,7 +4670,7 @@ app.post('/api/current-agent', async (req, res) => {
 //         console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
         
         // Clear the user from cache first to force fresh data on next GET request
-        clearCache('users', 'Public User');
+        invalidateCache('users', 'Public User');
         
         // Update cache with new agent selection
         setCache('users', 'Public User', updatedUserDoc);
