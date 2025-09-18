@@ -170,6 +170,7 @@ export class AppInitializer {
    */
   async initializePublicUser(context, options) {
     console.log('🌐 [AppInitializer] Initializing Public User');
+    console.log('🔍 [AppInitializer] Context:', context);
     
     const user = context.user;
     this.initializationState.currentUser = user;
@@ -177,6 +178,8 @@ export class AppInitializer {
     // Load public agent
     const agent = await this.loadPublicAgent();
     this.initializationState.currentAgent = agent;
+    
+    console.log('🔍 [AppInitializer] Public User agent result:', agent);
 
     // If no agent is available due to security violation, show agent selection
     const requiresAgentSelection = !agent;
@@ -270,6 +273,18 @@ export class AppInitializer {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 [AppInitializer] Public User agent response:', data);
+        console.log('🔍 [AppInitializer] Response status:', response.status);
+        console.log('🔍 [AppInitializer] Response headers:', response.headers);
+        if (data.agent) {
+          console.log('🔍 [AppInitializer] Public User got agent:', data.agent.name);
+          console.log('🔍 [AppInitializer] Agent details:', data.agent);
+          // SECURITY CHECK: Public User should only get public agents
+          if (!data.agent.name.startsWith('public-')) {
+            console.error(`🚨 SECURITY VIOLATION: Public User got non-public agent: ${data.agent.name}`);
+            return null; // Don't return the agent if it's not public
+          }
+        }
         return data.agent;
       } else if (response.status === 403) {
         console.log('🔒 [AppInitializer] Public User access denied - this is expected for security');

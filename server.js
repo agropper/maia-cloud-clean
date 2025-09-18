@@ -3443,6 +3443,7 @@ app.get('/api/current-agent', async (req, res) => {
   try {
     // Get current user from session if available
     let currentUser = req.session?.userId || 'Public User';
+    console.log(`🚨 [CURRENT-AGENT] ENDPOINT CALLED - Current user: ${currentUser}`);
     // console.log(`🔍 [current-agent] GET request - Current user: ${currentUser}`);
 //     console.log(`🔍 [current-agent] Session data:`, {
 //       hasSession: !!req.session,
@@ -3636,11 +3637,20 @@ app.get('/api/current-agent', async (req, res) => {
         try {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-//           console.log(`🔍 [current-agent] Retrieved Public User document:`, userDoc);
+          console.log(`🔍 [DEBUG] Public User document:`, { 
+            currentAgentId: userDoc?.currentAgentId, 
+            assignedAgentId: userDoc?.assignedAgentId,
+            currentAgentName: userDoc?.currentAgentName,
+            assignedAgentName: userDoc?.assignedAgentName
+          });
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
-          // console.log(`🔍 [DEBUG-current-agent] Public User document:`, { currentAgentId: userDoc?.currentAgentId, assignedAgentId: userDoc?.assignedAgentId, selectedAgentId: userAgentId });
+          console.log(`🔍 [DEBUG] Selected agent ID for Public User: ${userAgentId}`);
+          
+          if (userAgentId) {
+            console.log(`🔍 [DEBUG] About to call DO API for agent: ${userAgentId}`);
+          }
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
@@ -3797,7 +3807,8 @@ app.get('/api/current-agent', async (req, res) => {
 
     // SECURITY CHECK: Validate agent ownership based on user type
     const agentName = agentData.name;
-    // console.log(`🔍 [SECURITY CHECK] Checking agent name: "${agentName}" for user: ${currentUser}`);
+    console.log(`🔍 [DEBUG] SECURITY CHECK - Agent name: "${agentName}" for user: ${currentUser}`);
+    console.log(`🔍 [DEBUG] Agent data:`, { name: agentData.name, uuid: agentData.uuid });
     
     if (currentUser === 'Public User') {
       // Public User can only see agents that start with 'public-'
