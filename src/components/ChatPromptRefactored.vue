@@ -255,15 +255,14 @@ export default defineComponent({
         console.error('❌ Backend logout failed:', error);
       }
       
-      // Clear all agent data
-      appStateManager.clearAgent();
+      // Clear all caches to prevent cross-user contamination
+      if (window.apiCallCache) {
+        window.apiCallCache.clear();
+      }
       
-      // Set to public user
-      const publicUser = UserService.createPublicUser();
-      appStateManager.setUser(publicUser);
-      
-      // Clear chat data
-      appStateManager.clearChatState();
+      // Force a page reload to ensure complete re-initialization as Public User
+      console.log('🔄 [DEBUG] Reloading page after sign-out...');
+      window.location.reload();
     };
 
     // Handle request for private agent
@@ -281,6 +280,34 @@ export default defineComponent({
         console.log('🤖 [ChatPrompt] Agent changed:', newAgent?.name || 'None');
       }
     });
+
+    // Update chat area bottom margin to account for fixed toolbar
+    const updateChatAreaMargin = () => {
+      if (chatAreaRef.value) {
+        let chatAreaElement = null;
+        
+        if (chatAreaRef.value.$el && chatAreaRef.value.$el.nodeType === Node.ELEMENT_NODE) {
+          chatAreaElement = chatAreaRef.value.$el;
+        } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentElement) {
+          chatAreaElement = chatAreaRef.value.$el.parentElement;
+        } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentNode) {
+          chatAreaElement = chatAreaRef.value.$el.parentNode;
+        }
+        
+        if (chatAreaElement && chatAreaElement.nodeType === Node.ELEMENT_NODE) {
+          const toolbar = document.querySelector('.bottom-toolbar');
+          if (toolbar) {
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const toolbarTop = toolbarRect.top;
+            
+            // Set the chat area height to stop at the toolbar boundary
+            chatAreaElement.style.height = `${toolbarTop}px`;
+            chatAreaElement.style.maxHeight = `${toolbarTop}px`;
+            chatAreaElement.style.overflowY = 'auto';
+          }
+        }
+      }
+    };
 
     // Watch for modal state changes
     watch(() => appStateManager.getStateProperty('showNoPrivateAgentModal'), (show) => {
@@ -414,6 +441,17 @@ export default defineComponent({
     const currentDeepLink = ref(null);
     const chatAreaRef = ref(null);
     const pendingShareId = ref(null);
+
+    // Call on mount and window resize
+    onMounted(async () => {
+      await nextTick();
+      updateChatAreaMargin();
+      window.addEventListener('resize', updateChatAreaMargin);
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('resize', updateChatAreaMargin);
+    });
 
     return {
       // State
