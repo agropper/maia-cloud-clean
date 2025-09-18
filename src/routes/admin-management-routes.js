@@ -1,9 +1,5 @@
 import express from 'express';
 // Removed maia2Client import - using couchDBClient instead
-import UserStateManagerClass from '../utils/UserStateManager.js';
-
-// Create singleton instance
-const UserStateManager = new UserStateManagerClass();
 
 // DigitalOcean API configuration
 const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
@@ -1068,12 +1064,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    // Update user state cache
-    UserStateManager.updateUserStateSection(userId, 'workflow', {
-      workflowStage: workflowStage,
-      approvalStatus: updatedUser.approvalStatus,
-      adminNotes: updatedUser.adminNotes
-    });
+    // User state cache will be updated on next database read
     
     
     res.json({ 
