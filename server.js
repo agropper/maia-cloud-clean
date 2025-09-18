@@ -5908,8 +5908,6 @@ setSessionManager(sessionManager);
 // Mount KB protection routes
 app.use('/api/kb-protection', kbProtectionRoutes);
 
-// Make UserStateManager available to routes
-app.locals.userStateManager = UserStateManager;
 
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
@@ -6584,7 +6582,7 @@ app.listen(PORT, async () => {
       
       if (createResponse.ok) {
         const createData = await createResponse.json();
-        UserStateManager.updateBucketStatus(userId, createData);
+        // Bucket created successfully
         // console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
       }
     } catch (error) {

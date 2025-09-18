@@ -500,11 +500,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    // Clear UserStateManager cache to ensure fresh data
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      userStateManager.clearCache();
-    }
+    // Cache will be cleared on next database read
     
     // Get all users from maia_users database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
@@ -823,24 +819,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
   try {
     const { userId } = req.params;
     
-    // First try to get from UserStateManager cache
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      const cachedAgentData = userStateManager.getUserStateSection(userId, 'agent');
-      if (cachedAgentData) {
-        // Return cached data without hitting database
-        const assignedAgentId = cachedAgentData.assignedAgentId || cachedAgentData.currentAgentId || null;
-        const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
-        const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
-        
-        return res.json({
-          userId: userId,
-          assignedAgentId: assignedAgentId,
-          assignedAgentName: assignedAgentName,
-          agentAssignedAt: agentAssignedAt
-        });
-      }
-    }
+    // Get fresh data from database
     
     // Fallback to database if cache miss
     
@@ -872,17 +851,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
     const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
     
-    // Update cache with fresh data
-    if (userStateManager) {
-      userStateManager.updateUserStateSection(userId, 'agent', {
-        assignedAgentId: userDoc.assignedAgentId,
-        assignedAgentName: userDoc.assignedAgentName,
-        currentAgentId: userDoc.currentAgentId,
-        currentAgentName: userDoc.currentAgentName,
-        agentAssignedAt: userDoc.agentAssignedAt,
-        currentAgentSetAt: userDoc.currentAgentSetAt
-      });
-    }
+    // Cache will be updated on next database read
     
     res.json({
       userId: userId,
@@ -1364,17 +1333,7 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     // Save updated document
     await couchDBClient.saveDocument('maia_users', updatedUserDoc);
     
-    // Update UserStateManager cache
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      userStateManager.updateUserStateSection(userId, 'agent', {
-        assignedAgentId: agentId,
-        assignedAgentName: agentName,
-        currentAgentId: agentId,
-        currentAgentName: agentName,
-        agentAssignedAt: updatedUserDoc.agentAssignedAt
-      });
-    }
+    // Cache will be updated on next database read
     
     
     res.json({
@@ -1444,14 +1403,7 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
             
             await couchDBClient.saveDocument('maia_users', updatedUserDoc);
             
-            // Update cache
-            const userStateManager = req.app.locals.userStateManager;
-            if (userStateManager) {
-              userStateManager.updateUserStateSection(user._id, 'agent', {
-                assignedAgentName: expectedName,
-                currentAgentName: expectedName
-              });
-            }
+            // Cache will be updated on next database read
             
             syncResults.push({
               userId: user._id,
