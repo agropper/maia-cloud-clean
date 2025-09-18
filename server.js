@@ -1549,8 +1549,8 @@ app.post('/api/personal-chat', async (req, res) => {
         try {
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
           
-          // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
-          const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
+          // For Public User, prefer assignedAgentId over currentAgentId
+          const userAgentId = userDoc?.assignedAgentId || userDoc?.currentAgentId;
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
