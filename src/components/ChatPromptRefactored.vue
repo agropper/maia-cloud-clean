@@ -564,7 +564,7 @@ export default defineComponent({
     <PasskeyAuthDialog
       v-model="showPasskeyAuthDialog"
       :currentUser="currentUser"
-      @user-authenticated="handleUserAuthenticated"
+      @authenticated="handleUserAuthenticated"
     />
 
     <DeepLinkUserModal
