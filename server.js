@@ -6613,9 +6613,6 @@ app.listen(PORT, async () => {
 //     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
     await ensureAllUserBuckets();
 //     console.log('✅ [STARTUP] Bucket folder checks completed');
-  } catch (error) {
-    console.error(`❌ [STARTUP] Failed to initialize UserStateManager cache:`, error);
-  }
   
 // Start cleanup job for expired deep links
   setInterval(async () => {
