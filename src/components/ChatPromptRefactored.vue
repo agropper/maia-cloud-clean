@@ -228,7 +228,7 @@ export default defineComponent({
 
     // Handle user authentication
     const handleUserAuthenticated = async (userData: any) => {
-      console.log('🔐 [ChatPrompt] User authenticated:', userData);
+      console.log('🔐 [DEBUG] User authenticated event received:', userData);
       
       // Clear chat data upon sign-in
       appState.chatHistory = [];

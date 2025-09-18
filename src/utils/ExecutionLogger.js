@@ -16,7 +16,7 @@ class ExecutionLogger {
   startFlow(flowName) {
     this.stepCounter = 0;
     this.currentFlow = flowName;
-    console.log(`🚀 [FLOW] Starting: ${flowName}`);
+    // Removed verbose flow logging
   }
 
   /**
@@ -26,11 +26,7 @@ class ExecutionLogger {
    */
   step(message, data = null) {
     this.stepCounter++;
-    const stepNumber = this.stepCounter.toString().padStart(2, '0');
-    console.log(`📋 [${stepNumber}] [${this.currentFlow}] ${message}`);
-    if (data) {
-      console.log(`    Data:`, data);
-    }
+    // Removed verbose step logging
   }
 
   /**
@@ -54,11 +50,7 @@ class ExecutionLogger {
    */
   success(message, data = null) {
     this.stepCounter++;
-    const stepNumber = this.stepCounter.toString().padStart(2, '0');
-    console.log(`✅ [${stepNumber}] [${this.currentFlow}] ${message}`);
-    if (data) {
-      console.log(`    Data:`, data);
-    }
+    // Removed verbose success logging
   }
 
   /**
@@ -66,8 +58,7 @@ class ExecutionLogger {
    * @param {boolean} success - Whether the flow completed successfully
    */
   endFlow(success = true) {
-    const status = success ? '✅' : '❌';
-    console.log(`${status} [FLOW] Completed: ${this.currentFlow}`);
+    // Removed verbose flow completion logging
     this.currentFlow = null;
     this.stepCounter = 0;
   }

@@ -101,6 +101,7 @@ export class AppInitializer {
    */
   async determineContext() {
     const path = window.location.pathname;
+    console.log('🔍 [DEBUG] AppInitializer determining context for path:', path);
     
     // Check for deep link access
     if (path.startsWith('/shared/')) {
@@ -121,6 +122,7 @@ export class AppInitializer {
 
     // Check for authenticated user session
     try {
+      console.log('🔍 [DEBUG] AppInitializer checking auth-status...');
       const response = await fetch('/api/passkey/auth-status', {
         credentials: 'include',
         method: 'GET'
@@ -128,7 +130,9 @@ export class AppInitializer {
 
       if (response.ok) {
         const userData = await response.json();
+        console.log('🔍 [DEBUG] AppInitializer auth-status response:', userData);
         if (userData.authenticated && userData.user) {
+          console.log('🔍 [DEBUG] AppInitializer detected authenticated user:', userData.user);
           return {
             userType: 'authenticated',
             user: UserService.normalizeUserObject(userData.user),
@@ -141,6 +145,7 @@ export class AppInitializer {
     }
 
     // Default to public user
+    console.log('🔍 [DEBUG] AppInitializer defaulting to public user');
     return {
       userType: 'public',
       user: UserService.createPublicUser(),
