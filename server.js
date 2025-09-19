@@ -3652,6 +3652,22 @@ app.get('/api/current-agent', async (req, res) => {
             assignedAgentName: userDoc?.assignedAgentName
           });
           
+          // Agent choice feature is not implemented yet - clear any current agent selections
+          if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
+            console.log(`🔧 [BACKEND] Clearing current agent selection for ${currentUser} - agent choice feature not implemented yet`);
+            userDoc.currentAgentId = null;
+            userDoc.currentAgentName = null;
+            userDoc.currentAgentEndpoint = null;
+            userDoc.currentAgentSetAt = null;
+            userDoc.updatedAt = new Date().toISOString();
+            
+            // Save the corrected document
+            await couchDBClient.saveDocument('maia_users', userDoc);
+            // Update cache with corrected document
+            setCache('users', currentUser, userDoc);
+            console.log(`✅ [BACKEND] ${currentUser} document updated - current agent selection cleared`);
+          }
+          
           if (userDoc && (userDoc.currentAgentId || userDoc.assignedAgentId)) {
             // For Public User, prefer assignedAgentId over currentAgentId
             if (currentUser === 'Public User') {
@@ -3689,6 +3705,32 @@ app.get('/api/current-agent', async (req, res) => {
             currentAgentName: userDoc?.currentAgentName,
             assignedAgentName: userDoc?.assignedAgentName
           });
+          
+          // Agent choice feature is not implemented yet - clear any current agent selections
+          if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
+            console.log(`🔧 [BACKEND] Clearing current agent selection - agent choice feature not implemented yet`);
+            userDoc.currentAgentId = null;
+            userDoc.currentAgentName = null;
+            userDoc.currentAgentEndpoint = null;
+            userDoc.currentAgentSetAt = null;
+            userDoc.updatedAt = new Date().toISOString();
+            
+            // Save the corrected document
+            await couchDBClient.saveDocument('maia_users', userDoc);
+            console.log(`✅ [BACKEND] Public User document updated - current agent selection cleared`);
+          }
+          
+          // Fix corrupted Public User assigned agent - should only be public agents
+          if (userDoc && userDoc.assignedAgentName && !userDoc.assignedAgentName.startsWith('public-')) {
+            console.log(`🔧 [BACKEND] Fixing corrupted Public User assigned agent: ${userDoc.assignedAgentName} -> public-agent-05102025`);
+            userDoc.assignedAgentId = '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4'; // Correct public agent ID
+            userDoc.assignedAgentName = 'public-agent-05102025'; // Correct public agent name
+            userDoc.updatedAt = new Date().toISOString();
+            
+            // Save the corrected document
+            await couchDBClient.saveDocument('maia_users', userDoc);
+            console.log(`✅ [BACKEND] Public User document fixed - assigned agent corrected to public-agent-05102025`);
+          }
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)
           const userAgentId = userDoc?.currentAgentId || userDoc?.assignedAgentId;
@@ -4631,10 +4673,18 @@ app.post('/api/current-agent', async (req, res) => {
     }
     
     // Store the current agent selection in Cloudant for the user
-    if (currentUser !== 'Unknown User') {
+    // Public User should never have current agent selections - only assigned agents
+    if (currentUser !== 'Unknown User' && currentUser !== 'Public User') {
       try {
+        console.log(`🔍 [CURRENT-AGENT-POST] Setting current agent for user: ${currentUser}`);
         // Get user document from Cloudant
         const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        console.log(`🔍 [CURRENT-AGENT-POST] Retrieved document for ${currentUser}:`, {
+          currentAgentId: userDoc?.currentAgentId,
+          assignedAgentId: userDoc?.assignedAgentId,
+          currentAgentName: userDoc?.currentAgentName,
+          assignedAgentName: userDoc?.assignedAgentName
+        });
         
         // Update user document with current agent selection
         const updatedUserDoc = {
@@ -4657,46 +4707,13 @@ app.post('/api/current-agent', async (req, res) => {
       } catch (userError) {
         console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
       }
-    } else {
-      // For Public User, store in their own document
-      try {
-        // Try to get existing Public User document
-        let userDoc;
-        try {
-          userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
-        } catch (getError) {
-          // Document doesn't exist, create new one
-          userDoc = {
-            _id: 'Public User',
-            type: 'user',
-            createdAt: new Date().toISOString()
-          };
-        }
-        
-        // Update user document with current agent selection
-        const updatedUserDoc = {
-          ...userDoc,
-          _id: 'Public User', // Ensure _id is always set
-          currentAgentId: selectedAgent.uuid,
-          currentAgentName: selectedAgent.name,
-          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
-          currentAgentSetAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        // Save updated user document
-//         console.log(`🔍 Saving Public User document:`, updatedUserDoc);
-        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
-//         console.log(`✅ Stored current agent selection for Public User: ${selectedAgent.name} (${agentId})`);
-        
-        // Clear the user from cache first to force fresh data on next GET request
-        invalidateCache('users', 'Public User');
-        
-        // Update cache with new agent selection
-        setCache('users', 'Public User', updatedUserDoc);
-      } catch (userError) {
-        console.error(`❌ Failed to store current agent selection for Public User:`, userError);
-      }
+    } else if (currentUser === 'Public User') {
+      // Public User should never have current agent selections - only assigned agents
+      console.log(`⚠️ [CURRENT-AGENT-POST] Public User attempted to set current agent - this should not happen`);
+      return res.status(403).json({ 
+        message: 'Public User cannot select current agents - only assigned agents are available',
+        requiresAgentSelection: true
+      });
     }
     
     const endpoint = selectedAgent.deployment?.url + '/api/v1';
