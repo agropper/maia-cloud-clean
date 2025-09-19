@@ -129,7 +129,7 @@
               size="sm"
               color="grey"
               label="SIGN OUT"
-              @click="$emit('sign-out')"
+              @click="() => { console.log('🔴 [FRONTEND] SIGN OUT button clicked'); $emit('sign-out'); }"
               class="q-mr-sm"
             />
             

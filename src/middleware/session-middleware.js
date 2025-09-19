@@ -126,7 +126,7 @@ class SessionMiddleware {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const sessionId = req.sessionID;
-      const userId = req.session.userId;
+      const userId = req.session ? req.session.userId : null;
       
       if (userId && sessionId) {
         try {

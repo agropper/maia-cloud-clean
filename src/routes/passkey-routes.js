@@ -549,6 +549,24 @@ router.post("/authenticate-verify", async (req, res) => {
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
       
+      // Set authentication cookie with user info and timestamp
+      const authData = {
+        userId: updatedUser._id,
+        displayName: updatedUser.displayName || updatedUser._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+      };
+      
+      console.log(`🍪 [AUTH] Setting auth cookie with data:`, authData);
+      res.cookie('maia_auth', JSON.stringify(authData), {
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        path: '/'
+      });
+      console.log(`🍪 [AUTH] Auth cookie set for user: ${updatedUser._id}`);
+      
       // Set the user's assigned agent as current when they sign in
       try {
         console.log(`🔍 [AUTH] Setting assigned agent as current for user: ${updatedUser._id}`);
@@ -660,9 +678,59 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
-    if (req.session && req.session.userId) {
+    // Check for maia_auth cookie
+    const authCookie = req.cookies.maia_auth;
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60);
+        
+        if (now < expiresAt) {
+          console.log(`🍪 [COOKIE] Valid auth cookie for ${authData.userId} - expires in ${timeToExpiry} minutes`);
+        } else {
+          console.log(`🍪 [COOKIE] Expired auth cookie for ${authData.userId} - clearing`);
+        }
+      } catch (error) {
+        console.log(`🍪 [COOKIE] Invalid auth cookie - clearing`);
+      }
+    } else {
+      console.log(`🍪 [COOKIE] No auth cookie found`);
+    }
+    let userId = null;
+    
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        
+        // Check if cookie is still valid (less than 10 minutes old)
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
+        
+        if (now < expiresAt) {
+          userId = authData.userId;
+          console.log(`🍪 [AUTH] Valid cookie for ${userId} - expires in ${timeToExpiry} minutes`);
+        } else {
+          console.log(`❌ [AUTH] Cookie expired for ${authData.userId} - clearing`);
+          res.clearCookie('maia_auth');
+        }
+      } catch (error) {
+        console.error(`❌ [AUTH] Invalid cookie format - clearing`);
+        res.clearCookie('maia_auth');
+      }
+    }
+    
+    // Fallback to session-based auth
+    if (!userId && req.session && req.session.userId) {
+      userId = req.session.userId;
+      console.log(`📋 [AUTH] Using session for ${userId}`);
+    }
+    
+    if (userId) {
       // Check if this is a deep link user - they should not be authenticated on main app
-      if (req.session.userId.startsWith('deep_link_')) {
+      if (userId.startsWith('deep_link_')) {
         // Store deepLinkId before destroying session
         const deepLinkId = req.session.deepLinkId;
         
@@ -679,15 +747,15 @@ router.get("/auth-status", async (req, res) => {
       // Only authenticate passkey users (not deep link users)
       let userDoc = null;
       if (cacheFunctions) {
-        userDoc = cacheFunctions.getCache('users', req.session.userId);
-        if (!cacheFunctions.isCacheValid('users', req.session.userId)) {
-          userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+        userDoc = cacheFunctions.getCache('users', userId);
+        if (!cacheFunctions.isCacheValid('users', userId)) {
+          userDoc = await couchDBClient.getDocument("maia_users", userId);
           if (userDoc) {
-            cacheFunctions.setCache('users', req.session.userId, userDoc);
+            cacheFunctions.setCache('users', userId, userDoc);
           }
         }
       } else {
-        userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+        userDoc = await couchDBClient.getDocument("maia_users", userId);
       }
       if (userDoc) {
         // Echo current user to backend console
@@ -744,13 +812,17 @@ router.post("/logout", async (req, res) => {
   try {
     console.log(`🚨 BACKEND LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
     
-    if (req.session) {
+    // Clear the auth cookie
+    res.clearCookie('maia_auth');
+    console.log(`🍪 [LOGOUT] Cleared auth cookie`);
+    
+    if (req.session && req.session.userId) {
       const userId = req.session.userId;
       console.log(`👋 User signed out: ${userId}`);
       
       // Group chat filtering is handled by the frontend
       
-      req.session.destroy(async (err) => {
+      req.session.destroy((err) => {
         if (err) {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
@@ -760,7 +832,7 @@ router.post("/logout", async (req, res) => {
         // Session management is now in-memory only (maia_sessions database removed)
         console.log('[*] [Session Delete] Session destroyed (in-memory only)');
         
-        // Send a message to the browser console after session destruction
+        // Send response ONLY after session is actually destroyed
         res.json({ 
           success: true, 
           message: "Logged out successfully",

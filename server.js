@@ -6,6 +6,7 @@ dotenv.config()
 // Import session management utilities
 import { SessionManager } from './src/utils/session-manager.js';
 import { SessionMiddleware } from './src/middleware/session-middleware.js';
+import cookieParser from 'cookie-parser';
 
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
@@ -354,6 +355,9 @@ const uploadLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/parse-pdf', uploadLimiter);
 
+// Cookie parser middleware
+app.use(cookieParser());
+
 // CORS configuration for local development
 const corsOptions = {
           origin: process.env.ALLOWED_ORIGINS?.split(',') || [process.env.ORIGIN || 'http://localhost:3001'],
@@ -428,6 +432,21 @@ app.use(express.static(path.join(__dirname, 'dist'), {
     res.setHeader('Expires', '0');
   }
 }));
+
+// Request logging middleware - only log the first request per page load
+let lastRequestTime = 0;
+app.use((req, res, next) => {
+  const now = Date.now();
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  
+  // Only log the first request every 2 seconds to avoid spam
+  if (now - lastRequestTime > 2000 && !userAgent.includes('node-fetch') && !userAgent.includes('axios')) {
+    console.log(`🌐 [REQUEST] ${req.method} ${req.path} from browser`);
+    lastRequestTime = now;
+  }
+  
+  next();
+});
 
 // Input validation middleware
 app.use((req, res, next) => {
@@ -3432,45 +3451,46 @@ app.get('/api/current-agent', async (req, res) => {
   const hasSession = !!req.session;
   const sessionUserId = req.session?.userId;
   const hasCookie = !!req.headers.cookie;
-  const userAgent = req.headers['user-agent'];
-  const referer = req.headers.referer;
   
-  console.log(`🚀 [BACKEND] /api/current-agent called`);
-  console.log(`📋 [BACKEND] Request details:`, {
-    hasSession,
-    sessionUserId,
-    hasCookie,
-    userAgent: userAgent?.substring(0, 50) + '...',
-    referer: referer?.substring(0, 50) + '...'
-  });
   
   try {
-    // Get current user from session if available and valid
+    // Get current user from auth cookie first, then fallback to session
     let currentUser = 'Public User';
     
-    // Check if there's a valid session with a userId
-    if (req.session && req.session.userId) {
-      currentUser = req.session.userId;
-      console.log(`📋 [BACKEND] Valid session found for user: ${currentUser}`);
-    } else if (req.session) {
-      console.log(`📋 [BACKEND] Stale session found (no userId), treating as Public User`);
-    } else {
-      console.log(`📋 [BACKEND] No session found, treating as Public User`);
+    // Check for authentication cookie first
+    const authCookie = req.cookies.maia_auth;
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        
+        // Check if cookie is still valid (less than 10 minutes old)
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
+        
+        if (now < expiresAt) {
+          currentUser = authData.userId;
+          console.log(`🍪 [AUTH] Valid cookie for ${currentUser} - expires in ${timeToExpiry} minutes`);
+        } else {
+          console.log(`❌ [AUTH] Cookie expired for ${authData.userId} - clearing`);
+          res.clearCookie('maia_auth');
+        }
+      } catch (error) {
+        console.error(`❌ [AUTH] Invalid cookie format - clearing`);
+        res.clearCookie('maia_auth');
+      }
     }
     
-    console.log(`📋 [BACKEND] Identified user: ${currentUser}`);
-//     console.log(`🔍 [current-agent] Session data:`, {
-//       hasSession: !!req.session,
-//       userId: req.session?.userId,
-//       sessionId: req.sessionID
-//     });
+    // Fallback to session-based auth if no valid cookie
+    if (currentUser === 'Public User' && req.session && req.session.userId) {
+      currentUser = req.session.userId;
+      console.log(`📋 [AUTH] Using session for ${currentUser}`);
+    }
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
-    console.log(`📋 [BACKEND] Checking user type: ${currentUser}`);
     
     if (currentUser !== 'Public User') {
-      console.log(`📋 [BACKEND] Processing authenticated user: ${currentUser}`);
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
       if (currentUser.startsWith('deep_link_')) {
 //         console.log(`🔗 [current-agent] Deep link user detected: ${currentUser}, finding patient's agent`);
@@ -6604,8 +6624,8 @@ app.listen(PORT, async () => {
       console.log(`❌ [Database] Consistency check failed: ${error.message}`);
     }
     
-    // Auth status confirmation for Public User
-    console.log(`✅ [auth-status] Auth Status: Public User`);
+    // Server ready for requests
+    console.log(`✅ [STARTUP] Server ready for authentication requests`);
     
     // Ensure bucket folders for all users
 //     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');

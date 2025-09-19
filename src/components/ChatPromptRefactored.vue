@@ -248,11 +248,14 @@ export default defineComponent({
 
     // Handle sign out
     const handleSignOut = async () => {
+      console.log('🚪 [FRONTEND] handleSignOut called - starting logout process');
       try {
+        console.log('🚪 [FRONTEND] Making API call to /passkey/logout');
         const response = await fetch(`${API_BASE_URL}/passkey/logout`, { method: "POST" });
         const data = await response.json();
+        console.log('✅ [FRONTEND] Logout API call successful:', data);
       } catch (error) {
-        console.error('❌ Backend logout failed:', error);
+        console.error('❌ [FRONTEND] Backend logout failed:', error);
       }
       
       // Clear all caches to prevent cross-user contamination
