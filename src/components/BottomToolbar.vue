@@ -150,7 +150,7 @@
                 size="sm"
                 color="primary"
                 class="group-count-btn q-mr-sm"
-                @click="openGroupModal"
+                @click="triggerLoadSavedChats"
               >
                 <div class="group-count">{{ groupCount }}</div>
               </q-btn>
