@@ -342,6 +342,11 @@ export default defineComponent({
       });
     }, { deep: true });
 
+    // Watch for current user changes to update group count
+    watch(() => currentUser.value, () => {
+      updateGroupCount();
+    });
+
     // Watch for modal state changes
     watch(() => appStateManager.getStateProperty('showNoPrivateAgentModal'), (show) => {
       if (show && noPrivateAgentModalRef.value) {
@@ -468,7 +473,27 @@ export default defineComponent({
       showPasskeyAuthDialog.value = false;
     };
     const groupCount = ref(0);
-    const updateGroupCount = () => {};
+    const updateGroupCount = async () => {
+      try {
+        const { getAllGroupChats } = useGroupChat();
+        const allGroups = await getAllGroupChats();
+        
+        // Get current user name for filtering (same logic as Admin Panel)
+        const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
+        
+        // Filter groups by current user (same logic as Admin Panel)
+        const filteredGroups = allGroups.filter(group => {
+          const isOwner = group.currentUser === currentUserName;
+          const isPatientOwner = group.patientOwner === currentUserName;
+          return isOwner || isPatientOwner;
+        });
+        
+        groupCount.value = filteredGroups.length;
+      } catch (error) {
+        console.error('Error loading chat counts for Bottom Toolbar:', error);
+        groupCount.value = 0;
+      }
+    };
     const handleChatLoaded = () => {};
     const handleDeepLinkUpdated = () => {};
     const handleGroupDeleted = () => {};
@@ -480,6 +505,7 @@ export default defineComponent({
     onMounted(async () => {
       await nextTick();
       updateChatAreaMargin();
+      updateGroupCount(); // Load initial group count
       window.addEventListener('resize', updateChatAreaMargin);
     });
 
