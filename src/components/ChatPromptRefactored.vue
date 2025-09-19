@@ -589,6 +589,7 @@ export default defineComponent({
   <div class="chat-prompt-container">
     <!-- Chat Area -->
     <ChatArea
+      ref="chatAreaRef"
       :appState="appState"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
