@@ -286,20 +286,15 @@ export default defineComponent({
 
     // Update chat area bottom margin to account for fixed toolbar
     const updateChatAreaMargin = () => {
-      console.log('🔍 [CHAT AREA] updateChatAreaMargin called');
-      
       if (chatAreaRef.value) {
         let chatAreaElement = null;
         
         if (chatAreaRef.value.$el && chatAreaRef.value.$el.nodeType === Node.ELEMENT_NODE) {
           chatAreaElement = chatAreaRef.value.$el;
-          console.log('🔍 [CHAT AREA] Found chat area element via $el');
         } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentElement) {
           chatAreaElement = chatAreaRef.value.$el.parentElement;
-          console.log('🔍 [CHAT AREA] Found chat area element via parentElement');
         } else if (chatAreaRef.value.$el && chatAreaRef.value.$el.parentNode) {
           chatAreaElement = chatAreaRef.value.$el.parentNode;
-          console.log('🔍 [CHAT AREA] Found chat area element via parentNode');
         }
         
         if (chatAreaElement && chatAreaElement.nodeType === Node.ELEMENT_NODE) {
@@ -307,44 +302,23 @@ export default defineComponent({
           if (toolbar) {
             const toolbarRect = toolbar.getBoundingClientRect();
             const toolbarTop = toolbarRect.top;
-            const toolbarHeight = toolbarRect.height;
-            const windowHeight = window.innerHeight;
-            
-            console.log('🔍 [CHAT AREA] Toolbar metrics:', {
-              top: toolbarTop,
-              height: toolbarHeight,
-              windowHeight: windowHeight,
-              calculatedHeight: toolbarTop
-            });
             
             // Set the chat area height to stop at the toolbar boundary
             chatAreaElement.style.height = `${toolbarTop}px`;
             chatAreaElement.style.maxHeight = `${toolbarTop}px`;
             chatAreaElement.style.overflowY = 'auto';
             
-            console.log('🔍 [CHAT AREA] Set chat area height to:', toolbarTop);
-            
             // Auto-scroll to bottom to show action buttons
             setTimeout(() => {
               chatAreaElement.scrollTop = chatAreaElement.scrollHeight;
-              console.log('🔍 [CHAT AREA] Auto-scrolled to bottom, scrollTop:', chatAreaElement.scrollTop, 'scrollHeight:', chatAreaElement.scrollHeight);
             }, 100); // Small delay to ensure content is rendered
-          } else {
-            console.log('🔍 [CHAT AREA] No toolbar found');
           }
-        } else {
-          console.log('🔍 [CHAT AREA] No valid chat area element found');
         }
-      } else {
-        console.log('🔍 [CHAT AREA] chatAreaRef.value is null');
       }
     };
 
     // Watch for chat history changes to update chat area height
     watch(() => appState.chatHistory, (newHistory, oldHistory) => {
-      console.log('🔍 [CHAT AREA] Chat history changed, updating height');
-      console.log('🔍 [CHAT AREA] History length:', newHistory?.length || 0);
-      
       // Use nextTick to ensure DOM is updated before calculating height
       nextTick(() => {
         updateChatAreaMargin();
@@ -353,16 +327,13 @@ export default defineComponent({
         if (newHistory && newHistory.length > 0) {
           const lastMessage = newHistory[newHistory.length - 1];
           if (lastMessage.role === 'assistant') {
-            console.log('🔍 [CHAT AREA] AI response detected, ensuring scroll to bottom');
             setTimeout(() => {
               if (chatAreaRef.value && chatAreaRef.value.$el) {
                 const chatAreaElement = chatAreaRef.value.$el;
                 if (chatAreaElement.scrollTo) {
                   chatAreaElement.scrollTo({ top: chatAreaElement.scrollHeight, behavior: 'smooth' });
-                  console.log('🔍 [CHAT AREA] Smooth scrolled to bottom after AI response');
                 } else {
                   chatAreaElement.scrollTop = chatAreaElement.scrollHeight;
-                  console.log('🔍 [CHAT AREA] Scrolled to bottom after AI response');
                 }
               }
             }, 200); // Longer delay for AI responses to ensure content is fully rendered
@@ -436,14 +407,9 @@ export default defineComponent({
           assignedAgent.value // Pass assigned agent
         );
         
-        console.log('🔍 [CHAT AREA] AI response received, updating chat history');
-        console.log('🔍 [CHAT AREA] New history length:', newChatHistory?.length || 0);
-        
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
         appState.isLoading = false;
-        
-        console.log('🔍 [CHAT AREA] Chat history updated, height should be recalculated by watcher');
       } catch (error: any) {
         console.error("Query failed:", error);
         
@@ -512,17 +478,12 @@ export default defineComponent({
 
     // Call on mount and window resize
     onMounted(async () => {
-      console.log('🔍 [CHAT AREA] Component mounted, initializing height');
       await nextTick();
       updateChatAreaMargin();
-      window.addEventListener('resize', () => {
-        console.log('🔍 [CHAT AREA] Window resized, updating height');
-        updateChatAreaMargin();
-      });
+      window.addEventListener('resize', updateChatAreaMargin);
     });
 
     onUnmounted(() => {
-      console.log('🔍 [CHAT AREA] Component unmounted, cleaning up');
       window.removeEventListener('resize', updateChatAreaMargin);
     });
 
@@ -632,6 +593,7 @@ export default defineComponent({
       :appState="appState"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
+      :groupCount="groupCount"
       :placeholderText="placeholderText"
       :aiOption="aiOption"
       :AIoptions="AIoptions"
