@@ -323,6 +323,12 @@ export default defineComponent({
             chatAreaElement.style.overflowY = 'auto';
             
             console.log('🔍 [CHAT AREA] Set chat area height to:', toolbarTop);
+            
+            // Auto-scroll to bottom to show action buttons
+            setTimeout(() => {
+              chatAreaElement.scrollTop = chatAreaElement.scrollHeight;
+              console.log('🔍 [CHAT AREA] Auto-scrolled to bottom, scrollTop:', chatAreaElement.scrollTop, 'scrollHeight:', chatAreaElement.scrollHeight);
+            }, 100); // Small delay to ensure content is rendered
           } else {
             console.log('🔍 [CHAT AREA] No toolbar found');
           }
@@ -342,6 +348,26 @@ export default defineComponent({
       // Use nextTick to ensure DOM is updated before calculating height
       nextTick(() => {
         updateChatAreaMargin();
+        
+        // Additional scroll to bottom after AI responses
+        if (newHistory && newHistory.length > 0) {
+          const lastMessage = newHistory[newHistory.length - 1];
+          if (lastMessage.role === 'assistant') {
+            console.log('🔍 [CHAT AREA] AI response detected, ensuring scroll to bottom');
+            setTimeout(() => {
+              if (chatAreaRef.value && chatAreaRef.value.$el) {
+                const chatAreaElement = chatAreaRef.value.$el;
+                if (chatAreaElement.scrollTo) {
+                  chatAreaElement.scrollTo({ top: chatAreaElement.scrollHeight, behavior: 'smooth' });
+                  console.log('🔍 [CHAT AREA] Smooth scrolled to bottom after AI response');
+                } else {
+                  chatAreaElement.scrollTop = chatAreaElement.scrollHeight;
+                  console.log('🔍 [CHAT AREA] Scrolled to bottom after AI response');
+                }
+              }
+            }, 200); // Longer delay for AI responses to ensure content is fully rendered
+          }
+        }
       });
     }, { deep: true });
 
