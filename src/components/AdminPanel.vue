@@ -1602,13 +1602,16 @@ export default defineComponent({
     // Chat count loading function
     const loadChatCountsForAgents = async (agents) => {
       try {
+        console.log('🔍 [AdminPanel] Starting loadChatCountsForAgents...');
         const { getAllGroupChats } = useGroupChat();
         const allGroups = await getAllGroupChats();
+        console.log('🔍 [AdminPanel] Loaded all groups:', allGroups.length);
         
         // Update chat counts for each agent
         for (const agent of agents) {
           // Use the owner field that was already determined from agent name pattern
           const ownerName = agent.owner || 'Public User';
+          console.log(`🔍 [AdminPanel] Processing agent ${agent.name} with owner: ${ownerName}`);
           
           // Filter groups by the owner - use same logic as patient view for consistency
           const filteredGroups = allGroups.filter(group => {
@@ -1624,6 +1627,7 @@ export default defineComponent({
             return isOwner || isPatientOwner;
           });
           
+          console.log(`🔍 [AdminPanel] Agent ${agent.name} filtered groups count: ${filteredGroups.length}`);
           agent.chatCount = filteredGroups.length;
         }
       } catch (error) {

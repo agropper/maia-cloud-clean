@@ -475,22 +475,29 @@ export default defineComponent({
     const groupCount = ref(0);
     const updateGroupCount = async () => {
       try {
+        console.log('🔍 [BottomToolbar] Starting updateGroupCount...');
         const { getAllGroupChats } = useGroupChat();
         const allGroups = await getAllGroupChats();
+        console.log('🔍 [BottomToolbar] Loaded all groups:', allGroups.length);
         
         // Get current user name for filtering (same logic as Admin Panel)
         const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
+        console.log('🔍 [BottomToolbar] Current user name for filtering:', currentUserName);
+        console.log('🔍 [BottomToolbar] Current user object:', currentUser.value);
         
         // Filter groups by current user (same logic as Admin Panel)
         const filteredGroups = allGroups.filter(group => {
           const isOwner = group.currentUser === currentUserName;
           const isPatientOwner = group.patientOwner === currentUserName;
+          console.log(`🔍 [BottomToolbar] Group ${group.id}: currentUser=${group.currentUser}, patientOwner=${group.patientOwner}, isOwner=${isOwner}, isPatientOwner=${isPatientOwner}`);
           return isOwner || isPatientOwner;
         });
         
+        console.log('🔍 [BottomToolbar] Filtered groups count:', filteredGroups.length);
         groupCount.value = filteredGroups.length;
+        console.log('🔍 [BottomToolbar] Final groupCount.value:', groupCount.value);
       } catch (error) {
-        console.error('Error loading chat counts for Bottom Toolbar:', error);
+        console.error('❌ [BottomToolbar] Error loading chat counts:', error);
         groupCount.value = 0;
       }
     };
