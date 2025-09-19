@@ -3469,13 +3469,11 @@ app.get('/api/current-agent', async (req, res) => {
         
         if (now < expiresAt) {
           currentUser = authData.userId;
-          console.log(`🍪 [AUTH] Valid cookie for ${currentUser} - expires in ${timeToExpiry} minutes`);
         } else {
-          console.log(`❌ [AUTH] Cookie expired for ${authData.userId} - clearing`);
           res.clearCookie('maia_auth');
         }
       } catch (error) {
-        console.error(`❌ [AUTH] Invalid cookie format - clearing`);
+        console.error(`❌ Invalid cookie format - clearing`);
         res.clearCookie('maia_auth');
       }
     }
@@ -3483,7 +3481,6 @@ app.get('/api/current-agent', async (req, res) => {
     // Fallback to session-based auth if no valid cookie
     if (currentUser === 'Public User' && req.session && req.session.userId) {
       currentUser = req.session.userId;
-      console.log(`📋 [AUTH] Using session for ${currentUser}`);
     }
     
     // For authenticated users, check if they have an assigned agent

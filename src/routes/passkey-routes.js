@@ -557,7 +557,6 @@ router.post("/authenticate-verify", async (req, res) => {
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
       };
       
-      console.log(`🍪 [AUTH] Setting auth cookie with data:`, authData);
       res.cookie('maia_auth', JSON.stringify(authData), {
         maxAge: 10 * 60 * 1000, // 10 minutes
         httpOnly: true,
@@ -565,7 +564,6 @@ router.post("/authenticate-verify", async (req, res) => {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
         path: '/'
       });
-      console.log(`🍪 [AUTH] Auth cookie set for user: ${updatedUser._id}`);
       
       // Set the user's assigned agent as current when they sign in
       try {
@@ -590,12 +588,11 @@ router.post("/authenticate-verify", async (req, res) => {
             });
             
             if (currentAgentResponse.ok) {
-              console.log(`✅ [AUTH] Successfully set current agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName}`);
             }
           }
         }
       } catch (error) {
-        console.error(`❌ [AUTH] Error setting current agent for ${updatedUser._id}:`, error.message);
+        console.error(`❌ Error setting current agent for ${updatedUser._id}:`, error.message);
       }
       
       // Explicitly save the session
@@ -703,13 +700,11 @@ router.get("/auth-status", async (req, res) => {
         
         if (now < expiresAt) {
           userId = authData.userId;
-          console.log(`🍪 [AUTH] Valid cookie for ${userId} - expires in ${timeToExpiry} minutes`);
         } else {
-          console.log(`❌ [AUTH] Cookie expired for ${authData.userId} - clearing`);
           res.clearCookie('maia_auth');
         }
       } catch (error) {
-        console.error(`❌ [AUTH] Invalid cookie format - clearing`);
+        console.error(`❌ Invalid cookie format - clearing`);
         res.clearCookie('maia_auth');
       }
     }
@@ -717,7 +712,6 @@ router.get("/auth-status", async (req, res) => {
     // Fallback to session-based auth
     if (!userId && req.session && req.session.userId) {
       userId = req.session.userId;
-      console.log(`📋 [AUTH] Using session for ${userId}`);
     }
     
     if (userId) {
