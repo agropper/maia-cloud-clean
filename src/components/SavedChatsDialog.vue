@@ -159,7 +159,10 @@ export default defineComponent({
     };
 
     const selectChat = (chat: SavedChat) => {
+      console.log('🔍 [DEBUG LOAD] SavedChatsDialog selectChat called with:', chat);
+      console.log('🔍 [DEBUG LOAD] Emitting chat-selected event...');
       emit("chat-selected", chat);
+      console.log('🔍 [DEBUG LOAD] Emitting update:modelValue false...');
       emit("update:modelValue", false);
     };
 

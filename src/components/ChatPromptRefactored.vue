@@ -495,9 +495,16 @@ export default defineComponent({
       }
     };
     const handleChatLoaded = (groupChat: any) => {
+      console.log('🔍 [DEBUG LOAD] handleChatLoaded called with:', groupChat);
+      console.log('🔍 [DEBUG LOAD] chatAreaRef.value:', chatAreaRef.value);
+      
       // Pass the loaded chat to ChatArea
       if (chatAreaRef.value) {
+        console.log('🔍 [DEBUG LOAD] Calling chatAreaRef.value.handleChatLoaded...');
         chatAreaRef.value.handleChatLoaded(groupChat);
+        console.log('🔍 [DEBUG LOAD] chatAreaRef.value.handleChatLoaded completed');
+      } else {
+        console.log('❌ [DEBUG LOAD] chatAreaRef.value is null!');
       }
     };
     const handleDeepLinkUpdated = () => {};
@@ -647,7 +654,7 @@ export default defineComponent({
       v-model="showSavedChatsDialog"
       :appState="appState"
       :currentUser="currentUser"
-      @load-chat="handleChatLoaded"
+      @chat-selected="handleChatLoaded"
     />
 
     <AgentManagementDialog
