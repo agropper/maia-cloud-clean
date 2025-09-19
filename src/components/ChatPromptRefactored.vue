@@ -494,7 +494,12 @@ export default defineComponent({
         groupCount.value = 0;
       }
     };
-    const handleChatLoaded = () => {};
+    const handleChatLoaded = (groupChat: any) => {
+      // Pass the loaded chat to ChatArea
+      if (chatAreaRef.value) {
+        chatAreaRef.value.handleChatLoaded(groupChat);
+      }
+    };
     const handleDeepLinkUpdated = () => {};
     const handleGroupDeleted = () => {};
     const currentDeepLink = ref(null);
@@ -642,7 +647,7 @@ export default defineComponent({
       v-model="showSavedChatsDialog"
       :appState="appState"
       :currentUser="currentUser"
-      @load-chat="loadGroupChat"
+      @load-chat="handleChatLoaded"
     />
 
     <AgentManagementDialog
