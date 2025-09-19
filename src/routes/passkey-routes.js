@@ -709,10 +709,7 @@ router.get("/auth-status", async (req, res) => {
       }
     }
     
-    // Fallback to session-based auth
-    if (!userId && req.session && req.session.userId) {
-      userId = req.session.userId;
-    }
+    // Note: Removed session fallback - we now use cookie-based auth only
     
     if (userId) {
       // Check if this is a deep link user - they should not be authenticated on main app
