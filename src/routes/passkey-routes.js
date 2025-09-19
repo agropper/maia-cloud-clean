@@ -569,14 +569,12 @@ router.post("/authenticate-verify", async (req, res) => {
       
       // Set the user's assigned agent as current when they sign in
       try {
-        console.log(`🔍 [AUTH] Setting assigned agent as current for user: ${updatedUser._id}`);
         
         // Get the user's assigned agent from admin management
         const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${updatedUser._id}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
           if (assignedAgentData.assignedAgentId) {
-            console.log(`🔍 [AUTH] Found assigned agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId})`);
             
             // Set this agent as the current agent for the user
             const currentAgentResponse = await fetch(`http://localhost:3001/api/current-agent`, {
@@ -593,14 +591,8 @@ router.post("/authenticate-verify", async (req, res) => {
             
             if (currentAgentResponse.ok) {
               console.log(`✅ [AUTH] Successfully set current agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName}`);
-            } else {
-              console.warn(`⚠️ [AUTH] Failed to set current agent for ${updatedUser._id}: ${currentAgentResponse.status}`);
             }
-          } else {
-            console.log(`🔍 [AUTH] No assigned agent found for ${updatedUser._id} - will show "No Agent Selected"`);
           }
-        } else {
-          console.warn(`⚠️ [AUTH] Failed to get assigned agent for ${updatedUser._id}: ${assignedAgentResponse.status}`);
         }
       } catch (error) {
         console.error(`❌ [AUTH] Error setting current agent for ${updatedUser._id}:`, error.message);
@@ -688,15 +680,15 @@ router.get("/auth-status", async (req, res) => {
         const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60);
         
         if (now < expiresAt) {
-          console.log(`🍪 [COOKIE] Valid auth cookie for ${authData.userId} - expires in ${timeToExpiry} minutes`);
+          // Cookie is valid
         } else {
-          console.log(`🍪 [COOKIE] Expired auth cookie for ${authData.userId} - clearing`);
+          // Cookie expired
         }
       } catch (error) {
-        console.log(`🍪 [COOKIE] Invalid auth cookie - clearing`);
+        // Invalid cookie
       }
     } else {
-      console.log(`🍪 [COOKIE] No auth cookie found`);
+      // No cookie found
     }
     let userId = null;
     
@@ -828,9 +820,6 @@ router.post("/logout", async (req, res) => {
           return res.status(500).json({ error: "Failed to logout" });
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
-        
-        // Session management is now in-memory only (maia_sessions database removed)
-        console.log('[*] [Session Delete] Session destroyed (in-memory only)');
         
         // Send response ONLY after session is actually destroyed
         res.json({ 
