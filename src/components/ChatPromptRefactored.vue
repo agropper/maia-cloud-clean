@@ -494,18 +494,21 @@ export default defineComponent({
         groupCount.value = 0;
       }
     };
-    const handleChatLoaded = (groupChat: any) => {
-      console.log('🔍 [DEBUG LOAD] handleChatLoaded called with:', groupChat);
-      console.log('🔍 [DEBUG LOAD] chatAreaRef.value:', chatAreaRef.value);
+    const handleChatLoaded = (chat: any) => {
+      console.log('🔍 [DEBUG LOAD] handleChatLoaded called with:', chat);
       
-      // Pass the loaded chat to ChatArea
-      if (chatAreaRef.value) {
-        console.log('🔍 [DEBUG LOAD] Calling chatAreaRef.value.handleChatLoaded...');
-        chatAreaRef.value.handleChatLoaded(groupChat);
-        console.log('🔍 [DEBUG LOAD] chatAreaRef.value.handleChatLoaded completed');
-      } else {
-        console.log('❌ [DEBUG LOAD] chatAreaRef.value is null!');
-      }
+      // Update appState directly like the original handleChatSelected
+      appState.chatHistory = chat.chatHistory || [];
+      appState.uploadedFiles = chat.uploadedFiles || [];
+      
+      console.log('🔍 [DEBUG LOAD] Updated appState.chatHistory length:', appState.chatHistory.length);
+      console.log('🔍 [DEBUG LOAD] Updated appState.uploadedFiles length:', appState.uploadedFiles.length);
+      
+      // Show success message
+      writeMessage(
+        `Loaded chat from ${new Date(chat.createdAt).toLocaleDateString()}`,
+        "success"
+      );
     };
     const handleDeepLinkUpdated = () => {};
     const handleGroupDeleted = () => {};
@@ -638,7 +641,7 @@ export default defineComponent({
       :triggerSendQuery="triggerSendQuery"
       :triggerAuth="showAuth"
       :triggerJWT="showJWT"
-      :triggerLoadSavedChats="() => showSavedChatsDialog = true"
+      :triggerLoadSavedChats="() => { console.log('🔍 [DEBUG LOAD] triggerLoadSavedChats called'); showSavedChatsDialog = true; }"
       :triggerAgentManagement="triggerAgentManagement"
       :clearLocalStorageKeys="clearLocalStorageKeys"
       @write-message="writeMessage"
@@ -652,9 +655,9 @@ export default defineComponent({
     <!-- Modals and Dialogs -->
     <SavedChatsDialog
       v-model="showSavedChatsDialog"
-      :appState="appState"
-      :currentUser="currentUser"
+      :patientId="'demo_patient_001'"
       @chat-selected="handleChatLoaded"
+      v-if="showSavedChatsDialog"
     />
 
     <AgentManagementDialog
