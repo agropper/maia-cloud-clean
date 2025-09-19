@@ -81,6 +81,7 @@ export default defineComponent({
     },
   },
   setup() {
+    console.log('🔍 [DEBUG LOAD] ChatPromptRefactored.vue setup() called');
     const { appState, writeMessage, clearLocalStorageKeys, setActiveQuestionName } = useChatState();
     const { logMessage, logContextSwitch, logSystemEvent, setTimelineChunks } = useChatLogger();
     const { generateTranscript } = useTranscript();
@@ -518,6 +519,7 @@ export default defineComponent({
 
     // Call on mount and window resize
     onMounted(async () => {
+      console.log('🔍 [DEBUG LOAD] ChatPromptRefactored.vue onMounted() called');
       await nextTick();
       updateChatAreaMargin();
       updateGroupCount(); // Load initial group count
