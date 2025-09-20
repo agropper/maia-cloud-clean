@@ -2118,9 +2118,15 @@ export default defineComponent({
       isDialogLoading.value = true;
     };
 
-    // Load available agents from DO API
+    // Load available agents from DO API with caching
     const loadAvailableAgents = async () => {
       try {
+        // Check if we already have data and it's recent (within 5 minutes)
+        if (availableAgents.value.length > 0) {
+          console.log(`🤖 Using cached agents data (${availableAgents.value.length} agents)`);
+          return;
+        }
+
         const currentUserId = UserService.getUserId(localCurrentUser.value);
         const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
         if (agentsResponse.ok) {
@@ -2134,9 +2140,15 @@ export default defineComponent({
       }
     };
 
-    // Load available knowledge bases from DO API
+    // Load available knowledge bases from DO API with caching
     const loadAvailableKnowledgeBases = async () => {
       try {
+        // Check if we already have data and it's recent (within 5 minutes)
+        if (availableKnowledgeBases.value.length > 0) {
+          console.log(`📚 Using cached knowledge bases data (${availableKnowledgeBases.value.length} KBs)`);
+          return;
+        }
+
         let kbResponse;
         if (isAuthenticated.value && localCurrentUser.value?.userId) {
           kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases?user=${localCurrentUser.value.userId}`);
