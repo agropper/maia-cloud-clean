@@ -136,7 +136,7 @@ export default defineComponent({
   },
   emits: ["update:modelValue", "chat-selected"],
   setup(props, { emit }) {
-    const { getAllGroupChats, loadGroupChat } = useGroupChat();
+    const { getAllGroupChats } = useGroupChat();
     const { loadChats, deleteChat } = useCouchDB();
 
     const isOpen = ref(props.modelValue);
@@ -209,18 +209,9 @@ export default defineComponent({
       }
     };
 
-    const selectChat = async (chat: GroupChat) => {
-      try {
-        // Load the full chat data with complete base64 content
-        const fullChat = await loadGroupChat(chat.id);
-        emit("chat-selected", fullChat);
-        emit("update:modelValue", false);
-      } catch (error) {
-        console.error('Failed to load full chat data:', error);
-        // Fallback to using the list data if loading fails
-        emit("chat-selected", chat);
-        emit("update:modelValue", false);
-      }
+    const selectChat = (chat: GroupChat) => {
+      emit("chat-selected", chat);
+      emit("update:modelValue", false);
     };
 
     const isOwner = (chat: GroupChat) => {
