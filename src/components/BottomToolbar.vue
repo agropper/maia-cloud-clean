@@ -113,7 +113,7 @@
           <div class="status-line">
             <!-- SIGN IN/SIGN OUT Toggle -->
             <q-btn
-              v-if="!currentUser || (currentUser && (currentUser.userId === 'Public User' || currentUser.displayName === 'Public User'))"
+              v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
               flat
               dense
               size="sm"
@@ -397,15 +397,15 @@ export default defineComponent({
     }
 
     const getCurrentUserName = () => {
-      if (!props.currentUser) return 'Public User'
+      if (!props.currentUser) return 'Unknown User'
       if (typeof props.currentUser === 'string') return props.currentUser
-      return props.currentUser.displayName || props.currentUser.userId || 'Public User'
+      return props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
     }
 
     const isUserUnknown = computed(() => {
       if (!props.currentUser) return true
-      if (typeof props.currentUser === 'string') return props.currentUser === 'Public User'
-      return props.currentUser.userId === 'Public User' || props.currentUser.displayName === 'Public User'
+      if (typeof props.currentUser === 'string') return props.currentUser === 'Unknown User'
+      return props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
     })
 
     const openGroupModal = () => {
