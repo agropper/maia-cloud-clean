@@ -134,7 +134,7 @@ export default defineComponent({
       required: true,
     },
   },
-  emits: ["update:modelValue", "chat-selected"],
+  emits: ["update:modelValue", "chat-selected", "group-deleted"],
   setup(props, { emit }) {
     const { getAllGroupChats } = useGroupChat();
     const { loadChats, deleteChat } = useCouchDB();
@@ -149,11 +149,12 @@ export default defineComponent({
       error.value = "";
 
       try {
-        // Load from both GroupChat and CouchDB systems
-        const [allGroups, couchChats] = await Promise.all([
-          getAllGroupChats().catch(() => []), // Don't fail if GroupChat system is unavailable
-          loadChats().catch(() => []) // Don't fail if CouchDB system is unavailable
-        ]);
+        // Use cached data from the backend instead of calling getAllGroupChats()
+        const response = await fetch('/api/group-chats');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch group chats: ${response.statusText}`);
+        }
+        const allGroups = await response.json();
         
         // Get current user name for filtering
         let currentUserName: string;
@@ -184,24 +185,8 @@ export default defineComponent({
           });
         }
         
-        // Convert CouchDB chats to GroupChat format for compatibility
-        const convertedCouchChats = couchChats.map(chat => ({
-          id: chat.id,
-          shareId: `legacy_${chat.id}`, // Create a legacy shareId
-          currentUser: currentUserName, // Use current user as owner
-          connectedKB: '', // Legacy chats don't have KB info
-          createdAt: chat.createdAt,
-          updatedAt: chat.updatedAt,
-          participantCount: chat.participantCount,
-          messageCount: chat.messageCount,
-          chatHistory: chat.chatHistory,
-          uploadedFiles: chat.uploadedFiles, // These are already in UploadedFile format
-          isShared: false,
-          shareType: 'private' // Legacy chats are private
-        }));
-        
-        // Combine both sources
-        savedChats.value = [...filteredGroups, ...convertedCouchChats];
+        // Use only the filtered groups from cache
+        savedChats.value = filteredGroups;
       } catch (err) {
         error.value = err instanceof Error ? err.message : "Failed to load chats";
       } finally {
@@ -288,13 +273,31 @@ export default defineComponent({
 
     const handleDeleteChat = async (chatId: string) => {
       try {
-        await deleteChat(chatId);
-        // Remove from local list
-        savedChats.value = savedChats.value.filter(
-          (chat) => chat.id !== chatId
-        );
+        // Use the correct group chat deletion endpoint
+        const response = await fetch(`/api/group-chats/${chatId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Remove from local list
+          savedChats.value = savedChats.value.filter(
+            (chat) => chat.id !== chatId
+          );
+          
+          // Emit event to parent component to update group count
+          emit('group-deleted');
+        } else {
+          throw new Error(result.message || 'Failed to delete chat');
+        }
       } catch (err) {
         console.error("Failed to delete chat:", err);
+        error.value = err instanceof Error ? err.message : 'Failed to delete chat';
       }
     };
 

@@ -127,18 +127,11 @@ export default {
           // @ts-ignore
           const task = pdfjsLib.getDocument({ data: buf })
           pdf = await task.promise
-        } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && this.currentFile.originalFile.base64) {
+        } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && 'base64' in this.currentFile.originalFile && (this.currentFile.originalFile as any).base64) {
           // Database-loaded file with base64 data - reconstruct the PDF
   
           try {
-            const base64 = this.currentFile.originalFile.base64
-            console.log('🔍 [PDF FAILS] PopUp.loadPDF - currentFile structure:', {
-              hasOriginalFile: !!this.currentFile.originalFile,
-              originalFileKeys: Object.keys(this.currentFile.originalFile || {}),
-              base64Length: base64?.length || 0,
-              base64Preview: base64?.substring(0, 50) || 'none',
-              currentFileContent: this.currentFile.content?.substring(0, 50) || 'none'
-            });
+            const base64 = (this.currentFile.originalFile as any).base64
             console.log('🔍 [PDF DEBUG] Attempting to decode base64:', {
               base64Length: base64.length,
               base64Type: typeof base64,
@@ -207,10 +200,10 @@ export default {
         }
         
       } catch (e) {
-        console.error('PDF loading error:', e)
+        console.error('PDF loading error:', e instanceof Error ? e.message : 'Unknown error')
         
         // Check if this is a database-loaded file that should show text instead
-        if (e.message && e.message.includes('PDF binary not available')) {
+        if (e instanceof Error && e.message && e.message.includes('PDF binary not available')) {
           // Switch to text view for database files
           this.displayMode = 'text'
           return

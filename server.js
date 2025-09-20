@@ -2330,8 +2330,8 @@ app.post('/api/save-group-chat', async (req, res) => {
     const result = await couchDBClient.saveChat(groupChatDoc);
     // console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
     
-    // Invalidate chat cache since we added new chat data
-    invalidateCache('chats');
+    // Reload chat cache since we added new chat data
+    await reloadChatCache();
     
     res.json({ 
       success: true, 
@@ -2531,13 +2531,6 @@ app.get('/api/shared/:shareId', async (req, res) => {
     }
     
     // Debug: Check what we're returning from the database
-    console.log('🔍 [PDF FAILS] Server /api/shared/:shareId response:', {
-      chatId: chat._id,
-      uploadedFilesCount: chat.uploadedFiles?.length || 0,
-      firstFileBase64Length: chat.uploadedFiles?.[0]?.base64?.length || 0,
-      firstFileBase64Preview: chat.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none',
-      firstFileSize: chat.uploadedFiles?.[0]?.size || 0
-    });
     
     res.json({
       id: chat._id,
@@ -2653,8 +2646,8 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     const result = await couchDBClient.saveChat(updatedChatDoc);
 //     console.log(`🔄 Group chat updated: ${chatId}`);
     
-    // Invalidate chat cache since we modified chat data
-    invalidateCache('chats');
+    // Reload chat cache since we modified chat data
+    await reloadChatCache();
     
     res.json({ 
       success: true, 
@@ -2730,8 +2723,8 @@ app.delete('/api/group-chats/:chatId', async (req, res) => {
     
 //     console.log(`🗑️ Deleted chat: ${chatId}`);
     
-    // Invalidate chat cache since we deleted chat data
-    invalidateCache('chats');
+    // Reload chat cache since we deleted chat data
+    await reloadChatCache();
     
     res.json({ success: true, message: 'Group chat deleted successfully' });
   } catch (error) {
@@ -5890,6 +5883,17 @@ const invalidateCache = (cacheType, key = null) => {
   }
 };
 
+// Reload chat cache from database
+const reloadChatCache = async () => {
+  try {
+    const allChats = await couchDBClient.getAllChats();
+    setCache('chats', null, allChats);
+    console.log(`🔄 [CACHE] Reloaded ${allChats.length} saved chats into cache`);
+  } catch (error) {
+    console.error('❌ [CACHE] Failed to reload chat cache:', error.message);
+  }
+};
+
 // MAIA2 routes removed - using consolidated maia_users database
 
 // Pass the CouchDB client to the routes
@@ -6611,6 +6615,15 @@ app.listen(PORT, async () => {
     
     // Server ready for requests
     console.log(`✅ [STARTUP] Server ready for authentication requests`);
+    
+    // Load saved chats into cache at startup
+    try {
+      const allChats = await couchDBClient.getAllChats();
+      setCache('chats', null, allChats);
+      console.log(`📚 [STARTUP] Loaded ${allChats.length} saved chats into cache`);
+    } catch (error) {
+      console.error('❌ [STARTUP] Failed to load saved chats into cache:', error.message);
+    }
     
     // Ensure bucket folders for all users
 //     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');

@@ -352,6 +352,7 @@ export default defineComponent({
     'sign-out',
     'group-count-updated',
     'deep-link-updated',
+    'group-saved',
     'clear-warning'
   ],
   methods: {
@@ -540,6 +541,9 @@ export default defineComponent({
         
         // Refresh group count after creating/updating group chat
         this.loadGroupCount()
+        
+        // Emit event to parent component to update group count
+        this.$emit('group-saved')
         
         
       } catch (error) {

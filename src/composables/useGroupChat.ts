@@ -72,7 +72,7 @@ export const useGroupChat = () => {
             console.warn(`⚠️ Failed to convert PDF to base64: ${file.name}`, error);
             return { ...file, originalFile: null };
           }
-        } else if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
+        } else if (file.originalFile && typeof file.originalFile === 'object' && 'base64' in file.originalFile && (file.originalFile as any).base64) {
           // Database-loaded PDF file with existing base64 data - preserve it
           return file; // Return as-is, already has the correct structure
         } else {
@@ -140,7 +140,6 @@ export const useGroupChat = () => {
 
   const loadSharedChat = async (shareId: string): Promise<GroupChat> => {
     try {
-      console.log('🔍 [PDF FAILS] loadSharedChat called with shareId:', shareId);
       const response = await fetch(`${API_BASE_URL}/shared/${shareId}`)
       
       if (!response.ok) {
@@ -149,15 +148,9 @@ export const useGroupChat = () => {
       }
 
       const data = await response.json();
-      console.log('🔍 [PDF FAILS] loadSharedChat server response:', {
-        uploadedFilesCount: data.uploadedFiles?.length || 0,
-        firstFileBase64Length: data.uploadedFiles?.[0]?.base64?.length || 0,
-        firstFileBase64Preview: data.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none',
-        firstFileSize: data.uploadedFiles?.[0]?.size || 0
-      });
       return data;
     } catch (error) {
-      console.error('Failed to load shared chat:', error);
+      console.error('Failed to load shared chat:', error instanceof Error ? error.message : 'Unknown error');
       throw error
     }
   }
@@ -177,12 +170,14 @@ export const useGroupChat = () => {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('❌ [useGroupChat] Failed to load all group chats:', error);
-      console.error('❌ [useGroupChat] Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('❌ [useGroupChat] Failed to load all group chats:', error instanceof Error ? error.message : 'Unknown error');
+      if (error instanceof Error) {
+        console.error('❌ [useGroupChat] Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
       throw error
     }
   }

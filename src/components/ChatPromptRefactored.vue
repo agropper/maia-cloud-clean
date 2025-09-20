@@ -244,12 +244,6 @@ export default defineComponent({
         const { loadSharedChat } = useGroupChat();
         const groupChat = await loadSharedChat(userData.shareId);
         
-        console.log('🔍 [PDF FAILS] Deep link chat loaded:', {
-          chatId: groupChat.id,
-          uploadedFilesCount: groupChat.uploadedFiles?.length || 0,
-          firstFileBase64Length: groupChat.uploadedFiles?.[0]?.base64?.length || 0,
-          firstFileBase64Preview: groupChat.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none'
-        });
         
         // Load the group chat data WITHOUT modifying existing user names
         // This preserves the original user labels in the chat history
@@ -555,9 +549,12 @@ export default defineComponent({
     const groupCount = ref(0);
     const updateGroupCount = async () => {
       try {
-        console.log('🔍 [PDF FAILS] updateGroupCount called - this might affect PDF data');
-        const { getAllGroupChats } = useGroupChat();
-        const allGroups = await getAllGroupChats();
+        // Use cached data from the backend instead of calling getAllGroupChats()
+        const response = await fetch('/api/group-chats');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch group chats: ${response.statusText}`);
+        }
+        const allGroups = await response.json();
         
         // Get current user name for filtering (same logic as Admin Panel)
         const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
@@ -639,7 +636,15 @@ export default defineComponent({
       );
     };
     const handleDeepLinkUpdated = () => {};
-    const handleGroupDeleted = () => {};
+    const handleGroupDeleted = async () => {
+      // Update the group count when a chat is deleted
+      await updateGroupCount();
+    };
+    
+    const handleGroupSaved = async () => {
+      // Update the group count when a chat is saved
+      await updateGroupCount();
+    };
     const currentDeepLink = ref(null);
     const chatAreaRef = ref(null);
     const pendingShareId = ref(null);
@@ -761,6 +766,7 @@ export default defineComponent({
       handleChatLoaded,
       handleDeepLinkUpdated,
       handleGroupDeleted,
+      handleGroupSaved,
       currentDeepLink,
       chatAreaRef,
       pendingShareId,
@@ -789,6 +795,7 @@ export default defineComponent({
       @sign-out="handleSignOut"
       @clear-warning="agentWarning = ''"
       @view-file="viewFile"
+      @group-saved="handleGroupSaved"
     />
 
     <!-- Bottom Toolbar -->
@@ -819,6 +826,7 @@ export default defineComponent({
       v-model="showSavedChatsDialog"
       :currentUser="currentUser"
       @chat-selected="handleChatLoaded"
+      @group-deleted="handleGroupDeleted"
       v-if="showSavedChatsDialog"
     />
 
