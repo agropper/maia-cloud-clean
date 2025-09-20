@@ -148,6 +148,15 @@ export const useGroupChat = () => {
       }
 
       const data = await response.json();
+      
+      // Debug: Check what we're getting from the server
+      console.log('🔍 [loadSharedChat] Server response for shareId:', shareId, {
+        uploadedFilesCount: data.uploadedFiles?.length || 0,
+        firstFileBase64Length: data.uploadedFiles?.[0]?.base64?.length || 0,
+        firstFileBase64Preview: data.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none',
+        firstFileSize: data.uploadedFiles?.[0]?.size || 0
+      });
+      
       return data;
     } catch (error) {
       console.error('Failed to load shared chat:', error);
