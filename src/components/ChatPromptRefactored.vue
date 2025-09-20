@@ -244,23 +244,10 @@ export default defineComponent({
         const { loadSharedChat } = useGroupChat();
         const groupChat = await loadSharedChat(userData.shareId);
         
-        console.log('🔍 [PDF FAILS] Deep link chat loaded:', {
-          chatId: groupChat.id,
-          uploadedFilesCount: groupChat.uploadedFiles?.length || 0,
-          firstFileBase64Length: groupChat.uploadedFiles?.[0]?.base64?.length || 0,
-          firstFileBase64Preview: groupChat.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none'
-        });
-        
         // Load the group chat data WITHOUT modifying existing user names
         // This preserves the original user labels in the chat history
         appState.chatHistory = groupChat.chatHistory;
         appState.uploadedFiles = groupChat.uploadedFiles;
-        
-        console.log('🔍 [PDF FAILS] appState.uploadedFiles set:', {
-          uploadedFilesCount: appState.uploadedFiles?.length || 0,
-          firstFileBase64Length: appState.uploadedFiles?.[0]?.base64?.length || 0,
-          firstFileBase64Preview: appState.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none'
-        });
         
         // Store the chat ID for future updates
         appState.currentChatId = groupChat.id;
@@ -553,14 +540,25 @@ export default defineComponent({
       showPasskeyAuthDialog.value = false;
     };
     const groupCount = ref(0);
+    const groupCountCache = ref({ data: null, timestamp: 0, user: null });
+    const CACHE_DURATION = 30000; // 30 seconds
+    
     const updateGroupCount = async () => {
       try {
-        console.log('🔍 [PDF FAILS] updateGroupCount called - this might affect PDF data');
+        // Check if we have valid cached data for the current user
+        const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
+        const now = Date.now();
+        
+        if (groupCountCache.value.data && 
+            groupCountCache.value.user === currentUserName &&
+            (now - groupCountCache.value.timestamp) < CACHE_DURATION) {
+          // Use cached data
+          groupCount.value = groupCountCache.value.data;
+          return;
+        }
+        
         const { getAllGroupChats } = useGroupChat();
         const allGroups = await getAllGroupChats();
-        
-        // Get current user name for filtering (same logic as Admin Panel)
-        const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
         
         // Filter groups by current user (same logic as GroupManagementModal and SavedChatsDialog)
         let filteredGroups: any[];
@@ -584,6 +582,13 @@ export default defineComponent({
         }
         
         groupCount.value = filteredGroups.length;
+        
+        // Cache the result
+        groupCountCache.value = {
+          data: groupCount.value,
+          timestamp: now,
+          user: currentUserName
+        };
       } catch (error) {
         console.error('Error loading chat counts for Bottom Toolbar:', error);
         groupCount.value = 0;

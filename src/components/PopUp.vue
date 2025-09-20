@@ -132,13 +132,6 @@ export default {
   
           try {
             const base64 = this.currentFile.originalFile.base64
-            console.log('🔍 [PDF FAILS] PopUp.loadPDF - currentFile structure:', {
-              hasOriginalFile: !!this.currentFile.originalFile,
-              originalFileKeys: Object.keys(this.currentFile.originalFile || {}),
-              base64Length: base64?.length || 0,
-              base64Preview: base64?.substring(0, 50) || 'none',
-              currentFileContent: this.currentFile.content?.substring(0, 50) || 'none'
-            });
             console.log('🔍 [PDF DEBUG] Attempting to decode base64:', {
               base64Length: base64.length,
               base64Type: typeof base64,
