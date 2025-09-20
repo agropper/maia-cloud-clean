@@ -208,6 +208,39 @@ export default defineComponent({
       shareId: string;
     }) => {
       try {
+        // First, let the backend handle user lookup/creation
+        const response = await fetch('/api/deep-link-users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: userData.name,
+            email: userData.email,
+            shareId: userData.shareId,
+            accessTime: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            ipAddress: 'unknown', // Will be set by server
+            isDeepLinkUser: true
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to create/find user: ${response.statusText}`);
+        }
+
+        const userResult = await response.json();
+        
+        if (userResult.requiresEmailChoice) {
+          // Handle email mismatch - this should be handled by the modal
+          console.warn('⚠️ [ChatPrompt] Email mismatch detected, but modal should handle this');
+          return;
+        }
+
+        if (!userResult.success) {
+          throw new Error(userResult.message || 'Failed to create/find user');
+        }
+
         // Load the shared chat
         const { loadSharedChat } = useGroupChat();
         const groupChat = await loadSharedChat(userData.shareId);
@@ -220,12 +253,12 @@ export default defineComponent({
         // Store the chat ID for future updates
         appState.currentChatId = groupChat.id;
         
-        // Set current user to the identified user (this will update the Agent badge)
+        // Create user object from backend response (ensures proper database data)
         const deepLinkUser = UserService.createDeepLinkUser(
-          userData.name,
-          userData.email,
-          userData.userId,
-          userData.shareId
+          userResult.userId,
+          userResult.user.name, // Use name from backend response
+          userResult.user.email, // Use email from backend response
+          userResult.user.shareId
         );
         
         // Update centralized state
