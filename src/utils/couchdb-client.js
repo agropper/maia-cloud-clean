@@ -236,23 +236,73 @@ export class CouchDBClient {
 
   async getChatByShareId(shareId) {
     try {
+      console.log(`🔗 [DEEP LINK] getChatByShareId called with shareId: ${shareId}`);
+      console.log(`🔗 [DEEP LINK] Database info:`, {
+        databaseName: this.databaseName,
+        isCloudant: this.isCloudant
+      });
+      
       // Create a view to find chats by shareId
+      console.log(`🔗 [DEEP LINK] Attempting to use view 'chats/by_share_id' with key: ${shareId}`);
       const result = await this.database.view('chats', 'by_share_id', {
         key: shareId,
         include_docs: true
       })
       
+      console.log(`🔗 [DEEP LINK] View query result:`, {
+        rows: result.rows?.length || 0,
+        hasRows: result.rows && result.rows.length > 0,
+        firstRow: result.rows?.[0] ? {
+          id: result.rows[0].id,
+          key: result.rows[0].key,
+          hasDoc: !!result.rows[0].doc
+        } : 'no rows'
+      });
+      
       if (result.rows.length > 0) {
+        console.log(`✅ [DEEP LINK] Found chat via view:`, {
+          id: result.rows[0].doc._id,
+          shareId: result.rows[0].doc.shareId,
+          currentUser: result.rows[0].doc.currentUser
+        });
         return result.rows[0].doc
       }
+      console.log(`⚠️ [DEEP LINK] No results from view, returning null`);
       return null
     } catch (error) {
+      console.log(`❌ [DEEP LINK] View query failed, falling back to scan:`, {
+        error: error.message,
+        errorType: error.name,
+        shareId
+      });
+      
       // If view doesn't exist, fall back to scanning all documents
       try {
+        console.log(`🔗 [DEEP LINK] Starting fallback scan of all chats...`);
         const allChats = await this.getAllChats()
-        return allChats.find(chat => chat.shareId === shareId) || null
+        console.log(`🔗 [DEEP LINK] Scanned ${allChats.length} total chats`);
+        
+        const matchingChat = allChats.find(chat => {
+          const matches = chat.shareId === shareId;
+          if (matches) {
+            console.log(`🔗 [DEEP LINK] Found matching chat in scan:`, {
+              id: chat._id,
+              shareId: chat.shareId,
+              currentUser: chat.currentUser
+            });
+          }
+          return matches;
+        });
+        
+        console.log(`🔗 [DEEP LINK] Fallback scan result:`, matchingChat ? 'found' : 'not found');
+        return matchingChat || null
       } catch (scanError) {
-        console.error('❌ Failed to get chat by share ID:', scanError)
+        console.error('❌ [DEEP LINK] Error scanning chats for shareId:', scanError)
+        console.error('❌ [DEEP LINK] Scan error details:', {
+          message: scanError.message,
+          stack: scanError.stack,
+          shareId
+        });
         throw scanError
       }
     }

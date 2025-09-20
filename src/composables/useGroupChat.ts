@@ -140,15 +140,44 @@ export const useGroupChat = () => {
 
   const loadSharedChat = async (shareId: string): Promise<GroupChat> => {
     try {
+      console.log(`🔗 [DEEP LINK] Frontend calling /api/shared/${shareId}`);
+      console.log(`🔗 [DEEP LINK] API_BASE_URL: ${API_BASE_URL}`);
+      
       const response = await fetch(`${API_BASE_URL}/shared/${shareId}`)
       
+      console.log(`🔗 [DEEP LINK] Response received:`, {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: response.url
+      });
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ [DEEP LINK] HTTP error response:`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return await response.json()
+      const data = await response.json();
+      console.log(`✅ [DEEP LINK] Successfully loaded shared chat data:`, {
+        id: data.id,
+        shareId: data.shareId,
+        currentUser: data.currentUser,
+        hasChatHistory: !!data.chatHistory,
+        chatHistoryLength: data.chatHistory?.length || 0,
+        hasUploadedFiles: !!data.uploadedFiles,
+        uploadedFilesLength: data.uploadedFiles?.length || 0
+      });
+      
+      return data;
     } catch (error) {
-      console.error('Failed to load shared chat:', error)
+      console.error('❌ [DEEP LINK] Failed to load shared chat:', error);
+      console.error('❌ [DEEP LINK] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        shareId
+      });
       throw error
     }
   }

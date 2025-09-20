@@ -2522,14 +2522,38 @@ app.get('/api/shared/:shareId', async (req, res) => {
   try {
     const { shareId } = req.params;
     
+    console.log(`🔗 [DEEP LINK] Request received for shareId: ${shareId}`);
+    console.log(`🔗 [DEEP LINK] Request details:`, {
+      shareId,
+      method: req.method,
+      url: req.url,
+      headers: {
+        'user-agent': req.get('User-Agent'),
+        'origin': req.get('Origin'),
+        'referer': req.get('Referer')
+      }
+    });
+    
     // Use Cloudant client to find chat by share ID
+    console.log(`🔗 [DEEP LINK] Calling getChatByShareId with: ${shareId}`);
     const chat = await couchDBClient.getChatByShareId(shareId);
     
+    console.log(`🔗 [DEEP LINK] getChatByShareId result:`, chat ? {
+      id: chat._id,
+      shareId: chat.shareId,
+      currentUser: chat.currentUser,
+      hasChatHistory: !!chat.chatHistory,
+      chatHistoryLength: chat.chatHistory?.length || 0,
+      hasUploadedFiles: !!chat.uploadedFiles,
+      uploadedFilesLength: chat.uploadedFiles?.length || 0
+    } : 'null');
+    
     if (!chat) {
+      console.log(`❌ [DEEP LINK] No chat found for shareId: ${shareId}`);
       return res.status(404).json({ message: 'Shared chat not found' });
     }
     
-    // console.log(`📄 Loaded shared chat: ${shareId}`);
+    console.log(`✅ [DEEP LINK] Successfully loaded shared chat: ${shareId}`);
     res.json({
       id: chat._id,
       shareId: chat.shareId,
@@ -2542,7 +2566,12 @@ app.get('/api/shared/:shareId', async (req, res) => {
       isShared: chat.isShared
     });
   } catch (error) {
-    console.error('❌ Load shared chat error:', error);
+    console.error('❌ [DEEP LINK] Load shared chat error:', error);
+    console.error('❌ [DEEP LINK] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      shareId: req.params.shareId
+    });
     res.status(500).json({ message: `Failed to load shared chat: ${error.message}` });
   }
 });

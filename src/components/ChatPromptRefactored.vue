@@ -166,6 +166,24 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
+    // Handle deep link loading - only for actual deep link URLs
+    const handleDeepLink = async () => {
+      const path = window.location.pathname;
+      
+      // Only process if this is a deep link path (not root, not other paths)
+      if (path.startsWith('/shared/')) {
+        const shareIdMatch = path.match(/^\/shared\/([a-zA-Z0-9]{12})$/);
+        
+        if (shareIdMatch) {
+          const shareId = shareIdMatch[1];
+          
+          // Store the share ID and show the user identification modal
+          pendingShareId.value = shareId;
+          showDeepLinkUserModal.value = true;
+        }
+      }
+    };
+
     // Handle deep link user identification
     const handleDeepLinkUserIdentified = async (userData: {
       name: string;
@@ -578,6 +596,9 @@ export default defineComponent({
       updateChatAreaMargin();
       updateGroupCount(); // Load initial group count
       window.addEventListener('resize', updateChatAreaMargin);
+      
+      // Handle deep link URLs
+      await handleDeepLink();
     });
 
     onUnmounted(() => {
@@ -626,6 +647,7 @@ export default defineComponent({
       refreshAgentData,
       showPopup,
       triggerAgentManagement,
+      handleDeepLink,
       handleDeepLinkUserIdentified,
       handleUserAuthenticated,
       handleSignOut,
