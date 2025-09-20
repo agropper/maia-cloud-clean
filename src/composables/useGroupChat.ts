@@ -140,6 +140,7 @@ export const useGroupChat = () => {
 
   const loadSharedChat = async (shareId: string): Promise<GroupChat> => {
     try {
+      console.log('🔍 [PDF FAILS] loadSharedChat called with shareId:', shareId);
       const response = await fetch(`${API_BASE_URL}/shared/${shareId}`)
       
       if (!response.ok) {
@@ -148,15 +149,12 @@ export const useGroupChat = () => {
       }
 
       const data = await response.json();
-      
-      // Debug: Check what we're getting from the server
-      console.log('🔍 [loadSharedChat] Server response for shareId:', shareId, {
+      console.log('🔍 [PDF FAILS] loadSharedChat server response:', {
         uploadedFilesCount: data.uploadedFiles?.length || 0,
         firstFileBase64Length: data.uploadedFiles?.[0]?.base64?.length || 0,
         firstFileBase64Preview: data.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none',
         firstFileSize: data.uploadedFiles?.[0]?.size || 0
       });
-      
       return data;
     } catch (error) {
       console.error('Failed to load shared chat:', error);
