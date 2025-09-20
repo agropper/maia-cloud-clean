@@ -168,43 +168,51 @@ export default defineComponent({
         
         console.log('🔗 [DEEP LINK CHATS] Current user name for filtering:', currentUserName);
         console.log('🔗 [DEEP LINK CHATS] Current user object:', props.currentUser);
+        console.log('🔗 [DEEP LINK CHATS] Current user shareId:', props.currentUser?.shareId);
+        console.log('🔗 [DEEP LINK CHATS] Current user isDeepLinkUser:', props.currentUser?.isDeepLinkUser);
         
-        // Filter GroupChats by current user
-        // For deep link users, also include chats they can access via share links
-        const filteredGroups = allGroups.filter(group => {
-          const isOwner = group.currentUser === currentUserName;
-          const isPatientOwner = group.patientOwner === currentUserName;
-          const isDeepLink = group.shareType === "deep_link";
-          
-          // For deep link users, check if this is a shared chat they can access
-          let isSharedChat = false;
-          if (props.currentUser && typeof props.currentUser === 'object' && props.currentUser.userId) {
-            // Check if this is a deep link user and if they have access to this shared chat
-            const isDeepLinkUser = props.currentUser.userId.startsWith('deep_link_');
-            if (isDeepLinkUser && group.shareId) {
-              // For now, include all chats with shareId for deep link users
-              // This could be refined to check specific share permissions
-              isSharedChat = true;
-            }
-          }
-          
-          const shouldInclude = (isOwner || isPatientOwner || isSharedChat) && !isDeepLink;
-          
-          console.log('🔗 [DEEP LINK CHATS] Group:', {
-            id: group.id,
-            currentUser: group.currentUser,
-            patientOwner: group.patientOwner,
-            shareType: group.shareType,
-            shareId: group.shareId,
-            isOwner,
-            isPatientOwner,
-            isDeepLink,
-            isSharedChat,
-            shouldInclude
+        // Filter GroupChats by current user (same logic as GroupManagementModal)
+        let filteredGroups: any[];
+        
+        // Check if this is a deep link user with shareId
+        const isDeepLinkUser = props.currentUser && typeof props.currentUser === 'object' && 
+                              props.currentUser.userId && props.currentUser.userId.startsWith('deep_link_');
+        const deepLinkShareId = props.currentUser?.shareId || null;
+        
+        if (isDeepLinkUser && deepLinkShareId) {
+          // Deep link users see chats that match their shareId
+          filteredGroups = allGroups.filter(group => {
+            const matches = group.shareId === deepLinkShareId;
+            console.log('🔗 [DEEP LINK CHATS] Group:', {
+              id: group.id,
+              shareId: group.shareId,
+              deepLinkShareId,
+              matches
+            });
+            return matches;
           });
-          
-          return shouldInclude;
-        });
+        } else {
+          // Regular users see chats that match their currentUser
+          filteredGroups = allGroups.filter(group => {
+            const isOwner = group.currentUser === currentUserName;
+            const isPatientOwner = group.patientOwner === currentUserName;
+            const isDeepLink = group.shareType === "deep_link";
+            const shouldInclude = (isOwner || isPatientOwner) && !isDeepLink;
+            
+            console.log('🔗 [DEEP LINK CHATS] Group:', {
+              id: group.id,
+              currentUser: group.currentUser,
+              patientOwner: group.patientOwner,
+              shareType: group.shareType,
+              isOwner,
+              isPatientOwner,
+              isDeepLink,
+              shouldInclude
+            });
+            
+            return shouldInclude;
+          });
+        }
         
         // Convert CouchDB chats to GroupChat format for compatibility
         const convertedCouchChats = couchChats.map(chat => ({
