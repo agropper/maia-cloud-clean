@@ -2267,6 +2267,24 @@ app.post('/api/save-group-chat', async (req, res) => {
   try {
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
+    console.log('🔍 [PDF SAVE] Server received save-group-chat request:', {
+      chatHistoryLength: chatHistory?.length || 0,
+      uploadedFilesCount: uploadedFiles?.length || 0,
+      currentUser: currentUser
+    });
+    
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      console.log('🔍 [PDF SAVE] Server processing uploaded files:', uploadedFiles.map((file, index) => ({
+        index,
+        name: file.name,
+        type: file.type,
+        hasOriginalFile: !!file.originalFile,
+        hasBase64: file.originalFile && 'base64' in file.originalFile,
+        base64Length: file.originalFile && 'base64' in file.originalFile ? file.originalFile.base64.length : 0,
+        base64Preview: file.originalFile && 'base64' in file.originalFile ? file.originalFile.base64.substring(0, 50) : 'none'
+      })));
+    }
+    
     // For deep link users, use displayName for better readability in chat history
     const chatDisplayName = req.body.displayName || currentUser || 'Public User';
     
@@ -2328,7 +2346,26 @@ app.post('/api/save-group-chat', async (req, res) => {
 
     // Use Cloudant client
     const result = await couchDBClient.saveChat(groupChatDoc);
-    // console.log(`💾 Group chat saved to ${couchDBClient.getServiceInfo().isCloudant ? 'Cloudant' : 'CouchDB'}: ${result.id}`);
+    console.log(`🔍 [PDF SAVE] Group chat saved to database: ${result.id}`);
+    
+    // Debug: Verify what was actually saved by reading it back immediately
+    try {
+      const savedChat = await couchDBClient.getChat(result.id);
+      console.log('🔍 [PDF SAVE] Readback verification - what was actually saved:', {
+        chatId: savedChat._id,
+        uploadedFilesCount: savedChat.uploadedFiles?.length || 0,
+        firstFile: savedChat.uploadedFiles?.[0] ? {
+          name: savedChat.uploadedFiles[0].name,
+          type: savedChat.uploadedFiles[0].type,
+          hasOriginalFile: !!savedChat.uploadedFiles[0].originalFile,
+          hasBase64: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile,
+          base64Length: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile ? savedChat.uploadedFiles[0].originalFile.base64.length : 0,
+          base64Preview: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile ? savedChat.uploadedFiles[0].originalFile.base64.substring(0, 50) : 'none'
+        } : 'no files'
+      });
+    } catch (readbackError) {
+      console.error('🔍 [PDF SAVE] Failed to readback saved chat for verification:', readbackError.message);
+    }
     
     // Reload chat cache since we added new chat data
     await reloadChatCache();
@@ -2605,6 +2642,25 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     const { chatId } = req.params;
     const { chatHistory, uploadedFiles, currentUser, connectedKB } = req.body;
     
+    console.log('🔍 [PDF SAVE] Server received update-group-chat request:', {
+      chatId: chatId,
+      chatHistoryLength: chatHistory?.length || 0,
+      uploadedFilesCount: uploadedFiles?.length || 0,
+      currentUser: currentUser
+    });
+    
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      console.log('🔍 [PDF SAVE] Server processing uploaded files for update:', uploadedFiles.map((file, index) => ({
+        index,
+        name: file.name,
+        type: file.type,
+        hasOriginalFile: !!file.originalFile,
+        hasBase64: file.originalFile && 'base64' in file.originalFile,
+        base64Length: file.originalFile && 'base64' in file.originalFile ? file.originalFile.base64.length : 0,
+        base64Preview: file.originalFile && 'base64' in file.originalFile ? file.originalFile.base64.substring(0, 50) : 'none'
+      })));
+    }
+    
     // For deep link users, use displayName for better readability in chat history
     const chatDisplayName = req.body.displayName || currentUser || 'Public User';
     
@@ -2644,7 +2700,26 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
 
     // Save the updated chat
     const result = await couchDBClient.saveChat(updatedChatDoc);
-//     console.log(`🔄 Group chat updated: ${chatId}`);
+    console.log(`🔍 [PDF SAVE] Group chat updated in database: ${chatId}`);
+    
+    // Debug: Verify what was actually saved by reading it back immediately
+    try {
+      const savedChat = await couchDBClient.getChat(chatId);
+      console.log('🔍 [PDF SAVE] Readback verification for update - what was actually saved:', {
+        chatId: savedChat._id,
+        uploadedFilesCount: savedChat.uploadedFiles?.length || 0,
+        firstFile: savedChat.uploadedFiles?.[0] ? {
+          name: savedChat.uploadedFiles[0].name,
+          type: savedChat.uploadedFiles[0].type,
+          hasOriginalFile: !!savedChat.uploadedFiles[0].originalFile,
+          hasBase64: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile,
+          base64Length: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile ? savedChat.uploadedFiles[0].originalFile.base64.length : 0,
+          base64Preview: savedChat.uploadedFiles[0].originalFile && 'base64' in savedChat.uploadedFiles[0].originalFile ? savedChat.uploadedFiles[0].originalFile.base64.substring(0, 50) : 'none'
+        } : 'no files'
+      });
+    } catch (readbackError) {
+      console.error('🔍 [PDF SAVE] Failed to readback updated chat for verification:', readbackError.message);
+    }
     
     // Reload chat cache since we modified chat data
     await reloadChatCache();

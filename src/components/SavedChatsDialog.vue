@@ -194,9 +194,37 @@ export default defineComponent({
       }
     };
 
-    const selectChat = (chat: GroupChat) => {
-      emit("chat-selected", chat);
-      emit("update:modelValue", false);
+    const selectChat = async (chat: GroupChat) => {
+      try {
+        // Load the full chat data from the database to get complete PDF data
+        console.log('🔍 [PDF SAVE] Loading full chat data for:', chat.id);
+        const response = await fetch(`/api/load-group-chat/${chat.id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load chat: ${response.statusText}`);
+        }
+        const fullChatData = await response.json();
+        
+        console.log('🔍 [PDF SAVE] Full chat data loaded:', {
+          chatId: fullChatData._id,
+          uploadedFilesCount: fullChatData.uploadedFiles?.length || 0,
+          firstFile: fullChatData.uploadedFiles?.[0] ? {
+            name: fullChatData.uploadedFiles[0].name,
+            type: fullChatData.uploadedFiles[0].type,
+            hasOriginalFile: !!fullChatData.uploadedFiles[0].originalFile,
+            hasBase64: fullChatData.uploadedFiles[0].originalFile && 'base64' in fullChatData.uploadedFiles[0].originalFile,
+            base64Length: fullChatData.uploadedFiles[0].originalFile && 'base64' in fullChatData.uploadedFiles[0].originalFile ? fullChatData.uploadedFiles[0].originalFile.base64.length : 0
+          } : 'no files'
+        });
+        
+        // Emit the full chat data instead of the stripped list data
+        emit("chat-selected", fullChatData);
+        emit("update:modelValue", false);
+      } catch (error) {
+        console.error('🔍 [PDF SAVE] Failed to load full chat data:', error);
+        // Fallback to original behavior if loading fails
+        emit("chat-selected", chat);
+        emit("update:modelValue", false);
+      }
     };
 
     const isOwner = (chat: GroupChat) => {
