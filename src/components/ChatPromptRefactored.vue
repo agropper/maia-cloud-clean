@@ -120,15 +120,8 @@ export default defineComponent({
         if (highFrequencyActions.includes(action)) {
           // For high-frequency activities, just update in-memory activity tracker
           // This will be synced to database by the existing 30-second/60-second sync mechanism
-          const response = await fetch('/api/admin-management/update-activity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, action })
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
+          // NO API CALLS for high-frequency activities to prevent 429 errors
+          return;
         } else {
           // Important activities (app_loaded, query_attempt, no_agent_detected) make immediate API calls
           const response = await fetch('/api/admin-management/agent-activities', {
