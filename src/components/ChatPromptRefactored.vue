@@ -96,16 +96,14 @@ export default defineComponent({
     const showNoPrivateAgentModal = ref(false);
     const noPrivateAgentModalRef = ref<any>(null);
 
-    // Get state from centralized state manager
-    const currentUser = computed(() => appStateManager.getStateProperty('currentUser'));
-    const currentAgent = computed(() => appStateManager.getStateProperty('currentAgent'));
-    const currentKnowledgeBase = computed(() => appStateManager.getStateProperty('currentKnowledgeBase'));
-    const assignedAgent = computed(() => {
-      return appStateManager.getStateProperty('assignedAgent');
-    });
-    const userType = computed(() => appStateManager.getStateProperty('userType'));
-    const workflowStage = computed(() => appStateManager.getStateProperty('workflowStage'));
-    const workflowStep = computed(() => appStateManager.getStateProperty('workflowStep'));
+    // Get state from centralized state manager - use refs for reactivity
+    const currentUser = ref(appStateManager.getStateProperty('currentUser'));
+    const currentAgent = ref(appStateManager.getStateProperty('currentAgent'));
+    const currentKnowledgeBase = ref(appStateManager.getStateProperty('currentKnowledgeBase'));
+    const assignedAgent = ref(appStateManager.getStateProperty('assignedAgent'));
+    const userType = ref(appStateManager.getStateProperty('userType'));
+    const workflowStage = ref(appStateManager.getStateProperty('workflowStage'));
+    const workflowStep = ref(appStateManager.getStateProperty('workflowStep'));
 
     // Local state for UI
     const agentWarning = ref("");
@@ -607,6 +605,7 @@ export default defineComponent({
     const currentDeepLink = ref(null);
     const chatAreaRef = ref(null);
     const pendingShareId = ref(null);
+    const stateListenerId = ref(null);
 
     // Call on mount and window resize
     onMounted(async () => {
@@ -615,12 +614,40 @@ export default defineComponent({
       updateGroupCount(); // Load initial group count
       window.addEventListener('resize', updateChatAreaMargin);
       
+      // Add state listener for reactive updates
+      stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
+        if (newState.currentUser !== oldState.currentUser) {
+          currentUser.value = newState.currentUser;
+        }
+        if (newState.currentAgent !== oldState.currentAgent) {
+          currentAgent.value = newState.currentAgent;
+        }
+        if (newState.currentKnowledgeBase !== oldState.currentKnowledgeBase) {
+          currentKnowledgeBase.value = newState.currentKnowledgeBase;
+        }
+        if (newState.assignedAgent !== oldState.assignedAgent) {
+          assignedAgent.value = newState.assignedAgent;
+        }
+        if (newState.userType !== oldState.userType) {
+          userType.value = newState.userType;
+        }
+        if (newState.workflowStage !== oldState.workflowStage) {
+          workflowStage.value = newState.workflowStage;
+        }
+        if (newState.workflowStep !== oldState.workflowStep) {
+          workflowStep.value = newState.workflowStep;
+        }
+      });
+      
       // Handle deep link URLs
       await handleDeepLink();
     });
 
     onUnmounted(() => {
       window.removeEventListener('resize', updateChatAreaMargin);
+      if (stateListenerId.value) {
+        appStateManager.removeListener(stateListenerId.value);
+      }
     });
 
     return {
