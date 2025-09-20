@@ -2529,6 +2529,16 @@ app.get('/api/shared/:shareId', async (req, res) => {
     if (!chat) {
       return res.status(404).json({ message: 'Shared chat not found' });
     }
+    
+    // Debug: Check what we're returning from the database
+    console.log('🔍 [PDF FAILS] Server /api/shared/:shareId response:', {
+      chatId: chat._id,
+      uploadedFilesCount: chat.uploadedFiles?.length || 0,
+      firstFileBase64Length: chat.uploadedFiles?.[0]?.base64?.length || 0,
+      firstFileBase64Preview: chat.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none',
+      firstFileSize: chat.uploadedFiles?.[0]?.size || 0
+    });
+    
     res.json({
       id: chat._id,
       shareId: chat.shareId,
