@@ -261,7 +261,6 @@ export default defineComponent({
 
         if (result.success) {
           const userInfo = UserService.createAuthenticatedUser(userId.value, userId.value);
-          console.log('🔐 [DEBUG] SignInDialog emitting user-authenticated event:', userInfo);
 
           
           // Emit the authenticated user

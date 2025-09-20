@@ -81,7 +81,6 @@ export default defineComponent({
     },
   },
   setup() {
-    console.log('🔍 [DEBUG LOAD] ChatPromptRefactored.vue setup() called');
     const { appState, writeMessage, clearLocalStorageKeys, setActiveQuestionName } = useChatState();
     const { logMessage, logContextSwitch, logSystemEvent, setTimelineChunks } = useChatLogger();
     const { generateTranscript } = useTranscript();
@@ -229,7 +228,6 @@ export default defineComponent({
 
     // Handle user authentication
     const handleUserAuthenticated = async (userData: any) => {
-      console.log('🔐 [DEBUG] User authenticated event received:', userData);
       
       // Clear chat data upon sign-in
       appState.chatHistory = [];
@@ -243,7 +241,6 @@ export default defineComponent({
       }
       
       // Force a page reload to ensure complete re-initialization
-      console.log('🔄 [DEBUG] Reloading page for complete re-initialization...');
       window.location.reload();
     };
 
@@ -265,7 +262,6 @@ export default defineComponent({
       }
       
       // Force a page reload to ensure complete re-initialization as Public User
-      console.log('🔄 [DEBUG] Reloading page after sign-out...');
       window.location.reload();
     };
 
@@ -459,7 +455,15 @@ export default defineComponent({
     const saveToFile = () => {};
     const closeNoSave = () => {};
     const closeSession = () => {};
-    const viewFile = () => {};
+    const viewFile = (file: UploadedFile) => {
+      appState.popupContent = file.content;
+      appState.popupContentFunction = () => {
+        appState.popupContent = "";
+        appState.popupContentFunction = () => {};
+      };
+      appState.currentViewingFile = file;
+      showPopup();
+    };
     const triggerLoadSavedChats = () => { showSavedChatsDialog.value = true; };
     const handleChatSelected = () => {};
     const handleAgentUpdated = () => {};
@@ -496,14 +500,65 @@ export default defineComponent({
       }
     };
     const handleChatLoaded = (chat: any) => {
-      console.log('🔍 [DEBUG LOAD] handleChatLoaded called with:', chat);
-      
       // Update appState directly like the original handleChatSelected
       appState.chatHistory = chat.chatHistory || [];
-      appState.uploadedFiles = chat.uploadedFiles || [];
       
-      console.log('🔍 [DEBUG LOAD] Updated appState.chatHistory length:', appState.chatHistory.length);
-      console.log('🔍 [DEBUG LOAD] Updated appState.uploadedFiles length:', appState.uploadedFiles.length);
+      // Handle different data formats based on the source
+      let filesToUse = chat.uploadedFiles || [];
+      
+      // Check if this is a legacy CouchDB chat (has legacy_ prefix in shareId)
+      const isLegacyChat = chat.shareId && chat.shareId.startsWith('legacy_');
+      
+      console.log('🔍 [CHAT DEBUG] Loading chat:', {
+        chatId: chat.id,
+        shareId: chat.shareId,
+        isLegacyChat,
+        filesCount: filesToUse.length,
+        firstFileStructure: filesToUse[0] ? {
+          name: filesToUse[0].name,
+          type: filesToUse[0].type,
+          hasOriginalFile: !!filesToUse[0].originalFile,
+          originalFileType: typeof filesToUse[0].originalFile,
+          originalFileKeys: filesToUse[0].originalFile ? Object.keys(filesToUse[0].originalFile) : 'none'
+        } : 'no files'
+      });
+      
+      if (isLegacyChat) {
+        // Legacy CouchDB chats already have proper UploadedFile format
+        // No reconstruction needed - they were saved with the correct structure
+        console.log('🔍 [CHAT DEBUG] Using legacy chat files as-is');
+        appState.uploadedFiles = filesToUse;
+      } else {
+        // New GroupChat format - reconstruct UploadedFile objects
+        console.log('🔍 [CHAT DEBUG] Reconstructing GroupChat files');
+        const reconstructedFiles = filesToUse.map((file: any) => {
+          // If it's already a proper UploadedFile, return as-is
+          if (file.originalFile instanceof File) {
+            console.log('🔍 [CHAT DEBUG] File already has File object');
+            return file;
+          }
+          
+          // If it's a database-loaded file, reconstruct the proper structure
+          if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
+            console.log('🔍 [CHAT DEBUG] Reconstructing file with base64 data');
+            return {
+              ...file,
+              originalFile: {
+                name: file.originalFile.name,
+                size: file.originalFile.size,
+                type: file.originalFile.type,
+                base64: file.originalFile.base64
+              }
+            };
+          }
+          
+          // For files without originalFile data, return as-is (they'll show as text)
+          console.log('🔍 [CHAT DEBUG] File has no originalFile data');
+          return file;
+        });
+        
+        appState.uploadedFiles = reconstructedFiles;
+      }
       
       // Show success message
       writeMessage(
@@ -519,7 +574,6 @@ export default defineComponent({
 
     // Call on mount and window resize
     onMounted(async () => {
-      console.log('🔍 [DEBUG LOAD] ChatPromptRefactored.vue onMounted() called');
       await nextTick();
       updateChatAreaMargin();
       updateGroupCount(); // Load initial group count
@@ -629,6 +683,7 @@ export default defineComponent({
       @sign-in="handleSignIn"
       @sign-out="handleSignOut"
       @clear-warning="agentWarning = ''"
+      @view-file="viewFile"
     />
 
     <!-- Bottom Toolbar -->
@@ -643,7 +698,7 @@ export default defineComponent({
       :triggerSendQuery="triggerSendQuery"
       :triggerAuth="showAuth"
       :triggerJWT="showJWT"
-      :triggerLoadSavedChats="() => { console.log('🔍 [DEBUG LOAD] triggerLoadSavedChats called'); showSavedChatsDialog = true; }"
+      :triggerLoadSavedChats="() => { showSavedChatsDialog = true; }"
       :triggerAgentManagement="triggerAgentManagement"
       :clearLocalStorageKeys="clearLocalStorageKeys"
       @write-message="writeMessage"
@@ -657,7 +712,7 @@ export default defineComponent({
     <!-- Modals and Dialogs -->
     <SavedChatsDialog
       v-model="showSavedChatsDialog"
-      :patientId="'demo_patient_001'"
+      :currentUser="currentUser"
       @chat-selected="handleChatLoaded"
       v-if="showSavedChatsDialog"
     />
@@ -712,7 +767,14 @@ export default defineComponent({
     </QDialog>
 
     <!-- Popup Component -->
-    <PopUp ref="popupRef" :appState="appState" />
+    <PopUp 
+      ref="popupRef" 
+      :appState="appState"
+      :content="appState.popupContent"
+      :currentFile="appState.currentViewingFile"
+      button-text="Close"
+      :on-close="() => appState.popupContentFunction()"
+    />
   </div>
 </template>
 

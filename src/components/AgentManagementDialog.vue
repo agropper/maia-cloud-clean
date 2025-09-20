@@ -1862,24 +1862,19 @@ export default defineComponent({
 
     // Note: loadAgentInfo function removed - replaced with clean approach
     // const loadAgentInfo = async () => {
-      // console.log(`🔐 [DEBUG] loadAgentInfo called at: ${new Date().toISOString()}`);
       
       // // Clear any existing debounce timer
       // if (loadAgentInfoDebounceTimer.value) {
-      //   console.log(`🔐 [DEBUG] Clearing existing debounce timer`);
       //   clearTimeout(loadAgentInfoDebounceTimer.value);
       // }
       
       // // Set a new debounce timer
-      // console.log(`🔐 [DEBUG] Setting 300ms debounce timer`);
       // loadAgentInfoDebounceTimer.value = setTimeout(async () => {
-      //   console.log(`🔐 [DEBUG] Debounce timer fired, calling performLoadAgentInfo`);
       //   await performLoadAgentInfo();
       // }, 300); // 300ms debounce
     // };
     
     // Note: performLoadAgentInfo function removed - replaced with clean approach
-      // console.log(`🔐 [DEBUG] performLoadAgentInfo called at: ${new Date().toISOString()}`);
       
       // // Prevent multiple simultaneous calls
       // if (isLoading.value) {
@@ -1888,7 +1883,6 @@ export default defineComponent({
       // }
       
       // // Add delay to avoid 429 errors during app initialization
-      // console.log(`🔐 [DEBUG] Adding 500ms delay before API calls`);
       // await new Promise(resolve => setTimeout(resolve, 500));
       
       // isLoading.value = true;

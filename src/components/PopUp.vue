@@ -132,6 +132,25 @@ export default {
   
           try {
             const base64 = this.currentFile.originalFile.base64
+            console.log('🔍 [PDF DEBUG] Attempting to decode base64:', {
+              base64Length: base64.length,
+              base64Type: typeof base64,
+              base64Preview: base64.substring(0, 100),
+              base64End: base64.substring(Math.max(0, base64.length - 100)),
+              isValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(base64),
+              currentFileStructure: {
+                hasOriginalFile: !!this.currentFile.originalFile,
+                originalFileKeys: Object.keys(this.currentFile.originalFile || {}),
+                originalFileType: typeof this.currentFile.originalFile
+              }
+            })
+            
+            // Check if base64 is suspiciously short (likely corrupted)
+            if (base64.length < 1000) {
+              console.warn('🔍 [PDF] Base64 data is suspiciously short, likely corrupted. File size:', this.currentFile.size, 'Base64 length:', base64.length)
+              throw new Error('PDF binary data appears to be corrupted - showing extracted text instead')
+            }
+            
             const binaryString = atob(base64)
             const bytes = new Uint8Array(binaryString.length)
             for (let i = 0; i < binaryString.length; i++) {
@@ -142,6 +161,7 @@ export default {
             pdf = await task.promise
           } catch (base64Error) {
             console.error('🔍 [PDF] Base64 decoding failed:', base64Error)
+            console.error('🔍 [PDF DEBUG] Full currentFile structure:', this.currentFile)
             throw new Error('PDF binary not available - showing extracted text instead')
           }
         } else if (this.currentFile.fileUrl) {

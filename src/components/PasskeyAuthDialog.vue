@@ -534,7 +534,6 @@ export default defineComponent({
     const onSuccess = () => {
       // Use the stored user data if available, otherwise fall back to just userId
       const userData = registrationUserData.value || { userId: userId.value };
-      console.log('🔐 [DEBUG] PasskeyAuthDialog emitting authenticated event:', userData);
       emit("authenticated", userData);
 
       showDialog.value = false;

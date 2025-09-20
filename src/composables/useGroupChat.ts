@@ -43,9 +43,21 @@ export const useGroupChat = () => {
             const arrayBuffer = await file.originalFile.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             
+            console.log('🔍 [ENCODE DEBUG] Converting PDF to base64:', {
+              fileName: file.name,
+              fileSize: file.originalFile.size,
+              arrayBufferLength: arrayBuffer.byteLength,
+              uint8ArrayLength: uint8Array.length
+            });
+            
             // Convert to base64 using a binary-safe approach
             const base64 = arrayBufferToBase64(arrayBuffer);
             
+            console.log('🔍 [ENCODE DEBUG] Base64 conversion result:', {
+              base64Length: base64.length,
+              base64Preview: base64.substring(0, 100),
+              base64End: base64.substring(Math.max(0, base64.length - 100))
+            });
             
             return {
               ...file,
