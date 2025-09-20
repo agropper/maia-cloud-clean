@@ -250,16 +250,15 @@ export class AppInitializer {
     
     const shareId = context.shareId;
     
-    // Load shared chat data
-    const sharedData = await this.loadSharedChat(shareId);
-    
+    // For deep link users, don't load shared chat data automatically
+    // Let the frontend handle user identification and chat loading
     return {
-      user: sharedData.user,
-      agent: sharedData.agent,
-      knowledgeBase: sharedData.knowledgeBase,
+      user: null, // No user set yet - will be set after identification
+      agent: null, // No agent set yet - will be set after identification
+      knowledgeBase: null,
       userType: 'deep_link',
       shareId,
-      sharedChat: sharedData.chat
+      requiresUserIdentification: true // Flag to indicate user needs to be identified
     };
   }
 

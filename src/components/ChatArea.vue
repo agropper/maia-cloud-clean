@@ -319,8 +319,8 @@ export default defineComponent({
     },
     currentUser: {
       type: Object as PropType<any>,
-      required: true,
-      default: () => ({ userId: 'Unknown User', displayName: 'Unknown User' })
+      required: false,
+      default: () => null
     }
   },
   data() {
@@ -845,9 +845,12 @@ export default defineComponent({
                     },
                     isUserReady(): boolean {
                       // Check if currentUser is properly initialized and valid
-                      return this.currentUser && (
-                        typeof this.currentUser === 'string' || 
-                        (typeof this.currentUser === 'object' && this.currentUser.userId)
+                      // For deep link users, allow null user initially (they'll be identified later)
+                      return this.currentUser === null || (
+                        this.currentUser && (
+                          typeof this.currentUser === 'string' || 
+                          (typeof this.currentUser === 'object' && this.currentUser.userId)
+                        )
                       )
                     },
                     getCurrentUserName(): string {
