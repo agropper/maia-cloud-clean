@@ -155,6 +155,9 @@ export default defineComponent({
           loadChats().catch(() => []) // Don't fail if CouchDB system is unavailable
         ]);
         
+        console.log('🔗 [DEEP LINK CHATS] Loaded all groups:', allGroups.length);
+        console.log('🔗 [DEEP LINK CHATS] Loaded couch chats:', couchChats.length);
+        
         // Get current user name for filtering
         let currentUserName: string;
         if (typeof props.currentUser === 'object' && props.currentUser !== null) {
@@ -163,11 +166,28 @@ export default defineComponent({
           currentUserName = props.currentUser || 'Unknown User';
         }
         
+        console.log('🔗 [DEEP LINK CHATS] Current user name for filtering:', currentUserName);
+        console.log('🔗 [DEEP LINK CHATS] Current user object:', props.currentUser);
+        
         // Filter GroupChats by current user (exclude deep link shares)
         const filteredGroups = allGroups.filter(group => {
           const isOwner = group.currentUser === currentUserName;
           const isPatientOwner = group.patientOwner === currentUserName;
-          return (isOwner || isPatientOwner) && group.shareType !== "deep_link";
+          const isDeepLink = group.shareType === "deep_link";
+          const shouldInclude = (isOwner || isPatientOwner) && !isDeepLink;
+          
+          console.log('🔗 [DEEP LINK CHATS] Group:', {
+            id: group.id,
+            currentUser: group.currentUser,
+            patientOwner: group.patientOwner,
+            shareType: group.shareType,
+            isOwner,
+            isPatientOwner,
+            isDeepLink,
+            shouldInclude
+          });
+          
+          return shouldInclude;
         });
         
         // Convert CouchDB chats to GroupChat format for compatibility
@@ -188,6 +208,16 @@ export default defineComponent({
         
         // Combine both sources
         savedChats.value = [...filteredGroups, ...convertedCouchChats];
+        
+        console.log('🔗 [DEEP LINK CHATS] Filtered groups:', filteredGroups.length);
+        console.log('🔗 [DEEP LINK CHATS] Converted couch chats:', convertedCouchChats.length);
+        console.log('🔗 [DEEP LINK CHATS] Final saved chats:', savedChats.value.length);
+        console.log('🔗 [DEEP LINK CHATS] Final saved chats details:', savedChats.value.map(chat => ({
+          id: chat.id,
+          currentUser: chat.currentUser,
+          shareType: chat.shareType,
+          isShared: chat.isShared
+        })));
       } catch (err) {
         error.value = err instanceof Error ? err.message : "Failed to load chats";
       } finally {
