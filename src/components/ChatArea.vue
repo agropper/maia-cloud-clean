@@ -386,12 +386,6 @@ export default defineComponent({
       if (idx === -1) return
       
       // Log the deletion for debugging
-      console.log('🗑️ [ChatArea] Deleting message:', {
-        index: idx,
-        role: this.messageToDelete.role,
-        content: this.messageToDelete.content?.substring(0, 100) + '...',
-        hasPrecedingUser: !!this.precedingUserMessage
-      })
       
       // Remove the message
       this.appState.chatHistory.splice(idx, 1)
@@ -400,10 +394,6 @@ export default defineComponent({
       if (this.precedingUserMessage && idx > 0) {
         const userIdx = idx - 1
         if (this.appState.chatHistory[userIdx]?.role === 'user') {
-          console.log('🗑️ [ChatArea] Deleting preceding user message:', {
-            index: userIdx,
-            content: this.precedingUserMessage.content?.substring(0, 100) + '...'
-          })
           this.appState.chatHistory.splice(userIdx, 1)
         }
       }

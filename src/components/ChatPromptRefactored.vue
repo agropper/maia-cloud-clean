@@ -169,7 +169,6 @@ export default defineComponent({
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
       // This is now handled by the centralized state manager
-      console.log('🔄 [ChatPrompt] Agent data refresh requested - handled by state manager');
     };
 
     const showPopup = () => {
@@ -267,7 +266,6 @@ export default defineComponent({
         // Hide the deep link user modal
         showDeepLinkUserModal.value = false;
         
-        console.log('✅ [ChatPrompt] Deep link user identified and chat loaded');
       } catch (error) {
         console.error('❌ [ChatPrompt] Failed to load shared chat:', error);
       }
@@ -313,12 +311,9 @@ export default defineComponent({
 
     // Handle sign out
     const handleSignOut = async () => {
-      console.log('🚪 [FRONTEND] handleSignOut called - starting logout process');
       try {
-        console.log('🚪 [FRONTEND] Making API call to /passkey/logout');
         const response = await fetch(`${API_BASE_URL}/passkey/logout`, { method: "POST" });
         const data = await response.json();
-        console.log('✅ [FRONTEND] Logout API call successful:', data);
       } catch (error) {
         console.error('❌ [FRONTEND] Backend logout failed:', error);
       }
@@ -341,10 +336,10 @@ export default defineComponent({
     // Watch for state changes and update UI accordingly
     watch([currentUser, currentAgent], ([newUser, newAgent], [oldUser, oldAgent]) => {
       if (newUser !== oldUser) {
-        console.log('👤 [ChatPrompt] User changed:', newUser?.userId || 'None');
+        // User changed
       }
       if (newAgent !== oldAgent) {
-        console.log('🤖 [ChatPrompt] Agent changed:', newAgent?.name || 'None');
+        // Agent changed
       }
     });
 
@@ -590,38 +585,21 @@ export default defineComponent({
       // Check if this is a legacy CouchDB chat (has legacy_ prefix in shareId)
       const isLegacyChat = chat.shareId && chat.shareId.startsWith('legacy_');
       
-      console.log('🔍 [CHAT DEBUG] Loading chat:', {
-        chatId: chat.id,
-        shareId: chat.shareId,
-        isLegacyChat,
-        filesCount: filesToUse.length,
-        firstFileStructure: filesToUse[0] ? {
-          name: filesToUse[0].name,
-          type: filesToUse[0].type,
-          hasOriginalFile: !!filesToUse[0].originalFile,
-          originalFileType: typeof filesToUse[0].originalFile,
-          originalFileKeys: filesToUse[0].originalFile ? Object.keys(filesToUse[0].originalFile) : 'none'
-        } : 'no files'
-      });
       
       if (isLegacyChat) {
         // Legacy CouchDB chats already have proper UploadedFile format
         // No reconstruction needed - they were saved with the correct structure
-        console.log('🔍 [CHAT DEBUG] Using legacy chat files as-is');
         appState.uploadedFiles = filesToUse;
       } else {
         // New GroupChat format - reconstruct UploadedFile objects
-        console.log('🔍 [CHAT DEBUG] Reconstructing GroupChat files');
         const reconstructedFiles = filesToUse.map((file: any) => {
           // If it's already a proper UploadedFile, return as-is
           if (file.originalFile instanceof File) {
-            console.log('🔍 [CHAT DEBUG] File already has File object');
             return file;
           }
           
           // If it's a database-loaded file, reconstruct the proper structure
           if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
-            console.log('🔍 [CHAT DEBUG] Reconstructing file with base64 data');
             return {
               ...file,
               originalFile: {
@@ -634,7 +612,6 @@ export default defineComponent({
           }
           
           // For files without originalFile data, return as-is (they'll show as text)
-          console.log('🔍 [CHAT DEBUG] File has no originalFile data');
           return file;
         });
         
