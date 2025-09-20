@@ -197,7 +197,10 @@ export class AppStateManager {
    * Determine user type
    */
   determineUserType(user) {
-    if (!user || UserService.isPublicUser(user)) {
+    if (!user) {
+      return 'unknown'; // For deep link users who haven't been identified yet
+    }
+    if (UserService.isPublicUser(user)) {
       return 'public';
     }
     if (user.isDeepLinkUser || user.userId?.startsWith('deep_link_')) {
