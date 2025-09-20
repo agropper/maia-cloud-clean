@@ -1673,6 +1673,30 @@ router.post('/database/fix-consistency', async (req, res) => {
   }
 });
 
+// New endpoint for high-frequency activity updates (in-memory only)
+router.post('/update-activity', async (req, res) => {
+  try {
+    const { userId, action } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // Only update in-memory activity tracker (no database writes)
+    updateUserActivity(userId);
+    
+    res.json({ 
+      success: true, 
+      message: 'Activity updated in memory',
+      userId,
+      action 
+    });
+  } catch (error) {
+    console.error('❌ Error updating activity:', error);
+    res.status(500).json({ message: 'Failed to update activity' });
+  }
+});
+
 // Export functions for use in main server
 export { updateUserActivity, getAllUserActivities };
 

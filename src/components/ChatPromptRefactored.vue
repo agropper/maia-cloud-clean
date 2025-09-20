@@ -116,14 +116,32 @@ export default defineComponent({
       try {
         const userId = currentUser.value?.userId || currentUser.value?.displayName || 'Public User';
 
-        const response = await fetch('/api/admin-management/agent-activities', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, action })
-        });
+        // High-frequency activities should only update in-memory (no API calls)
+        const highFrequencyActions = ['mouse_click', 'keyboard_input', 'window_focus', 'scroll'];
+        
+        if (highFrequencyActions.includes(action)) {
+          // For high-frequency activities, just update in-memory activity tracker
+          // This will be synced to database by the existing 30-second/60-second sync mechanism
+          const response = await fetch('/api/admin-management/update-activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, action })
+          });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+        } else {
+          // Important activities (app_loaded, query_attempt, no_agent_detected) make immediate API calls
+          const response = await fetch('/api/admin-management/agent-activities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, action })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
         }
       } catch (activityError) {
         console.error('❌ [Frontend] Activity tracking failed:', activityError.message);
