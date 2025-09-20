@@ -553,12 +553,26 @@ export default defineComponent({
         // Get current user name for filtering (same logic as Admin Panel)
         const currentUserName = currentUser.value?.userId || currentUser.value?.displayName || 'Unknown User';
         
-        // Filter groups by current user (same logic as Admin Panel)
-        const filteredGroups = allGroups.filter(group => {
-          const isOwner = group.currentUser === currentUserName;
-          const isPatientOwner = group.patientOwner === currentUserName;
-          return isOwner || isPatientOwner;
-        });
+        // Filter groups by current user (same logic as GroupManagementModal and SavedChatsDialog)
+        let filteredGroups: any[];
+        
+        // Check if this is a deep link user with shareId
+        const isDeepLinkUser = currentUser.value && typeof currentUser.value === 'object' && 
+                              currentUser.value.userId && currentUser.value.userId.startsWith('deep_link_');
+        const deepLinkShareId = currentUser.value?.shareId || null;
+        
+        if (isDeepLinkUser && deepLinkShareId) {
+          // Deep link users see chats that match their shareId
+          filteredGroups = allGroups.filter(group => group.shareId === deepLinkShareId);
+        } else {
+          // Regular users see chats that match their currentUser
+          filteredGroups = allGroups.filter(group => {
+            const isOwner = group.currentUser === currentUserName;
+            const isPatientOwner = group.patientOwner === currentUserName;
+            const isDeepLink = group.shareType === "deep_link";
+            return (isOwner || isPatientOwner) && !isDeepLink;
+          });
+        }
         
         groupCount.value = filteredGroups.length;
       } catch (error) {
