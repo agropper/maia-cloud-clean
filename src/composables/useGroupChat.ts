@@ -35,17 +35,7 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 export const useGroupChat = () => {
   // Helper function to convert File objects to base64 for storage
   const processFilesForStorage = async (files: UploadedFile[]): Promise<any[]> => {
-    console.log('🔍 [PDF SAVE] processFilesForStorage called with', files.length, 'files');
-    
     return Promise.all(files.map(async (file, index) => {
-      console.log(`🔍 [PDF SAVE] Processing file ${index}:`, {
-        name: file.name,
-        type: file.type,
-        hasOriginalFile: !!file.originalFile,
-        originalFileType: typeof file.originalFile,
-        isFileInstance: file.originalFile instanceof File,
-        hasBase64: file.originalFile && 'base64' in file.originalFile
-      });
       if (file.type === 'pdf') {
         if (file.originalFile instanceof File) {
           try {
@@ -94,19 +84,8 @@ export const useGroupChat = () => {
     displayName?: string
   ): Promise<SaveGroupChatResponse> => {
     try {
-      console.log('🔍 [PDF SAVE] saveGroupChat called with', uploadedFiles.length, 'uploaded files');
-      
       // Process files before sending to server
       const processedFiles = await processFilesForStorage(uploadedFiles);
-      
-      console.log('🔍 [PDF SAVE] Processed files for saving:', processedFiles.map((file, index) => ({
-        index,
-        name: file.name,
-        type: file.type,
-        hasOriginalFile: !!file.originalFile,
-        hasBase64: file.originalFile && 'base64' in file.originalFile,
-        base64Length: file.originalFile && 'base64' in file.originalFile ? (file.originalFile as any).base64.length : 0
-      })));
       
       const response = await fetch(`${API_BASE_URL}/save-group-chat`, {
         method: 'POST',
