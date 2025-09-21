@@ -427,6 +427,12 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   etag: false,
   lastModified: false,
   setHeaders: (res, path) => {
+    // Set proper content type for PDFs
+    if (path.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+    
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

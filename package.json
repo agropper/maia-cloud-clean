@@ -9,7 +9,7 @@
     "dev": "vite",
     "netlify:dev": "netlify dev --timeout=60",
     "build": "vue-tsc && vite build && npm run postbuild",
-    "postbuild": "node -e \"const fs = require('fs'); const path = require('path'); if (fs.existsSync('dist/index.html')) { fs.renameSync('dist/index.html', 'dist/index.ejs'); console.log('✅ Renamed index.html to index.ejs for EJS templating'); }\"",
+    "postbuild": "node -e \"const fs = require('fs'); const path = require('path'); if (fs.existsSync('dist/index.html')) { fs.renameSync('dist/index.html', 'dist/index.ejs'); console.log('✅ Renamed index.html to index.ejs for EJS templating'); } fs.copyFileSync('Documents/Help_Drawing.pdf', 'dist/Help_Drawing.pdf'); console.log('✅ Copied Help_Drawing.pdf to dist folder');\"",
     "preview": "vite preview",
     "setup-do": "node scripts/setup-digitalocean.js",
     "setup-do:list": "node scripts/setup-digitalocean.js list",

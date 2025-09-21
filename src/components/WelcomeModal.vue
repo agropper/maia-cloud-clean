@@ -1,4 +1,5 @@
 <template>
+  <!-- Welcome Modal -->
   <QDialog v-model="showModal" persistent>
     <QCard class="welcome-modal">
       <QCardSection class="text-center">
@@ -39,6 +40,13 @@
       </QCardActions>
     </QCard>
   </QDialog>
+
+  <!-- Help Page -->
+  <HelpPage 
+    v-if="showHelpPage" 
+    :is-visible="showHelpPage"
+    @close="handleHelpClose"
+  />
 </template>
 
 <script setup>
@@ -50,8 +58,10 @@ import {
   QCardActions,
   QBtn
 } from 'quasar'
+import HelpPage from './HelpPage.vue'
 
 const showModal = ref(false)
+const showHelpPage = ref(false)
 
 const handleUnderstand = () => {
   showModal.value = false
@@ -59,6 +69,15 @@ const handleUnderstand = () => {
   localStorage.setItem('maia-welcome-seen', 'true')
   // Also store the timestamp for future reference
   localStorage.setItem('maia-welcome-seen-timestamp', new Date().toISOString())
+  
+  // Always show help page after welcome modal
+  console.log('[*] Showing help page after welcome modal')
+  showHelpPage.value = true
+}
+
+const handleHelpClose = () => {
+  showHelpPage.value = false
+  console.log('[*] Help page closed, user can now continue')
 }
 
 onMounted(() => {
