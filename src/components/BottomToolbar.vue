@@ -113,7 +113,7 @@
           <div class="status-line">
             <!-- SIGN IN/SIGN OUT Toggle -->
             <q-btn
-              v-if="!currentUser || (currentUser && (currentUser.userId === 'Unknown User' || currentUser.displayName === 'Unknown User'))"
+              v-if="!currentUser || !currentUser.isAuthenticated"
               flat
               dense
               size="sm"
