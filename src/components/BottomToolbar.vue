@@ -176,6 +176,21 @@
               />
               <div class="tooltip-text">Copy deep link to clipboard</div>
             </div>
+            
+            <!-- Mail Icon - Bottom right -->
+            <div class="tooltip-wrapper mail-icon-right">
+              <q-btn
+                flat
+                round
+                dense
+                icon="mail"
+                color="primary"
+                @click="handleMailClick"
+                size="sm"
+                class="q-ml-sm"
+              />
+              <div class="tooltip-text">Contact support</div>
+            </div>
           </div>
           
           <!-- Load Saved Chats Button - Disabled for Group Chat functionality -->
@@ -215,6 +230,63 @@
       @chatLoaded="handleChatLoaded"
     />
 
+    <!-- Contact Support Modal -->
+    <q-dialog v-model="showContactModal" persistent>
+      <q-card style="min-width: 500px; max-width: 600px;">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Contact Support</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <q-form @submit="sendContactMessage" class="q-gutter-md">
+            <q-input
+              v-model="contactForm.email"
+              label="Your Email (optional if you expect an answer)"
+              type="email"
+              hint="We'll use this to respond to your message"
+            />
+            
+            <q-select
+              v-model="contactForm.messageType"
+              :options="contactMessageTypes"
+              label="Message Type"
+              emit-value
+              map-options
+            />
+            
+            <q-input
+              v-model="contactForm.subject"
+              label="Subject *"
+              :rules="[val => !!val || 'Subject is required']"
+              required
+            />
+            
+            <q-input
+              v-model="contactForm.message"
+              label="Message *"
+              type="textarea"
+              rows="4"
+              :rules="[val => !!val || 'Message is required']"
+              required
+            />
+          </q-form>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Cancel" color="primary" v-close-popup />
+          <q-btn 
+            label="Send Message" 
+            color="primary" 
+            @click="sendContactMessage"
+            :loading="isSendingContact"
+            :disable="!contactForm.subject || !contactForm.message"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Loading Pane - Show when actually loading -->
     <div v-if="appState.isLoading" :class="'loading-pane ' + appState.isLoading">
       <q-circular-progress indeterminate rounded size="30px" color="primary" class="q-ma-md" />
@@ -226,7 +298,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, useQuasar } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, QDialog, QCard, QCardSection, QCardActions, QForm, QSpace, useQuasar } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -250,6 +322,12 @@ export default defineComponent({
     QItemLabel,
     QIcon,
     QTooltip,
+    QDialog,
+    QCard,
+    QCardSection,
+    QCardActions,
+    QForm,
+    QSpace,
     GNAP,
     GroupManagementModal
   },
@@ -318,7 +396,25 @@ export default defineComponent({
     const interimTranscript = ref('')
 
     const showGroupModal = ref(false)
+    const showContactModal = ref(false)
+    const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
+
+    const contactForm = ref({
+      email: '',
+      subject: '',
+      message: '',
+      messageType: 'general_question'
+    })
+
+    const contactMessageTypes = [
+      { label: 'General Question', value: 'general_question' },
+      { label: 'Bug Report', value: 'bug_report' },
+      { label: 'Feature Request', value: 'feature_request' },
+      { label: 'Technical Support', value: 'technical_support' },
+      { label: 'Account Issue', value: 'account_issue' },
+      { label: 'Other', value: 'other' }
+    ]
 
     const selectedModel = computed({
       get: () => {
@@ -514,6 +610,68 @@ export default defineComponent({
       }, 1000)
     }
 
+    const handleMailClick = () => {
+      // Handle mail icon click - show contact form
+      console.log('[*] Mail icon clicked - Opening contact form')
+      showContactModal.value = true
+    }
+
+    const sendContactMessage = async () => {
+      if (!contactForm.value.subject || !contactForm.value.message) {
+        $q.notify({
+          type: 'negative',
+          message: 'Please fill in all required fields',
+          timeout: 3000
+        })
+        return
+      }
+
+      isSendingContact.value = true
+      try {
+        const response = await fetch('/api/admin/contact-support', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: getCurrentUserName(),
+            email: contactForm.value.email,
+            subject: contactForm.value.subject,
+            message: contactForm.value.message,
+            messageType: contactForm.value.messageType
+          }),
+        })
+
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: 'Message sent successfully to administrator!',
+            timeout: 3000
+          })
+          showContactModal.value = false
+          
+          // Reset form
+          contactForm.value = {
+            email: '',
+            subject: '',
+            message: '',
+            messageType: 'general_question'
+          }
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+      } catch (error: any) {
+        console.error('Error sending contact message:', error)
+        $q.notify({
+          type: 'negative',
+          message: `Failed to send message: ${error.message}`,
+          timeout: 5000
+        })
+      } finally {
+        isSendingContact.value = false
+      }
+    }
+
     return {
       isListening,
       isSpeechSupported,
@@ -522,6 +680,10 @@ export default defineComponent({
       getCurrentUserName,
       openGroupModal,
       showGroupModal,
+      showContactModal,
+      isSendingContact,
+      contactForm,
+      contactMessageTypes,
       handleGroupDeleted,
       handleChatLoaded,
       handleIconClick,
@@ -529,7 +691,9 @@ export default defineComponent({
       isUserUnknown,
       handleFileUpload,
       pickFiles,
-      fileInput
+      fileInput,
+      handleMailClick,
+      sendContactMessage
     }
   }
 })
@@ -754,6 +918,11 @@ export default defineComponent({
 /* Ensure clickable icons show pointer cursor */
 .clickable-icon {
   cursor: pointer !important;
+}
+
+/* Right-justify the mail icon */
+.mail-icon-right {
+  margin-left: auto;
 }
 
 </style>
