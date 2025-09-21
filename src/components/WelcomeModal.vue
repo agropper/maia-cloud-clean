@@ -4,7 +4,7 @@
       <QCardSection class="text-center">
         <div class="text-h4 q-mb-md">Welcome to MAIA</div>
         <div class="text-subtitle1 text-grey-7 q-mb-lg">
-          Medical AI Assistant
+          Your Medical AI Assistant
         </div>
       </QCardSection>
 
@@ -32,7 +32,7 @@
         <QBtn
           color="primary"
           size="lg"
-          label="I Understand"
+          label="I understand these options"
           @click="handleUnderstand"
           class="full-width"
         />
