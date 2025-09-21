@@ -32,10 +32,9 @@
       <QCardActions class="q-px-xl q-pb-xl">
         <QBtn
           color="primary"
-          size="lg"
           label="I understand these options"
           @click="handleUnderstand"
-          class="full-width"
+          class="full-width welcome-button"
         />
       </QCardActions>
     </QCard>
@@ -119,5 +118,11 @@ onMounted(() => {
 
 .welcome-paragraph:last-of-type {
   margin-bottom: 0;
+}
+
+.welcome-button {
+  height: 48px;
+  font-size: 16px;
+  font-weight: 500;
 }
 </style>
