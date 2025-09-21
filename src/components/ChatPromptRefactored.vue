@@ -622,6 +622,15 @@ export default defineComponent({
         appState.uploadedFiles = reconstructedFiles;
       }
       
+      // Set the current chat ID for future updates
+      appState.currentChatId = chat._id || chat.id;
+      
+      // Reset chat state to prevent "Modified" status when loading saved chats
+      // This ensures the POST TO GROUP button doesn't appear unnecessarily
+      if (chatAreaRef.value && typeof chatAreaRef.value.initializeChatState === 'function') {
+        chatAreaRef.value.initializeChatState();
+      }
+      
       // Show success message
       writeMessage(
         `Loaded chat from ${new Date(chat.createdAt).toLocaleDateString()}`,
