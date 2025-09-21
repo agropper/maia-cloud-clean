@@ -3,7 +3,7 @@
     <div class="loading-container">
       <div class="loading-spinner">
         <q-spinner-dots
-          size="3rem"
+          size="48px"
           color="primary"
         />
       </div>
@@ -38,7 +38,7 @@
             <q-icon 
               :name="step.completed ? 'check_circle' : step.error ? 'error' : 'radio_button_unchecked'"
               :color="step.completed ? 'positive' : step.error ? 'negative' : 'grey'"
-              size="1.2rem"
+              size="19px"
             />
             <span class="step-text">{{ step.text }}</span>
           </div>
@@ -47,7 +47,7 @@
       
       <!-- Error state -->
       <div v-if="error" class="error-container">
-        <q-icon name="error" color="negative" size="2rem" />
+        <q-icon name="error" color="negative" size="32px" />
         <h4 class="error-title">Loading Failed</h4>
         <p class="error-message">{{ error }}</p>
         <q-btn 
