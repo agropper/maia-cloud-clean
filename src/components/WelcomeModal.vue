@@ -11,19 +11,19 @@
       <QCardSection class="q-px-xl">
         <div class="welcome-content">
           <p class="welcome-paragraph">
-            The Medical AI Assistant (MAIA) has three different privacy modes: Public, Sponsored, and Private.
+            The Medical AI Assistant (MAIA) lets you choose from different privacy modes: Public, Supported, and Private.
           </p>
 
           <p class="welcome-paragraph">
-            <strong>Public</strong> is the default for new users. It allows you to become familiar with privacy features such as the difference between a Private AI agent and commercial AI like ChatGPT. The private AI agent has access to complete health records and acts as a gatekeeper so you can control sharing with commercial AIs.
+            <strong>Public</strong> is the default for new users. It allows you to become familiar with privacy features such as the differences between a private AI and a commercial AI like ChatGPT. A private AI has access to your health records and acts as a gatekeeper, so you can control what you share with commercial AIs.
           </p>
 
           <p class="welcome-paragraph">
-            <strong>Sponsored</strong> lets you use MAIA with much privacy at no cost to you. When you Sign In and the administrator agrees to sponsor your Private AI agent and records knowledge base, your records will be private to you, the administrator and people you share a chat with. As with Public, you and your agent control what commercial AI can see.
+            <strong>Supported</strong> lets you use MAIA at no cost to you. When you sign in, the MAIA administrator agrees to pay for and maintain your private AI and records knowledge base. The administrator approves new accounts and provides technical support only. Your records will be private to you, the administrator and people you share a chat with. As with the public option, you and your private AI control what commercial AI can see.
           </p>
 
           <p class="welcome-paragraph">
-            <strong>Private</strong> puts you in complete control of your Private AI agent using an administrator you choose. You will need to pay for hosting costs at Digital Ocean or another commodity hosting service. Because MAIA is Free open source software, the maintainers of MAIA will have no access to your MAIA.
+            <strong>Private</strong> puts you in complete control of your private AI. You will need to pay for hosting costs at Digital Ocean or another hosting service. For support, you will need to set up an administrator or participate in a community. Only you and the people you specify will be able to access to your MAIA.
           </p>
         </div>
       </QCardSection>

@@ -20,4 +20,4 @@ The Medical AI Assistant (MAIA) lets you choose from different privacy modes: Pu
 *Supported* lets you use MAIA at no cost to you. When you sign in, the MAIA administrator agrees to pay for and maintain your private AI and records knowledge base. The administrator approves new accounts and provides technical support only. Your records will be private to you, the administrator and people you share a chat with. As with the public option, you and your private AI control what commercial AI can see. 
 *Private* puts you in complete control of your private AI. You will need to pay for hosting costs at Digital Ocean or another hosting service. For support, you will need to set up an administrator or participate in a community. Only you and the people you specify will be able to access to your MAIA.
 
-[I understand] 
+[I understand these options] 
