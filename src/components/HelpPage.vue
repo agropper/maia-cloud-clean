@@ -141,7 +141,6 @@ const loadPDF = async () => {
       if (Math.abs(modalAspectRatio - pdfAspectRatio) > 0.01) {
         // Adjust modal height to match PDF aspect ratio
         modalHeight = modalWidth / pdfAspectRatio
-        console.log(`📏 MODAL ASPECT FIX: Adjusted height from ${modalContentHeight} to ${modalHeight} to match PDF aspect ratio`)
       }
       
       // Set modal dimensions FIRST

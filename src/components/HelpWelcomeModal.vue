@@ -1,7 +1,7 @@
 <template>
-  <!-- Welcome Modal -->
-  <QDialog v-model="showModal" persistent>
-    <QCard class="welcome-modal">
+  <!-- Help Welcome Modal -->
+  <QDialog v-model="isOpen" persistent>
+    <QCard class="help-welcome-modal">
       <QCardSection class="text-center">
         <div class="text-h4 q-mb-md">Welcome to MAIA</div>
         <div class="text-subtitle1 text-grey-7 q-mb-lg">
@@ -33,7 +33,7 @@
         <QBtn
           color="primary"
           label="I understand these options"
-          @click="handleUnderstand"
+          @click="handleShowHelp"
           class="full-width welcome-button"
         />
       </QCardActions>
@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import {
   QDialog,
   QCard,
@@ -59,47 +59,43 @@ import {
 } from 'quasar'
 import HelpPage from './HelpPage.vue'
 
-const showModal = ref(false)
+// Props - using modelValue for v-model support
+const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false
+  }
+})
+
+// Emits - standard v-model pattern
+const emit = defineEmits(['update:modelValue'])
+
+const isOpen = ref(props.modelValue)
 const showHelpPage = ref(false)
 
-const handleUnderstand = () => {
-  showModal.value = false
-  // Store that user has seen the welcome modal
-  localStorage.setItem('maia-welcome-seen', 'true')
-  // Also store the timestamp for future reference
-  localStorage.setItem('maia-welcome-seen-timestamp', new Date().toISOString())
-  
-  // Always show help page after welcome modal
+// Watch for v-model changes
+watch(() => props.modelValue, (newValue) => {
+  isOpen.value = newValue
+})
+
+// Watch for internal changes and emit to parent
+watch(isOpen, (newValue) => {
+  emit('update:modelValue', newValue)
+})
+
+const handleShowHelp = () => {
+  // Close this modal and show help page
+  isOpen.value = false
   showHelpPage.value = true
 }
 
 const handleHelpClose = () => {
   showHelpPage.value = false
 }
-
-onMounted(() => {
-  // Only show modal if user hasn't seen it before and not on admin routes
-  const hasSeenWelcome = localStorage.getItem('maia-welcome-seen')
-  const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
-  
-  console.log('🔍 [WelcomeModal] Checking conditions:', {
-    hasSeenWelcome,
-    isAdminRoute,
-    pathname: window.location.pathname,
-    willShow: !hasSeenWelcome && !isAdminRoute
-  })
-  
-  if (!hasSeenWelcome && !isAdminRoute) {
-    console.log('✅ [WelcomeModal] Showing welcome modal')
-    showModal.value = true
-  } else {
-    console.log('❌ [WelcomeModal] Not showing modal - already seen or admin route')
-  }
-})
 </script>
 
 <style scoped>
-.welcome-modal {
+.help-welcome-modal {
   max-width: 900px;
   width: 90vw;
 }

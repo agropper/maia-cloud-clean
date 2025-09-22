@@ -244,6 +244,11 @@
       @chatLoaded="handleChatLoaded"
     />
 
+    <!-- Help Welcome Modal -->
+    <HelpWelcomeModal 
+      v-model="showHelpWelcomeModal"
+    />
+
     <!-- Help Page Modal -->
     <HelpPage 
       v-if="showHelpModal" 
@@ -327,6 +332,7 @@ import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
 import HelpPage from './HelpPage.vue'
+import HelpWelcomeModal from './HelpWelcomeModal.vue'
 import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
@@ -355,7 +361,8 @@ export default defineComponent({
     QSpace,
     GNAP,
     GroupManagementModal,
-    HelpPage
+    HelpPage,
+    HelpWelcomeModal
   },
 
   props: {
@@ -424,6 +431,7 @@ export default defineComponent({
     const showGroupModal = ref(false)
     const showContactModal = ref(false)
     const showHelpModal = ref(false)
+    const showHelpWelcomeModal = ref(false)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -644,15 +652,13 @@ export default defineComponent({
     }
 
     const handleInfoClick = () => {
-      // Handle info icon click - show help page
-      console.log('[*] Info icon clicked - Opening help page')
-      showHelpModal.value = true
+      // Handle info icon click - show help welcome modal first
+      showHelpWelcomeModal.value = true
     }
 
     const handleHelpClose = () => {
       // Handle help page close
       showHelpModal.value = false
-      console.log('[*] Help page closed')
     }
 
     const sendContactMessage = async () => {
@@ -721,6 +727,7 @@ export default defineComponent({
       showGroupModal,
       showContactModal,
       showHelpModal,
+      showHelpWelcomeModal,
       isSendingContact,
       contactForm,
       contactMessageTypes,
