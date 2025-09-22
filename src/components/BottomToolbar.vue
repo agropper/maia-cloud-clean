@@ -177,8 +177,22 @@
               <div class="tooltip-text">Copy deep link to clipboard</div>
             </div>
             
-            <!-- Mail Icon - Bottom right -->
+            <!-- Info and Mail Icons - Bottom right -->
             <div class="tooltip-wrapper mail-icon-right">
+              <q-btn
+                flat
+                round
+                dense
+                icon="info"
+                color="primary"
+                @click="handleInfoClick"
+                size="sm"
+                class="q-mr-sm"
+              />
+              <div class="tooltip-text">Show help guide</div>
+            </div>
+            
+            <div class="tooltip-wrapper">
               <q-btn
                 flat
                 round
@@ -228,6 +242,13 @@
       :currentUser="currentUser"
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
+    />
+
+    <!-- Help Page Modal -->
+    <HelpPage 
+      v-if="showHelpModal" 
+      :is-visible="showHelpModal"
+      @close="handleHelpClose"
     />
 
     <!-- Contact Support Modal -->
@@ -305,6 +326,7 @@ import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLab
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
+import HelpPage from './HelpPage.vue'
 import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
@@ -332,7 +354,8 @@ export default defineComponent({
     QForm,
     QSpace,
     GNAP,
-    GroupManagementModal
+    GroupManagementModal,
+    HelpPage
   },
 
   props: {
@@ -400,6 +423,7 @@ export default defineComponent({
 
     const showGroupModal = ref(false)
     const showContactModal = ref(false)
+    const showHelpModal = ref(false)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -619,6 +643,18 @@ export default defineComponent({
       showContactModal.value = true
     }
 
+    const handleInfoClick = () => {
+      // Handle info icon click - show help page
+      console.log('[*] Info icon clicked - Opening help page')
+      showHelpModal.value = true
+    }
+
+    const handleHelpClose = () => {
+      // Handle help page close
+      showHelpModal.value = false
+      console.log('[*] Help page closed')
+    }
+
     const sendContactMessage = async () => {
       if (!contactForm.value.subject || !contactForm.value.message) {
         $q.notify({
@@ -684,6 +720,7 @@ export default defineComponent({
       openGroupModal,
       showGroupModal,
       showContactModal,
+      showHelpModal,
       isSendingContact,
       contactForm,
       contactMessageTypes,
@@ -696,6 +733,8 @@ export default defineComponent({
       pickFiles,
       fileInput,
       handleMailClick,
+      handleInfoClick,
+      handleHelpClose,
       sendContactMessage
     }
   }

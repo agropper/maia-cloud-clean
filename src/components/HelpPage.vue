@@ -45,19 +45,13 @@
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="help-footer">
-          <p class="help-footer-text">
-            Click the X in the upper right corner when you're ready to continue
-          </p>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { QBtn, QIcon, QSpinnerDots } from 'quasar'
 // PDF.js legacy build for better bundler compatibility
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
@@ -90,42 +84,127 @@ const loadPDF = async () => {
   if (!container) {
     return
   }
-  isLoading.value = true
-  pdfError.value = false
-  pdfErrorMessage.value = ''
   
-  try {
-    // Clear any existing content
-    container.innerHTML = ''
+    isLoading.value = true
+    pdfError.value = false
+    pdfErrorMessage.value = ''
     
-    // Use locally served worker to avoid CSP issues
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
-    
-    // Load the PDF
-    const task = pdfjsLib.getDocument({ url: pdfUrl.value })
-    const pdf = await task.promise
-    
-    const maxPages = 10
-    const totalPages = Math.min(pdf.numPages, maxPages)
-    
-    // Render pages
-    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const viewport = page.getViewport({ scale: 1.25 })
+    try {
+      // Clear any existing content
+      container.innerHTML = ''
+      
+      // Use locally served worker to avoid CSP issues
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
+      
+      // Load the PDF
+      const task = pdfjsLib.getDocument({ url: pdfUrl.value })
+      const pdf = await task.promise
+      
+      const maxPages = 10
+      const totalPages = Math.min(pdf.numPages, maxPages)
+      
+      // Get the first page to calculate modal size
+      const firstPage = await pdf.getPage(1)
+      const naturalViewport = firstPage.getViewport({ scale: 1.0 })
+      const naturalWidth = naturalViewport.width
+      const naturalHeight = naturalViewport.height
+      
+      // Calculate optimal modal size based on PDF dimensions and browser window
+      const browserWidth = window.innerWidth
+      const browserHeight = window.innerHeight
+      const maxModalWidth = browserWidth * 0.8  // 80% of browser width
+      const maxModalHeight = browserHeight * 0.8 // 80% of browser height
+      
+      // Calculate scale to fit PDF in available browser space (minus padding)
+      const availableWidth = maxModalWidth - 80  // 40px padding on each side
+      const availableHeight = maxModalHeight - 80 // 40px padding top/bottom
+      
+      const scaleX = availableWidth / naturalWidth
+      const scaleY = availableHeight / naturalHeight
+      const actualScale = Math.min(scaleX, scaleY)
+      
+      // Calculate final modal dimensions based on scaled PDF
+      const scaledWidth = naturalWidth * actualScale
+      const scaledHeight = naturalHeight * actualScale
+      
+      // Calculate modal size maintaining PDF aspect ratio
+      const pdfAspectRatio = naturalWidth / naturalHeight
+      const modalContentWidth = scaledWidth + 80  // Add back padding
+      const modalContentHeight = scaledHeight + 80 // Add back padding
+      
+      // Ensure modal maintains PDF aspect ratio
+      let modalWidth = modalContentWidth
+      let modalHeight = modalContentHeight
+      
+      // If modal aspect ratio doesn't match PDF, adjust to match PDF aspect ratio
+      const modalAspectRatio = modalWidth / modalHeight
+      if (Math.abs(modalAspectRatio - pdfAspectRatio) > 0.01) {
+        // Adjust modal height to match PDF aspect ratio
+        modalHeight = modalWidth / pdfAspectRatio
+        console.log(`📏 MODAL ASPECT FIX: Adjusted height from ${modalContentHeight} to ${modalHeight} to match PDF aspect ratio`)
+      }
+      
+      // Set modal dimensions FIRST
+      const modalContainer = container.closest('.help-page-container')
+      if (modalContainer) {
+        modalContainer.style.width = `${modalWidth}px`
+        modalContainer.style.height = `${modalHeight}px`
+      }
+      
+      // Wait for modal to resize, then capture container dimensions
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      // Set loading to false so container becomes visible
+      isLoading.value = false
+      
+      // Wait for container to become visible
+      await new Promise(resolve => setTimeout(resolve, 50))
+      
+      // NOW capture container dimensions after modal is properly sized and visible
+      const containerWidth = container.offsetWidth
+      const containerHeight = container.offsetHeight
+      
+      // PDF loaded and modal sized
+      
+      // Render pages
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const page = await pdf.getPage(pageNum)
+      
+      // Recalculate viewport with proper scale
+      const properViewport = page.getViewport({ scale: actualScale })
+      
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       if (!ctx) throw new Error('Could not get canvas context')
-      canvas.width = Math.floor(viewport.width)
-      canvas.height = Math.floor(viewport.height)
+      
+      canvas.width = Math.floor(properViewport.width)
+      canvas.height = Math.floor(properViewport.height)
+      
+      canvas.style.width = `${properViewport.width}px`
+      canvas.style.height = `${properViewport.height}px`
       canvas.style.display = 'block'
       canvas.style.margin = '0 auto 16px auto'
-      canvas.style.maxWidth = '100%'
-      canvas.style.width = '100%'
-      canvas.style.height = 'auto'
-      canvas.style.boxSizing = 'border-box'
+      canvas.style.maxWidth = 'none'
+      canvas.style.maxHeight = 'none'
       
-      await page.render({ canvasContext: ctx, viewport }).promise
+      await page.render({ canvasContext: ctx, viewport: properViewport }).promise
       container.appendChild(canvas)
+      
+      // Set container size to match canvas to avoid empty space
+      container.style.width = `${properViewport.width + 32}px` // Add padding
+      container.style.height = `${properViewport.height + 32}px` // Add padding
+      
+      // Fix the pdf-viewer-container size to match the content
+      const pdfViewerContainer = container.parentElement
+      if (pdfViewerContainer) {
+        pdfViewerContainer.style.width = `${properViewport.width + 32}px`
+        pdfViewerContainer.style.height = `${properViewport.height + 32}px`
+        pdfViewerContainer.style.flex = 'none'
+        pdfViewerContainer.style.minHeight = '0'
+      }
+      
+      // Wait for DOM to update
+      await new Promise(resolve => setTimeout(resolve, 10))
     }
     
     isLoading.value = false
@@ -148,6 +227,10 @@ onMounted(() => {
   // Set the PDF URL - we'll serve it from the dist folder
   pdfUrl.value = '/Help_Drawing.pdf'
 })
+
+onUnmounted(() => {
+  // Cleanup if needed
+})
 </script>
 
 <style scoped>
@@ -169,9 +252,6 @@ onMounted(() => {
   background: white;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  max-width: 1200px;
-  width: 100%;
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -204,21 +284,33 @@ onMounted(() => {
 
 .pdf-viewer-container {
   flex: 1;
-  min-height: 500px;
+  min-height: 0;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   overflow: hidden;
   background-color: #f8f9fa;
   position: relative;
+  max-width: 100%;
+  width: 100%;
 }
 
 .pdf-content {
   padding: 16px;
   overflow-y: auto;
   overflow-x: hidden;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.pdf-content canvas {
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 auto 16px auto !important;
+  box-sizing: border-box !important;
 }
 
 .pdf-loading-overlay {
@@ -269,19 +361,6 @@ onMounted(() => {
   font-size: 1.1rem;
 }
 
-.help-footer {
-  text-align: center;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.help-footer-text {
-  color: #7f8c8d;
-  font-size: 0.9rem;
-  margin: 0;
-}
-
 /* Responsive design */
 @media (max-width: 768px) {
   .help-page-overlay {
@@ -292,19 +371,7 @@ onMounted(() => {
     padding: 20px;
   }
   
-  .help-title {
-    font-size: 2rem;
-  }
-  
-  .help-subtitle {
-    font-size: 1rem;
-  }
-  
   .pdf-viewer-container {
-    min-height: 400px;
-  }
-  
-  .pdf-viewer {
     min-height: 400px;
   }
 }
