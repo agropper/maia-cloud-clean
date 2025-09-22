@@ -287,9 +287,12 @@
       </q-card>
     </q-dialog>
 
-    <!-- Loading Pane - Show when actually loading -->
-    <div v-if="appState.isLoading" :class="'loading-pane ' + appState.isLoading">
-      <q-circular-progress indeterminate rounded size="30px" color="primary" class="q-ma-md" />
+    <!-- AI Loading Indicator -->
+    <div v-if="appState.isLoading" class="ai-loading-indicator">
+      <div class="loading-content">
+        <q-icon name="hourglass_empty" size="24px" color="primary" class="loading-spinner hourglass-animation" />
+        <span class="loading-text">AI responses typically take 5 to 30 seconds...</span>
+      </div>
     </div>
   </div>
 </template>
@@ -861,16 +864,47 @@ export default defineComponent({
   color: #d32f2f;
 }
 
-.loading-pane {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.9);
+.ai-loading-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
 }
 
-.loading-pane.true {
-  background: rgba(255, 255, 255, 0.95);
+.loading-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.loading-spinner {
+  flex-shrink: 0;
+}
+
+.hourglass-animation {
+  animation: hourglass-spin 2s ease-in-out infinite;
+}
+
+@keyframes hourglass-spin {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(90deg); }
+  50% { transform: rotate(180deg); }
+  75% { transform: rotate(270deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 14px;
+  color: #666;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .tooltip-wrapper {
