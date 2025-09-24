@@ -50,7 +50,19 @@
 
           <!-- Authenticated User Information Panel -->
           <div v-else-if="isAuthenticated && !isDeepLinkUser" class="q-mb-lg">
-            <div class="text-caption text-grey-7 q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+            <!-- Awaiting Approval Message -->
+            <div v-if="hasRequestedApproval && !assignedAgent" class="text-caption text-grey-7 q-pa-md" style="background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+              <div class="row items-center">
+                <q-icon name="hourglass_empty" color="warning" size="1.2rem" class="q-mr-sm" />
+                <div>
+                  <strong>Awaiting Approval</strong><br>
+                  Your request for a private agent has been sent to the administrator.
+                </div>
+              </div>
+            </div>
+            
+            <!-- Private AI Access Message (when agent is assigned) -->
+            <div v-else-if="assignedAgent" class="text-caption text-grey-7 q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
               <div class="row items-center">
                 <q-icon name="person" color="primary" size="1.2rem" class="q-mr-sm" />
                 <div>
