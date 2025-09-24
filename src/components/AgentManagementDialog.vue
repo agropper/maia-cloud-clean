@@ -1489,8 +1489,10 @@ export default defineComponent({
     
     const isSendingHelpEmail = ref(false);
     
-    // Track if approval has been requested
-    const hasRequestedApproval = ref(false);
+    // Track if approval has been requested - computed based on user email
+    const hasRequestedApproval = computed(() => {
+      return localCurrentUser.value?.email && localCurrentUser.value.email.trim() !== '';
+    });
 
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
@@ -3307,8 +3309,7 @@ export default defineComponent({
         workflowSteps.value[1].completed = false;
         workflowSteps.value[1].current = true;
         
-        // Reset approval request flag
-        hasRequestedApproval.value = false;
+        // Note: hasRequestedApproval is now computed based on user email
         
         // Show notification
         $q.notify({
@@ -3864,8 +3865,7 @@ export default defineComponent({
             message: "Approval request sent successfully! The administrator will review your request.",
           });
           
-          // Mark that approval has been requested
-          hasRequestedApproval.value = true;
+          // Note: hasRequestedApproval is now computed based on user email
           
           showAdminApprovalDialog.value = false;
           

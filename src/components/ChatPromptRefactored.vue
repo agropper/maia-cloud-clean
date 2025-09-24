@@ -311,6 +311,17 @@ export default defineComponent({
       await fetchCurrentAgent();
     };
 
+    // Handle support request - update user data with email
+    const handleSupportRequested = async (data: any) => {
+      console.log('Support requested, updating user data:', data);
+      
+      // Update current user data with the email from the support request
+      if (currentUser.value && data.email) {
+        currentUser.value.email = data.email;
+        console.log('User data updated with email:', data.email);
+      }
+    };
+
     // Handle sign out
     const handleSignOut = async () => {
       try {
@@ -742,6 +753,7 @@ export default defineComponent({
       handleDeepLink,
       handleDeepLinkUserIdentified,
       handleUserAuthenticated,
+      handleSupportRequested,
       handleSignOut,
       handleRequestPrivateAgent,
       trackUserActivity,
@@ -823,6 +835,7 @@ export default defineComponent({
       @show-popup="showPopup"
       @sign-in="handleSignIn"
       @sign-out="handleSignOut"
+      @support-requested="handleSupportRequested"
     />
 
     <!-- Modals and Dialogs -->
