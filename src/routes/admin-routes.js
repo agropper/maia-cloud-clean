@@ -278,6 +278,29 @@ router.post('/request-approval', async (req, res) => {
 
     const resendResult = await resendResponse.json();
 
+    // Update user document with email if provided (separate from approval request logging)
+    if (email && email.trim()) {
+      try {
+        if (couchDBClient) {
+          console.log(`[EMAIL UPDATE] Attempting to update email for user ${username}: ${email}`);
+          const userDoc = await couchDBClient.getDocument('maia_users', username);
+          if (userDoc) {
+            userDoc.email = email.trim();
+            await couchDBClient.saveDocument('maia_users', userDoc);
+            console.log(`[EMAIL UPDATE] ✅ Successfully updated email for user ${username}: ${email}`);
+          } else {
+            console.warn(`[EMAIL UPDATE] ❌ User document not found for ${username}`);
+          }
+        } else {
+          console.warn(`[EMAIL UPDATE] ❌ CouchDB client not available`);
+        }
+      } catch (userUpdateError) {
+        console.error(`[EMAIL UPDATE] ❌ Could not update email for user ${username}:`, userUpdateError.message);
+      }
+    } else {
+      console.log(`[EMAIL UPDATE] No email provided for user ${username}`);
+    }
+
     // Log the approval request in the database (optional)
     try {
       if (couchDBClient) {
@@ -296,20 +319,7 @@ router.post('/request-approval', async (req, res) => {
         };
 
         await couchDBClient.saveDocument('maia2_admin_approvals', approvalRequest);
-
-        // Update user document with email if provided
-        if (email && email.trim()) {
-          try {
-            const userDoc = await couchDBClient.getDocument('maia_users', username);
-            if (userDoc) {
-              userDoc.email = email.trim();
-              await couchDBClient.saveDocument('maia_users', userDoc);
-              console.log(`Updated email for user ${username}: ${email}`);
-            }
-          } catch (userUpdateError) {
-            console.warn(`Could not update email for user ${username}:`, userUpdateError.message);
-          }
-        }
+        console.log(`[APPROVAL REQUEST] ✅ Logged approval request for ${username}`);
       }
     } catch (dbError) {
       console.warn('⚠️ Failed to log approval request to database:', dbError.message);
