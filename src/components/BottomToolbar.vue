@@ -349,7 +349,7 @@ import {
 export default defineComponent({
   name: 'BottomToolbar',
   
-  emits: ['sign-in', 'sign-out', 'chat-loaded', 'group-deleted', 'support-requested'],
+  emits: ['sign-in', 'sign-out', 'chat-loaded', 'group-deleted'],
 
   components: {
     QBtn,
@@ -687,8 +687,8 @@ export default defineComponent({
 
     const handleSupportRequested = (data) => {
       console.log('Support requested for user:', data)
-      // Emit event to parent component to refresh user data
-      emit('support-requested', data)
+      // You could emit this to parent component if needed
+      // emit('support-requested', data)
     }
 
     const sendContactMessage = async () => {
