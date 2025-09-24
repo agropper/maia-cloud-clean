@@ -623,6 +623,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     const userInfo = {
       userId: userDoc._id || userDoc.userId,
       displayName: userDoc.displayName || userDoc._id,
+      email: userDoc.email || null,
       createdAt: userDoc.createdAt,
       updatedAt: userDoc.updatedAt,
       hasPasskey: !!userDoc.credentialID,

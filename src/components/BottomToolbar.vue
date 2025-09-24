@@ -249,6 +249,13 @@
       v-model="showHelpWelcomeModal"
     />
 
+    <!-- New User Welcome Modal -->
+    <NewUserWelcomeModal 
+      v-model="showNewUserWelcomeModal"
+      :currentUser="currentUser"
+      @support-requested="handleSupportRequested"
+    />
+
     <!-- Help Page Modal -->
     <HelpPage 
       v-if="showHelpModal" 
@@ -333,6 +340,7 @@ import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
 import HelpPage from './HelpPage.vue'
 import HelpWelcomeModal from './HelpWelcomeModal.vue'
+import NewUserWelcomeModal from './NewUserWelcomeModal.vue'
 import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
@@ -362,7 +370,8 @@ export default defineComponent({
     GNAP,
     GroupManagementModal,
     HelpPage,
-    HelpWelcomeModal
+    HelpWelcomeModal,
+    NewUserWelcomeModal
   },
 
   props: {
@@ -432,6 +441,7 @@ export default defineComponent({
     const showContactModal = ref(false)
     const showHelpModal = ref(false)
     const showHelpWelcomeModal = ref(false)
+    const showNewUserWelcomeModal = ref(false)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -661,6 +671,26 @@ export default defineComponent({
       showHelpModal.value = false
     }
 
+    // Watch for new user sign-ins to show welcome modal
+    const previousUser = ref(props.currentUser)
+    watch(() => props.currentUser, (newUser, oldUser) => {
+      // Check if this is a new user signing in (was null/undefined, now has a user)
+      if (newUser && newUser.userId && newUser.userId !== 'Public User' && 
+          (!oldUser || !oldUser.userId || oldUser.userId === 'Public User')) {
+        // Show welcome modal for new authenticated users
+        setTimeout(() => {
+          showNewUserWelcomeModal.value = true
+        }, 1000) // Small delay to let UI settle
+      }
+      previousUser.value = newUser
+    }, { immediate: false })
+
+    const handleSupportRequested = (data) => {
+      console.log('Support requested for user:', data)
+      // You could emit this to parent component if needed
+      // emit('support-requested', data)
+    }
+
     const sendContactMessage = async () => {
       if (!contactForm.value.subject || !contactForm.value.message) {
         $q.notify({
@@ -728,6 +758,7 @@ export default defineComponent({
       showContactModal,
       showHelpModal,
       showHelpWelcomeModal,
+      showNewUserWelcomeModal,
       isSendingContact,
       contactForm,
       contactMessageTypes,
@@ -742,6 +773,7 @@ export default defineComponent({
       handleMailClick,
       handleInfoClick,
       handleHelpClose,
+      handleSupportRequested,
       sendContactMessage
     }
   }

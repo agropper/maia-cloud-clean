@@ -409,6 +409,10 @@
               <div class="col-6">
                 <p><strong>User ID:</strong> {{ selectedUser.userId }}</p>
                 <p><strong>Display Name:</strong> {{ selectedUser.displayName }}</p>
+                <p><strong>Email:</strong> 
+                  <span v-if="selectedUser.email">{{ selectedUser.email }}</span>
+                  <span v-else class="text-grey-6">No email provided</span>
+                </p>
                 <p><strong>Created:</strong> {{ formatDate(selectedUser.createdAt) }}</p>
               </div>
               <div class="col-6">

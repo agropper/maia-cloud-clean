@@ -296,6 +296,20 @@ router.post('/request-approval', async (req, res) => {
         };
 
         await couchDBClient.saveDocument('maia2_admin_approvals', approvalRequest);
+
+        // Update user document with email if provided
+        if (email && email.trim()) {
+          try {
+            const userDoc = await couchDBClient.getDocument('maia_users', username);
+            if (userDoc) {
+              userDoc.email = email.trim();
+              await couchDBClient.saveDocument('maia_users', userDoc);
+              console.log(`Updated email for user ${username}: ${email}`);
+            }
+          } catch (userUpdateError) {
+            console.warn(`Could not update email for user ${username}:`, userUpdateError.message);
+          }
+        }
       }
     } catch (dbError) {
       console.warn('⚠️ Failed to log approval request to database:', dbError.message);
