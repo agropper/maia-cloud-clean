@@ -414,6 +414,7 @@ router.post("/register-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowState || updatedUser.workflowStage || 'no_request_yet',
         },
       });
     } else {
@@ -627,6 +628,7 @@ router.post("/authenticate-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowState || updatedUser.workflowStage || 'no_request_yet',
         },
       };
       

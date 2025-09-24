@@ -48,26 +48,14 @@
             </div>
           </div>
 
-          <!-- Authenticated User Information Panel -->
+          <!-- User Information Panel - Always shown for authenticated users -->
           <div v-else-if="isAuthenticated && !isDeepLinkUser" class="q-mb-lg">
-            <!-- Awaiting Approval Message -->
-            <div v-if="hasRequestedApproval && !assignedAgent" class="text-caption text-grey-7 q-pa-md" style="background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+            <!-- Workflow State Information Block -->
+            <div v-if="currentWorkflowMessage" class="text-caption text-grey-7 q-pa-md" :style="getWorkflowStateStyle(currentWorkflowState)">
               <div class="row items-center">
-                <q-icon name="hourglass_empty" color="warning" size="1.2rem" class="q-mr-sm" />
+                <q-icon :name="getWorkflowStateIcon(currentWorkflowState)" :color="getWorkflowStateColor(currentWorkflowState)" size="1.2rem" class="q-mr-sm" />
                 <div>
-                  <strong>Awaiting Approval</strong><br>
-                  Your request for a private agent has been sent to the administrator.
-                </div>
-              </div>
-            </div>
-            
-            <!-- Private AI Access Message (when agent is assigned) -->
-            <div v-else-if="assignedAgent" class="text-caption text-grey-7 q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
-              <div class="row items-center">
-                <q-icon name="person" color="primary" size="1.2rem" class="q-mr-sm" />
-                <div>
-                  <strong>Private AI Access</strong><br>
-                  You have access to your private AI agent and can create knowledge bases from your health records. Use the options below to manage your files and knowledge bases.
+                  <strong>{{ currentWorkflowMessage }}</strong>
                 </div>
               </div>
             </div>
@@ -1492,10 +1480,84 @@ export default defineComponent({
     // Track if approval has been requested
     const hasRequestedApproval = ref(false);
     
+    // Workflow state messages for user information block
+    const workflowStateMessages = {
+      'no_passkey': 'No Passkey - Please register a passkey to access private features',
+      'no_request_yet': 'No Request Yet - You can request support for a private AI agent',
+      'awaiting_approval': 'Awaiting Approval - Your request for a private agent has been sent to the administrator',
+      'approved': 'Approved - You have been approved for private AI access',
+      'agent_assigned': 'Agent Assigned - You have access to your private AI agent',
+      'inconsistent': 'Inconsistent State - Please contact administrator for assistance'
+    };
+    
     // Update hasRequestedApproval based on user workflow state
-    watch(() => localCurrentUser.value?.workflowState, (newWorkflowState) => {
-      hasRequestedApproval.value = newWorkflowState === 'awaiting_approval';
+    watch(() => localCurrentUser.value?.workflowStage, (newWorkflowStage) => {
+      hasRequestedApproval.value = newWorkflowStage === 'awaiting_approval';
     }, { immediate: true });
+    
+    // Get current workflow state and message
+    const currentWorkflowState = computed(() => {
+      if (!localCurrentUser.value) return null;
+      
+      // Use workflowStage from database if available (this is the field used by Admin Panel)
+      if (localCurrentUser.value.workflowStage) {
+        return localCurrentUser.value.workflowStage;
+      }
+      
+      // Fallback logic for users without workflowStage field
+      if (!localCurrentUser.value.credentialID) {
+        return 'no_passkey';
+      }
+      
+      // Check if user has requested support (has email)
+      if (localCurrentUser.value.email) {
+        return 'awaiting_approval';
+      }
+      
+      return 'no_request_yet';
+    });
+    
+    const currentWorkflowMessage = computed(() => {
+      const state = currentWorkflowState.value;
+      return state ? workflowStateMessages[state] || `Unknown State: ${state}` : null;
+    });
+    
+    // Helper functions for workflow state styling
+    const getWorkflowStateStyle = (state) => {
+      const styles = {
+        'no_passkey': 'background-color: #ffebee; border-radius: 8px; border-left: 4px solid #f44336;',
+        'no_request_yet': 'background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;',
+        'awaiting_approval': 'background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;',
+        'approved': 'background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #4caf50;',
+        'agent_assigned': 'background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;',
+        'inconsistent': 'background-color: #fce4ec; border-radius: 8px; border-left: 4px solid #e91e63;'
+      };
+      return styles[state] || 'background-color: #f5f5f5; border-radius: 8px; border-left: 4px solid #9e9e9e;';
+    };
+    
+    const getWorkflowStateIcon = (state) => {
+      const icons = {
+        'no_passkey': 'vpn_key_off',
+        'no_request_yet': 'help_outline',
+        'awaiting_approval': 'hourglass_empty',
+        'approved': 'check_circle',
+        'agent_assigned': 'smart_toy',
+        'inconsistent': 'warning'
+      };
+      return icons[state] || 'info';
+    };
+    
+    const getWorkflowStateColor = (state) => {
+      const colors = {
+        'no_passkey': 'negative',
+        'no_request_yet': 'primary',
+        'awaiting_approval': 'warning',
+        'approved': 'positive',
+        'agent_assigned': 'primary',
+        'inconsistent': 'negative'
+      };
+      return colors[state] || 'grey';
+    };
 
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
@@ -3314,7 +3376,7 @@ export default defineComponent({
         
         // Update local user workflow state to reflect the change
         if (localCurrentUser.value) {
-          localCurrentUser.value.workflowState = 'no_request_yet';
+          localCurrentUser.value.workflowStage = 'no_request_yet';
         }
         
         // Show notification
@@ -3873,7 +3935,7 @@ export default defineComponent({
           
           // Update local user workflow state to reflect the change
           if (localCurrentUser.value) {
-            localCurrentUser.value.workflowState = 'awaiting_approval';
+            localCurrentUser.value.workflowStage = 'awaiting_approval';
           }
           
           showAdminApprovalDialog.value = false;
@@ -4250,6 +4312,13 @@ export default defineComponent({
       cleanupBucketFiles,
       showCleanupErrorModal,
       currentKbId,
+      // Workflow state management
+      workflowStateMessages,
+      currentWorkflowState,
+      currentWorkflowMessage,
+      getWorkflowStateStyle,
+      getWorkflowStateIcon,
+      getWorkflowStateColor,
     };
 
 
