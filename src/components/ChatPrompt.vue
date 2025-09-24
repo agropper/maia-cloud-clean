@@ -474,6 +474,7 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
+      console.log('[*] [SIGN IN] handleUserAuthenticated called with userData:', userData)
       // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
       apiCallCache.clear();
       
@@ -483,6 +484,7 @@ export default defineComponent({
       appState.currentViewingFile = null;
       appState.popupContent = '';
       
+      console.log('[*] [SIGN IN] Setting currentUser to:', UserService.normalizeUserObject(userData))
       currentUser.value = UserService.normalizeUserObject(userData);
       
       // Fetch the user's current agent and KB from API to update Agent Badge

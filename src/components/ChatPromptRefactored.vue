@@ -273,13 +273,18 @@ export default defineComponent({
 
     // Fetch current agent information
     const fetchCurrentAgent = async () => {
+      console.log('[*] [SIGN IN] STEP 35: fetchCurrentAgent called, making API request to:', `${API_BASE_URL}/current-agent`)
       try {
         const response = await fetch(`${API_BASE_URL}/current-agent`);
+        console.log('[*] [SIGN IN] STEP 36: current-agent API response status:', response.status)
         const data = await response.json();
+        console.log('[*] [SIGN IN] STEP 37: current-agent API response data:', data)
 
         if (data.agent) {
+          console.log('[*] [SIGN IN] STEP 38: Setting agent data:', data.agent)
           appStateManager.setAgent(data.agent);
           if (data.agent.knowledgeBase) {
+            console.log('[*] [SIGN IN] STEP 39: Setting knowledge base:', data.agent.knowledgeBase)
             appStateManager.setState({ currentKnowledgeBase: data.agent.knowledgeBase });
           }
         } else {
@@ -291,22 +296,41 @@ export default defineComponent({
       }
     };
 
+    // Watch for currentUser changes to debug prop passing
+    watch(currentUser, (newUser, oldUser) => {
+      console.log('[*] [SIGN IN] STEP 40: currentUser changed from:', oldUser, 'to:', newUser)
+    }, { deep: true })
+
     // Handle user authentication
     const handleUserAuthenticated = async (userData: any) => {
+      console.log('[*] [SIGN IN] STEP 16: ChatPromptRefactored handleUserAuthenticated called with userData:', userData)
+      console.log('[*] [SIGN IN] STEP 17: Current currentUser before update:', currentUser.value)
       
       // Clear chat data upon sign-in
+      console.log('[*] [SIGN IN] STEP 18: Clearing chat data for new user...')
       appState.chatHistory = [];
       appState.uploadedFiles = [];
       appState.currentViewingFile = null;
       appState.popupContent = '';
       
       // Clear all caches to prevent cross-user contamination
+      console.log('[*] [SIGN IN] STEP 19: Clearing API cache...')
       if (window.apiCallCache) {
         window.apiCallCache.clear();
       }
       
-      // Force a page reload to ensure complete re-initialization
-      window.location.reload();
+      console.log('[*] [SIGN IN] STEP 20: Normalizing user data:', userData)
+      const normalizedUser = UserService.normalizeUserObject(userData);
+      console.log('[*] [SIGN IN] STEP 21: Setting currentUser to normalized user:', normalizedUser)
+      currentUser.value = normalizedUser;
+      console.log('[*] [SIGN IN] STEP 22: Current currentUser after update:', currentUser.value)
+      
+      console.log('[*] [SIGN IN] STEP 23: Fetching current agent for user...')
+      // Fetch the user's current agent and KB from API to update Agent Badge
+      await fetchCurrentAgent();
+      console.log('[*] [SIGN IN] STEP 24: Agent fetch complete, currentAgent:', currentAgent.value)
+      
+      console.log('[*] [SIGN IN] STEP 25: User authentication complete, UI should update')
     };
 
     // Handle sign out
