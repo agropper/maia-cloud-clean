@@ -1491,6 +1491,11 @@ export default defineComponent({
     
     // Track if approval has been requested
     const hasRequestedApproval = ref(false);
+    
+    // Update hasRequestedApproval based on user workflow state
+    watch(() => localCurrentUser.value?.workflowState, (newWorkflowState) => {
+      hasRequestedApproval.value = newWorkflowState === 'awaiting_approval';
+    }, { immediate: true });
 
     // Cancel indexing modal state
     const showCancelIndexingModal = ref(false);
@@ -3307,8 +3312,10 @@ export default defineComponent({
         workflowSteps.value[1].completed = false;
         workflowSteps.value[1].current = true;
         
-        // Reset approval request flag
-        hasRequestedApproval.value = false;
+        // Update local user workflow state to reflect the change
+        if (localCurrentUser.value) {
+          localCurrentUser.value.workflowState = 'no_request_yet';
+        }
         
         // Show notification
         $q.notify({
@@ -3864,8 +3871,10 @@ export default defineComponent({
             message: "Approval request sent successfully! The administrator will review your request.",
           });
           
-          // Mark that approval has been requested
-          hasRequestedApproval.value = true;
+          // Update local user workflow state to reflect the change
+          if (localCurrentUser.value) {
+            localCurrentUser.value.workflowState = 'awaiting_approval';
+          }
           
           showAdminApprovalDialog.value = false;
           

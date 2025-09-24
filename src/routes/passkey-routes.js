@@ -290,6 +290,7 @@ router.post("/register", async (req, res) => {
       displayName,
       domain: rpID,
       type: 'user', // Add type field for proper filtering
+      workflowState: 'no_request_yet', // Initial workflow state for new users
       challenge: options.challenge,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

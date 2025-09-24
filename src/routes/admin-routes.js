@@ -278,28 +278,29 @@ router.post('/request-approval', async (req, res) => {
 
     const resendResult = await resendResponse.json();
 
-    // Update user document with email if provided (separate from approval request logging)
-    if (email && email.trim()) {
-      try {
-        if (couchDBClient) {
-          console.log(`[EMAIL UPDATE] Attempting to update email for user ${username}: ${email}`);
-          const userDoc = await couchDBClient.getDocument('maia_users', username);
-          if (userDoc) {
-            userDoc.email = email.trim();
-            await couchDBClient.saveDocument('maia_users', userDoc);
-            console.log(`[EMAIL UPDATE] ✅ Successfully updated email for user ${username}: ${email}`);
-          } else {
-            console.warn(`[EMAIL UPDATE] ❌ User document not found for ${username}`);
+        // Update user document with email and workflow state if provided
+        if (email && email.trim()) {
+          try {
+            if (couchDBClient) {
+              console.log(`[EMAIL UPDATE] Attempting to update email and workflow state for user ${username}: ${email}`);
+              const userDoc = await couchDBClient.getDocument('maia_users', username);
+              if (userDoc) {
+                userDoc.email = email.trim();
+                userDoc.workflowState = 'awaiting_approval'; // Update workflow state
+                await couchDBClient.saveDocument('maia_users', userDoc);
+                console.log(`[EMAIL UPDATE] ✅ Successfully updated email and workflow state for user ${username}: ${email}`);
+              } else {
+                console.warn(`[EMAIL UPDATE] ❌ User document not found for ${username}`);
+              }
+            } else {
+              console.warn(`[EMAIL UPDATE] ❌ CouchDB client not available`);
+            }
+          } catch (userUpdateError) {
+            console.error(`[EMAIL UPDATE] ❌ Could not update email and workflow state for user ${username}:`, userUpdateError.message);
           }
         } else {
-          console.warn(`[EMAIL UPDATE] ❌ CouchDB client not available`);
+          console.log(`[EMAIL UPDATE] No email provided for user ${username}`);
         }
-      } catch (userUpdateError) {
-        console.error(`[EMAIL UPDATE] ❌ Could not update email for user ${username}:`, userUpdateError.message);
-      }
-    } else {
-      console.log(`[EMAIL UPDATE] No email provided for user ${username}`);
-    }
 
     // Note: Approval request logging removed - email notification is sufficient
 
