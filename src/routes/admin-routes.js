@@ -301,30 +301,7 @@ router.post('/request-approval', async (req, res) => {
       console.log(`[EMAIL UPDATE] No email provided for user ${username}`);
     }
 
-    // Log the approval request in the database (optional)
-    try {
-      if (couchDBClient) {
-        const approvalRequest = {
-          _id: `approval_request_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: 'admin_approval_request',
-          username,
-          email,
-          requestType,
-          message,
-          status: 'pending',
-          requestedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          emailSent: true,
-          emailId: resendResult.id
-        };
-
-        await couchDBClient.saveDocument('maia2_admin_approvals', approvalRequest);
-        console.log(`[APPROVAL REQUEST] ✅ Logged approval request for ${username}`);
-      }
-    } catch (dbError) {
-      console.warn('⚠️ Failed to log approval request to database:', dbError.message);
-      // Don't fail the request if database logging fails
-    }
+    // Note: Approval request logging removed - email notification is sufficient
 
     res.json({
       success: true,

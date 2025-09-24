@@ -420,55 +420,7 @@ class Maia2Client {
   // ============================================================================
   // ADMIN APPROVAL METHODS
   // ============================================================================
-
-  /**
-   * Submit admin approval request
-   */
-  async submitApprovalRequest(approvalData) {
-    if (!this.isInitialized) throw new Error('MAIA2 Client not initialized');
-    if (!this.currentUser) throw new Error('User not authenticated');
-    
-    try {
-      const approval = {
-        _id: `approval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'admin_approval',
-        ...approvalData,
-        userId: this.currentUser.username,
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userNotified: false,
-        adminNotified: false,
-        priority: approvalData.urgency === 'critical' ? 1 : 
-                 approvalData.urgency === 'high' ? 2 :
-                 approvalData.urgency === 'medium' ? 3 : 4
-      };
-
-      const result = await this.couchDBClient.saveDocument('maia2_admin_approvals', approval);
-
-      return { ...approval, _id: result.id, _rev: result.rev };
-    } catch (error) {
-      console.error('❌ Failed to submit approval request:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get pending approval requests (admin only)
-   */
-  async getPendingApprovals() {
-    if (!this.isInitialized) throw new Error('MAIA2 Client not initialized');
-    if (!this.currentUser?.isAdmin) throw new Error('Admin access required');
-    
-    try {
-      const allApprovals = await this.couchDBClient.getAllDocuments('maia2_admin_approvals');
-      return allApprovals.filter(a => a.type === 'admin_approval' && a.status === 'pending');
-    } catch (error) {
-      console.error('❌ Failed to get pending approvals:', error.message);
-      throw error;
-    }
-  }
+  // Note: Admin approval methods removed - approval requests are handled via email notifications
 
   // ============================================================================
   // AUDIT LOGGING METHODS
@@ -542,7 +494,6 @@ class Maia2Client {
       'maia2_agents',
       'maia2_knowledge_bases',
       'maia2_user_resources',
-      'maia2_admin_approvals',
       'maia2_audit_logs'
     ];
 
