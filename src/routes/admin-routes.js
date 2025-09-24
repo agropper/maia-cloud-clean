@@ -278,17 +278,17 @@ router.post('/request-approval', async (req, res) => {
 
     const resendResult = await resendResponse.json();
 
-        // Update user document with email and workflow state if provided
+        // Update user document with email and workflow stage if provided
         if (email && email.trim()) {
           try {
             if (couchDBClient) {
-              console.log(`[EMAIL UPDATE] Attempting to update email and workflow state for user ${username}: ${email}`);
+              console.log(`[EMAIL UPDATE] Attempting to update email and workflow stage for user ${username}: ${email}`);
               const userDoc = await couchDBClient.getDocument('maia_users', username);
               if (userDoc) {
                 userDoc.email = email.trim();
-                userDoc.workflowState = 'awaiting_approval'; // Update workflow state
+                userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
                 await couchDBClient.saveDocument('maia_users', userDoc);
-                console.log(`[EMAIL UPDATE] ✅ Successfully updated email and workflow state for user ${username}: ${email}`);
+                console.log(`[EMAIL UPDATE] ✅ Successfully updated email and workflow stage for user ${username}: ${email}`);
               } else {
                 console.warn(`[EMAIL UPDATE] ❌ User document not found for ${username}`);
               }
@@ -296,7 +296,7 @@ router.post('/request-approval', async (req, res) => {
               console.warn(`[EMAIL UPDATE] ❌ CouchDB client not available`);
             }
           } catch (userUpdateError) {
-            console.error(`[EMAIL UPDATE] ❌ Could not update email and workflow state for user ${username}:`, userUpdateError.message);
+            console.error(`[EMAIL UPDATE] ❌ Could not update email and workflow stage for user ${username}:`, userUpdateError.message);
           }
         } else {
           console.log(`[EMAIL UPDATE] No email provided for user ${username}`);

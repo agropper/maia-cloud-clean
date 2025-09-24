@@ -290,7 +290,7 @@ router.post("/register", async (req, res) => {
       displayName,
       domain: rpID,
       type: 'user', // Add type field for proper filtering
-      workflowState: 'no_request_yet', // Initial workflow state for new users
+      workflowStage: 'no_request_yet', // Initial workflow stage for new users
       challenge: options.challenge,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -414,7 +414,7 @@ router.post("/register-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
-          workflowStage: updatedUser.workflowState || updatedUser.workflowStage || 'no_request_yet',
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
         },
       });
     } else {
@@ -628,7 +628,7 @@ router.post("/authenticate-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
-          workflowStage: updatedUser.workflowState || updatedUser.workflowStage || 'no_request_yet',
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
         },
       };
       

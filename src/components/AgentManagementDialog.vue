@@ -50,7 +50,7 @@
 
           <!-- User Information Panel - Always shown for authenticated users -->
           <div v-else-if="isAuthenticated && !isDeepLinkUser" class="q-mb-lg">
-            <!-- Workflow State Information Block -->
+            <!-- Workflow Stage Information Block -->
             <div v-if="currentWorkflowMessage" class="text-caption text-grey-7 q-pa-md" :style="getWorkflowStateStyle(currentWorkflowState)">
               <div class="row items-center">
                 <q-icon :name="getWorkflowStateIcon(currentWorkflowState)" :color="getWorkflowStateColor(currentWorkflowState)" size="1.2rem" class="q-mr-sm" />
@@ -1480,7 +1480,7 @@ export default defineComponent({
     // Track if approval has been requested
     const hasRequestedApproval = ref(false);
     
-    // Workflow state messages for user information block
+    // Workflow stage messages for user information block
     const workflowStateMessages = {
       'no_passkey': 'No Passkey - Please register a passkey to access private features',
       'no_request_yet': 'No Request Yet - You can request support for a private AI agent',
@@ -1490,12 +1490,12 @@ export default defineComponent({
       'inconsistent': 'Inconsistent State - Please contact administrator for assistance'
     };
     
-    // Update hasRequestedApproval based on user workflow state
+    // Update hasRequestedApproval based on user workflow stage
     watch(() => localCurrentUser.value?.workflowStage, (newWorkflowStage) => {
       hasRequestedApproval.value = newWorkflowStage === 'awaiting_approval';
     }, { immediate: true });
     
-    // Get current workflow state and message
+    // Get current workflow stage and message
     const currentWorkflowState = computed(() => {
       if (!localCurrentUser.value) return null;
       
@@ -1522,7 +1522,7 @@ export default defineComponent({
       return state ? workflowStateMessages[state] || `Unknown State: ${state}` : null;
     });
     
-    // Helper functions for workflow state styling
+    // Helper functions for workflow stage styling
     const getWorkflowStateStyle = (state) => {
       const styles = {
         'no_passkey': 'background-color: #ffebee; border-radius: 8px; border-left: 4px solid #f44336;',
@@ -3374,7 +3374,7 @@ export default defineComponent({
         workflowSteps.value[1].completed = false;
         workflowSteps.value[1].current = true;
         
-        // Update local user workflow state to reflect the change
+        // Update local user workflow stage to reflect the change
         if (localCurrentUser.value) {
           localCurrentUser.value.workflowStage = 'no_request_yet';
         }
@@ -3933,7 +3933,7 @@ export default defineComponent({
             message: "Approval request sent successfully! The administrator will review your request.",
           });
           
-          // Update local user workflow state to reflect the change
+          // Update local user workflow stage to reflect the change
           if (localCurrentUser.value) {
             localCurrentUser.value.workflowStage = 'awaiting_approval';
           }
@@ -4312,7 +4312,7 @@ export default defineComponent({
       cleanupBucketFiles,
       showCleanupErrorModal,
       currentKbId,
-      // Workflow state management
+      // Workflow stage management
       workflowStateMessages,
       currentWorkflowState,
       currentWorkflowMessage,

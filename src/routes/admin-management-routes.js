@@ -944,12 +944,7 @@ function validateWorkflowConsistency(user) {
 }
 
 function determineWorkflowStage(user) {
-  // Primary source of truth: stored workflowState field (new field)
-  if (user.workflowState) {
-    return user.workflowState;
-  }
-  
-  // Fallback: legacy workflowStage field
+  // Primary source of truth: stored workflowStage field
   if (user.workflowStage) {
     // Validate consistency between workflowStage and approvalStatus
     try {
@@ -962,7 +957,7 @@ function determineWorkflowStage(user) {
     return user.workflowStage;
   }
   
-  // Fallback for legacy users without workflow fields
+  // Fallback for legacy users without workflowStage field
   // Check if user has a passkey (look for credentialID field)
   if (!user.credentialID) {
     return 'no_passkey';
