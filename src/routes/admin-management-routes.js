@@ -593,6 +593,10 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     
     // Get user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    
+    // Debug: Log email field for user details
+    console.log(`[DEBUG] User details for ${userId} - email field:`, userDoc?.email);
+    
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -957,6 +961,12 @@ function determineWorkflowStage(user) {
   // Check if user has a passkey (look for credentialID field)
   if (!user.credentialID) {
     return 'no_passkey';
+  }
+  
+  // Check if user has made any approval requests by looking for email field
+  // If no email and no approvalStatus, they haven't requested support yet
+  if (!user.approvalStatus && !user.email) {
+    return 'no_request_yet';
   }
   
   // For legacy users without approvalStatus field, assume they need approval

@@ -1516,6 +1516,7 @@ export default defineComponent({
     const getWorkflowStageColor = (stage) => {
       const colors = {
         'no_passkey': 'grey',
+        'no_request_yet': 'blue-grey',
         'awaiting_approval': 'warning',
         'waiting_for_deployment': 'info',
         'approved': 'positive',
@@ -1530,6 +1531,7 @@ export default defineComponent({
     const formatWorkflowStage = (stage) => {
       const labels = {
         'no_passkey': 'No Passkey',
+        'no_request_yet': 'No Request Yet',
         'awaiting_approval': 'Awaiting Approval',
         'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
