@@ -1070,14 +1070,31 @@ export default defineComponent({
       showUserModal.value = true;
       
       try {
-        const response = await fetch(`/api/user-state/${user.userId}`);
+        const response = await fetch(`/api/admin-management/users/${user.userId}`);
         if (response.ok) {
           const userDetails = await response.json();
+          
+          // Fetch bucket status for the user
+          let bucketStatus = null;
+          try {
+            const bucketResponse = await fetch(`/api/bucket/user-status/${user.userId}`);
+            if (bucketResponse.ok) {
+              bucketStatus = await bucketResponse.json();
+            }
+          } catch (bucketError) {
+            console.warn('Could not fetch bucket status:', bucketError);
+          }
+          
           // Ensure userId is preserved from the original user object
           selectedUser.value = {
             ...userDetails,
-            userId: user.userId // Preserve the userId from the table row
+            userId: user.userId, // Preserve the userId from the table row
+            // Add bucket information
+            hasBucket: bucketStatus?.hasFolder || false,
+            bucketFileCount: bucketStatus?.fileCount || 0,
+            bucketTotalSize: bucketStatus?.totalSize || 0
           };
+          
           // Load existing admin notes if they exist
           if (userDetails.adminNotes) {
             adminNotes.value = userDetails.adminNotes;

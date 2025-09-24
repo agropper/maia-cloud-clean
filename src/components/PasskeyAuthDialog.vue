@@ -401,11 +401,9 @@ export default defineComponent({
     };
 
     const registerPasskey = async () => {
-      console.log('[*] [SIGN IN] STEP 1: Starting passkey registration for userId:', userId.value)
       isRegistering.value = true;
       try {
         // Step 1: Generate registration options
-        console.log('[*] [SIGN IN] STEP 2: Requesting registration options from backend...')
         const optionsResponse = await fetch(
           `${API_BASE_URL}/passkey/register`,
           {
@@ -422,20 +420,15 @@ export default defineComponent({
         );
 
         if (!optionsResponse.ok) {
-          console.log('[*] [SIGN IN] ERROR: Failed to generate registration options, status:', optionsResponse.status)
           throw new Error("Failed to generate registration options");
         }
 
         const options = await optionsResponse.json();
-        console.log('[*] [SIGN IN] STEP 3: Received registration options from backend:', options)
 
         // Step 2: Create credentials using SimpleWebAuthn v13
-        console.log('[*] [SIGN IN] STEP 4: Creating passkey credential with WebAuthn...')
         const credential = await startRegistrationWebAuthn({ optionsJSON: options });
-        console.log('[*] [SIGN IN] STEP 5: WebAuthn credential created:', credential)
 
         // Step 3: Verify registration
-        console.log('[*] [SIGN IN] STEP 6: Sending credential to backend for verification...')
         const verifyResponse = await fetch(
           `${API_BASE_URL}/passkey/register-verify`,
           {
@@ -450,18 +443,13 @@ export default defineComponent({
           }
         );
 
-        console.log('[*] [SIGN IN] STEP 7: Backend verification response status:', verifyResponse.status)
         const result = await verifyResponse.json();
-        console.log('[*] [SIGN IN] STEP 8: Backend verification result:', result)
 
         if (result.success) {
-          console.log('[*] [SIGN IN] STEP 9: Registration successful, storing user data:', result.user)
           // Store the user data for later use
           registrationUserData.value = result.user;
-          console.log('[*] [SIGN IN] STEP 10: Setting currentStep to "success"')
           currentStep.value = "success";
         } else {
-          console.log('[*] [SIGN IN] ERROR: Registration failed:', result.error)
           currentStep.value = "error";
           errorMessage.value = result.error || "Registration failed";
         }
@@ -544,14 +532,10 @@ export default defineComponent({
     };
 
     const onSuccess = () => {
-      console.log('[*] [SIGN IN] STEP 11: onSuccess called - user clicked "Done" button')
       // Use the stored user data if available, otherwise fall back to just userId
       const userData = registrationUserData.value || { userId: userId.value };
-      console.log('[*] [SIGN IN] STEP 12: Preparing userData for emission:', userData)
-      console.log('[*] [SIGN IN] STEP 13: Emitting "authenticated" event to parent component')
       emit("authenticated", userData);
 
-      console.log('[*] [SIGN IN] STEP 14: Closing dialog and resetting state')
       showDialog.value = false;
       // Reset for next use
       currentStep.value = "choose";
@@ -560,7 +544,6 @@ export default defineComponent({
       userIdErrorMessage.value = "";
       errorMessage.value = "";
       registrationUserData.value = null;
-      console.log('[*] [SIGN IN] STEP 15: Dialog cleanup complete')
     };
 
     return {

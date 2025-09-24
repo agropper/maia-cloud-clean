@@ -528,35 +528,15 @@ export default defineComponent({
     }
 
     const getCurrentUserName = () => {
-      console.log('[*] [SIGN IN] STEP 26: BottomToolbar getCurrentUserName called, currentUser prop:', props.currentUser)
-      console.log('[*] [SIGN IN] STEP 27: currentUser type:', typeof props.currentUser)
-      if (!props.currentUser) {
-        console.log('[*] [SIGN IN] STEP 28: No currentUser, returning Unknown User')
-        return 'Unknown User'
-      }
-      if (typeof props.currentUser === 'string') {
-        console.log('[*] [SIGN IN] STEP 29: currentUser is string, returning:', props.currentUser)
-        return props.currentUser
-      }
-      const userName = props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
-      console.log('[*] [SIGN IN] STEP 30: currentUser is object, returning userName:', userName)
-      return userName
+      if (!props.currentUser) return 'Unknown User'
+      if (typeof props.currentUser === 'string') return props.currentUser
+      return props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
     }
 
     const isUserUnknown = computed(() => {
-      console.log('[*] [SIGN IN] STEP 31: BottomToolbar isUserUnknown computed called, currentUser:', props.currentUser)
-      if (!props.currentUser) {
-        console.log('[*] [SIGN IN] STEP 32: No currentUser, returning true (user is unknown)')
-        return true
-      }
-      if (typeof props.currentUser === 'string') {
-        const isUnknown = props.currentUser === 'Unknown User'
-        console.log('[*] [SIGN IN] STEP 33: currentUser is string, isUnknown:', isUnknown)
-        return isUnknown
-      }
-      const isUnknown = props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
-      console.log('[*] [SIGN IN] STEP 34: currentUser is object, isUnknown:', isUnknown)
-      return isUnknown
+      if (!props.currentUser) return true
+      if (typeof props.currentUser === 'string') return props.currentUser === 'Unknown User'
+      return props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
     })
 
     const openGroupModal = () => {

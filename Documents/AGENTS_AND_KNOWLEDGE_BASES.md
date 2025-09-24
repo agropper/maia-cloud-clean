@@ -187,3 +187,8 @@ This suggests the protection document lookup is failing or the logic is incorrec
 - ✅ **Safe for merging branch** - maia_chats is already "unchanged" in MAIA2 design
 - ✅ **Simpler maintenance** - Single source of truth for each data type
 
+-------------------------------
+
+September 24, 2025
+
+- Fixed the reporting of bucket status in Admin User Details
