@@ -251,7 +251,7 @@ router.post('/request-approval', async (req, res) => {
                  style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin-right: 10px;">
                 Access Admin Panel
               </a>
-              <a href="${process.env.ADMIN_BASE_URL || 'http://localhost:3001'}/admin/user/${username}" 
+              <a href="${process.env.ADMIN_BASE_URL || 'http://localhost:3001'}/admin?userId=${username}" 
                  style="background-color: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                 View User Details
               </a>
