@@ -85,9 +85,9 @@ const checkAgentDeployments = async () => {
     // Skip if not enough time has passed since last check
     if (timeSinceLastCheck < DEPLOYMENT_CHECK_INTERVAL) {
       continue;
-    }
-    
-    try {
+  }
+
+  try {
       // Check agent deployment status via DO API
       const agentResponse = await doRequest(`/v2/gen-ai/agents/${tracking.agentId}`);
       
@@ -144,8 +144,6 @@ const checkAgentDeployments = async () => {
             workflowStage: 'agent_assigned',
             assignedAgentId: tracking.agentId,
             assignedAgentName: tracking.agentName,
-            currentAgentId: tracking.agentId,
-            currentAgentName: tracking.agentName,
             agentDeployedAt: new Date().toISOString(),
             agentAssignedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -763,12 +761,12 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     }
     
     
-    // Extract current agent information from ownedAgents if available
-    let currentAgentId = userDoc.currentAgentId || null;
-    let currentAgentName = userDoc.currentAgentName || null;
+    // Extract agent information from assignedAgentId (source of truth)
+    let currentAgentId = userDoc.assignedAgentId || null;
+    let currentAgentName = userDoc.assignedAgentName || null;
     let agentAssignedAt = userDoc.agentAssignedAt || null;
     
-    // If we have ownedAgents but no currentAgentId, use the first owned agent
+    // If we have ownedAgents but no assignedAgentId, use the first owned agent
     if (userDoc.ownedAgents && userDoc.ownedAgents.length > 0 && !currentAgentId) {
       const firstAgent = userDoc.ownedAgents[0];
       currentAgentId = firstAgent.id;
@@ -776,7 +774,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       agentAssignedAt = firstAgent.assignedAt;
     }
     
-    // If we have currentAgentId but no agentAssignedAt, try to get it from ownedAgents
+    // If we have assignedAgentId but no agentAssignedAt, try to get it from ownedAgents
     if (currentAgentId && !agentAssignedAt && userDoc.ownedAgents && userDoc.ownedAgents.length > 0) {
       const matchingAgent = userDoc.ownedAgents.find(agent => agent.id === currentAgentId);
       if (matchingAgent && matchingAgent.assignedAt) {
@@ -805,11 +803,9 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       workflowStage: determineWorkflowStage(userDoc),
       adminNotes: userDoc.adminNotes || '',
       approvalStatus: userDoc.approvalStatus,
-      // Agent information - provide both old and new field names for compatibility
-      currentAgentId: currentAgentId,
-      currentAgentName: currentAgentName,
-      assignedAgentId: currentAgentId, // Frontend compatibility
-      assignedAgentName: currentAgentName, // Frontend compatibility
+      // Agent information - use assignedAgentId as source of truth
+      assignedAgentId: currentAgentId,
+      assignedAgentName: currentAgentName,
       ownedAgents: userDoc.ownedAgents || [],
       currentAgentSetAt: userDoc.currentAgentSetAt,
       challenge: userDoc.challenge,
@@ -1018,10 +1014,10 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Return assigned agent information - check both assignedAgentId and currentAgentId
-    const assignedAgentId = userDoc.assignedAgentId || userDoc.currentAgentId || null;
-    const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
-    const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
+    // Return assigned agent information - use assignedAgentId as source of truth
+    const assignedAgentId = userDoc.assignedAgentId || null;
+    const assignedAgentName = userDoc.assignedAgentName || null;
+    const agentAssignedAt = userDoc.agentAssignedAt || null;
     
     // Cache will be updated on next database read
     
@@ -1504,8 +1500,6 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
       ...userDoc,
       assignedAgentId: agentId,
       assignedAgentName: agentName,
-      currentAgentId: agentId, // Set current to match assigned
-      currentAgentName: agentName,
       agentAssignedAt: agentId ? new Date().toISOString() : null,
       updatedAt: new Date().toISOString()
     };
@@ -1660,10 +1654,8 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
       hasAssignedAgent: !!userDoc.assignedAgentId,
       assignedAgentId: userDoc.assignedAgentId || null,
       assignedAgentName: userDoc.assignedAgentName || null,
-      currentAgentId: userDoc.currentAgentId || null,
-      currentAgentName: userDoc.currentAgentName || null,
       agentAssignedAt: userDoc.agentAssignedAt || null,
-      isConsistent: userDoc.assignedAgentId === userDoc.currentAgentId
+      isConsistent: true // No more currentAgentId to check consistency against
     };
     
     // If user has an assigned agent, verify it exists in DO API
@@ -1725,8 +1717,6 @@ router.post('/database/fix-consistency', async (req, res) => {
               ...userDoc,
               assignedAgentId: issue.expectedAgentId,
               assignedAgentName: issue.agentName,
-              currentAgentId: issue.expectedAgentId, // Set current to match assigned
-              currentAgentName: issue.agentName,
               workflowStage: 'agent_assigned', // Update workflow stage when agent is assigned
               approvalStatus: 'approved', // Set approval status when agent is assigned
               agentAssignedAt: new Date().toISOString(),

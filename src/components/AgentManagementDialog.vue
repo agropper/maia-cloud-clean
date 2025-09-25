@@ -1386,8 +1386,7 @@ export default defineComponent({
     // Agent state
     const currentAgent = ref<DigitalOceanAgent | null>(null);
     const assignedAgent = ref<DigitalOceanAgent | null>(null);
-    const availableAgents = ref<DigitalOceanAgent[]>([]);
-    const selectedAgentId = ref<string>("");
+    // Agent selection removed - agents are assigned only by admin process
     const knowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const availableKnowledgeBases = ref<DigitalOceanKnowledgeBase[]>([]);
     const documents = ref<any[]>([]);
@@ -1971,57 +1970,14 @@ export default defineComponent({
       // All old function code removed
     // All old function code removed - was causing build errors
 
-    // Handle agent selection
+    // Handle agent selection - REMOVED: Users can no longer select their own agents
+    // Agents are now assigned only by admin process to prevent security violations
     const onAgentSelected = async (agentId: string) => {
-      // Note: Agents are not automatically assigned to users
-      // Agents without owners belong to Public User
-      // Authenticated users can only select agents that are already assigned to them
-      try {
-        const response = await fetch(`/api/current-agent`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ agentId }),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log("✅ Agent saved to Cloudant:", result);
-
-          // Skip verification step - trust that the agent was saved successfully
-          // The verification was causing issues due to session context problems
-          console.log("[*] Agent selected successfully:", result.agent?.name || 'Unknown');
-          
-          // Update the UI with the agent data from the save response
-          if (result.agent) {
-            currentAgent.value = result.agent;
-            assignedAgent.value = result.agent;
-
-          // Emit agent update event
-          emit("agent-updated", result.agent);
-
-          $q.notify({
-            type: "positive",
-              message: `Agent "${result.agent.name}" selected successfully!`,
-              timeout: 3000,
-            });
-
-            // Show KB link suggestion modal
-            showKbLinkSuggestionDialog.value = true;
-          } else {
-            throw new Error("No agent data returned from save operation");
-          }
-        } else {
-          throw new Error("Failed to set current agent");
-        }
-      } catch (error: any) {
-        console.error("❌ Error setting current agent:", error);
-        $q.notify({
-          type: "negative",
-          message: `Failed to set current agent: ${error.message || "Unknown error"}`,
-        });
-      }
+      $q.notify({
+        type: "negative",
+        message: "Agent selection is disabled. Agents are assigned by administrator only.",
+        timeout: 5000,
+      });
     };
 
 
@@ -2197,21 +2153,7 @@ export default defineComponent({
       isDialogLoading.value = true;
     };
 
-    // Load available agents from DO API
-    const loadAvailableAgents = async () => {
-      try {
-        const currentUserId = UserService.getUserId(localCurrentUser.value);
-        const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
-        if (agentsResponse.ok) {
-          const agents = await agentsResponse.json();
-          availableAgents.value = agents;
-          console.log(`🤖 Loaded ${agents.length} available agents for ${currentUserId}`);
-        }
-      } catch (error) {
-        console.error('❌ Error loading available agents:', error);
-        availableAgents.value = [];
-      }
-    };
+    // Agent loading removed - agents are assigned only by admin process
 
     // Load available knowledge bases from DO API
     const loadAvailableKnowledgeBases = async () => {
@@ -2248,7 +2190,7 @@ export default defineComponent({
       const currentUserId = normalizedUser?.userId;
       if (previousUserId !== currentUserId) {
         console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
-        availableAgents.value = [];
+        // Agent loading removed
         availableKnowledgeBases.value = [];
       }
       
@@ -2301,7 +2243,6 @@ export default defineComponent({
         
         // Load available data from DO API in parallel
         await Promise.all([
-          loadAvailableAgents(),
           loadAvailableKnowledgeBases()
         ]);
         
@@ -4211,7 +4152,7 @@ export default defineComponent({
       showDialog,
       currentAgent,
       assignedAgent,
-      availableAgents,
+      // availableAgents removed
       knowledgeBase,
       availableKnowledgeBases,
       documents,

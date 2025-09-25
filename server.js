@@ -1612,17 +1612,17 @@ app.post('/api/personal-chat', async (req, res) => {
         // Check if user has a current agent selection stored in Cloudant
         try {
           const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
-          if (userDoc && userDoc.currentAgentId) {
+          if (userDoc && userDoc.assignedAgentId) {
             // Get the agent's deployment URL from DigitalOcean API
-            const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+            const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
             const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
             
             if (agentData && agentData.deployment?.url) {
               agentModel = agentData.name;  // Use agent name for DigitalOcean API
               agentName = agentData.name;
-              agentId = userDoc.currentAgentId;
+              agentId = userDoc.assignedAgentId;
               agentEndpoint = `${agentData.deployment.url}/api/v1`;  // Use agent's deployment URL
-              // console.log(`🔐 [personal-chat] Using user's current agent selection: ${agentData.name} (${agentModel})`);
+              // console.log(`🔐 [personal-chat] Using user's assigned agent: ${agentData.name} (${agentModel})`);
               // console.log(`🌐 [personal-chat] Using agent endpoint: ${agentEndpoint}`);
               
               // Get knowledge base info for this agent
@@ -1651,8 +1651,8 @@ app.post('/api/personal-chat', async (req, res) => {
         try {
           const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
           
-          // For Public User, prefer assignedAgentId over currentAgentId
-          const userAgentId = userDoc?.assignedAgentId || userDoc?.currentAgentId;
+          // For Public User, use assignedAgentId as source of truth
+          const userAgentId = userDoc?.assignedAgentId;
           
           if (userDoc && userAgentId) {
             // Check if the selected agent is still available to Public User (not owned by authenticated users)
@@ -1678,15 +1678,12 @@ app.post('/api/personal-chat', async (req, res) => {
               }
             } else {
               // Agent is no longer available to Public User (now owned by authenticated user)
-              // Clear the invalid agent selection
+              // Clear the invalid agent assignment (should not happen with assignedAgentId)
               const updatedUserDoc = {
                 ...userDoc,
-                currentAgentId: null,
-                currentAgentName: null,
-                currentAgentEndpoint: null,
-                currentAgentSetAt: null,
                 assignedAgentId: null,
                 assignedAgentName: null,
+                agentAssignedAt: null,
                 updatedAt: new Date().toISOString()
               };
               await couchDBClient.saveDocument('maia_users', updatedUserDoc);
@@ -3728,27 +3725,11 @@ app.get('/api/current-agent', async (req, res) => {
             }
           }
           
-          // Agent choice feature is not implemented yet - clear any current agent selections
-          if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
-            userDoc.currentAgentId = null;
-            userDoc.currentAgentName = null;
-            userDoc.currentAgentEndpoint = null;
-            userDoc.currentAgentSetAt = null;
-            userDoc.updatedAt = new Date().toISOString();
-            
-            // Save the corrected document
-            await couchDBClient.saveDocument('maia_users', userDoc);
-            // Update cache with corrected document
-            setCache('users', currentUser, userDoc);
-          }
+          // No more currentAgentId - only assignedAgentId is used
           
-          if (userDoc && (userDoc.currentAgentId || userDoc.assignedAgentId)) {
-            // For Public User, prefer assignedAgentId over currentAgentId
-            if (currentUser === 'Public User') {
-              agentId = userDoc.assignedAgentId || userDoc.currentAgentId;
-            } else {
-              agentId = userDoc.currentAgentId || userDoc.assignedAgentId;
-            }
+          if (userDoc && userDoc.assignedAgentId) {
+            // Use assignedAgentId as the source of truth - no more currentAgentId
+            agentId = userDoc.assignedAgentId;
           } else {
             // No current agent selection found for user
             return res.json({ 
@@ -3808,15 +3789,12 @@ app.get('/api/current-agent', async (req, res) => {
             } else {
               // Agent is no longer available to Public User (now owned by authenticated user)
               // console.log(`🔍 [current-agent] Public User's selected agent ${userDoc.currentAgentName} is now owned by an authenticated user, clearing selection`);
-              // Clear the invalid agent selection
+              // Clear the invalid agent assignment (should not happen with assignedAgentId)
               const updatedUserDoc = {
                 ...userDoc,
-                currentAgentId: null,
-                currentAgentName: null,
-                currentAgentEndpoint: null,
-                currentAgentSetAt: null,
                 assignedAgentId: null,
                 assignedAgentName: null,
+                agentAssignedAt: null,
                 updatedAt: new Date().toISOString()
               };
               await couchDBClient.saveDocument('maia_users', updatedUserDoc);
@@ -3867,10 +3845,6 @@ app.get('/api/current-agent', async (req, res) => {
           if (userDoc) {
             const updatedUserDoc = {
               ...userDoc,
-              currentAgentId: null,
-              currentAgentName: null,
-              currentAgentEndpoint: null,
-              currentAgentSetAt: null,
               assignedAgentId: null,
               assignedAgentName: null,
               agentAssignedAt: null,
@@ -4674,10 +4648,9 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
     // Clear the agent assignment
     const updatedUserDoc = {
       ...userDoc,
-      currentAgentId: null,
-      currentAgentName: null,
-      currentAgentEndpoint: null,
-      currentAgentSetAt: null,
+      assignedAgentId: null,
+      assignedAgentName: null,
+      agentAssignedAt: null,
       updatedAt: new Date().toISOString()
     };
     
@@ -4704,96 +4677,8 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
   }
 });
 
-// Set current agent
-app.post('/api/current-agent', async (req, res) => {
-  try {
-    const { agentId } = req.body;
-    const currentUser = req.session?.userId || 'Unknown User';
-    
-    if (!agentId) {
-      return res.status(400).json({ message: 'Agent ID is required' });
-    }
-    
-    // Get the agent details
-    const agents = await doRequest('/v2/gen-ai/agents');
-    const agentArray = agents.agents || [];
-    const selectedAgent = agentArray.find(agent => agent.uuid === agentId);
-    
-    if (!selectedAgent) {
-      return res.status(404).json({ message: 'Agent not found' });
-    }
-    
-    // For Public User, check if the agent is available to them
-    if (currentUser === 'Public User') {
-      const isAgentAvailable = await isAgentAvailableToPublicUser(agentId);
-      if (!isAgentAvailable) {
-        return res.status(403).json({ 
-          message: 'This agent is not available for selection. It may be assigned to another user.',
-          requiresAgentSelection: true
-        });
-      }
-    }
-    
-    // Store the current agent selection in Cloudant for the user
-    // Public User should never have current agent selections - only assigned agents
-    if (currentUser !== 'Unknown User' && currentUser !== 'Public User') {
-      try {
-        // Get user document from Cloudant
-        const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
-        
-        // Update user document with current agent selection
-        const updatedUserDoc = {
-          ...userDoc,
-          currentAgentId: selectedAgent.uuid,
-          currentAgentName: selectedAgent.name,
-          currentAgentEndpoint: `${selectedAgent.deployment?.url}/api/v1`,
-          currentAgentSetAt: new Date().toISOString()
-        };
-        
-        // Save updated user document
-        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
-//         console.log(`✅ Stored current agent selection for user ${currentUser}: ${selectedAgent.name} (${agentId})`);
-        
-        // Clear the user from cache first to force fresh data on next GET request
-        invalidateCache('users', currentUser);
-        
-        // Update cache with new agent selection
-        setCache('users', currentUser, updatedUserDoc);
-      } catch (userError) {
-        console.warn(`Failed to store current agent selection for user ${currentUser}:`, userError.message);
-      }
-    } else if (currentUser === 'Public User') {
-      // Public User should never have current agent selections - only assigned agents
-      return res.status(403).json({ 
-        message: 'Public User cannot select current agents - only assigned agents are available',
-        requiresAgentSelection: true
-      });
-    }
-    
-    const endpoint = selectedAgent.deployment?.url + '/api/v1';
-    
-//     console.log(`✅ Set current agent to: ${selectedAgent.name} (${agentId})`);
-//     console.log(`🔗 Endpoint: ${endpoint}`);
-    
-    res.json({ 
-      success: true, 
-      agent: {
-        id: selectedAgent.uuid,
-        name: selectedAgent.name,
-        description: selectedAgent.instruction || '',
-        model: selectedAgent.model?.name || 'Unknown',
-        status: selectedAgent.deployment?.status?.toLowerCase().replace('status_', '') || 'unknown',
-        instructions: selectedAgent.instruction || '',
-        uuid: selectedAgent.uuid,
-        deployment: selectedAgent.deployment
-      },
-      endpoint: endpoint
-    });
-  } catch (error) {
-    console.error('❌ Set current agent error:', error);
-    res.status(500).json({ message: `Failed to set current agent: ${error.message}` });
-  }
-});
+// POST /api/current-agent endpoint removed - agents are now assigned only by admin process
+// Users cannot select their own agents to prevent security violations
 
 // ============================================================================
 // UNIFIED USER STATE MANAGEMENT ENDPOINTS
@@ -6034,9 +5919,7 @@ app.post('/api/cleanup-database', async (req, res) => {
       {
         _id: 'Unknown User',
         type: 'user',
-        createdAt: new Date().toISOString(),
-        currentAgentId: null,
-        currentAgentName: null
+        createdAt: new Date().toISOString()
       },
       {
         _id: 'admin',
@@ -6118,16 +6001,16 @@ app.post('/api/fix-agent-ownership', async (req, res) => {
     // Define the correct agent ownership relationships
     const agentOwnership = {
       'Unknown User': {
-        currentAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
-        currentAgentName: 'agent-08032025',
+        assignedAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
+        assignedAgentName: 'agent-08032025',
         ownedAgents: [
           { id: '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4', name: 'agent-05102025', assignedAt: new Date().toISOString() },
           { id: '059fc237-7077-11f0-b056-36d958d30bcf', name: 'agent-08032025', assignedAt: new Date().toISOString() }
         ]
       },
       'wed271': {
-        currentAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
-        currentAgentName: 'agent-08292025',
+        assignedAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
+        assignedAgentName: 'agent-08292025',
         ownedAgents: [
           { id: '2960ae8d-8514-11f0-b074-4e013e2ddde4', name: 'agent-08292025', assignedAt: new Date().toISOString() }
         ]
@@ -6156,10 +6039,10 @@ app.post('/api/fix-agent-ownership', async (req, res) => {
         // Update with agent ownership data
         const updatedUserDoc = {
           ...userDoc,
-          currentAgentId: agentData.currentAgentId,
-          currentAgentName: agentData.currentAgentName,
+          assignedAgentId: agentData.assignedAgentId,
+          assignedAgentName: agentData.assignedAgentName,
           ownedAgents: agentData.ownedAgents,
-          currentAgentSetAt: new Date().toISOString(),
+          agentAssignedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
@@ -6258,16 +6141,16 @@ app.get('/api/fix-agent-ownership', async (req, res) => {
     // Define the correct agent ownership relationships
     const agentOwnership = {
       'Unknown User': {
-        currentAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
-        currentAgentName: 'agent-08032025',
+        assignedAgentId: '059fc237-7077-11f0-b056-36d958d30bcf', // agent-08032025 UUID
+        assignedAgentName: 'agent-08032025',
         ownedAgents: [
           { id: '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4', name: 'agent-05102025', assignedAt: new Date().toISOString() },
           { id: '059fc237-7077-11f0-b056-36d958d30bcf', name: 'agent-08032025', assignedAt: new Date().toISOString() }
         ]
       },
       'wed271': {
-        currentAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
-        currentAgentName: 'agent-08292025',
+        assignedAgentId: '2960ae8d-8514-11f0-b074-4e013e2ddde4', // agent-08292025 UUID
+        assignedAgentName: 'agent-08292025',
         ownedAgents: [
           { id: '2960ae8d-8514-11f0-b074-4e013e2ddde4', name: 'agent-08292025', assignedAt: new Date().toISOString() }
         ]
@@ -6296,10 +6179,10 @@ app.get('/api/fix-agent-ownership', async (req, res) => {
         // Update with agent ownership data
         const updatedUserDoc = {
           ...userDoc,
-          currentAgentId: agentData.currentAgentId,
-          currentAgentName: agentData.currentAgentName,
+          assignedAgentId: agentData.assignedAgentId,
+          assignedAgentName: agentData.assignedAgentName,
           ownedAgents: agentData.ownedAgents,
-          currentAgentSetAt: new Date().toISOString(),
+          agentAssignedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
