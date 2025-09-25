@@ -437,8 +437,8 @@
                   </div>
                 </div>
 
-                <!-- Knowledge Base List -->
-                <div v-if="availableKnowledgeBases.length > 0" class="q-mb-md">
+                <!-- Knowledge Base List - Only show if user has assigned agent -->
+                <div v-if="availableKnowledgeBases.length > 0 && assignedAgent" class="q-mb-md">
                   <div
                     v-for="kb in availableKnowledgeBases"
                     :key="kb.uuid"
@@ -2197,15 +2197,9 @@ export default defineComponent({
       isDialogLoading.value = true;
     };
 
-    // Load available agents from DO API with caching
+    // Load available agents from DO API
     const loadAvailableAgents = async () => {
       try {
-        // Check if we already have data and it's recent (within 5 minutes)
-        if (availableAgents.value.length > 0) {
-          console.log(`🤖 Using cached agents data (${availableAgents.value.length} agents)`);
-          return;
-        }
-
         const currentUserId = UserService.getUserId(localCurrentUser.value);
         const agentsResponse = await fetch(`${API_BASE_URL}/agents?user=${currentUserId}`);
         if (agentsResponse.ok) {
@@ -2219,15 +2213,9 @@ export default defineComponent({
       }
     };
 
-    // Load available knowledge bases from DO API with caching
+    // Load available knowledge bases from DO API
     const loadAvailableKnowledgeBases = async () => {
       try {
-        // Check if we already have data and it's recent (within 5 minutes)
-        if (availableKnowledgeBases.value.length > 0) {
-          console.log(`📚 Using cached knowledge bases data (${availableKnowledgeBases.value.length} KBs)`);
-          return;
-        }
-
         let kbResponse;
         if (isAuthenticated.value && localCurrentUser.value?.userId) {
           kbResponse = await fetch(`${API_BASE_URL}/knowledge-bases?user=${localCurrentUser.value.userId}`);
@@ -2248,10 +2236,21 @@ export default defineComponent({
 
     // Load current user state from props/session (no API calls needed)
     const loadCurrentUserState = () => {
+      // Store previous user ID to detect user changes
+      const previousUserId = localCurrentUser.value?.userId;
+      
       // Normalize the user object to ensure consistent structure
       const normalizedUser = UserService.normalizeUserObject(props.currentUser);
       localCurrentUser.value = normalizedUser;
       isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
+      
+      // Clear cached data if user has changed
+      const currentUserId = normalizedUser?.userId;
+      if (previousUserId !== currentUserId) {
+        console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
+        availableAgents.value = [];
+        availableKnowledgeBases.value = [];
+      }
       
       // Set current agent from props (if available)
       if (props.currentAgent) {
