@@ -757,6 +757,7 @@ export default defineComponent({
     const isResettingPasskey = ref(false);
     const isLoadingAgentsPatients = ref(false);
     const isCreatingAgent = ref(false);
+    const pendingDeepLinkUserId = ref(null);
     const isRunningConsistencyCheck = ref(false);
     const users = ref([]);
     const agents = ref([]);
@@ -1033,6 +1034,24 @@ export default defineComponent({
         if (response.ok) {
           const data = await response.json();
           users.value = data.users;
+          
+          // Check if there's a pending deep link user ID to open
+          if (pendingDeepLinkUserId.value) {
+            const deepLinkUser = users.value.find(u => u.userId === pendingDeepLinkUserId.value);
+            if (deepLinkUser) {
+              console.log(`🔗 [Admin Panel] Opening user details modal for deep link user: ${pendingDeepLinkUserId.value}`);
+              await viewUserDetails(deepLinkUser);
+              pendingDeepLinkUserId.value = null; // Clear after opening
+            } else {
+              console.warn(`⚠️ [Admin Panel] Deep link user not found: ${pendingDeepLinkUserId.value}`);
+              $q.notify({
+                type: 'warning',
+                message: `User "${pendingDeepLinkUserId.value}" not found`,
+                timeout: 3000
+              });
+              pendingDeepLinkUserId.value = null; // Clear even if not found
+            }
+          }
         } else {
           const errorData = await response.json().catch(() => ({}));
           
@@ -2150,7 +2169,7 @@ export default defineComponent({
       }
     });
     
-    // Check URL parameters for error messages
+    // Check URL parameters for error messages and deep link user ID
     const checkUrlParameters = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get('error');
@@ -2172,6 +2191,14 @@ export default defineComponent({
           default:
             errorMessage.value = 'An unknown error occurred.';
         }
+      }
+      
+      // Check for deep link user ID from server-side template or URL parameter
+      const deepLinkUserId = window.ADMIN_DEEP_LINK_USER_ID || urlParams.get('userId');
+      if (deepLinkUserId) {
+        console.log(`🔗 [Admin Panel] Deep link detected for user: ${deepLinkUserId}`);
+        // Store the user ID to open modal after users are loaded
+        pendingDeepLinkUserId.value = deepLinkUserId;
       }
     };
     

@@ -410,6 +410,24 @@ app.get('/admin', (req, res) => {
   });
 });
 
+// Admin panel deep link route for specific user details - PROTECTED
+app.get('/admin/user/:userId', (req, res) => {
+//   console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
+  
+  const { userId } = req.params;
+  const appTitle = process.env.APP_TITLE || 'MAIA';
+  const environment = process.env.NODE_ENV || 'development';
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
+  
+  res.render('index.ejs', {
+    APP_TITLE: appTitle,
+    ENVIRONMENT: environment,
+    APP_VERSION: process.env.APP_VERSION || '1.0.0',
+    CLOUDANT_DASHBOARD_URL: cloudantUrl,
+    ADMIN_DEEP_LINK_USER_ID: userId // Pass userId to frontend
+  });
+});
+
 // Admin registration route - no authentication required (this is how admins initially register)
 app.get('/admin/register', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';

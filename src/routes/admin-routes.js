@@ -248,8 +248,12 @@ router.post('/request-approval', async (req, res) => {
             <p>To manage this user and other private AI requests:</p>
             <div style="text-align: center; margin: 20px 0;">
               <a href="${process.env.ADMIN_BASE_URL || 'http://localhost:3001'}/admin" 
-                 style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                 style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin-right: 10px;">
                 Access Admin Panel
+              </a>
+              <a href="${process.env.ADMIN_BASE_URL || 'http://localhost:3001'}/admin/user/${username}" 
+                 style="background-color: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+                View User Details
               </a>
             </div>
             <p style="font-size: 14px; color: #7f8c8d;">
