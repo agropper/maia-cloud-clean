@@ -695,7 +695,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   QCard,
@@ -1188,53 +1188,70 @@ export default defineComponent({
       }
     };
     
+    // Frontend deployment polling removed - backend monitoring now handles this
     const startDeploymentPolling = (userId, agentUuid) => {
+      // Backend deployment monitoring handles agent deployment tracking
+      // No frontend polling needed
+    };
+
+    // Server-Sent Events for real-time admin notifications
+    let adminEventSource = null;
+    
+    const connectAdminEvents = () => {
+      if (adminEventSource) {
+        adminEventSource.close();
+      }
       
-      const pollInterval = setInterval(async () => {
+      adminEventSource = new EventSource('/api/admin/events');
+      
+      adminEventSource.onopen = () => {
+        console.log('🔗 [SSE] Connected to admin notification stream');
+      };
+      
+      adminEventSource.onmessage = (event) => {
         try {
-          const response = await fetch('/api/agents');
-          if (response.ok) {
-            const agentsData = await response.json();
-            const agent = agentsData.find(a => a.uuid === agentUuid);
+          const notification = JSON.parse(event.data);
+          
+          if (notification.type === 'connected') {
+            console.log('📡 [SSE]', notification.message);
+          } else if (notification.type === 'deployment_completed') {
+            console.log('🎉 [ADMIN NOTIFICATION]', notification.data.message);
             
-            if (agent) {
-              
-              if (agent.deployment?.status === 'STATUS_DEPLOYED' || 
-                  agent.deployment?.status === 'STATUS_RUNNING') {
-                
-                // Stop polling
-                clearInterval(pollInterval);
-                deploymentPolling.value.delete(userId);
-                
-                // Update user to approved
-                await setUserWorkflowStage(userId, 'approved');
-                
-                // Refresh users list
-                await loadUsers();
-                
-                $q.notify({
-                  type: 'positive',
-                  message: `Agent for ${userId} is now deployed and ready!`
-                });
-              }
-            }
+            // Show notification to user
+            $q.notify({
+              type: 'positive',
+              message: `✅ ${notification.data.message}`,
+              timeout: 10000,
+              position: 'top'
+            });
+            
+            // Refresh users list to show updated status
+            loadUsers();
+          } else if (notification.type === 'heartbeat') {
+            // Silent heartbeat - just keep connection alive
           }
         } catch (error) {
-          console.error(`❌ Error checking deployment status:`, error);
+          console.error('❌ [SSE] Error parsing notification:', error);
         }
-      }, 15000); // Poll every 15 seconds
+      };
       
-      // Store the interval ID for cleanup
-      deploymentPolling.value.set(userId, pollInterval);
-      
-      // Set a timeout to stop polling after 10 minutes (40 attempts)
-      setTimeout(() => {
-        if (deploymentPolling.value.has(userId)) {
-          clearInterval(pollInterval);
-          deploymentPolling.value.delete(userId);
-        }
-      }, 600000); // 10 minutes
+      adminEventSource.onerror = (error) => {
+        console.error('❌ [SSE] Connection error:', error);
+        
+        // Attempt to reconnect after 5 seconds
+        setTimeout(() => {
+          console.log('🔄 [SSE] Attempting to reconnect...');
+          connectAdminEvents();
+        }, 5000);
+      };
     };
+    
+    // Clean up connection when component unmounts
+    onUnmounted(() => {
+      if (adminEventSource) {
+        adminEventSource.close();
+      }
+    });
     
     const createAgentForUser = async () => {
       if (!selectedUser.value) return;
@@ -1248,6 +1265,7 @@ export default defineComponent({
           },
           body: JSON.stringify({
             patientName: selectedUser.value.displayName,
+            userId: selectedUser.value.userId,
             model: 'OpenAI GPT-oss-120b' // Will be dynamically resolved to UUID
           })
         });
@@ -1462,7 +1480,7 @@ export default defineComponent({
     const loadAgents = async () => {
       isLoadingAgents.value = true;
       try {
-        const response = await fetch('/api/agents');
+        const response = await fetch('/api/agents?user=admin');
         if (response.ok) {
           const agentsData = await response.json();
           agents.value = agentsData;
@@ -1539,6 +1557,7 @@ export default defineComponent({
         'awaiting_approval': 'warning',
         'waiting_for_deployment': 'info',
         'approved': 'positive',
+        'agent_assigned': 'positive',
         'hasAgent': 'positive',
         'rejected': 'negative',
         'suspended': 'orange',
@@ -1554,6 +1573,7 @@ export default defineComponent({
         'awaiting_approval': 'Awaiting Approval',
         'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
+        'agent_assigned': 'Agent Assigned',
         'hasAgent': 'Has Agent',
         'rejected': 'Rejected',
         'suspended': 'Suspended',
@@ -1940,6 +1960,32 @@ export default defineComponent({
         for (const user of usersData.users) {
           const userId = user.userId || user._id;
           const assignedAgentId = user.assignedAgentId;
+          const workflowStage = user.workflowStage;
+          
+          // Check for workflow stage inconsistencies
+          if (assignedAgentId && workflowStage !== 'agent_assigned') {
+            // User has an assigned agent but workflow stage is not 'agent_assigned'
+            inconsistencies.push({
+              type: 'workflow_stage_mismatch',
+              userId: userId,
+              agentId: assignedAgentId,
+              agentName: user.assignedAgentName || 'Unknown',
+              currentWorkflowStage: workflowStage,
+              expectedWorkflowStage: 'agent_assigned',
+              message: `User ${userId} has assigned agent ${user.assignedAgentName} but workflow stage is '${workflowStage}' instead of 'agent_assigned'`
+            });
+          } else if (!assignedAgentId && workflowStage === 'agent_assigned') {
+            // User has workflow stage 'agent_assigned' but no assigned agent
+            inconsistencies.push({
+              type: 'workflow_stage_mismatch',
+              userId: userId,
+              agentId: null,
+              agentName: null,
+              currentWorkflowStage: workflowStage,
+              expectedWorkflowStage: 'approved',
+              message: `User ${userId} has workflow stage 'agent_assigned' but no assigned agent`
+            });
+          }
           
           if (assignedAgentId) {
             // Find the agent in DO API
@@ -2148,6 +2194,9 @@ export default defineComponent({
     
     // Lifecycle
     onMounted(async () => {
+      // Connect to admin notification stream
+      connectAdminEvents();
+      
       checkUrlParameters();
       await checkAdminStatus();
       

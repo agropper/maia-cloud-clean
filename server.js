@@ -1105,6 +1105,78 @@ app.get('/api/bucket-files', async (req, res) => {
   }
 });
 
+// Server-Sent Events endpoint for admin notifications
+app.get('/api/admin/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Send initial connection message
+  res.write('data: {"type":"connected","message":"Admin notification stream connected"}\n\n');
+
+  // Store this connection for sending messages
+  const clientId = Date.now() + Math.random();
+  adminEventClients.set(clientId, res);
+
+  // Send periodic heartbeat to keep connection alive
+  const heartbeat = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeat);
+      adminEventClients.delete(clientId);
+      return;
+    }
+    res.write('data: {"type":"heartbeat","timestamp":"' + new Date().toISOString() + '"}\n\n');
+  }, 30000); // Every 30 seconds
+
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    adminEventClients.delete(clientId);
+  });
+});
+
+// Helper function to send admin notifications
+function sendAdminNotification(type, data) {
+  const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
+  
+  adminEventClients.forEach((res, clientId) => {
+    try {
+      if (!res.writableEnded) {
+        res.write(`data: ${message}\n\n`);
+      }
+    } catch (error) {
+      console.error(`❌ Error sending notification to client ${clientId}:`, error);
+      adminEventClients.delete(clientId);
+    }
+  });
+}
+
+// Store for admin event clients
+const adminEventClients = new Map();
+
+// Admin notification endpoint
+app.post('/api/admin/notify', (req, res) => {
+  try {
+    const { type, data } = req.body;
+    
+    if (!type || !data) {
+      return res.status(400).json({ error: 'Type and data are required' });
+    }
+    
+    // Send notification to all connected admin clients
+    sendAdminNotification(type, data);
+    
+    res.json({ success: true, message: 'Notification sent to admin clients' });
+  } catch (error) {
+    console.error('❌ Error sending admin notification:', error);
+    res.status(500).json({ error: 'Failed to send notification' });
+  }
+});
+
 // Ensure user folder exists in DigitalOcean Spaces bucket
 app.post('/api/bucket/ensure-user-folder', async (req, res) => {
   try {
@@ -4300,7 +4372,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
 // Create agent
 app.post('/api/agents', async (req, res) => {
   try {
-    const { name, description, model, model_uuid, instructions, patientName, knowledgeBaseId } = req.body;
+    const { name, description, model, model_uuid, instructions, patientName, userId, knowledgeBaseId } = req.body;
     
     // Handle patient name pattern if provided
     let agentName;
@@ -4415,6 +4487,15 @@ app.post('/api/agents', async (req, res) => {
     if (!responseData) {
       console.error('❌ No agent data in response:', agent);
       return res.status(500).json({ message: 'Agent creation succeeded but no data returned' });
+    }
+    
+    // Start deployment tracking if userId is provided (from Admin Panel)
+    if (userId && responseData.uuid) {
+      console.log(`🚀 [AGENT CREATION] Starting deployment tracking for user ${userId}, agent ${agentName} (${responseData.uuid})`);
+      
+      // Import and call the deployment tracking function
+      const { addToDeploymentTracking } = await import('./src/routes/admin-management-routes.js');
+      addToDeploymentTracking(userId, responseData.uuid, agentName);
     }
     
     res.json(responseData);
@@ -5830,7 +5911,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
 
 // In-memory caching system to prevent redundant Cloudant calls
 const dataCache = {
@@ -5921,8 +6002,9 @@ const setCacheFunctions = (routeModule) => {
 // Set cache functions for passkey routes
 setCacheFunctions(passkeyRoutes);
 
-// Set cache functions for admin-management routes
+// Set cache functions and DigitalOcean API function for admin-management routes
 setCacheFunctions(adminManagementRoutes);
+setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
@@ -6548,7 +6630,7 @@ app.listen(PORT, async () => {
   
   // Helper function to ensure bucket folders for all users
   async function ensureAllUserBuckets() {
-//     console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
+    console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
     
     // Get all user IDs from database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
@@ -6562,7 +6644,7 @@ app.listen(PORT, async () => {
     
     try {
       await Promise.all(bucketChecks);
-      // console.log(`✅ [STARTUP] Completed bucket checks for ${bucketChecks.length} users`);
+      console.log(`✅ [STARTUP] Completed bucket checks for ${bucketChecks.length} users`);
     } catch (error) {
       console.error('❌ [STARTUP] Error ensuring user buckets:', error);
     }
@@ -6578,7 +6660,7 @@ app.listen(PORT, async () => {
         
         // If user has no folder, create one
         if (!statusData.hasFolder) {
-          // console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
+          console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
           const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -6588,7 +6670,7 @@ app.listen(PORT, async () => {
           if (createResponse.ok) {
             const createData = await createResponse.json();
             // Bucket created successfully
-            // console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
+            console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
           }
         } else {
           // User already has folder, just update cache
@@ -6598,7 +6680,7 @@ app.listen(PORT, async () => {
       }
       
       // If status check failed, try to create folder anyway
-      // console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
+      console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
       const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -6608,7 +6690,7 @@ app.listen(PORT, async () => {
       if (createResponse.ok) {
         const createData = await createResponse.json();
         // Bucket created successfully
-        // console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
+        console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
       }
     } catch (error) {
       console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
@@ -6642,9 +6724,9 @@ app.listen(PORT, async () => {
     }
     
     // Ensure bucket folders for all users
-//     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
+    console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
     await ensureAllUserBuckets();
-//     console.log('✅ [STARTUP] Bucket folder checks completed');
+    console.log('✅ [STARTUP] Bucket folder checks completed');
     
     // Start deployment monitoring for agents
     console.log('🚀 [STARTUP] Starting agent deployment monitoring...');
@@ -6654,7 +6736,7 @@ app.listen(PORT, async () => {
       } catch (error) {
         console.error('❌ Error in deployment monitoring:', error);
       }
-    }, 30 * 1000); // Check every 30 seconds
+        }, 5 * 1000); // Check every 5 seconds
   
 // Start cleanup job for expired deep links
   setInterval(async () => {
