@@ -920,6 +920,7 @@ function validateWorkflowConsistency(user) {
   // Define valid combinations
   const validCombinations = {
     'no_passkey': ['no_passkey', undefined], // No approval status needed
+    'no_request_yet': [undefined], // User has passkey but hasn't requested support yet
     'awaiting_approval': ['pending', undefined], // Awaiting approval
     'waiting_for_deployment': ['approved'], // Approved but waiting for agent deployment
     'approved': ['approved'], // Fully approved
