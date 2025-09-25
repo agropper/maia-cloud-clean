@@ -1004,7 +1004,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     
     // Validate workflow stage
-    const validStages = ['no_passkey', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
+    const validStages = ['no_passkey', 'no_request_yet', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
     if (!validStages.includes(workflowStage)) {
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
