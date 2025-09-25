@@ -42,7 +42,6 @@ const app = express();
 
 // Unified Cloudant/CouchDB setup
 import { createCouchDBClient } from './src/utils/couchdb-client.js';
-import maia2Client from './src/utils/maia2-client.js';
 
 const couchDBClient = createCouchDBClient();
 
@@ -92,17 +91,6 @@ const initializeDatabase = async () => {
 // Initialize database
 initializeDatabase();
 
-// Initialize MAIA2 client
-const initializeMAIA2 = async () => {
-  try {
-    await maia2Client.initialize();
-//     console.log('✅ MAIA2 Client initialized successfully');
-  } catch (error) {
-    console.error('❌ Failed to initialize MAIA2 Client:', error);
-  }
-};
-
-initializeMAIA2();
 
 
 
