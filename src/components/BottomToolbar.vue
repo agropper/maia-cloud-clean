@@ -671,19 +671,64 @@ export default defineComponent({
       showHelpModal.value = false
     }
 
+    // Function to check if we should show the new user welcome modal
+    const shouldShowNewUserWelcomeModal = async (user) => {
+      if (!user || !user.userId || user.userId === 'Public User') {
+        return false
+      }
+      
+      try {
+        // Fetch user's workflow stage from backend
+        const response = await fetch(`/api/admin-management/users/${encodeURIComponent(user.userId)}`)
+        if (response.ok) {
+          const userData = await response.json()
+          // Show modal if user is in "No Request Yet" stage
+          if (userData.workflowStage === 'no_request_yet') {
+            console.log('🔍 [NewUserWelcomeModal] User is in "No Request Yet" stage, showing modal')
+            return true
+          }
+        }
+      } catch (error) {
+        console.error('❌ [NewUserWelcomeModal] Error fetching user workflow stage:', error)
+      }
+      
+      return false
+    }
+
     // Watch for new user sign-ins to show welcome modal
     const previousUser = ref(props.currentUser)
-    watch(() => props.currentUser, (newUser, oldUser) => {
+    watch(() => props.currentUser, async (newUser, oldUser) => {
       // Check if this is a new user signing in (was null/undefined, now has a user)
       if (newUser && newUser.userId && newUser.userId !== 'Public User' && 
           (!oldUser || !oldUser.userId || oldUser.userId === 'Public User')) {
-        // Show welcome modal for new authenticated users
-        setTimeout(() => {
-          showNewUserWelcomeModal.value = true
-        }, 1000) // Small delay to let UI settle
+        
+        // Check if we should show the modal for this user
+        const shouldShow = await shouldShowNewUserWelcomeModal(newUser)
+        if (shouldShow) {
+          // Show welcome modal for new authenticated users in "No Request Yet" stage
+          setTimeout(() => {
+            showNewUserWelcomeModal.value = true
+          }, 1000) // Small delay to let UI settle
+        }
       }
       previousUser.value = newUser
     }, { immediate: false })
+
+    // Check on component mount if current user should see the modal
+    const checkInitialUser = async () => {
+      if (props.currentUser && props.currentUser.userId && props.currentUser.userId !== 'Public User') {
+        const shouldShow = await shouldShowNewUserWelcomeModal(props.currentUser)
+        if (shouldShow) {
+          // Small delay to let UI settle
+          setTimeout(() => {
+            showNewUserWelcomeModal.value = true
+          }, 1500)
+        }
+      }
+    }
+
+    // Run initial check
+    checkInitialUser()
 
     const handleSupportRequested = (data) => {
       console.log('Support requested for user:', data)
