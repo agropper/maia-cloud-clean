@@ -1,5 +1,4 @@
 import express from 'express';
-// Removed maia2Client import - using couchDBClient instead
 
 // DigitalOcean API configuration
 const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
@@ -653,9 +652,9 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       currentAgentSetAt: userDoc.currentAgentSetAt,
       challenge: userDoc.challenge,
       agentAssignedAt: agentAssignedAt,
-      approvalRequests: [], // TODO: Implement when Maia2Client has these methods
-      agents: [], // TODO: Implement when Maia2Client has these methods
-      knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
+      approvalRequests: [],
+      agents: [],
+      knowledgeBases: []
     };
     
     
@@ -722,10 +721,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    // If approved, trigger resource creation workflow
-    if (action === 'approve') {
-      // TODO: Implement automatic agent and KB creation
-    }
+    // If approved, admin will manually create agent via Admin Panel
     
     res.json({ 
       message: `User ${action} successfully`,
@@ -734,7 +730,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
       approvalStatus: approvalStatus,
       workflowStage: workflowStage,
       timestamp: new Date().toISOString(),
-      nextSteps: action === 'approve' ? 'Private AI agent and knowledge base will be created automatically' : null
+      nextSteps: action === 'approve' ? 'Admin should create agent manually via Admin Panel' : null
     });
     
   } catch (error) {
@@ -989,7 +985,6 @@ function determineWorkflowStage(user) {
   
   if (user.approvalStatus === 'approved') {
     // Check if they have resources created
-    // TODO: Implement actual resource checking when Maia2Client has these methods
     return 'approved'; // For now, just return approved
   }
   
