@@ -2234,8 +2234,8 @@ export default defineComponent({
       }
     };
 
-    // Load current user state from props/session (no API calls needed)
-    const loadCurrentUserState = () => {
+    // Load current user state from props/session and fetch workflow stage from database
+    const loadCurrentUserState = async () => {
       // Store previous user ID to detect user changes
       const previousUserId = localCurrentUser.value?.userId;
       
@@ -2250,6 +2250,25 @@ export default defineComponent({
         console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
         availableAgents.value = [];
         availableKnowledgeBases.value = [];
+      }
+      
+      // Fetch user's workflow stage from database (same source as Admin Panel)
+      if (isAuthenticated.value && currentUserId && currentUserId !== 'Public User') {
+        try {
+          const response = await fetch(`${API_BASE_URL}/admin-management/users/${encodeURIComponent(currentUserId)}`);
+          if (response.ok) {
+            const userData = await response.json();
+            // Update the local user with the workflow stage from database
+            if (userData.workflowStage) {
+              localCurrentUser.value.workflowStage = userData.workflowStage;
+              console.log(`🔍 [AgentManagementDialog] Fetched workflow stage from database: ${userData.workflowStage} for user ${currentUserId}`);
+            }
+          } else {
+            console.warn(`⚠️ [AgentManagementDialog] Could not fetch user data for ${currentUserId}`);
+          }
+        } catch (error) {
+          console.error(`❌ [AgentManagementDialog] Error fetching user workflow stage:`, error);
+        }
       }
       
       // Set current agent from props (if available)
@@ -2277,8 +2296,8 @@ export default defineComponent({
     // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
       try {
-        // Load current user state first (no API calls)
-        loadCurrentUserState();
+        // Load current user state first (includes fetching workflow stage from database)
+        await loadCurrentUserState();
         
         // Load available data from DO API in parallel
         await Promise.all([
