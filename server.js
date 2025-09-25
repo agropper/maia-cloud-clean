@@ -5842,7 +5842,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments } from './src/routes/admin-management-routes.js';
 
 // In-memory caching system to prevent redundant Cloudant calls
 const dataCache = {
@@ -5932,6 +5932,10 @@ const setCacheFunctions = (routeModule) => {
 
 // Set cache functions for passkey routes
 setCacheFunctions(passkeyRoutes);
+
+// Set cache functions for admin-management routes
+setCacheFunctions(adminManagementRoutes);
+
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
 
@@ -6653,6 +6657,16 @@ app.listen(PORT, async () => {
 //     console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
     await ensureAllUserBuckets();
 //     console.log('✅ [STARTUP] Bucket folder checks completed');
+    
+    // Start deployment monitoring for agents
+    console.log('🚀 [STARTUP] Starting agent deployment monitoring...');
+    setInterval(async () => {
+      try {
+        await checkAgentDeployments();
+      } catch (error) {
+        console.error('❌ Error in deployment monitoring:', error);
+      }
+    }, 30 * 1000); // Check every 30 seconds
   
 // Start cleanup job for expired deep links
   setInterval(async () => {

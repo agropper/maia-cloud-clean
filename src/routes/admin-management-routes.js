@@ -50,11 +50,133 @@ const router = express.Router();
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
+// Cache functions (will be set by server.js)
+let cacheFunctions = null;
+export const setCacheFunctions = (functions) => {
+  cacheFunctions = functions;
+};
+
 // General user activity tracking: in-memory + periodic database sync
 const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean, lastDbUpdate: Date }
 let lastDatabaseSync = 0;
 const SYNC_INTERVAL = 60 * 1000; // 1 minute
 const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database updates for same user
+
+// User-level deployment tracking for agents
+const userDeploymentTracker = new Map(); // userId -> { agentId, agentName, status, lastCheck, retryCount, maxRetries }
+const DEPLOYMENT_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+const MAX_DEPLOYMENT_RETRIES = 20; // Max 10 minutes of checking
+
+// User-level cache invalidation function
+const invalidateUserCache = (userId) => {
+  if (!cacheFunctions) return;
+  
+  console.log(`🔄 [CACHE] Invalidating user cache for: ${userId}`);
+  
+  // Invalidate user-specific caches
+  cacheFunctions.invalidateCache('users', userId);
+  cacheFunctions.invalidateCache('agents', userId);
+  cacheFunctions.invalidateCache('agentAssignments', userId);
+  
+  // Also invalidate general caches that might contain user data
+  cacheFunctions.invalidateCache('chats');
+};
+
+// Add user to deployment tracking
+const addToDeploymentTracking = (userId, agentId, agentName) => {
+  userDeploymentTracker.set(userId, {
+    agentId,
+    agentName,
+    status: 'deploying',
+    lastCheck: Date.now(),
+    retryCount: 0,
+    maxRetries: MAX_DEPLOYMENT_RETRIES
+  });
+  
+  console.log(`🚀 [DEPLOYMENT] Started tracking deployment for user ${userId}, agent ${agentName} (${agentId})`);
+};
+
+// Check agent deployment status and update workflow stage
+const checkAgentDeployments = async () => {
+  if (userDeploymentTracker.size === 0) return;
+  
+  const now = Date.now();
+  const usersToRemove = [];
+  
+  for (const [userId, tracking] of userDeploymentTracker.entries()) {
+    // Skip if not enough time has passed since last check
+    if (now - tracking.lastCheck < DEPLOYMENT_CHECK_INTERVAL) continue;
+    
+    try {
+      console.log(`🔍 [DEPLOYMENT] Checking deployment status for user ${userId}, agent ${tracking.agentId}`);
+      
+      // Check agent deployment status via DO API
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${tracking.agentId}`);
+      const agentData = agentResponse.agent || agentResponse.data || agentResponse;
+      const deploymentStatus = agentData.deployment?.status;
+      
+      console.log(`📊 [DEPLOYMENT] Agent ${tracking.agentId} status: ${deploymentStatus}`);
+      
+      if (deploymentStatus === 'status_active') {
+        // Agent is deployed - update user workflow stage to 'agent_assigned'
+        console.log(`✅ [DEPLOYMENT] Agent ${tracking.agentName} deployed for user ${userId}`);
+        
+        // Get user document
+        const userDoc = await couchDBClient.getDocument('maia_users', userId);
+        if (userDoc) {
+          const updatedUser = {
+            ...userDoc,
+            workflowStage: 'agent_assigned',
+            agentDeployedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await couchDBClient.saveDocument('maia_users', updatedUser);
+          
+          // Invalidate user cache to ensure fresh data
+          invalidateUserCache(userId);
+          
+          console.log(`🎉 [DEPLOYMENT] Updated workflow stage to 'agent_assigned' for user ${userId}`);
+        }
+        
+        // Remove from tracking
+        usersToRemove.push(userId);
+        
+      } else if (deploymentStatus === 'status_failed' || deploymentStatus === 'status_error') {
+        console.error(`❌ [DEPLOYMENT] Agent ${tracking.agentName} deployment failed for user ${userId}`);
+        usersToRemove.push(userId);
+        
+      } else {
+        // Still deploying - increment retry count
+        tracking.retryCount++;
+        tracking.lastCheck = now;
+        
+        if (tracking.retryCount >= tracking.maxRetries) {
+          console.warn(`⚠️ [DEPLOYMENT] Max retries reached for user ${userId}, agent ${tracking.agentName}`);
+          usersToRemove.push(userId);
+        }
+      }
+      
+    } catch (error) {
+      console.error(`❌ [DEPLOYMENT] Error checking deployment for user ${userId}:`, error.message);
+      
+      // Increment retry count on error
+      tracking.retryCount++;
+      tracking.lastCheck = now;
+      
+      if (tracking.retryCount >= tracking.maxRetries) {
+        console.warn(`⚠️ [DEPLOYMENT] Max retries reached for user ${userId} due to errors`);
+        usersToRemove.push(userId);
+      }
+    }
+  }
+  
+  // Remove completed/failed tracking entries
+  usersToRemove.forEach(userId => {
+    userDeploymentTracker.delete(userId);
+    console.log(`🗑️ [DEPLOYMENT] Removed tracking for user ${userId}`);
+  });
+};
 
 // Update user activity in memory (fast, no database writes)
 const updateUserActivity = (userId) => {
@@ -721,6 +843,9 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
+    
     // If approved, admin will manually create agent via Admin Panel
     
     res.json({ 
@@ -800,6 +925,12 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     };
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
+    
+    // Start tracking deployment for this user
+    addToDeploymentTracking(userId, agentId, agentName);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -1040,7 +1171,8 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    // User state cache will be updated on next database read
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     
     res.json({ 
@@ -1340,7 +1472,11 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     // Save updated document
     await couchDBClient.saveDocument('maia_users', updatedUserDoc);
     
-    // Cache will be updated on next database read
+    // Start tracking deployment for this user
+    addToDeploymentTracking(userId, agentId, agentName);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     
     res.json({
@@ -1705,6 +1841,6 @@ router.post('/update-activity', async (req, res) => {
 });
 
 // Export functions for use in main server
-export { updateUserActivity, getAllUserActivities };
+export { updateUserActivity, getAllUserActivities, checkAgentDeployments };
 
 export default router;
