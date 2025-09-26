@@ -402,6 +402,16 @@
         </QCardSection>
 
         <QCardSection v-if="selectedUser">
+          <!-- Debug info for Safari -->
+          <div style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc;">
+            <strong>🔍 [SAFARI DEBUG] Modal Content Rendering:</strong><br>
+            showUserModal: {{ showUserModal }}<br>
+            selectedUser exists: {{ !!selectedUser }}<br>
+            selectedUser.userId: {{ selectedUser?.userId }}<br>
+            selectedUser.displayName: {{ selectedUser?.displayName }}<br>
+            Browser: {{ navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'Safari' : 'Other' }}
+          </div>
+          
           <!-- User Info -->
           <div class="user-info q-mb-lg">
             <h5>User Information</h5>
@@ -695,7 +705,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   QCard,
@@ -1088,21 +1098,38 @@ export default defineComponent({
     };
     
     const viewUserDetails = async (user) => {
+      console.log('🔍 [SAFARI DEBUG] Opening user details modal for:', user);
+      console.log('🔍 [SAFARI DEBUG] Browser info:', {
+        userAgent: navigator.userAgent,
+        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent),
+        platform: navigator.platform
+      });
+      
       selectedUser.value = user;
       adminNotes.value = '';
       showUserModal.value = true;
       
+      console.log('🔍 [SAFARI DEBUG] Modal state set:', {
+        showUserModal: showUserModal.value,
+        selectedUser: selectedUser.value,
+        hasSelectedUser: !!selectedUser.value
+      });
+      
       try {
+        console.log('🔍 [SAFARI DEBUG] Fetching user details from API...');
         const response = await fetch(`/api/admin-management/users/${user.userId}`);
         if (response.ok) {
           const userDetails = await response.json();
+          console.log('🔍 [SAFARI DEBUG] User details fetched:', userDetails);
           
           // Fetch bucket status for the user
           let bucketStatus = null;
           try {
+            console.log('🔍 [SAFARI DEBUG] Fetching bucket status...');
             const bucketResponse = await fetch(`/api/bucket/user-status/${user.userId}`);
             if (bucketResponse.ok) {
               bucketStatus = await bucketResponse.json();
+              console.log('🔍 [SAFARI DEBUG] Bucket status fetched:', bucketStatus);
             }
           } catch (bucketError) {
             console.warn('Could not fetch bucket status:', bucketError);
@@ -1117,6 +1144,8 @@ export default defineComponent({
             bucketFileCount: bucketStatus?.fileCount || 0,
             bucketTotalSize: bucketStatus?.totalSize || 0
           };
+          
+          console.log('🔍 [SAFARI DEBUG] Final selectedUser set:', selectedUser.value);
           
           // Load existing admin notes if they exist
           if (userDetails.adminNotes) {
@@ -2256,6 +2285,16 @@ export default defineComponent({
       // Get the Cloudant Dashboard URL from the server-rendered template
       // The server passes this via the EJS template
       return window.CLOUDANT_DASHBOARD_URL || '#';
+    });
+
+    // Watch for modal state changes
+    watch(showUserModal, (newValue, oldValue) => {
+      console.log('🔍 [SAFARI DEBUG] Modal state changed:', {
+        from: oldValue,
+        to: newValue,
+        selectedUser: selectedUser.value,
+        timestamp: new Date().toISOString()
+      });
     });
     
     return {
