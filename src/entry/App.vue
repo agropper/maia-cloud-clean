@@ -2,6 +2,7 @@
 import ChatPrompt from '../components/ChatPromptRefactored.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
+import UserDetailsPage from '../components/UserDetailsPage.vue'
 import WelcomeModal from '../components/WelcomeModal.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
@@ -32,6 +33,11 @@ const isTooltipTest = computed(() => {
 // Check if we're on an admin route
 const isAdminRoute = computed(() => {
   return window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
+})
+
+// Check if we're on a user details route
+const isUserDetailsRoute = computed(() => {
+  return window.location.pathname.startsWith('/admin/user/')
 })
 
 // Check if we're on the admin registration route specifically
@@ -217,6 +223,7 @@ const getLoadingProgress = () => {
     <!-- Main Application Content -->
     <div v-if="isInitialized && !isLoading" class="app-content">
       <TooltipTest v-if="isTooltipTest" />
+      <UserDetailsPage v-else-if="isUserDetailsRoute" />
       <AdminPanel v-else-if="isAdminRoute" :isRegistrationRoute="isAdminRegisterRoute" />
       <div v-else-if="shouldShowBlankPage" class="admin-error-page">
         <div class="error-content">

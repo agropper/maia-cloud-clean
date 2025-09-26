@@ -1101,68 +1101,9 @@ export default defineComponent({
       showUserModal.value = false;
     };
 
-    const viewUserDetails = async (user) => {
-      console.log('🔍 [SAFARI DEBUG] Opening user details modal for:', user);
-      console.log('🔍 [SAFARI DEBUG] Browser info:', {
-        userAgent: navigator.userAgent,
-        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent),
-        platform: navigator.platform
-      });
-      
-      selectedUser.value = user;
-      adminNotes.value = '';
-      
-      showUserModal.value = true;
-      
-      console.log('🔍 [SAFARI DEBUG] Modal state set:', {
-        showUserModal: showUserModal.value,
-        selectedUser: selectedUser.value,
-        hasSelectedUser: !!selectedUser.value
-      });
-      
-      try {
-        console.log('🔍 [SAFARI DEBUG] Fetching user details from API...');
-        const response = await fetch(`/api/admin-management/users/${user.userId}`);
-        if (response.ok) {
-          const userDetails = await response.json();
-          console.log('🔍 [SAFARI DEBUG] User details fetched:', userDetails);
-          
-          // Fetch bucket status for the user
-          let bucketStatus = null;
-          try {
-            console.log('🔍 [SAFARI DEBUG] Fetching bucket status...');
-            const bucketResponse = await fetch(`/api/bucket/user-status/${user.userId}`);
-            if (bucketResponse.ok) {
-              bucketStatus = await bucketResponse.json();
-              console.log('🔍 [SAFARI DEBUG] Bucket status fetched:', bucketStatus);
-            }
-          } catch (bucketError) {
-            console.warn('Could not fetch bucket status:', bucketError);
-          }
-          
-          // Ensure userId is preserved from the original user object
-          selectedUser.value = {
-            ...userDetails,
-            userId: user.userId, // Preserve the userId from the table row
-            // Add bucket information
-            hasBucket: bucketStatus?.hasFolder || false,
-            bucketFileCount: bucketStatus?.fileCount || 0,
-            bucketTotalSize: bucketStatus?.totalSize || 0
-          };
-          
-          console.log('🔍 [SAFARI DEBUG] Final selectedUser set:', selectedUser.value);
-          
-          // Load existing admin notes if they exist
-          if (userDetails.adminNotes) {
-            adminNotes.value = userDetails.adminNotes;
-          }
-        }
-      } catch (error) {
-        console.error('Error loading user details:', error);
-      }
-      
-      // Load available agents for assignment
-      await loadAgents();
+    const viewUserDetails = (user) => {
+      // Navigate to user details page
+      window.location.href = `/admin/user/${user.userId}`;
     };
     
     const resetUserForAgentCreation = async () => {
