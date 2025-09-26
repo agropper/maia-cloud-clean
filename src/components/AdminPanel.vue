@@ -398,7 +398,7 @@
             👤 User Details: {{ selectedUser?.displayName }}
           </div>
           <QSpace />
-          <QBtn icon="close" flat round dense @click="showUserModal = false" />
+          <QBtn icon="close" flat round dense @click="closeUserModal" />
         </QCardSection>
 
         <QCardSection v-if="selectedUser">
@@ -585,7 +585,7 @@
         </QCardSection>
 
         <QCardActions align="right">
-          <QBtn flat label="Close" @click="showUserModal = false" />
+          <QBtn flat label="Close" @click="closeUserModal" />
         </QCardActions>
       </QCard>
     </QDialog>
@@ -1097,6 +1097,19 @@ export default defineComponent({
       }
     };
     
+    const closeUserModal = () => {
+      // Safari viewport fix - restore body styles
+      if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
+        console.log('🔍 [SAFARI DEBUG] Restoring viewport for Safari');
+        // Remove the viewport fix styles
+        document.body.style.webkitTransform = '';
+        document.body.style.transform = '';
+        document.body.style.webkitBackfaceVisibility = '';
+        document.body.style.backfaceVisibility = '';
+      }
+      showUserModal.value = false;
+    };
+
     const viewUserDetails = async (user) => {
       console.log('🔍 [SAFARI DEBUG] Opening user details modal for:', user);
       console.log('🔍 [SAFARI DEBUG] Browser info:', {
@@ -1107,6 +1120,17 @@ export default defineComponent({
       
       selectedUser.value = user;
       adminNotes.value = '';
+      
+      // Safari viewport fix - prevent shrinking
+      if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
+        console.log('🔍 [SAFARI DEBUG] Applying viewport fix for Safari');
+        // Force hardware acceleration and prevent viewport changes
+        document.body.style.webkitTransform = 'translateZ(0)';
+        document.body.style.transform = 'translateZ(0)';
+        document.body.style.webkitBackfaceVisibility = 'hidden';
+        document.body.style.backfaceVisibility = 'hidden';
+      }
+      
       showUserModal.value = true;
       
       console.log('🔍 [SAFARI DEBUG] Modal state set:', {
@@ -1174,7 +1198,7 @@ export default defineComponent({
         });
         
         // Close the user details modal
-        showUserModal.value = false;
+        closeUserModal();
         
         // Reload users to reflect the change
         await loadUsers();
@@ -1308,7 +1332,7 @@ export default defineComponent({
           await setUserWorkflowStage(selectedUser.value.userId, 'waiting_for_deployment');
           
           // Close the user details modal
-          showUserModal.value = false;
+          closeUserModal();
           
           // Start polling for deployment status
           startDeploymentPolling(selectedUser.value.userId, agentData.uuid);
@@ -1362,7 +1386,7 @@ export default defineComponent({
             selectedUser.value.workflowStage = action;
           }
           
-          showUserModal.value = false;
+          closeUserModal();
         } else {
           throw new Error('Failed to process approval');
         }
@@ -2346,6 +2370,7 @@ export default defineComponent({
       handleChatLoaded,
       handleGroupDeleted,
       viewUserDetails,
+      closeUserModal,
       createAgentForUser,
       resetUserForAgentCreation,
       setUserWorkflowStage,
@@ -2423,6 +2448,29 @@ export default defineComponent({
 .admin-actions,
 .admin-notes {
   margin-bottom: 20px;
+}
+
+/* Safari viewport shrinking fix */
+.q-dialog {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.q-dialog__inner {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Prevent Safari from shrinking viewport on modal open */
+body.q-body--dialog {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .user-info h5,
