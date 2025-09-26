@@ -391,8 +391,8 @@
     </QDialog>
 
     <!-- User Details Modal -->
-    <QDialog v-model="showUserModal" persistent maximized>
-      <QCard>
+    <QDialog v-model="showUserModal" persistent>
+      <QCard style="min-width: 800px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
         <QCardSection class="row items-center q-pb-none">
           <div class="text-h6">
             👤 User Details: {{ selectedUser?.displayName }}
