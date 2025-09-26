@@ -149,6 +149,12 @@ ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com,http://local
 - **Type**: String
 - **Required**: Yes (for DigitalOcean AI functionality)
 
+### **DIGITALOCEAN_BUCKET**
+- **Purpose**: DigitalOcean Spaces bucket URL for file storage
+- **Type**: String (full URL)
+- **Required**: No (optional - for file upload/storage features)
+- **Example**: `https://maia-files.tor1.digitaloceanspaces.com`
+
 ## **📧 Email Service Configuration (Resend)**
 
 ### **RESEND_API_KEY**
@@ -428,6 +434,8 @@ DIGITALOCEAN_PROJECT_ID=your-project-id-here
 DIGITALOCEAN_BASE_URL=https://api.digitalocean.com
 # DigitalOcean GenAI endpoint
 DIGITALOCEAN_GENAI_ENDPOINT=https://your-endpoint.agents.do-ai.run/api/v1
+# DigitalOcean Spaces bucket (optional - for file storage)
+DIGITALOCEAN_BUCKET=https://your-bucket.tor1.digitaloceanspaces.com
 ```
 
 ## **🚀 Production Deployment**

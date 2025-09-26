@@ -1103,9 +1103,25 @@ export default defineComponent({
             const bucketResponse = await fetch(`/api/bucket/user-status/${user.userId}`);
             if (bucketResponse.ok) {
               bucketStatus = await bucketResponse.json();
+            } else {
+              // Handle any other error status
+              bucketStatus = {
+                success: false,
+                hasFolder: false,
+                fileCount: 0,
+                totalSize: 0,
+                message: 'Bucket status unavailable'
+              };
             }
           } catch (bucketError) {
             console.warn('Could not fetch bucket status:', bucketError);
+            bucketStatus = {
+              success: false,
+              hasFolder: false,
+              fileCount: 0,
+              totalSize: 0,
+              message: 'Bucket status unavailable'
+            };
           }
           
           // Ensure userId is preserved from the original user object
