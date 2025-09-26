@@ -392,7 +392,7 @@
 
     <!-- User Details Modal -->
     <q-dialog v-model="showUserModal" persistent>
-      <q-card style="min-width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto;">
+      <q-card style="min-width: 600px; max-width: 90vw;">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             👤 User Details: {{ selectedUser?.displayName }}
