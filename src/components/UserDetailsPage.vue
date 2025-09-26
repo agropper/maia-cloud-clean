@@ -175,10 +175,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-
-const route = useRoute()
-const router = useRouter()
 
 // Reactive data
 const user = ref(null)
@@ -188,8 +184,12 @@ const approving = ref(false)
 const rejecting = ref(false)
 const creatingAgent = ref(false)
 
-// Get userId from route params
-const userId = computed(() => route.params.userId as string)
+// Get userId from URL pathname
+const userId = computed(() => {
+  const path = window.location.pathname
+  const match = path.match(/\/admin\/user\/(.+)$/)
+  return match ? match[1] : null
+})
 
 // Load user details
 const loadUserDetails = async () => {
@@ -237,7 +237,7 @@ const loadUserDetails = async () => {
 
 // Navigation
 const goBack = () => {
-  router.push('/admin')
+  window.location.href = '/admin'
 }
 
 // Admin actions
