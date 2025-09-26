@@ -937,6 +937,16 @@ app.post('/api/upload-file', async (req, res) => {
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
     
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
+    
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
       region: 'us-east-1',
@@ -973,12 +983,21 @@ app.post('/api/upload-file', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error uploading file to bucket:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to upload file to bucket: ${error.message}`,
-      error: 'UPLOAD_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, cannot upload file`);
+      res.status(400).json({ 
+        success: false, 
+        message: `Bucket ${bucketName} does not exist`,
+        error: 'BUCKET_NOT_FOUND'
+      });
+    } else {
+      console.error('❌ Error uploading file to bucket:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to upload file to bucket: ${error.message}`,
+        error: 'UPLOAD_FAILED'
+      });
+    }
   }
 });
 
@@ -1007,6 +1026,16 @@ app.post('/api/upload-to-bucket', async (req, res) => {
     // Extract bucket name from the full URL environment variable
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
     
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
@@ -1046,12 +1075,21 @@ app.post('/api/upload-to-bucket', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error uploading file to bucket:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to upload file to bucket: ${error.message}`,
-      error: 'UPLOAD_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, cannot upload file`);
+      res.status(400).json({ 
+        success: false, 
+        message: `Bucket ${bucketName} does not exist`,
+        error: 'BUCKET_NOT_FOUND'
+      });
+    } else {
+      console.error('❌ Error uploading file to bucket:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to upload file to bucket: ${error.message}`,
+        error: 'UPLOAD_FAILED'
+      });
+    }
   }
 });
 
@@ -1065,6 +1103,16 @@ app.get('/api/bucket-files', async (req, res) => {
     // Extract bucket name from the full URL environment variable
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
     
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
@@ -1096,12 +1144,20 @@ app.get('/api/bucket-files', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('❌ Error listing bucket files:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to list bucket files: ${error.message}`,
-      error: 'LIST_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, returning empty file list`);
+      res.json({
+        success: true,
+        files: []
+      });
+    } else {
+      console.error('❌ Error listing bucket files:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to list bucket files: ${error.message}`,
+        error: 'LIST_FAILED'
+      });
+    }
   }
 });
 
@@ -1198,6 +1254,16 @@ app.post('/api/bucket/ensure-user-folder', async (req, res) => {
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
     
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
+    
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
       region: 'us-east-1',
@@ -1260,12 +1326,21 @@ app.post('/api/bucket/ensure-user-folder', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error ensuring user folder:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to ensure user folder: ${error.message}`,
-      error: 'FOLDER_CREATION_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, cannot create user folder`);
+      res.status(400).json({ 
+        success: false, 
+        message: `Bucket ${bucketName} does not exist`,
+        error: 'BUCKET_NOT_FOUND'
+      });
+    } else {
+      console.error('❌ Error ensuring user folder:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to ensure user folder: ${error.message}`,
+        error: 'FOLDER_CREATION_FAILED'
+      });
+    }
   }
 });
 
@@ -1281,6 +1356,16 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     // Extract bucket name from the full URL environment variable
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
     
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
@@ -1333,12 +1418,26 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting user bucket status:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to get user bucket status: ${error.message}`,
-      error: 'STATUS_CHECK_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, returning empty status for user ${userId}`);
+      res.json({
+        success: true,
+        userId: userId,
+        folderPath: `${userId}/`,
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0,
+        files: [],
+        createdAt: null
+      });
+    } else {
+      console.error('❌ Error getting user bucket status:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to get user bucket status: ${error.message}`,
+        error: 'STATUS_CHECK_FAILED'
+      });
+    }
   }
 });
 
@@ -1361,6 +1460,16 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
     // Extract bucket name from the full URL environment variable
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
     const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
     
     const s3Client = new S3Client({
       endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
@@ -1386,12 +1495,21 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
       deletedKey: key
     });
   } catch (error) {
-    console.error('❌ Error deleting file from bucket:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to delete file from bucket: ${error.message}`,
-      error: 'DELETE_FAILED'
-    });
+    if (error.Code === 'NoSuchBucket') {
+      console.warn(`⚠️ Bucket ${bucketName} does not exist, cannot delete file`);
+      res.status(400).json({ 
+        success: false, 
+        message: `Bucket ${bucketName} does not exist`,
+        error: 'BUCKET_NOT_FOUND'
+      });
+    } else {
+      console.error('❌ Error deleting file from bucket:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to delete file from bucket: ${error.message}`,
+        error: 'DELETE_FAILED'
+      });
+    }
   }
 });
 
@@ -6536,15 +6654,23 @@ app.listen(PORT, async () => {
   // Helper function to ensure bucket folder for a specific user
   async function ensureUserBucket(userId) {
     try {
+      // Check if bucket exists first
+      const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+      if (!bucketUrl) {
+        console.log(`⚠️ [STARTUP] DIGITALOCEAN_BUCKET not configured, skipping bucket operations for ${userId}`);
+        return;
+      }
+
       // First check current status
-      const statusResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${userId}`);
+      const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
+      const statusResponse = await fetch(`${baseUrl}/api/bucket/user-status/${userId}`);
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
         
         // If user has no folder, create one
         if (!statusData.hasFolder) {
           console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
-          const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+          const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId })
@@ -6564,7 +6690,7 @@ app.listen(PORT, async () => {
       
       // If status check failed, try to create folder anyway
       console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
-      const createResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+      const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })

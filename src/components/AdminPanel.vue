@@ -274,7 +274,7 @@
 
             <!-- No Agents -->
             <div v-if="agentsAndPatients.length === 0" class="text-center q-pa-md">
-              <QIcon name="smart_toy" size="2rem" color="grey" class="q-mb-md" />
+              <QIcon name="smart_toy" size="32px" color="grey" class="q-mb-md" />
               <div class="text-grey-6">No agents found</div>
             </div>
           </QCardSection>
@@ -589,12 +589,12 @@
 
         <QCardSection>
           <div v-if="isLoadingAgents" class="text-center q-pa-md">
-            <QIcon name="hourglass_empty" size="2rem" class="q-mb-md" />
+            <QIcon name="hourglass_empty" size="32px" class="q-mb-md" />
             <div>Loading available agents...</div>
           </div>
 
           <div v-else-if="agents.length === 0" class="text-center q-pa-md">
-            <QIcon name="warning" size="2rem" class="q-mb-md" color="warning" />
+            <QIcon name="warning" size="32px" class="q-mb-md" color="warning" />
             <div>No agents available</div>
           </div>
 
@@ -620,7 +620,7 @@
                       <QIcon 
                         name="check_circle" 
                         color="positive" 
-                        size="1.5rem"
+                        size="24px"
                         v-if="selectedUser?.assignedAgentId === agent.id"
                       />
                     </div>
