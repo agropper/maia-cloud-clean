@@ -1,28 +1,28 @@
 <template>
   <div class="user-details-page">
     <div class="page-header">
-      <QBtn 
+      <q-btn 
         icon="arrow_back" 
         flat 
         @click="goBack"
         class="back-button"
       >
         Back to Admin Panel
-      </QBtn>
+      </q-btn>
       <h2 class="page-title">
         👤 User Details: {{ user?.displayName || 'Loading...' }}
       </h2>
     </div>
 
     <div v-if="loading" class="loading-container">
-      <QSpinner size="2em" />
+      <q-spinner size="2em" />
       <div class="q-mt-sm">Loading user details...</div>
     </div>
 
     <div v-else-if="error" class="error-container">
-      <QIcon name="error" color="negative" size="40px" />
+      <q-icon name="error" color="negative" size="40px" />
       <div class="text-negative q-mt-sm">{{ error }}</div>
-      <QBtn
+      <q-btn
         label="Retry"
         color="primary"
         @click="loadUserDetails"
@@ -32,8 +32,8 @@
 
     <div v-else-if="user" class="user-details-content">
       <!-- Basic Information -->
-      <QCard class="info-card">
-        <QCardSection>
+      <q-card class="info-card">
+        <q-cardSection>
           <h5 class="card-title">Basic Information</h5>
           <div class="info-grid">
             <div class="info-item">
@@ -52,17 +52,17 @@
               <strong>Last Updated:</strong> {{ formatDate(user.updatedAt) }}
             </div>
           </div>
-        </QCardSection>
-      </QCard>
+        </q-cardSection>
+      </q-card>
 
       <!-- Workflow Information -->
-      <QCard class="info-card">
-        <QCardSection>
+      <q-card class="info-card">
+        <q-cardSection>
           <h5 class="card-title">Workflow Information</h5>
           <div class="info-grid">
             <div class="info-item">
               <strong>Workflow Stage:</strong> 
-              <QChip 
+              <q-chip 
                 :color="getWorkflowStageColor(user.workflowStage)" 
                 text-color="white"
                 :label="formatWorkflowStage(user.workflowStage)"
@@ -70,7 +70,7 @@
             </div>
             <div class="info-item">
               <strong>Approval Status:</strong> 
-              <QChip 
+              <q-chip 
                 :color="getApprovalStatusColor(user.approvalStatus)" 
                 text-color="white"
                 :label="formatApprovalStatus(user.approvalStatus)"
@@ -83,17 +83,17 @@
               <strong>Agent Assigned:</strong> {{ formatDate(user.agentAssignedAt) }}
             </div>
           </div>
-        </QCardSection>
-      </QCard>
+        </q-cardSection>
+      </q-card>
 
       <!-- Bucket Information -->
-      <QCard class="info-card">
-        <QCardSection>
+      <q-card class="info-card">
+        <q-cardSection>
           <h5 class="card-title">Bucket Status</h5>
           <div class="info-grid">
             <div class="info-item">
               <strong>Has Bucket:</strong> 
-              <QChip 
+              <q-chip 
                 :color="user.hasBucket ? 'positive' : 'negative'" 
                 text-color="white"
                 :label="user.hasBucket ? 'Yes' : 'No'"
@@ -106,17 +106,17 @@
               <strong>Total Size:</strong> {{ formatFileSize(user.bucketTotalSize) }}
             </div>
           </div>
-        </QCardSection>
-      </QCard>
+        </q-cardSection>
+      </q-card>
 
       <!-- Passkey Information -->
-      <QCard class="info-card">
-        <QCardSection>
+      <q-card class="info-card">
+        <q-cardSection>
           <h5 class="card-title">Passkey Information</h5>
           <div class="info-grid">
             <div class="info-item">
               <strong>Has Passkey:</strong> 
-              <QChip 
+              <q-chip 
                 :color="user.hasPasskey ? 'positive' : 'negative'" 
                 text-color="white"
                 :label="user.hasPasskey ? 'Yes' : 'No'"
@@ -124,51 +124,51 @@
             </div>
             <div class="info-item">
               <strong>Valid Passkey:</strong> 
-              <QChip 
+              <q-chip 
                 :color="user.hasValidPasskey ? 'positive' : 'negative'" 
                 text-color="white"
                 :label="user.hasValidPasskey ? 'Yes' : 'No'"
               />
             </div>
           </div>
-        </QCardSection>
-      </QCard>
+        </q-cardSection>
+      </q-card>
 
       <!-- Admin Actions -->
-      <QCard class="info-card">
-        <QCardSection>
+      <q-card class="info-card">
+        <q-cardSection>
           <h5 class="card-title">Admin Actions</h5>
           <div class="action-buttons">
-            <QBtn
+            <q-btn
               v-if="user.workflowStage === 'awaiting_approval'"
               color="positive"
               label="Approve User"
               @click="approveUser"
               :loading="approving"
             />
-            <QBtn
+            <q-btn
               v-if="user.workflowStage === 'awaiting_approval'"
               color="negative"
               label="Reject User"
               @click="rejectUser"
               :loading="rejecting"
             />
-            <QBtn
+            <q-btn
               v-if="user.workflowStage === 'approved' && !user.assignedAgentId"
               color="primary"
               label="Create Agent"
               @click="createAgent"
               :loading="creatingAgent"
             />
-            <QBtn
+            <q-btn
               v-if="user.workflowStage === 'agent_assigned'"
               color="info"
               label="View Agent Status"
               @click="viewAgentStatus"
             />
           </div>
-        </QCardSection>
-      </QCard>
+        </q-cardSection>
+      </q-card>
     </div>
   </div>
 </template>
