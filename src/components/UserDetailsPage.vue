@@ -258,7 +258,9 @@ const approveUser = async () => {
   try {
     approving.value = true
     const response = await fetch(`/api/admin-management/users/${userId.value}/approve`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve' })
     })
     if (!response.ok) {
       throw new Error(`Failed to approve user: ${response.status}`)
@@ -275,10 +277,10 @@ const approveUser = async () => {
 const rejectUser = async () => {
   try {
     rejecting.value = true
-    const response = await fetch(`/api/admin-management/users/${userId.value}/workflow-stage`, {
+    const response = await fetch(`/api/admin-management/users/${userId.value}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflowStage: 'rejected' })
+      body: JSON.stringify({ action: 'reject' })
     })
     if (!response.ok) {
       throw new Error(`Failed to reject user: ${response.status}`)
