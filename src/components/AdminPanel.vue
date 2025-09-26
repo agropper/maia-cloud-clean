@@ -409,7 +409,7 @@
             selectedUser exists: {{ !!selectedUser }}<br>
             selectedUser.userId: {{ selectedUser?.userId }}<br>
             selectedUser.displayName: {{ selectedUser?.displayName }}<br>
-            Browser: {{ navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'Safari' : 'Other' }}
+            Browser: {{ browserInfo }}
           </div>
           
           <!-- User Info -->
@@ -2287,6 +2287,12 @@ export default defineComponent({
       return window.CLOUDANT_DASHBOARD_URL || '#';
     });
 
+    const browserInfo = computed(() => {
+      if (typeof navigator === 'undefined') return 'Unknown';
+      const isSafari = navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome');
+      return isSafari ? 'Safari' : 'Other';
+    });
+
     // Watch for modal state changes
     watch(showUserModal, (newValue, oldValue) => {
       console.log('🔍 [SAFARI DEBUG] Modal state changed:', {
@@ -2362,6 +2368,7 @@ export default defineComponent({
       goToMainApp,
       signOut,
       cloudantDashboardUrl,
+      browserInfo,
       runDatabaseConsistencyCheck,
       runManualConsistencyCheck,
       resetWelcomeModal
