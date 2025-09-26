@@ -939,14 +939,11 @@ app.post('/api/upload-file', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -1032,14 +1029,11 @@ app.post('/api/upload-to-bucket', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -1112,14 +1106,11 @@ app.get('/api/bucket-files', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -1265,14 +1256,11 @@ app.post('/api/bucket/ensure-user-folder', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -1371,14 +1359,11 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -1478,14 +1463,11 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      // Return empty result instead of error for better UX
-      return res.json({
-        success: true,
-        message: 'Bucket not configured - file storage disabled',
-        files: [],
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
       });
     }
     
@@ -6675,7 +6657,7 @@ app.listen(PORT, async () => {
       // Check if bucket exists first
       const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
       if (!bucketUrl) {
-        // Silently skip bucket operations when not configured
+        console.log(`⚠️ [STARTUP] DIGITALOCEAN_BUCKET not configured, skipping bucket operations for ${userId}`);
         return;
       }
 
