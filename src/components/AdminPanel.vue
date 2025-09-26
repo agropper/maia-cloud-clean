@@ -391,8 +391,8 @@
     </QDialog>
 
     <!-- User Details Modal -->
-    <QDialog v-model="showUserModal" persistent>
-      <QCard style="min-width: 800px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+    <QDialog v-model="showUserModal" persistent fullscreen>
+      <QCard style="overflow-y: auto;">
         <QCardSection class="row items-center q-pb-none">
           <div class="text-h6">
             👤 User Details: {{ selectedUser?.displayName }}
@@ -1098,14 +1098,34 @@ export default defineComponent({
     };
     
     const closeUserModal = () => {
-      // Safari viewport fix - restore body styles
+      // Safari viewport fix - restore all styles
       if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
         console.log('🔍 [SAFARI DEBUG] Restoring viewport for Safari');
-        // Remove the viewport fix styles
+        
+        // Restore body styles
         document.body.style.webkitTransform = '';
         document.body.style.transform = '';
         document.body.style.webkitBackfaceVisibility = '';
         document.body.style.backfaceVisibility = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
+        document.body.style.overflow = '';
+        
+        // Restore document element styles
+        document.documentElement.style.height = '';
+        document.documentElement.style.overflow = '';
+        
+        // Restore modal container styles
+        const modalContainer = document.querySelector('.q-dialog');
+        if (modalContainer) {
+          modalContainer.style.webkitTransform = '';
+          modalContainer.style.transform = '';
+          modalContainer.style.webkitBackfaceVisibility = '';
+          modalContainer.style.backfaceVisibility = '';
+        }
+        
+        console.log('🔍 [SAFARI DEBUG] Viewport restored');
       }
       showUserModal.value = false;
     };
@@ -1121,14 +1141,39 @@ export default defineComponent({
       selectedUser.value = user;
       adminNotes.value = '';
       
-      // Safari viewport fix - prevent shrinking
+      // Safari viewport fix - prevent shrinking with aggressive timing
       if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
-        console.log('🔍 [SAFARI DEBUG] Applying viewport fix for Safari');
-        // Force hardware acceleration and prevent viewport changes
+        console.log('🔍 [SAFARI DEBUG] Applying aggressive viewport fix for Safari');
+        
+        // Store original viewport height
+        const originalHeight = window.innerHeight;
+        console.log('🔍 [SAFARI DEBUG] Original viewport height:', originalHeight);
+        
+        // Apply multiple viewport fixes
         document.body.style.webkitTransform = 'translateZ(0)';
         document.body.style.transform = 'translateZ(0)';
         document.body.style.webkitBackfaceVisibility = 'hidden';
         document.body.style.backfaceVisibility = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        document.body.style.overflow = 'hidden';
+        
+        // Force viewport to stay at original size
+        document.documentElement.style.height = `${originalHeight}px`;
+        document.documentElement.style.overflow = 'hidden';
+        
+        // Apply fix to modal container as well
+        setTimeout(() => {
+          const modalContainer = document.querySelector('.q-dialog');
+          if (modalContainer) {
+            modalContainer.style.webkitTransform = 'translateZ(0)';
+            modalContainer.style.transform = 'translateZ(0)';
+            modalContainer.style.webkitBackfaceVisibility = 'hidden';
+            modalContainer.style.backfaceVisibility = 'hidden';
+            console.log('🔍 [SAFARI DEBUG] Applied fix to modal container');
+          }
+        }, 100);
       }
       
       showUserModal.value = true;
