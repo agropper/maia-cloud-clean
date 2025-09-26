@@ -391,17 +391,17 @@
     </QDialog>
 
     <!-- User Details Modal -->
-    <QDialog v-model="showUserModal" persistent fullscreen>
-      <QCard style="overflow-y: auto;">
-        <QCardSection class="row items-center q-pb-none">
+    <q-dialog v-model="showUserModal" persistent>
+      <q-card style="min-width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto;">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             👤 User Details: {{ selectedUser?.displayName }}
           </div>
-          <QSpace />
-          <QBtn icon="close" flat round dense @click="closeUserModal" />
-        </QCardSection>
+          <q-space />
+          <q-btn icon="close" flat round dense @click="closeUserModal" />
+        </q-card-section>
 
-        <QCardSection v-if="selectedUser">
+        <q-card-section v-if="selectedUser">
           <!-- Debug info for Safari -->
           <div style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc;">
             <strong>🔍 [SAFARI DEBUG] Modal Content Rendering:</strong><br>
@@ -582,13 +582,13 @@
               />
             </div>
           </div>
-        </QCardSection>
+        </q-card-section>
 
-        <QCardActions align="right">
-          <QBtn flat label="Close" @click="closeUserModal" />
-        </QCardActions>
-      </QCard>
-    </QDialog>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" @click="closeUserModal" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Agent Assignment Dialog -->
     <QDialog v-model="showAssignAgentDialog" persistent>
@@ -1098,35 +1098,6 @@ export default defineComponent({
     };
     
     const closeUserModal = () => {
-      // Safari viewport fix - restore all styles
-      if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
-        console.log('🔍 [SAFARI DEBUG] Restoring viewport for Safari');
-        
-        // Restore body styles
-        document.body.style.webkitTransform = '';
-        document.body.style.transform = '';
-        document.body.style.webkitBackfaceVisibility = '';
-        document.body.style.backfaceVisibility = '';
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.height = '';
-        document.body.style.overflow = '';
-        
-        // Restore document element styles
-        document.documentElement.style.height = '';
-        document.documentElement.style.overflow = '';
-        
-        // Restore modal container styles
-        const modalContainer = document.querySelector('.q-dialog');
-        if (modalContainer) {
-          modalContainer.style.webkitTransform = '';
-          modalContainer.style.transform = '';
-          modalContainer.style.webkitBackfaceVisibility = '';
-          modalContainer.style.backfaceVisibility = '';
-        }
-        
-        console.log('🔍 [SAFARI DEBUG] Viewport restored');
-      }
       showUserModal.value = false;
     };
 
@@ -1140,41 +1111,6 @@ export default defineComponent({
       
       selectedUser.value = user;
       adminNotes.value = '';
-      
-      // Safari viewport fix - prevent shrinking with aggressive timing
-      if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')) {
-        console.log('🔍 [SAFARI DEBUG] Applying aggressive viewport fix for Safari');
-        
-        // Store original viewport height
-        const originalHeight = window.innerHeight;
-        console.log('🔍 [SAFARI DEBUG] Original viewport height:', originalHeight);
-        
-        // Apply multiple viewport fixes
-        document.body.style.webkitTransform = 'translateZ(0)';
-        document.body.style.transform = 'translateZ(0)';
-        document.body.style.webkitBackfaceVisibility = 'hidden';
-        document.body.style.backfaceVisibility = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.height = '100%';
-        document.body.style.overflow = 'hidden';
-        
-        // Force viewport to stay at original size
-        document.documentElement.style.height = `${originalHeight}px`;
-        document.documentElement.style.overflow = 'hidden';
-        
-        // Apply fix to modal container as well
-        setTimeout(() => {
-          const modalContainer = document.querySelector('.q-dialog');
-          if (modalContainer) {
-            modalContainer.style.webkitTransform = 'translateZ(0)';
-            modalContainer.style.transform = 'translateZ(0)';
-            modalContainer.style.webkitBackfaceVisibility = 'hidden';
-            modalContainer.style.backfaceVisibility = 'hidden';
-            console.log('🔍 [SAFARI DEBUG] Applied fix to modal container');
-          }
-        }, 100);
-      }
       
       showUserModal.value = true;
       
@@ -2495,28 +2431,6 @@ export default defineComponent({
   margin-bottom: 20px;
 }
 
-/* Safari viewport shrinking fix */
-.q-dialog {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-.q-dialog__inner {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-/* Prevent Safari from shrinking viewport on modal open */
-body.q-body--dialog {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
 
 .user-info h5,
 .approval-requests h5,
