@@ -2431,6 +2431,35 @@ export default defineComponent({
   margin-bottom: 20px;
 }
 
+/* Safari viewport shrinking fix - CSS only approach */
+@supports (-webkit-appearance: none) {
+  .q-dialog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 6000 !important;
+  }
+  
+  .q-dialog__inner {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  .q-dialog .q-card {
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    margin: 20px !important;
+  }
+}
+
 
 .user-info h5,
 .approval-requests h5,
