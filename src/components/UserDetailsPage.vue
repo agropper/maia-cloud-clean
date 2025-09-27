@@ -302,7 +302,8 @@ const createAgent = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         userId: userId.value,
-        patientName: user.value.displayName || user.value.userId
+        patientName: user.value.displayName || user.value.userId,
+        model: 'claude-3-5-sonnet-20241022'
       })
     })
     if (!response.ok) {
