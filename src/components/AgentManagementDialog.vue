@@ -326,83 +326,99 @@
                   >
                 </div>
 
-                <!-- Available files for knowledge base creation -->
+                <!-- Knowledge Base Creation Progress - Only for authenticated users (not deep link users) -->
                 <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
-                  <div class="text-subtitle2 q-mb-sm">
-                    Available files for knowledge base creation:
+                  <div v-if="!isCreatingKb" class="q-mb-md">
+                    <div class="text-subtitle2 q-mb-sm">
+                      Knowledge base creation and indexing can take a few minutes.
+                    </div>
+                    
+                    <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
+                      <q-list dense>
+                        <!-- Uploaded files from chat area -->
+                        <q-item
+                          v-for="file in uploadedFiles"
+                          :key="file.id"
+                          class="q-pa-xs"
+                        >
+                          <q-item-section avatar>
+                            <q-checkbox
+                              v-model="file.selected"
+                              color="primary"
+                            />
+                          </q-item-section>
+                          <q-item-section>
+                            <q-item-label class="text-body2">
+                              {{ file.name }}
+                            </q-item-label>
+                            <q-item-label caption class="text-grey-6">
+                              {{ file.size }} bytes
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                        
+                        <!-- Files from bucket -->
+                        <q-item
+                          v-for="file in userBucketFiles"
+                          :key="file.key"
+                          class="q-pa-xs"
+                        >
+                          <q-item-section avatar>
+                            <q-checkbox
+                              v-model="file.selected"
+                              color="primary"
+                            />
+                          </q-item-section>
+                          <q-item-section>
+                            <q-item-label class="text-body2">
+                              {{ file.key.split('/').pop() }} - saved
+                            </q-item-label>
+                            <q-item-label caption class="text-grey-6">
+                              {{ file.size }} bytes
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </q-list>
+                    </div>
+                    <div v-else class="text-caption text-grey q-pa-sm">
+                      Files can be imported with the paper clip
+                    </div>
+                    
+                    <q-btn
+                      label="CREATE KNOWLEDGE BASE"
+                      color="primary"
+                      icon="add_circle"
+                      :disable="getSelectedFilesCount() === 0"
+                      @click="createKnowledgeBaseFromSelectedFiles"
+                      class="q-px-lg q-mt-md"
+                    />
+                    
+                    <div class="text-caption text-grey q-mt-xs">
+                      Select at least one file for the knowledge base.
+                    </div>
                   </div>
-                  <!-- Debug info -->
-                  <div class="text-caption text-grey q-mb-xs">
-                    [KB DEBUG] uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}, userBucketFiles: {{ userBucketFiles ? userBucketFiles.length : 'null' }}
-                  </div>
-                  <div class="text-caption text-grey q-mb-xs">
-                    [KB DEBUG] props.uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}
-                  </div>
-                  <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
-                    <q-list dense>
-                      <!-- Uploaded files from chat area -->
-                      <q-item
-                        v-for="file in uploadedFiles"
-                        :key="file.id"
-                        class="q-pa-xs"
-                      >
-                        <q-item-section avatar>
-                          <q-checkbox
-                            v-model="file.selected"
-                            color="primary"
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label class="text-body2">
-                            {{ file.name }}
-                          </q-item-label>
-                          <q-item-label caption class="text-grey-6">
-                            {{ file.size }} bytes
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                      
-                      <!-- Files from bucket -->
-                      <q-item
-                        v-for="file in userBucketFiles"
-                        :key="file.key"
-                        class="q-pa-xs"
-                      >
-                        <q-item-section avatar>
-                          <q-checkbox
-                            v-model="file.selected"
-                            color="primary"
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label class="text-body2">
-                            {{ file.key.split('/').pop() }} - saved
-                          </q-item-label>
-                          <q-item-label caption class="text-grey-6">
-                            {{ file.size }} bytes
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                  </div>
-                  <div v-else class="text-caption text-grey q-pa-sm">
-                    Files can be imported with the paper clip
-                  </div>
-                </div>
-
-                <!-- Create Knowledge Base Button - Only for authenticated users (not deep link users) -->
-                <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
-                  <q-btn
-                    label="CREATE KNOWLEDGE BASE"
-                    color="primary"
-                    icon="add_circle"
-                    :disable="getSelectedFilesCount() === 0"
-                    @click="createKnowledgeBaseFromSelectedFiles"
-                    class="q-px-lg"
-                  />
                   
-                  <div class="text-caption text-grey q-mt-xs">
-                    Select at least one file for the knowledge base.
+                  <!-- Progress Section -->
+                  <div v-else class="q-pa-md text-center">
+                    <div class="q-mb-md">
+                      <q-circular-progress
+                        indeterminate
+                        size="50px"
+                        color="primary"
+                        class="q-mb-md"
+                      />
+                    </div>
+                    <div class="text-h6 q-mb-sm">{{ currentKbStatus }}</div>
+                    <div class="text-caption text-grey q-mb-md">
+                      Knowledge base creation and indexing can take a few minutes.
+                    </div>
+                    <q-btn
+                      label="CANCEL"
+                      color="negative"
+                      outline
+                      @click="cancelKbCreation"
+                      class="q-mt-md"
+                    />
                   </div>
                 </div>
 
@@ -1377,6 +1393,7 @@ export default defineComponent({
     const newKbDescription = ref("");
     const isCreatingKb = ref(false);
     const selectedDocuments = ref<string[]>([]);
+    const currentKbStatus = ref('Creating KB');
     
     // Enhanced file selection modal state
     const selectedBucketFiles = ref<string[]>([]);
@@ -1868,46 +1885,32 @@ export default defineComponent({
 
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
-      console.log('[KB DEBUG] checkUserBucketFiles called, forceRefresh:', forceRefresh);
-      
       if (!localCurrentUser.value?.userId) {
-        console.log('[KB DEBUG] No userId available:', localCurrentUser.value);
         return [];
       }
       
       // Use cached value if available and not forcing refresh
       if (!forceRefresh && userBucketFiles.value.length > 0) {
-        console.log('[KB DEBUG] Using cached value, count:', userBucketFiles.value.length);
         return userBucketFiles.value;
       }
       
       try {
         const username = localCurrentUser.value.userId
-        console.log('[KB DEBUG] Fetching files for user:', username);
         
         // Use the same endpoint as UserDetailsPage
         const response = await fetch(`/api/bucket/user-status/${username}`)
-        console.log('[KB DEBUG] API response status:', response.status, response.ok);
         
         if (response.ok) {
           const result = await response.json()
-          console.log('[KB DEBUG] API response data:', result);
           if (result.success && result.files) {
-            console.log('[KB DEBUG] Found user files:', result.files.length, result.files);
             // Update the cached value
             userBucketFiles.value = result.files;
-            console.log('[KB DEBUG] Updated userBucketFiles.value:', userBucketFiles.value);
             return result.files
-          } else {
-            console.log('[KB DEBUG] No files found or result.success is false:', result);
           }
-        } else {
-          console.log('[KB DEBUG] API response not ok:', response.status, response.statusText);
         }
       } catch (error) {
-        console.error('[KB DEBUG] Error checking user bucket files:', error)
+        console.error('Error checking user bucket files:', error)
       }
-      console.log('[KB DEBUG] Returning empty array');
       return []
     };
 
@@ -2210,24 +2213,17 @@ export default defineComponent({
 
     // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
-      console.log('[KB DEBUG] onDialogOpen called');
-      console.log('[KB DEBUG] props.uploadedFiles:', props.uploadedFiles);
-      console.log('[KB DEBUG] props.uploadedFiles length:', props.uploadedFiles?.length || 'null');
       try {
         // Load current user state first (includes fetching workflow stage from database)
         await loadCurrentUserState();
-        console.log('[KB DEBUG] loadCurrentUserState completed');
         
         // Load available data from DO API in parallel
         await Promise.all([
           loadAvailableKnowledgeBases()
         ]);
-        console.log('[KB DEBUG] loadAvailableKnowledgeBases completed');
         
         // Load user bucket files
-        console.log('[KB DEBUG] Loading bucket files...');
         await checkUserBucketFiles(true);
-        console.log('[KB DEBUG] checkUserBucketFiles completed');
         
         console.log(`✅ Dialog data loaded successfully`);
       } catch (error) {
@@ -2274,11 +2270,6 @@ export default defineComponent({
       }
     });
 
-    // Watch for uploaded files changes
-    watch(() => props.uploadedFiles, (newFiles) => {
-      console.log('[KB DEBUG] props.uploadedFiles changed:', newFiles);
-      console.log('[KB DEBUG] props.uploadedFiles length:', newFiles?.length || 'null');
-    }, { immediate: true, deep: true });
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
@@ -2993,13 +2984,8 @@ export default defineComponent({
     };
 
     const createKnowledgeBaseFromSelectedFiles = async () => {
-      console.log('[KB DEBUG] createKnowledgeBaseFromSelectedFiles called');
-      
       const selectedUploadedFiles = props.uploadedFiles?.filter(file => file.selected) || [];
       const selectedBucketFiles = userBucketFiles.value?.filter(file => file.selected) || [];
-      
-      console.log('[KB DEBUG] Selected uploaded files:', selectedUploadedFiles.length);
-      console.log('[KB DEBUG] Selected bucket files:', selectedBucketFiles.length);
       
       if (selectedUploadedFiles.length === 0 && selectedBucketFiles.length === 0) {
         $q.notify({
@@ -3009,67 +2995,59 @@ export default defineComponent({
         return;
       }
 
+      isCreatingKb.value = true;
+      currentKbStatus.value = 'Creating KB';
+
       try {
-        // If there are uploaded files that aren't in bucket yet, copy them to bucket first
+        // Step 1: Upload files to bucket if needed
         if (selectedUploadedFiles.length > 0) {
-          console.log('[KB DEBUG] Copying uploaded files to bucket...');
-          console.log('[KB DEBUG] Files to copy:', selectedUploadedFiles.map(f => f.name));
-          
           for (const file of selectedUploadedFiles) {
-            console.log('[KB DEBUG] Copying file to bucket:', file.name);
-            
             try {
               // Prepare file content and metadata
               let aiContent = null;
               let fileName = file.name;
               let fileType = 'text/plain';
               
-              // Handle different file types like the existing uploadSelectedFilesToBucket function
+              // Handle different file types
               if (file.type === 'pdf') {
-                // PDF files have both raw text (content) and AI-ready markdown (transcript)
                 if (file.transcript && file.transcript.length > 0) {
                   aiContent = file.transcript;
                   fileName = file.name.replace('.pdf', '.md');
                   fileType = 'text/markdown';
                 } else if (file.content && file.content.length > 0) {
-                  // Fallback to raw content if no transcript available
                   aiContent = file.content;
                   fileName = file.name.replace('.pdf', '.md');
                   fileType = 'text/markdown';
                 } else {
-                  console.warn(`[KB DEBUG] PDF file ${fileName} has no content or transcript - skipping`);
+                  console.warn(`PDF file ${fileName} has no content or transcript - skipping`);
                   continue;
                 }
               } else if (file.type === 'rtf') {
-                // RTF files have both raw text (content) and AI-ready markdown (transcript)
                 if (file.transcript && file.transcript.length > 0) {
                   aiContent = file.transcript;
                   fileName = file.name.replace('.rtf', '.md');
                   fileType = 'text/markdown';
                 } else if (file.content && file.content.length > 0) {
-                  // Fallback to raw content if no transcript available
                   aiContent = file.content;
                   fileName = file.name.replace('.rtf', '.md');
                   fileType = 'text/markdown';
                 } else {
-                  console.warn(`[KB DEBUG] RTF file ${fileName} has no content or transcript - skipping`);
+                  console.warn(`RTF file ${fileName} has no content or transcript - skipping`);
                   continue;
                 }
               } else if (file.type === 'transcript' || file.name.endsWith('.md')) {
-                // Already in markdown format
                 aiContent = file.content;
                 fileType = 'text/markdown';
               } else {
-                // Other file types
                 aiContent = file.content;
               }
               
               if (!aiContent || aiContent.length === 0) {
-                console.warn(`[KB DEBUG] No content available for file: ${file.name}`);
+                console.warn(`No content available for file: ${file.name}`);
                 continue;
               }
               
-              // Upload to user-specific folder in DigitalOcean Spaces using JSON format
+              // Upload to user-specific folder in DigitalOcean Spaces
               const username = localCurrentUser.value?.userId || 'unknown';
               const userFolder = `${username}/`;
               
@@ -3089,42 +3067,135 @@ export default defineComponent({
               if (uploadResponse.ok) {
                 const uploadResult = await uploadResponse.json();
                 if (uploadResult.success) {
-                  console.log('[KB DEBUG] Successfully uploaded file to bucket:', file.name, uploadResult);
+                  console.log(`[*] File added to bucket: ${file.name}`);
                 } else {
-                  console.error('[KB DEBUG] Failed to upload file to bucket:', file.name, uploadResult);
                   throw new Error(`Failed to upload ${file.name} to bucket`);
                 }
               } else {
-                console.error('[KB DEBUG] Failed to upload file to bucket:', file.name, uploadResponse.status);
                 throw new Error(`Failed to upload ${file.name} to bucket`);
               }
             } catch (uploadError) {
-              console.error('[KB DEBUG] Error uploading file to bucket:', file.name, uploadError);
+              console.error('Error uploading file to bucket:', file.name, uploadError);
               throw uploadError;
             }
           }
-          
-          console.log('[KB DEBUG] All uploaded files copied to bucket successfully');
           
           // Refresh bucket files after upload
           await checkUserBucketFiles(true);
         }
 
-        // Create knowledge base with selected files
-        console.log('[KB DEBUG] Creating knowledge base with selected files...');
-        // This would trigger the knowledge base creation process
-        $q.notify({
-          type: 'positive',
-          message: `Creating knowledge base with ${getSelectedFilesCount()} selected files...`
+        // Step 2: Create knowledge base
+        console.log('[KB CREATE] Creating knowledge base...');
+        currentKbStatus.value = 'Indexing KB';
+        
+        // Get all files for KB creation (both uploaded and bucket files)
+        const allSelectedFiles = [...selectedUploadedFiles, ...selectedBucketFiles];
+        const kbName = `KB-${localCurrentUser.value?.userId}-${Date.now()}`;
+        const kbDescription = `Knowledge base created from ${allSelectedFiles.length} files`;
+        
+        // Create knowledge base using the existing function
+        const kbResponse = await fetch('/api/knowledge-bases', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: kbName,
+            description: kbDescription,
+            userId: localCurrentUser.value?.userId
+          })
         });
         
+        if (!kbResponse.ok) {
+          throw new Error('Failed to create knowledge base');
+        }
+        
+        const kbResult = await kbResponse.json();
+        console.log('[KB CREATE] Knowledge base created:', kbResult);
+        
+        // Step 3: Attach to agent
+        console.log('[KB CREATE] Attaching to agent...');
+        currentKbStatus.value = 'Attaching to agent';
+        
+        if (assignedAgent.value) {
+          // Attach knowledge base to agent
+          const attachResponse = await fetch(`/api/agents/${assignedAgent.value.id}/knowledge-bases`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              knowledgeBaseId: kbResult.id
+            })
+          });
+          
+          if (!attachResponse.ok) {
+            throw new Error('Failed to attach knowledge base to agent');
+          }
+          
+          console.log('[KB CREATE] Knowledge base attached to agent');
+          
+          // Step 4: Clean up files
+          console.log('[KB CREATE] Cleaning up files...');
+          
+          // Remove uploaded files from appState
+          selectedUploadedFiles.forEach(file => {
+            const index = props.uploadedFiles.findIndex(f => f.id === file.id);
+            if (index !== -1) {
+              props.uploadedFiles.splice(index, 1);
+            }
+          });
+          
+          // Delete files from bucket
+          const username = localCurrentUser.value?.userId || 'unknown';
+          for (const file of allSelectedFiles) {
+            try {
+              const fileName = file.key ? file.key.split('/').pop() : file.name;
+              await fetch(`/api/delete-bucket-file`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: username,
+                  fileName: fileName
+                })
+              });
+            } catch (deleteError) {
+              console.warn('Failed to delete file from bucket:', file.name, deleteError);
+            }
+          }
+          
+          // Refresh knowledge bases
+          await loadAvailableKnowledgeBases();
+          
+          console.log('[KB CREATE] Knowledge base creation completed successfully');
+          
+          $q.notify({
+            type: 'positive',
+            message: 'Knowledge base created and attached to your agent successfully!'
+          });
+        }
+        
       } catch (error) {
-        console.error('[KB DEBUG] Error creating knowledge base:', error);
+        console.error('[KB CREATE] Error creating knowledge base:', error);
         $q.notify({
           type: 'negative',
           message: 'Failed to create knowledge base'
         });
+      } finally {
+        isCreatingKb.value = false;
+        currentKbStatus.value = 'Creating KB';
       }
+    };
+
+    const cancelKbCreation = () => {
+      isCreatingKb.value = false;
+      currentKbStatus.value = 'Creating KB';
+      $q.notify({
+        type: 'warning',
+        message: 'Knowledge base creation cancelled'
+      });
     };
 
     // Computed property to check if there are documents available for KB creation
@@ -4330,6 +4401,8 @@ export default defineComponent({
       confirmConnectKnowledgeBase,
       getSelectedFilesCount,
       createKnowledgeBaseFromSelectedFiles,
+      cancelKbCreation,
+      currentKbStatus,
       uploadedFiles: props.uploadedFiles,
       isKnowledgeBaseConnected,
       showConfirmDialog,
