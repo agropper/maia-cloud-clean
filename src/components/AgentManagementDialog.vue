@@ -335,6 +335,9 @@
                   <div class="text-caption text-grey q-mb-xs">
                     [KB DEBUG] uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}, userBucketFiles: {{ userBucketFiles ? userBucketFiles.length : 'null' }}
                   </div>
+                  <div class="text-caption text-grey q-mb-xs">
+                    [KB DEBUG] props.uploadedFiles: {{ props.uploadedFiles ? props.uploadedFiles.length : 'null' }}
+                  </div>
                   <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                     <q-list dense>
                       <!-- Uploaded files from chat area -->
@@ -2208,6 +2211,8 @@ export default defineComponent({
     // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
       console.log('[KB DEBUG] onDialogOpen called');
+      console.log('[KB DEBUG] props.uploadedFiles:', props.uploadedFiles);
+      console.log('[KB DEBUG] props.uploadedFiles length:', props.uploadedFiles?.length || 'null');
       try {
         // Load current user state first (includes fetching workflow stage from database)
         await loadCurrentUserState();
