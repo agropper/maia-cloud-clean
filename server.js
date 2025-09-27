@@ -3192,30 +3192,26 @@ const getAgentApiKey = async (agentId) => {
       responseType: typeof allUsers
     });
     
-    // TEMPORARY FIX: Add missing API key for sat272 agent
-    if (agentId === '43c7473e-9bdd-11f0-b074-4e013e2ddde4') {
-      console.log(`🔑 [TEMPORARY FIX] Adding missing API key for agent ${agentId}`);
-      try {
-        const userDoc = await couchDBClient.getDocument('maia_users', 'sat272');
-        if (userDoc) {
-          userDoc.agentApiKey = 'old7vPnBXqEODvHpWXJvyQ2jIPtWbZUa';
-          await couchDBClient.saveDocument('maia_users', userDoc);
-          agentApiKeys[agentId] = 'old7vPnBXqEODvHpWXJvyQ2jIPtWbZUa';
-          console.log(`🔑 [TEMPORARY FIX] ✅ API key added to database for agent ${agentId}`);
-          return 'old7vPnBXqEODvHpWXJvyQ2jIPtWbZUa';
-        }
-      } catch (fixError) {
-        console.error(`🔑 [TEMPORARY FIX] ❌ Failed to add API key:`, fixError.message);
-      }
+    // Handle different response structures from getAllDocuments
+    let userList;
+    if (allUsers.rows) {
+      // Standard CouchDB response with rows
+      userList = allUsers.rows.map(row => row.doc);
+    } else if (Array.isArray(allUsers)) {
+      // Direct array response
+      userList = allUsers;
+    } else {
+      // Object with numeric keys (array-like)
+      userList = Object.values(allUsers);
     }
     
-    const userWithAgent = allUsers.rows.find(row => row.doc.assignedAgentId === agentId);
+    const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
     
-    if (userWithAgent && userWithAgent.doc.agentApiKey) {
-      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.doc.userId})`);
+    if (userWithAgent && userWithAgent.agentApiKey) {
+      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.userId})`);
       // Also cache it in memory for faster access
-      agentApiKeys[agentId] = userWithAgent.doc.agentApiKey;
-      return userWithAgent.doc.agentApiKey;
+      agentApiKeys[agentId] = userWithAgent.agentApiKey;
+      return userWithAgent.agentApiKey;
     }
   } catch (dbError) {
     console.warn(`🔑 Could not check database for API key of agent ${agentId}:`, dbError.message);
