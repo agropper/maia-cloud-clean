@@ -1258,6 +1258,7 @@ import {
   QTooltip,
   QAvatar,
   QSpinnerDots,
+  QCircularProgress,
 } from "quasar";
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
