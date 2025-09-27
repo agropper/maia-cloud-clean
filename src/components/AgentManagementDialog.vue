@@ -2174,6 +2174,14 @@ export default defineComponent({
         timestamp: new Date().toISOString()
       });
       
+      // DEBUG: Show detailed agent data structure
+      console.log(`🔍 [AGENT DEBUG] Detailed agent data:`, {
+        currentAgent: props.currentAgent,
+        assignedAgent: props.assignedAgent,
+        currentAgentKeys: props.currentAgent ? Object.keys(props.currentAgent) : 'null',
+        assignedAgentKeys: props.assignedAgent ? Object.keys(props.assignedAgent) : 'null'
+      });
+      
       // Clear cached data if user has changed
       if (previousUserId !== currentUserId) {
         console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
@@ -2192,6 +2200,18 @@ export default defineComponent({
               localCurrentUser.value.workflowStage = userData.workflowStage;
               console.log(`🔍 [AgentManagementDialog] Fetched workflow stage from database: ${userData.workflowStage} for user ${currentUserId}`);
             }
+            
+            // DEBUG: Show complete user data from database
+            console.log(`🔍 [DATABASE DEBUG] Complete user data from database:`, {
+              userId: userData.userId,
+              workflowStage: userData.workflowStage,
+              assignedAgentId: userData.assignedAgentId,
+              assignedAgentName: userData.assignedAgentName,
+              hasAgentApiKey: !!userData.agentApiKey,
+              agentAssignedAt: userData.agentAssignedAt,
+              email: userData.email,
+              allKeys: Object.keys(userData)
+            });
           } else {
             console.warn(`⚠️ [AgentManagementDialog] Could not fetch user data for ${currentUserId}`);
           }

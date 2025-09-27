@@ -4135,13 +4135,22 @@ app.get('/api/current-agent', async (req, res) => {
       response.warning = warning;
     }
 
-    console.log(`[SIGN IN] ✅ Final agent response for user ${currentUser}:`, {
-      agentId: transformedAgent.id,
-      agentName: transformedAgent.name,
-      hasEndpoint: !!endpoint,
-      connectedKBs: connectedKnowledgeBases.length,
-      warning: warning ? 'YES' : 'NO'
-    });
+        console.log(`[SIGN IN] ✅ Final agent response for user ${currentUser}:`, {
+          agentId: transformedAgent.id,
+          agentName: transformedAgent.name,
+          hasEndpoint: !!endpoint,
+          connectedKBs: connectedKnowledgeBases.length,
+          warning: warning ? 'YES' : 'NO'
+        });
+        
+        // DEBUG: Show complete agent data being sent to frontend
+        console.log(`[AGENT DEBUG] Complete agent data sent to frontend:`, {
+          user: currentUser,
+          agent: transformedAgent,
+          agentKeys: Object.keys(transformedAgent),
+          hasKnowledgeBase: !!transformedAgent.knowledgeBase,
+          hasKnowledgeBases: !!(transformedAgent.knowledgeBases && transformedAgent.knowledgeBases.length > 0)
+        });
 
     res.json(response);
   } catch (error) {
