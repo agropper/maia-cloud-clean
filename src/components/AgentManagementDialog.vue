@@ -3092,7 +3092,15 @@ export default defineComponent({
         
         // Get all files for KB creation (both uploaded and bucket files)
         const allSelectedFiles = [...selectedUploadedFiles, ...selectedBucketFiles];
-        const kbName = `KB-${localCurrentUser.value?.userId}-${Date.now()}`;
+        
+        // Generate KB name following the format: sat27-{first8chars}-MMDDYYYY
+        const username = localCurrentUser.value?.userId || 'unknown';
+        const firstFile = allSelectedFiles[0];
+        const fileName = firstFile?.key ? firstFile.key.split('/').pop() : firstFile?.name || 'kb';
+        const filePrefix = fileName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toLowerCase();
+        const today = new Date();
+        const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
+        const kbName = `${username}-${filePrefix}-${dateStr}`;
         const kbDescription = `Knowledge base created from ${allSelectedFiles.length} files`;
         
         // Create knowledge base using the existing function
