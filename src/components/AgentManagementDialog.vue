@@ -3019,19 +3019,81 @@ export default defineComponent({
             console.log('[KB DEBUG] Copying file to bucket:', file.name);
             
             try {
-              // Upload file to bucket using the existing upload endpoint
-              const formData = new FormData();
-              formData.append('file', file.originalFile || file.file);
-              formData.append('userId', localCurrentUser.value?.userId || '');
+              // Prepare file content and metadata
+              let aiContent = null;
+              let fileName = file.name;
+              let fileType = 'text/plain';
+              
+              // Handle different file types like the existing uploadSelectedFilesToBucket function
+              if (file.type === 'pdf') {
+                // PDF files have both raw text (content) and AI-ready markdown (transcript)
+                if (file.transcript && file.transcript.length > 0) {
+                  aiContent = file.transcript;
+                  fileName = file.name.replace('.pdf', '.md');
+                  fileType = 'text/markdown';
+                } else if (file.content && file.content.length > 0) {
+                  // Fallback to raw content if no transcript available
+                  aiContent = file.content;
+                  fileName = file.name.replace('.pdf', '.md');
+                  fileType = 'text/markdown';
+                } else {
+                  console.warn(`[KB DEBUG] PDF file ${fileName} has no content or transcript - skipping`);
+                  continue;
+                }
+              } else if (file.type === 'rtf') {
+                // RTF files have both raw text (content) and AI-ready markdown (transcript)
+                if (file.transcript && file.transcript.length > 0) {
+                  aiContent = file.transcript;
+                  fileName = file.name.replace('.rtf', '.md');
+                  fileType = 'text/markdown';
+                } else if (file.content && file.content.length > 0) {
+                  // Fallback to raw content if no transcript available
+                  aiContent = file.content;
+                  fileName = file.name.replace('.rtf', '.md');
+                  fileType = 'text/markdown';
+                } else {
+                  console.warn(`[KB DEBUG] RTF file ${fileName} has no content or transcript - skipping`);
+                  continue;
+                }
+              } else if (file.type === 'transcript' || file.name.endsWith('.md')) {
+                // Already in markdown format
+                aiContent = file.content;
+                fileType = 'text/markdown';
+              } else {
+                // Other file types
+                aiContent = file.content;
+              }
+              
+              if (!aiContent || aiContent.length === 0) {
+                console.warn(`[KB DEBUG] No content available for file: ${file.name}`);
+                continue;
+              }
+              
+              // Upload to user-specific folder in DigitalOcean Spaces using JSON format
+              const username = localCurrentUser.value?.userId || 'unknown';
+              const userFolder = `${username}/`;
               
               const uploadResponse = await fetch('/api/upload-to-bucket', {
                 method: 'POST',
-                body: formData
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  fileName: fileName,
+                  content: aiContent,
+                  fileType: fileType,
+                  userFolder: userFolder
+                })
               });
               
               if (uploadResponse.ok) {
                 const uploadResult = await uploadResponse.json();
-                console.log('[KB DEBUG] Successfully uploaded file to bucket:', file.name, uploadResult);
+                if (uploadResult.success) {
+                  console.log('[KB DEBUG] Successfully uploaded file to bucket:', file.name, uploadResult);
+                } else {
+                  console.error('[KB DEBUG] Failed to upload file to bucket:', file.name, uploadResult);
+                  throw new Error(`Failed to upload ${file.name} to bucket`);
+                }
               } else {
                 console.error('[KB DEBUG] Failed to upload file to bucket:', file.name, uploadResponse.status);
                 throw new Error(`Failed to upload ${file.name} to bucket`);
