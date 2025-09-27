@@ -11,7 +11,7 @@
         <!-- Dialog Loading State -->
         <div v-if="isDialogLoading" class="text-center q-pa-xl">
           <q-spinner-dots
-            size="3rem"
+            size="48px"
                     color="primary"
           />
           <div class="text-h6 q-mt-md">Loading Agent Management...</div>
@@ -587,7 +587,7 @@
         </q-card-section>
         <q-card-section>
           <div class="text-center q-pa-md">
-            <q-icon name="library_books" size="3rem" color="grey-4" />
+            <q-icon name="library_books" size="48px" color="grey-4" />
             <div class="text-caption text-grey q-mt-sm">
               Document management coming soon
             </div>
@@ -606,7 +606,7 @@
         </q-card-section>
         <q-card-section>
           <div v-if="!hasUploadedDocuments && userBucketFiles.length === 0" class="text-center q-pa-md">
-            <q-icon name="attach_file" size="3rem" color="grey-4" />
+            <q-icon name="attach_file" size="48px" color="grey-4" />
             <div class="text-h6 q-mt-md">No Files Available</div>
             <div class="text-caption q-mb-md">
               Upload documents using the paper clip button or add files to your bucket folder
@@ -834,7 +834,7 @@
         </q-card-section>
         <q-card-section>
           <div class="text-center q-pa-md">
-            <q-icon name="upload_file" size="3rem" color="primary" />
+            <q-icon name="upload_file" size="48px" color="primary" />
             <div class="text-h6 q-mt-md">Add Documents</div>
             <div class="text-caption text-grey q-mt-sm">
               Upload files to add to your knowledge base:

@@ -3883,13 +3883,36 @@ app.get('/api/current-agent', async (req, res) => {
           }
           
           // Fix corrupted Public User assigned agent - should only be public agents
-          if (userDoc && userDoc.assignedAgentName && !userDoc.assignedAgentName.startsWith('public-')) {
-            userDoc.assignedAgentId = '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4'; // Correct public agent ID
-            userDoc.assignedAgentName = 'public-agent-05102025'; // Correct public agent name
-            userDoc.updatedAt = new Date().toISOString();
-            
-            // Save the corrected document
-            await couchDBClient.saveDocument('maia_users', userDoc);
+          if (userDoc && userDoc.assignedAgentId) {
+            // Get the agent from DigitalOcean API to check its name
+            try {
+              const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
+              const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+              
+              if (agentData && !agentData.name.startsWith('public-')) {
+                console.log(`🔧 [current-agent] Fixing corrupted Public User agent assignment: ${agentData.name} -> null`);
+                
+                // Clear the corrupted assignment
+                userDoc.assignedAgentId = null;
+                userDoc.assignedAgentName = null;
+                userDoc.agentAssignedAt = null;
+                userDoc.updatedAt = new Date().toISOString();
+                
+                // Save the corrected document
+                await couchDBClient.saveDocument('maia_users', userDoc);
+                
+                // Update cache
+                setCache('users', 'Public User', userDoc);
+                
+                return res.json({ 
+                  agent: null, 
+                  message: 'Your previous agent assignment was invalid and has been cleared. Please choose a new agent via the Agent Management dialog.',
+                  requiresAgentSelection: true
+                });
+              }
+            } catch (agentError) {
+              console.warn(`🔧 [current-agent] Could not validate Public User agent ${userDoc.assignedAgentId}:`, agentError.message);
+            }
           }
           
           // Check for both currentAgentId and assignedAgentId (assignedAgentId is set by consistency fixes)

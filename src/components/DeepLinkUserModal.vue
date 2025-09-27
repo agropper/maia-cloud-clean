@@ -2,7 +2,7 @@
   <q-dialog v-model="showModal" persistent>
     <q-card class="deep-link-user-modal">
       <q-card-section class="text-center">
-        <q-icon name="link" size="3rem" color="primary" />
+        <q-icon name="link" size="48px" color="primary" />
         <h4 class="q-mt-md q-mb-sm">Welcome to MAIA!</h4>
         <p class="text-body1 q-mb-md">
           You're accessing a shared conversation. To continue, please provide your information.
@@ -78,7 +78,7 @@
   <q-dialog v-model="showEmailChoiceModal" persistent>
     <q-card class="email-choice-modal">
       <q-card-section class="text-center">
-        <q-icon name="email" size="3rem" color="warning" />
+        <q-icon name="email" size="48px" color="warning" />
         <h4 class="q-mt-md q-mb-sm">Email Address Mismatch</h4>
         <p class="text-body1 q-mb-md">
           A user with the name "{{ emailChoiceData?.existingUser?.name }}" already exists with a different email address.

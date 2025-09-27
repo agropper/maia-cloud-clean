@@ -140,7 +140,7 @@
           <div class="text-center q-pa-md">
             <q-icon
               name="check_circle"
-              size="3rem"
+              size="48px"
               color="positive"
               class="q-mb-md"
             />
