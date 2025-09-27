@@ -1864,14 +1864,14 @@ app.post('/api/personal-chat', async (req, res) => {
         console.log(`🔑 [DO API] DigitalOcean API keys for agent ${agentId}:`, {
           response: doApiKeysResponse,
           responseKeys: Object.keys(doApiKeysResponse || {}),
-          apiKeys: doApiKeysResponse?.api_keys || doApiKeysResponse?.data || 'No api_keys field found'
+          apiKeys: doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || 'No api_keys field found'
         });
         
         // Show what we're using
         console.log(`🔑 [STORED KEY] Using API key: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
         
         // Check if stored key matches any DO key
-        const doApiKeys = doApiKeysResponse?.api_keys || doApiKeysResponse?.data || [];
+        const doApiKeys = doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || [];
         if (Array.isArray(doApiKeys)) {
           const matchingKey = doApiKeys.find(key => key.key === agentApiKey || key.secret_key === agentApiKey);
           if (matchingKey) {
