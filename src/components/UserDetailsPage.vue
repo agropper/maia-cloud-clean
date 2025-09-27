@@ -303,7 +303,7 @@ const createAgent = async () => {
       body: JSON.stringify({ 
         userId: userId.value,
         patientName: user.value.displayName || user.value.userId,
-        model: 'Anthropic Claude 3.5 Sonnet'
+        model: 'OpenAI GPT-oss-120b'
       })
     })
     if (!response.ok) {
