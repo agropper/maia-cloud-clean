@@ -2976,7 +2976,7 @@ export default defineComponent({
 
     // Helper functions for file selection
     const getSelectedFilesCount = () => {
-      const uploadedSelected = uploadedFiles.value?.filter(file => file.selected).length || 0;
+      const uploadedSelected = props.uploadedFiles?.filter(file => file.selected).length || 0;
       const bucketSelected = userBucketFiles.value?.filter(file => file.selected).length || 0;
       return uploadedSelected + bucketSelected;
     };
@@ -2984,7 +2984,7 @@ export default defineComponent({
     const createKnowledgeBaseFromSelectedFiles = async () => {
       console.log('[KB DEBUG] createKnowledgeBaseFromSelectedFiles called');
       
-      const selectedUploadedFiles = uploadedFiles.value?.filter(file => file.selected) || [];
+      const selectedUploadedFiles = props.uploadedFiles?.filter(file => file.selected) || [];
       const selectedBucketFiles = userBucketFiles.value?.filter(file => file.selected) || [];
       
       console.log('[KB DEBUG] Selected uploaded files:', selectedUploadedFiles.length);
@@ -4228,6 +4228,7 @@ export default defineComponent({
       confirmConnectKnowledgeBase,
       getSelectedFilesCount,
       createKnowledgeBaseFromSelectedFiles,
+      uploadedFiles: props.uploadedFiles,
       isKnowledgeBaseConnected,
       showConfirmDialog,
       confirmAction,
