@@ -4705,8 +4705,9 @@ app.post('/api/agents', async (req, res) => {
         })
       });
       
-      const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.data || apiKeyResponse;
-      agentApiKey = apiKeyData.key || apiKeyData.api_key;
+      const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.api_key_info || apiKeyResponse.data || apiKeyResponse;
+      // Try multiple possible field names for the API key
+      agentApiKey = apiKeyData.key || apiKeyData.api_key || apiKeyData.secret_key;
       
       if (agentApiKey) {
         console.log(`[AGENT CREATE] ✅ API key created successfully for agent ${agentId}`);
@@ -4714,6 +4715,7 @@ app.post('/api/agents', async (req, res) => {
         agentApiKeys[agentId] = agentApiKey;
       } else {
         console.error(`[AGENT CREATE] ❌ Failed to extract API key from response:`, apiKeyResponse);
+        console.error(`[AGENT CREATE] ❌ Available fields in response:`, Object.keys(apiKeyData));
       }
     } catch (apiKeyError) {
       console.error(`[AGENT CREATE] ❌ Failed to create API key for agent ${agentId}:`, apiKeyError.message);
