@@ -336,7 +336,7 @@
                     [KB DEBUG] uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}, userBucketFiles: {{ userBucketFiles ? userBucketFiles.length : 'null' }}
                   </div>
                   <div class="text-caption text-grey q-mb-xs">
-                    [KB DEBUG] props.uploadedFiles: {{ props.uploadedFiles ? props.uploadedFiles.length : 'null' }}
+                    [KB DEBUG] props.uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}
                   </div>
                   <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                     <q-list dense>
@@ -2273,6 +2273,12 @@ export default defineComponent({
         knowledgeBase.value = null;
       }
     });
+
+    // Watch for uploaded files changes
+    watch(() => props.uploadedFiles, (newFiles) => {
+      console.log('[KB DEBUG] props.uploadedFiles changed:', newFiles);
+      console.log('[KB DEBUG] props.uploadedFiles length:', newFiles?.length || 'null');
+    }, { immediate: true, deep: true });
 
     const handleAgentCreated = (agent: DigitalOceanAgent) => {
       currentAgent.value = agent;
