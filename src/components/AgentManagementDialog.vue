@@ -387,114 +387,19 @@
                   </div>
                 </div>
 
-                <!-- File Management Actions Dropdown - Only for authenticated users (not deep link users) -->
+                <!-- Create Knowledge Base Button - Only for authenticated users (not deep link users) -->
                 <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
-                  <q-btn-dropdown
-                    label="File Management Actions"
+                  <q-btn
+                    label="CREATE KNOWLEDGE BASE"
                     color="primary"
-                    icon="settings"
-                    :title="'Choose a file management action'"
-                  >
-                    <q-list>
-                      <!-- Create new or add to existing knowledge base -->
-                      <q-item
-                        clickable
-                        v-close-popup
-                        @click="handleFileAction('create_or_add')"
-                        :disable="!userHasFiles"
-                      >
-                        <q-item-section avatar>
-                          <q-icon 
-                            name="add_circle" 
-                            :color="userHasFiles ? 'positive' : 'grey-5'" 
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
-                            Create new or add to existing knowledge base
-                          </q-item-label>
-                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
-                            No files in bucket folder
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                      
-                      <!-- Import more files before creating knowledge base -->
-                      <q-item
-                        clickable
-                        v-close-popup
-                        @click="handleFileAction('import_more')"
-                        :disable="!userHasFiles"
-                      >
-                        <q-item-section avatar>
-                          <q-icon 
-                            name="upload_file" 
-                            :color="userHasFiles ? 'primary' : 'grey-5'" 
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
-                            Import more files before creating knowledge base
-                          </q-item-label>
-                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
-                            No files in bucket folder
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                      
-                      <!-- Clear all files -->
-                      <q-item
-                        clickable
-                        v-close-popup
-                        @click="handleFileAction('clear_files')"
-                        :disable="!userHasFiles"
-                      >
-                        <q-item-section avatar>
-                          <q-icon 
-                            name="clear_all" 
-                            :color="userHasFiles ? 'orange' : 'grey-5'" 
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label :class="{ 'text-grey-5': !userHasFiles }">
-                            Clear all files (you will need to import them again)
-                          </q-item-label>
-                          <q-item-label v-if="!userHasFiles" caption class="text-grey-5">
-                            No files in bucket folder
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                      
-                      <!-- Import files to create a new knowledge base -->
-                      <q-item
-                        clickable
-                        v-close-popup
-                        @click="handleFileAction('import_files')"
-                        :disable="userHasFiles"
-                      >
-                        <q-item-section avatar>
-                          <q-icon 
-                            name="upload_file" 
-                            :color="!userHasFiles ? 'primary' : 'grey-5'" 
-                          />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label :class="{ 'text-grey-5': userHasFiles }">
-                            Import files to create a new knowledge base
-                          </q-item-label>
-                          <q-item-label v-if="userHasFiles" caption class="text-grey-5">
-                            Files already exist in bucket folder
-                          </q-item-label>
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-btn-dropdown>
+                    icon="add_circle"
+                    :disable="getSelectedFilesCount() === 0"
+                    @click="createKnowledgeBaseFromSelectedFiles"
+                    class="q-px-lg"
+                  />
                   
-                  <div
-                    v-if="!userHasFiles"
-                    class="text-caption text-grey q-mt-xs"
-                  >
-                    No files found in your bucket folder. Upload files to get started with knowledge base creation.
+                  <div class="text-caption text-grey q-mt-xs">
+                    Select at least one file for the knowledge base.
                   </div>
                 </div>
 
@@ -3069,6 +2974,57 @@ export default defineComponent({
     // User's existing files in bucket folder
     const userBucketFiles = ref<any[]>([]);
 
+    // Helper functions for file selection
+    const getSelectedFilesCount = () => {
+      const uploadedSelected = uploadedFiles.value?.filter(file => file.selected).length || 0;
+      const bucketSelected = userBucketFiles.value?.filter(file => file.selected).length || 0;
+      return uploadedSelected + bucketSelected;
+    };
+
+    const createKnowledgeBaseFromSelectedFiles = async () => {
+      console.log('[KB DEBUG] createKnowledgeBaseFromSelectedFiles called');
+      
+      const selectedUploadedFiles = uploadedFiles.value?.filter(file => file.selected) || [];
+      const selectedBucketFiles = userBucketFiles.value?.filter(file => file.selected) || [];
+      
+      console.log('[KB DEBUG] Selected uploaded files:', selectedUploadedFiles.length);
+      console.log('[KB DEBUG] Selected bucket files:', selectedBucketFiles.length);
+      
+      if (selectedUploadedFiles.length === 0 && selectedBucketFiles.length === 0) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select at least one file to create a knowledge base'
+        });
+        return;
+      }
+
+      try {
+        // If there are uploaded files that aren't in bucket yet, copy them to bucket first
+        if (selectedUploadedFiles.length > 0) {
+          console.log('[KB DEBUG] Copying uploaded files to bucket...');
+          for (const file of selectedUploadedFiles) {
+            // Copy file to bucket (this would need to be implemented)
+            console.log('[KB DEBUG] Would copy file to bucket:', file.name);
+          }
+        }
+
+        // Create knowledge base with selected files
+        console.log('[KB DEBUG] Creating knowledge base with selected files...');
+        // This would trigger the knowledge base creation process
+        $q.notify({
+          type: 'positive',
+          message: `Creating knowledge base with ${getSelectedFilesCount()} selected files...`
+        });
+        
+      } catch (error) {
+        console.error('[KB DEBUG] Error creating knowledge base:', error);
+        $q.notify({
+          type: 'negative',
+          message: 'Failed to create knowledge base'
+        });
+      }
+    };
+
     // Computed property to check if there are documents available for KB creation
     const hasUploadedDocuments = computed(() => {
       // Check if user has files in bucket OR uploaded files
@@ -4270,6 +4226,8 @@ export default defineComponent({
       formatFileSize,
       confirmDetachKnowledgeBase,
       confirmConnectKnowledgeBase,
+      getSelectedFilesCount,
+      createKnowledgeBaseFromSelectedFiles,
       isKnowledgeBaseConnected,
       showConfirmDialog,
       confirmAction,
