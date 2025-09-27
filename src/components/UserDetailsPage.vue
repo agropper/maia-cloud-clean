@@ -303,7 +303,7 @@ const createAgent = async () => {
       body: JSON.stringify({ 
         userId: userId.value,
         patientName: user.value.displayName || user.value.userId,
-        model: 'claude-3-5-sonnet-20241022'
+        model: 'Anthropic Claude 3.5 Sonnet'
       })
     })
     if (!response.ok) {
