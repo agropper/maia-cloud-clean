@@ -3177,12 +3177,28 @@ const agentApiKeys = {
 const getAgentApiKey = async (agentId) => {
   // Check if we have a hardcoded key for this agent
   if (agentApiKeys[agentId]) {
-    // console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
+    console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
     return agentApiKeys[agentId];
   }
 
+  // Check if we have the API key stored in the database
+  try {
+    // Find user with this agent assigned
+    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const userWithAgent = allUsers.rows.find(row => row.doc.assignedAgentId === agentId);
+    
+    if (userWithAgent && userWithAgent.doc.agentApiKey) {
+      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.doc.userId})`);
+      // Also cache it in memory for faster access
+      agentApiKeys[agentId] = userWithAgent.doc.agentApiKey;
+      return userWithAgent.doc.agentApiKey;
+    }
+  } catch (dbError) {
+    console.warn(`🔑 Could not check database for API key of agent ${agentId}:`, dbError.message);
+  }
+
   // Fallback to global API key if no agent-specific key found
-  // console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
+  console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
   return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
 };
 
@@ -4637,6 +4653,74 @@ app.post('/api/agents', async (req, res) => {
       return res.status(500).json({ message: 'Agent creation succeeded but no data returned' });
     }
     
+    const agentId = responseData.uuid || responseData.id;
+    console.log(`[AGENT CREATE] Agent created successfully: ${agentName} (${agentId})`);
+    
+    // Create API key for the agent
+    let agentApiKey = null;
+    try {
+      console.log(`[AGENT CREATE] Creating API key for agent ${agentId}...`);
+      const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      
+      const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.data || apiKeyResponse;
+      agentApiKey = apiKeyData.key || apiKeyData.api_key;
+      
+      if (agentApiKey) {
+        console.log(`[AGENT CREATE] ✅ API key created successfully for agent ${agentId}`);
+        // Store the API key in the agentApiKeys object
+        agentApiKeys[agentId] = agentApiKey;
+      } else {
+        console.error(`[AGENT CREATE] ❌ Failed to extract API key from response:`, apiKeyResponse);
+      }
+    } catch (apiKeyError) {
+      console.error(`[AGENT CREATE] ❌ Failed to create API key for agent ${agentId}:`, apiKeyError.message);
+      // Don't fail the entire request if API key creation fails
+    }
+    
+    // Store agent info in maia_users database if userId is provided
+    if (userId && agentId) {
+      try {
+        console.log(`[AGENT CREATE] Storing agent info in maia_users database for user ${userId}...`);
+        
+        // Get user document
+        const userDoc = await couchDBClient.getDocument('maia_users', userId);
+        if (userDoc) {
+          // Update user document with agent information
+          const updatedUserDoc = {
+            ...userDoc,
+            assignedAgentId: agentId,
+            assignedAgentName: agentName,
+            agentApiKey: agentApiKey, // Store the API key
+            agentAssignedAt: new Date().toISOString(),
+            workflowStage: 'agent_assigned',
+            approvalStatus: 'approved',
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Save updated document
+          await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+          
+          // Invalidate user cache
+          setCache('users', userId, updatedUserDoc);
+          
+          console.log(`[AGENT CREATE] ✅ Agent info stored in maia_users for user ${userId}:`, {
+            agentId: agentId,
+            agentName: agentName,
+            hasApiKey: !!agentApiKey,
+            workflowStage: 'agent_assigned'
+          });
+        } else {
+          console.warn(`[AGENT CREATE] ⚠️ User ${userId} not found in maia_users database`);
+        }
+      } catch (dbError) {
+        console.error(`[AGENT CREATE] ❌ Failed to store agent info in maia_users for user ${userId}:`, dbError.message);
+        // Don't fail the entire request if database storage fails
+      }
+    }
+    
     // Start deployment tracking if userId is provided (from Admin Panel)
     if (userId && responseData.uuid) {
       console.log(`🚀 [AGENT CREATION] Starting deployment tracking for user ${userId}, agent ${agentName} (${responseData.uuid})`);
@@ -4883,6 +4967,24 @@ app.post('/api/knowledge-bases', async (req, res) => {
       itemPath: itemPath,
       documentUuids: document_uuids
     });
+    
+    // Debug: List actual bucket folder structure
+    console.log('[KB CREATE] Bucket folder debug - checking actual folder structure...');
+    try {
+      const bucketFiles = await doRequest(`/v2/spaces/maia.tor1/objects?prefix=${username}/&limit=100`);
+      const bucketFileList = bucketFiles.objects || bucketFiles.data?.objects || [];
+      console.log('[KB CREATE] Bucket folder contents:', {
+        folder: `${username}/`,
+        fileCount: bucketFileList.length,
+        files: bucketFileList.map(file => ({
+          key: file.key,
+          size: file.size,
+          lastModified: file.last_modified
+        }))
+      });
+    } catch (bucketError) {
+      console.log('[KB CREATE] Could not list bucket folder:', bucketError.message);
+    }
     
 
     
