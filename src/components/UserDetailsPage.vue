@@ -300,7 +300,10 @@ const createAgent = async () => {
     const response = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: userId.value })
+      body: JSON.stringify({ 
+        userId: userId.value,
+        patientName: user.value.displayName || user.value.userId
+      })
     })
     if (!response.ok) {
       throw new Error(`Failed to create agent: ${response.status}`)

@@ -4478,9 +4478,13 @@ app.post('/api/agents', async (req, res) => {
       // Convert patient name to lowercase, remove spaces, keep only letters and numbers
       const cleanPatientName = patientName.toLowerCase().replace(/[^a-z0-9]/g, '');
       agentName = `${cleanPatientName}-agent-${day}${month}${year}`;
-    } else {
+    } else if (name) {
       // Use provided name with validation
       agentName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    } else {
+      return res.status(400).json({ 
+        error: 'Either patientName or name parameter is required for agent creation' 
+      });
     }
     
 //     console.log(`🔍 Agent name: "${agentName}"`);
