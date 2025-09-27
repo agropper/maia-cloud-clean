@@ -4696,7 +4696,9 @@ app.post('/api/agents', async (req, res) => {
       console.log(`[AGENT CREATE] Creating API key for agent ${agentId}...`);
       const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
         method: 'POST',
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          name: `${agentName}-api-key`
+        })
       });
       
       const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.data || apiKeyResponse;
