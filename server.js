@@ -4107,34 +4107,58 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
     const { agentId } = req.params;
     const { knowledgeBaseId, action } = req.body;
     
+    console.log(`[KB CREATE] Starting KB attachment process:`, {
+      agentId: agentId,
+      knowledgeBaseId: knowledgeBaseId,
+      action: action,
+      requestBody: req.body,
+      timestamp: new Date().toISOString()
+    });
+    
     if (!knowledgeBaseId) {
+      console.log(`[KB CREATE] ❌ Validation failed - knowledgeBaseId is required`);
       return res.status(400).json({ message: 'knowledgeBaseId is required' });
     }
     
-//     console.log(`🔗 Attaching knowledge base ${knowledgeBaseId} to agent ${agentId}`);
+    console.log(`[KB CREATE] Attaching knowledge base ${knowledgeBaseId} to agent ${agentId}`);
     
     // Use the DigitalOcean API to attach the knowledge base to the agent
     const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${knowledgeBaseId}`, {
       method: 'POST'
     });
     
-//     console.log(`✅ Knowledge base attached to agent successfully:`, result);
+    console.log(`[KB CREATE] DigitalOcean attachment API response:`, {
+      status: 'success',
+      result: result,
+      resultKeys: Object.keys(result || {})
+    });
     
     // Wait a moment for the API to process
-//     console.log(`⏳ Waiting 2 seconds for API to process attachment...`);
+    console.log(`[KB CREATE] Waiting 2 seconds for API to process attachment...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Verify the attachment by getting the agent details
-//     console.log(`🔍 Verifying attachment for agent ${agentId}`);
+    console.log(`[KB CREATE] Verifying attachment for agent ${agentId}`);
     const agentDetails = await doRequest(`/v2/gen-ai/agents/${agentId}`);
     const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data || agentDetails;
     const attachedKBs = agentData.knowledge_bases || [];
     
-//     console.log(`📚 Agent now has ${attachedKBs.length} KBs:`, attachedKBs.map(kb => kb.uuid || kb.id));
+    console.log(`[KB CREATE] Agent verification details:`, {
+      agentDataKeys: Object.keys(agentData || {}),
+      attachedKBs: attachedKBs,
+      attachedKBCount: attachedKBs.length,
+      attachedKBIds: attachedKBs.map(kb => kb.uuid || kb.id)
+    });
     
     const isAttached = attachedKBs.some(kb => (kb.uuid || kb.id) === knowledgeBaseId);
+    console.log(`[KB CREATE] Attachment verification result:`, {
+      isAttached: isAttached,
+      targetKBId: knowledgeBaseId,
+      attachedKBIds: attachedKBs.map(kb => kb.uuid || kb.id)
+    });
+    
     if (isAttached) {
-//       console.log(`✅ Knowledge base ${knowledgeBaseId} successfully attached to agent ${agentId}`);
+      console.log(`[KB CREATE] ✅ Knowledge base ${knowledgeBaseId} successfully attached to agent ${agentId}`);
       res.json({
         success: true,
         message: 'Knowledge base attached successfully',
@@ -4145,7 +4169,7 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
         }
       });
     } else {
-//       console.log(`❌ Knowledge base ${knowledgeBaseId} failed to attach to agent ${agentId}`);
+      console.log(`[KB CREATE] ❌ Knowledge base ${knowledgeBaseId} failed to attach to agent ${agentId}`);
       res.json({
         success: false,
         message: 'Failed to attach knowledge base - verification failed',
@@ -4157,7 +4181,12 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Attach KB error:', error);
+    console.error('[KB CREATE] ❌ Attach KB error:', {
+      error: error.message,
+      stack: error.stack,
+      agentId: req.params.agentId,
+      requestBody: req.body
+    });
     res.status(500).json({ message: `Failed to attach knowledge base: ${error.message}` });
   }
 });
@@ -4835,6 +4864,11 @@ app.post('/api/knowledge-bases', async (req, res) => {
   try {
     const { name, description, documents, username } = req.body;
     
+    console.log('[KB CREATE] Starting knowledge base creation:', {
+      requestBody: req.body,
+      timestamp: new Date().toISOString()
+    });
+    
     // Convert documents array to document_uuids if needed
     const document_uuids = documents ? documents.map(doc => doc.id || doc.bucketKey) : [];
     
@@ -4842,14 +4876,29 @@ app.post('/api/knowledge-bases', async (req, res) => {
     const kbName = username ? `${username}-${name}` : name;
     const itemPath = username ? `${username}/` : "shared/";
     
+    console.log('[KB CREATE] KB configuration:', {
+      originalName: name,
+      finalKbName: kbName,
+      username: username,
+      itemPath: itemPath,
+      documentUuids: document_uuids
+    });
+    
 
     
     // Get available embedding models first
     let embeddingModelId = null;
     
+    console.log('[KB CREATE] Fetching available embedding models...');
+    
     try {
       const modelsResponse = await doRequest('/v2/gen-ai/models');
       const models = modelsResponse.models || modelsResponse.data?.models || [];
+      
+      console.log('[KB CREATE] Available models:', {
+        totalModels: models.length,
+        modelNames: models.map(m => m.name).slice(0, 5) // Show first 5 model names
+      });
       
       // Find embedding models that can be used for knowledge bases
       // These are typically text embedding models
@@ -4862,6 +4911,11 @@ app.post('/api/knowledge-bases', async (req, res) => {
         )
       );
       
+      console.log('[KB CREATE] Found embedding models:', {
+        count: embeddingModels.length,
+        names: embeddingModels.map(m => m.name)
+      });
+      
       if (embeddingModels.length > 0) {
         // Prefer GTE Large as it's a high-quality embedding model
         const preferredModel = embeddingModels.find(model => 
@@ -4869,12 +4923,12 @@ app.post('/api/knowledge-bases', async (req, res) => {
         ) || embeddingModels[0];
         
         embeddingModelId = preferredModel.uuid;
-//         console.log(`📚 Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
+        console.log(`[KB CREATE] Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
       } else {
-//         console.log(`⚠️ No embedding models found, proceeding without specific embedding model`);
+        console.log(`[KB CREATE] No embedding models found, proceeding without specific embedding model`);
       }
     } catch (modelError) {
-//       console.log(`⚠️ Failed to get models, proceeding without specific embedding model`);
+      console.log(`[KB CREATE] Failed to get models, proceeding without specific embedding model:`, modelError.message);
     }
     
     const kbData = {
@@ -4898,20 +4952,31 @@ app.post('/api/knowledge-bases', async (req, res) => {
       kbData.embedding_model_uuid = embeddingModelId;
     }
 
-//     console.log(`📚 Creating knowledge base: ${kbName}${embeddingModelId ? ` with embedding model: ${embeddingModelId}` : ''}`);
+    console.log(`[KB CREATE] Creating knowledge base with data:`, {
+      kbName: kbName,
+      embeddingModelId: embeddingModelId,
+      kbData: kbData
+    });
+    
     const knowledgeBase = await doRequest('/v2/gen-ai/knowledge_bases', {
       method: 'POST',
       body: JSON.stringify(kbData)
     });
 
+    console.log(`[KB CREATE] DigitalOcean API response:`, {
+      status: 'success',
+      response: knowledgeBase,
+      responseKeys: Object.keys(knowledgeBase)
+    });
+
     const kbId = knowledgeBase.knowledge_base?.uuid || knowledgeBase.data?.uuid || knowledgeBase.uuid;
-//     console.log(`✅ Created knowledge base: ${kbName} (${kbId})`);
+    console.log(`[KB CREATE] Extracted KB ID: ${kbId} from response`);
 
     // Store user ownership information in Cloudant
     if (kbId) {
       try {
-//         console.log(`🔐 Attempting to store ownership info for KB ${kbId} (${kbName})`);
-//         console.log(`🔐 Username: ${username}, isProtected: ${!!username}`);
+        console.log(`[KB CREATE] Storing ownership info for KB ${kbId} (${kbName})`);
+        console.log(`[KB CREATE] Username: ${username}, isProtected: ${!!username}`);
         
         const ownershipDoc = {
           _id: `kb_${kbId}`,
@@ -4923,32 +4988,43 @@ app.post('/api/knowledge-bases', async (req, res) => {
           itemPath: itemPath
         };
         
-//         console.log(`🔐 Ownership document:`, JSON.stringify(ownershipDoc, null, 2));
+        console.log(`[KB CREATE] Ownership document:`, ownershipDoc);
         
         const result = await couchDBClient.saveDocument('maia_knowledge_bases', ownershipDoc);
-//         console.log(`🔐 Save result:`, result);
+        console.log(`[KB CREATE] Save result:`, result);
         
         if (username) {
-//           console.log(`✅ Stored ownership info for KB ${kbId} owned by ${username}`);
+          console.log(`[KB CREATE] ✅ Stored ownership info for KB ${kbId} owned by ${username}`);
         } else {
-//           console.log(`✅ Stored ownership info for KB ${kbId} as shared KB`);
+          console.log(`[KB CREATE] ✅ Stored ownership info for KB ${kbId} as shared KB`);
         }
       } catch (ownershipError) {
-        console.error(`❌ Failed to store ownership info for KB ${kbId}:`, ownershipError);
-        console.error(`❌ Error details:`, ownershipError.stack);
+        console.error(`[KB CREATE] ❌ Failed to store ownership info for KB ${kbId}:`, ownershipError);
+        console.error(`[KB CREATE] ❌ Error details:`, ownershipError.stack);
         // Don't fail the request if ownership storage fails
       }
     } else {
-      console.warn(`⚠️ Cannot store ownership info - KB ID is undefined`);
+      console.warn(`[KB CREATE] ⚠️ Cannot store ownership info - KB ID is undefined`);
     }
 
     // Note: Documents are already accessible through the spaces_data_source
     // No need to add individual documents as separate data sources
-//     console.log(`📚 Knowledge base created successfully with access to files in ${itemPath}`);
+    console.log(`[KB CREATE] ✅ Knowledge base created successfully with access to files in ${itemPath}`);
 
-    res.json(knowledgeBase.data || knowledgeBase);
+    const responseData = knowledgeBase.data || knowledgeBase;
+    console.log(`[KB CREATE] Sending response to client:`, {
+      kbId: kbId,
+      kbName: kbName,
+      responseKeys: Object.keys(responseData)
+    });
+
+    res.json(responseData);
   } catch (error) {
-    console.error('❌ Create knowledge base error:', error);
+    console.error('[KB CREATE] ❌ Create knowledge base error:', {
+      error: error.message,
+      stack: error.stack,
+      requestBody: req.body
+    });
     res.status(500).json({ message: `Failed to create knowledge base: ${error.message}` });
   }
 });
