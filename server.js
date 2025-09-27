@@ -3243,6 +3243,45 @@ const getAgentApiKey = async (agentId) => {
     
     if (userWithAgent && userWithAgent.agentApiKey) {
       console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.userId})`);
+      
+      // TEMPORARY FIX: Create new API key for sat272 agent (old key is invalid)
+      if (agentId === '43c7473e-9bdd-11f0-b074-4e013e2ddde4') {
+        console.log(`🔑 [TEMPORARY FIX] Creating new API key for agent ${agentId} (old key invalid)`);
+        try {
+          // Create a new API key
+          const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: `sat272-agent-27092025-api-key-${Date.now()}`
+            })
+          });
+          
+          console.log(`🔑 [TEMPORARY FIX] New API key response:`, newApiKeyResponse);
+          
+          // Extract the new API key
+          const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
+          const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
+          
+          if (newApiKey) {
+            console.log(`🔑 [TEMPORARY FIX] ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
+            
+            // Update database with new API key
+            const userDoc = await couchDBClient.getDocument('maia_users', 'sat272');
+            if (userDoc) {
+              userDoc.agentApiKey = newApiKey;
+              await couchDBClient.saveDocument('maia_users', userDoc);
+              agentApiKeys[agentId] = newApiKey;
+              console.log(`🔑 [TEMPORARY FIX] ✅ New API key saved to database for agent ${agentId}`);
+              return newApiKey;
+            }
+          } else {
+            console.error(`🔑 [TEMPORARY FIX] ❌ Failed to extract new API key from response:`, newApiKeyResponse);
+          }
+        } catch (fixError) {
+          console.error(`🔑 [TEMPORARY FIX] ❌ Failed to create new API key:`, fixError.message);
+        }
+      }
+      
       // Also cache it in memory for faster access
       agentApiKeys[agentId] = userWithAgent.agentApiKey;
       return userWithAgent.agentApiKey;
