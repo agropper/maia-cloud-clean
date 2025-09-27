@@ -1969,22 +1969,18 @@ export default defineComponent({
       
       try {
         const username = localCurrentUser.value.userId
-        const userFolder = `${username}/`
-        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username, 'folder:', userFolder);
+        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username);
         
-        const response = await fetch('/api/bucket-files')
+        // Use the same endpoint as UserDetailsPage
+        const response = await fetch(`/api/bucket/user-status/${username}`)
         if (response.ok) {
           const result = await response.json()
           console.log('🔧 checkUserBucketFiles: API response:', result);
           if (result.success && result.files) {
-            // Filter files that belong to this user
-            const userFiles = result.files.filter(file => 
-              file.key.startsWith(userFolder) && !file.key.endsWith('/')
-            )
-            console.log('🔧 checkUserBucketFiles: Filtered user files:', userFiles.length, userFiles);
+            console.log('🔧 checkUserBucketFiles: Found user files:', result.files.length, result.files);
             // Update the cached value
-            userBucketFiles.value = userFiles;
-            return userFiles
+            userBucketFiles.value = result.files;
+            return result.files
           }
         } else {
           console.log('🔧 checkUserBucketFiles: API response not ok:', response.status);
