@@ -1315,6 +1315,7 @@ export default defineComponent({
     QTooltip,
     QAvatar,
     QSpinnerDots,
+    QCircularProgress,
   },
   props: {
     modelValue: {
