@@ -326,16 +326,16 @@
                   >
                 </div>
 
-                <!-- Files Available for Knowledge Base Creation -->
-                <div v-if="isAuthenticated && !isDeepLinkUser && userBucketFiles.length > 0" class="q-mb-md">
+                <!-- Available files for knowledge base creation -->
+                <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
                   <div class="text-subtitle2 q-mb-sm">
-                    📁 Files Available for Knowledge Base Creation ({{ userBucketFiles.length }} files):
+                    Available files for knowledge base creation:
                   </div>
-                  <div class="q-pa-sm bg-blue-1 rounded-borders">
+                  <div v-if="uploadedFiles && uploadedFiles.length > 0" class="q-pa-sm bg-blue-1 rounded-borders">
                     <q-list dense>
                       <q-item
-                        v-for="file in userBucketFiles"
-                        :key="file.key"
+                        v-for="file in uploadedFiles"
+                        :key="file.id"
                         class="q-pa-xs"
                       >
                         <q-item-section avatar>
@@ -346,7 +346,7 @@
                         </q-item-section>
                         <q-item-section>
                           <q-item-label class="text-body2">
-                            {{ file.key.split('/').pop() }}
+                            {{ file.name }}
                           </q-item-label>
                           <q-item-label caption class="text-grey-6">
                             {{ file.size }} bytes
@@ -354,6 +354,9 @@
                         </q-item-section>
                       </q-item>
                     </q-list>
+                  </div>
+                  <div v-else class="text-caption text-grey q-pa-sm">
+                    Files can be imported with the paper clip
                   </div>
                 </div>
 
