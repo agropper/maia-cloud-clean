@@ -3002,10 +3002,39 @@ export default defineComponent({
         // If there are uploaded files that aren't in bucket yet, copy them to bucket first
         if (selectedUploadedFiles.length > 0) {
           console.log('[KB DEBUG] Copying uploaded files to bucket...');
+          console.log('[KB DEBUG] Files to copy:', selectedUploadedFiles.map(f => f.name));
+          
           for (const file of selectedUploadedFiles) {
-            // Copy file to bucket (this would need to be implemented)
-            console.log('[KB DEBUG] Would copy file to bucket:', file.name);
+            console.log('[KB DEBUG] Copying file to bucket:', file.name);
+            
+            try {
+              // Upload file to bucket using the existing upload endpoint
+              const formData = new FormData();
+              formData.append('file', file.originalFile || file.file);
+              formData.append('userId', localCurrentUser.value?.userId || '');
+              
+              const uploadResponse = await fetch('/api/upload-to-bucket', {
+                method: 'POST',
+                body: formData
+              });
+              
+              if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json();
+                console.log('[KB DEBUG] Successfully uploaded file to bucket:', file.name, uploadResult);
+              } else {
+                console.error('[KB DEBUG] Failed to upload file to bucket:', file.name, uploadResponse.status);
+                throw new Error(`Failed to upload ${file.name} to bucket`);
+              }
+            } catch (uploadError) {
+              console.error('[KB DEBUG] Error uploading file to bucket:', file.name, uploadError);
+              throw uploadError;
+            }
           }
+          
+          console.log('[KB DEBUG] All uploaded files copied to bucket successfully');
+          
+          // Refresh bucket files after upload
+          await checkUserBucketFiles(true);
         }
 
         // Create knowledge base with selected files
