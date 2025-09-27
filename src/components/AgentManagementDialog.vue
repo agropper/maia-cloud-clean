@@ -2164,8 +2164,17 @@ export default defineComponent({
       localCurrentUser.value = normalizedUser;
       isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
       
-      // Clear cached data if user has changed
+      // DEBUG: Show user authentication and agent assignment status
       const currentUserId = normalizedUser?.userId;
+      console.log(`🔍 [SECURITY CHECK] User authentication status:`, {
+        userId: currentUserId,
+        isAuthenticated: isAuthenticated.value,
+        currentAgent: props.currentAgent?.name || 'none',
+        assignedAgent: props.assignedAgent?.name || 'none',
+        timestamp: new Date().toISOString()
+      });
+      
+      // Clear cached data if user has changed
       if (previousUserId !== currentUserId) {
         console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
         // Agent loading removed
@@ -2247,6 +2256,24 @@ export default defineComponent({
     watch(() => props.currentAgent, (newAgent) => {
       if (newAgent && currentAgent.value?.id !== newAgent.id) {
         console.log(`🤖 Agent updated in dialog: ${newAgent.name}`);
+        
+        // SECURITY CHECK: Validate agent ownership for authenticated users
+        const currentUserId = localCurrentUser.value?.userId;
+        const agentName = newAgent.name;
+        
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId.startsWith('deep_link_')) {
+          // Authenticated users should only see agents that match their user ID pattern
+          const expectedPrefix = `${currentUserId}-agent-`;
+          
+          if (!agentName.startsWith(expectedPrefix)) {
+            console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
+            console.log(`🚨 SECURITY FIX: Clearing agent assignment for user ${currentUserId}`);
+            currentAgent.value = null;
+            assignedAgent.value = null;
+            return;
+          }
+        }
+        
         currentAgent.value = newAgent;
         assignedAgent.value = newAgent;
       }

@@ -3724,6 +3724,8 @@ app.get('/api/current-agent', async (req, res) => {
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
     
+    console.log(`[SECURITY CHECK] Checking agent assignment for user: ${currentUser}`);
+    
     if (currentUser !== 'Public User') {
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
       if (currentUser.startsWith('deep_link_')) {
@@ -3885,8 +3887,10 @@ app.get('/api/current-agent', async (req, res) => {
           if (userDoc && userDoc.assignedAgentId) {
             // Use assignedAgentId as the source of truth - no more currentAgentId
             agentId = userDoc.assignedAgentId;
+            console.log(`[SECURITY CHECK] ✅ User ${currentUser} has assigned agent: ${agentId}`);
           } else {
             // No current agent selection found for user
+            console.log(`[SECURITY CHECK] ❌ User ${currentUser} has no assigned agent`);
             return res.json({ 
               agent: null, 
               message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
