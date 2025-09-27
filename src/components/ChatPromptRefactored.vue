@@ -293,6 +293,9 @@ export default defineComponent({
 
     // Handle user authentication
     const handleUserAuthenticated = async (userData: any) => {
+      console.log('[KB DEBUG] handleUserAuthenticated called, clearing uploaded files');
+      console.log('[KB DEBUG] Files being cleared:', appState.uploadedFiles.length);
+      
       // Clear chat data upon sign-in
       appState.chatHistory = [];
       appState.uploadedFiles = [];
