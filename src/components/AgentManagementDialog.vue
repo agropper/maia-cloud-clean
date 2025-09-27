@@ -331,6 +331,10 @@
                   <div class="text-subtitle2 q-mb-sm">
                     Available files for knowledge base creation:
                   </div>
+                  <!-- Debug info -->
+                  <div class="text-caption text-grey q-mb-xs">
+                    [KB DEBUG] uploadedFiles: {{ uploadedFiles ? uploadedFiles.length : 'null' }}, userBucketFiles: {{ userBucketFiles ? userBucketFiles.length : 'null' }}
+                  </div>
                   <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                     <q-list dense>
                       <!-- Uploaded files from chat area -->
@@ -1956,38 +1960,46 @@ export default defineComponent({
 
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
+      console.log('[KB DEBUG] checkUserBucketFiles called, forceRefresh:', forceRefresh);
+      
       if (!localCurrentUser.value?.userId) {
-        console.log('🔧 checkUserBucketFiles: No userId available');
+        console.log('[KB DEBUG] No userId available:', localCurrentUser.value);
         return [];
       }
       
       // Use cached value if available and not forcing refresh
       if (!forceRefresh && userBucketFiles.value.length > 0) {
-        console.log('🔧 checkUserBucketFiles: Using cached value, count:', userBucketFiles.value.length);
+        console.log('[KB DEBUG] Using cached value, count:', userBucketFiles.value.length);
         return userBucketFiles.value;
       }
       
       try {
         const username = localCurrentUser.value.userId
-        console.log('🔧 checkUserBucketFiles: Fetching files for user:', username);
+        console.log('[KB DEBUG] Fetching files for user:', username);
         
         // Use the same endpoint as UserDetailsPage
         const response = await fetch(`/api/bucket/user-status/${username}`)
+        console.log('[KB DEBUG] API response status:', response.status, response.ok);
+        
         if (response.ok) {
           const result = await response.json()
-          console.log('🔧 checkUserBucketFiles: API response:', result);
+          console.log('[KB DEBUG] API response data:', result);
           if (result.success && result.files) {
-            console.log('🔧 checkUserBucketFiles: Found user files:', result.files.length, result.files);
+            console.log('[KB DEBUG] Found user files:', result.files.length, result.files);
             // Update the cached value
             userBucketFiles.value = result.files;
+            console.log('[KB DEBUG] Updated userBucketFiles.value:', userBucketFiles.value);
             return result.files
+          } else {
+            console.log('[KB DEBUG] No files found or result.success is false:', result);
           }
         } else {
-          console.log('🔧 checkUserBucketFiles: API response not ok:', response.status);
+          console.log('[KB DEBUG] API response not ok:', response.status, response.statusText);
         }
       } catch (error) {
-        console.error('❌ Error checking user bucket files:', error)
+        console.error('[KB DEBUG] Error checking user bucket files:', error)
       }
+      console.log('[KB DEBUG] Returning empty array');
       return []
     };
 
@@ -2290,14 +2302,22 @@ export default defineComponent({
 
     // Clean dialog opening function - only loads what's needed
     const onDialogOpen = async () => {
+      console.log('[KB DEBUG] onDialogOpen called');
       try {
         // Load current user state first (includes fetching workflow stage from database)
         await loadCurrentUserState();
+        console.log('[KB DEBUG] loadCurrentUserState completed');
         
         // Load available data from DO API in parallel
         await Promise.all([
           loadAvailableKnowledgeBases()
         ]);
+        console.log('[KB DEBUG] loadAvailableKnowledgeBases completed');
+        
+        // Load user bucket files
+        console.log('[KB DEBUG] Loading bucket files...');
+        await checkUserBucketFiles(true);
+        console.log('[KB DEBUG] checkUserBucketFiles completed');
         
         console.log(`✅ Dialog data loaded successfully`);
       } catch (error) {
