@@ -331,8 +331,9 @@
                   <div class="text-subtitle2 q-mb-sm">
                     Available files for knowledge base creation:
                   </div>
-                  <div v-if="uploadedFiles && uploadedFiles.length > 0" class="q-pa-sm bg-blue-1 rounded-borders">
+                  <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                     <q-list dense>
+                      <!-- Uploaded files from chat area -->
                       <q-item
                         v-for="file in uploadedFiles"
                         :key="file.id"
@@ -347,6 +348,28 @@
                         <q-item-section>
                           <q-item-label class="text-body2">
                             {{ file.name }}
+                          </q-item-label>
+                          <q-item-label caption class="text-grey-6">
+                            {{ file.size }} bytes
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                      
+                      <!-- Files from bucket -->
+                      <q-item
+                        v-for="file in userBucketFiles"
+                        :key="file.key"
+                        class="q-pa-xs"
+                      >
+                        <q-item-section avatar>
+                          <q-checkbox
+                            v-model="file.selected"
+                            color="primary"
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label class="text-body2">
+                            {{ file.key.split('/').pop() }} - saved
                           </q-item-label>
                           <q-item-label caption class="text-grey-6">
                             {{ file.size }} bytes
