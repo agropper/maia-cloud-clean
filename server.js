@@ -3668,6 +3668,13 @@ app.get('/api/current-agent', async (req, res) => {
   const sessionUserId = req.session?.userId;
   const hasCookie = !!req.headers.cookie;
   
+  console.log(`[SIGN IN] Current agent request:`, {
+    hasSession,
+    sessionUserId,
+    hasCookie,
+    cookies: req.headers.cookie,
+    timestamp: new Date().toISOString()
+  });
   
   try {
     // Get current user from auth cookie first, then fallback to session
@@ -3684,20 +3691,34 @@ app.get('/api/current-agent', async (req, res) => {
         const expiresAt = new Date(authData.expiresAt);
         const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
         
+        console.log(`[SIGN IN] Auth cookie found:`, {
+          userId: authData.userId,
+          expiresAt: authData.expiresAt,
+          timeToExpiry: `${timeToExpiry} minutes`,
+          isValid: now < expiresAt
+        });
+        
         if (now < expiresAt) {
           currentUser = authData.userId;
+          console.log(`[SIGN IN] ✅ Using cookie auth for user: ${currentUser}`);
         } else {
+          console.log(`[SIGN IN] ❌ Cookie expired, clearing`);
           res.clearCookie('maia_auth');
         }
       } catch (error) {
-        console.error(`❌ Invalid cookie format - clearing`);
+        console.error(`[SIGN IN] ❌ Invalid cookie format - clearing:`, error.message);
         res.clearCookie('maia_auth');
       }
+    } else {
+      console.log(`[SIGN IN] No auth cookie found`);
     }
     
     // Fallback to session-based auth if no valid cookie
     if (currentUser === 'Public User' && req.session && req.session.userId) {
       currentUser = req.session.userId;
+      console.log(`[SIGN IN] ✅ Using session auth for user: ${currentUser}`);
+    } else if (currentUser === 'Public User') {
+      console.log(`[SIGN IN] No valid auth found, using Public User`);
     }
     
     // For authenticated users, check if they have an assigned agent
@@ -4109,6 +4130,14 @@ app.get('/api/current-agent', async (req, res) => {
     if (warning) {
       response.warning = warning;
     }
+
+    console.log(`[SIGN IN] ✅ Final agent response for user ${currentUser}:`, {
+      agentId: transformedAgent.id,
+      agentName: transformedAgent.name,
+      hasEndpoint: !!endpoint,
+      connectedKBs: connectedKnowledgeBases.length,
+      warning: warning ? 'YES' : 'NO'
+    });
 
     res.json(response);
   } catch (error) {
@@ -4533,6 +4562,11 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
 app.post('/api/agents', async (req, res) => {
   try {
     const { name, description, model, model_uuid, instructions, patientName, userId, knowledgeBaseId } = req.body;
+    
+    console.log('[NEW AGENT] Starting agent creation process:', {
+      requestBody: req.body,
+      timestamp: new Date().toISOString()
+    });
     
     // Handle patient name pattern if provided
     let agentName;
