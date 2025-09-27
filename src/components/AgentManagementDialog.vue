@@ -326,6 +326,37 @@
                   >
                 </div>
 
+                <!-- Files Available for Knowledge Base Creation -->
+                <div v-if="isAuthenticated && !isDeepLinkUser && userBucketFiles.length > 0" class="q-mb-md">
+                  <div class="text-subtitle2 q-mb-sm">
+                    📁 Files Available for Knowledge Base Creation ({{ userBucketFiles.length }} files):
+                  </div>
+                  <div class="q-pa-sm bg-blue-1 rounded-borders">
+                    <q-list dense>
+                      <q-item
+                        v-for="file in userBucketFiles"
+                        :key="file.key"
+                        class="q-pa-xs"
+                      >
+                        <q-item-section avatar>
+                          <q-checkbox
+                            v-model="file.selected"
+                            color="primary"
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label class="text-body2">
+                            {{ file.key.split('/').pop() }}
+                          </q-item-label>
+                          <q-item-label caption class="text-grey-6">
+                            {{ file.size }} bytes
+                          </q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </div>
+                </div>
+
                 <!-- File Management Actions Dropdown - Only for authenticated users (not deep link users) -->
                 <div v-if="isAuthenticated && !isDeepLinkUser" class="q-mb-md">
                   <q-btn-dropdown
