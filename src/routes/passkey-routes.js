@@ -406,6 +406,13 @@ router.post("/register-verify", async (req, res) => {
       // Save the updated user document to Cloudant
       await couchDBClient.saveDocument("maia_users", updatedUser);
 
+      // Set session data for authenticated user (same as authenticate-verify)
+      req.session.userId = updatedUser._id;
+      req.session.username = updatedUser._id;
+      req.session.displayName = updatedUser.displayName || updatedUser._id;
+      req.session.authenticatedAt = new Date().toISOString();
+      req.session.expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
       console.log("✅ Passkey registration successful for user:", userId);
 
       res.json({
