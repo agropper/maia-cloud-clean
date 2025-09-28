@@ -193,6 +193,7 @@
         <QTab name="users" label="Private AI Users" icon="people" />
         <QTab name="agents" label="Agents & Patients" icon="smart_toy" />
         <QTab name="knowledge-bases" label="Knowledge Bases" icon="storage" />
+        <QTab name="models" label="AI Models" icon="psychology" />
         <QTab name="sessions" label="Active Sessions" icon="account_circle" />
         <QTab name="health" label="System Health" icon="monitor_heart" />
       </QTabs>
@@ -392,6 +393,72 @@
                 </QTd>
               </template>
 
+            </QTable>
+          </div>
+        </QTabPanel>
+
+        <!-- AI Models Tab -->
+        <QTabPanel name="models">
+          <div class="q-pa-md">
+            <div class="q-mb-md">
+              <h4 class="q-ma-none">AI Models</h4>
+              <p class="text-grey-6 q-ma-none">Configure which AI model to use for new agents</p>
+            </div>
+
+            <!-- Current Model Selection -->
+            <QCard class="q-mb-md">
+              <QCardSection>
+                <h5 class="q-ma-none q-mb-md">Current Model for New Agents</h5>
+                <div v-if="currentModel" class="current-model-display">
+                  <QBadge
+                    color="primary"
+                    :label="currentModel.name"
+                    class="q-mr-sm"
+                  />
+                  <span class="text-grey-6">{{ currentModel.description || 'No description available' }}</span>
+                </div>
+                <div v-else class="text-grey-6">
+                  No model selected
+                </div>
+              </QCardSection>
+            </QCard>
+
+            <!-- Available Models Table -->
+            <QTable
+              :rows="availableModels"
+              :columns="modelColumns"
+              row-key="uuid"
+              :loading="isLoadingModels"
+              class="admin-table"
+            >
+              <template v-slot:body-cell-selection="props">
+                <QTd :props="props">
+                  <QBtn
+                    :color="isSelectedModel(props.row) ? 'primary' : 'grey'"
+                    :icon="isSelectedModel(props.row) ? 'radio_button_checked' : 'radio_button_unchecked'"
+                    :label="isSelectedModel(props.row) ? 'Selected' : 'Select'"
+                    size="sm"
+                    @click="selectModel(props.row)"
+                    :disable="isSelectedModel(props.row)"
+                  />
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-status="props">
+                <QTd :props="props">
+                  <QBadge
+                    :color="props.row.status === 'available' ? 'positive' : 'negative'"
+                    :label="props.row.status || 'unknown'"
+                    class="status-badge"
+                  />
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-description="props">
+                <QTd :props="props">
+                  <span class="text-grey-6">{{ props.value || 'No description available' }}</span>
+                </QTd>
+              </template>
             </QTable>
           </div>
         </QTabPanel>
@@ -598,6 +665,11 @@ const showGroupModal = ref(false)
 const selectedAgentForChats = ref(null)
 const isLoadingHealth = ref(false)
 
+// Models tab data
+const availableModels = ref([])
+const currentModel = ref(null)
+const isLoadingModels = ref(false)
+
 // Tables - Real data from caches
 const users = ref([])
 const agents = ref([])
@@ -682,6 +754,14 @@ const sessionColumns = [
   { name: 'ipAddress', label: 'IP Address', field: 'ipAddress', align: 'center', sortable: true },
   { name: 'userAgent', label: 'User Agent', field: 'userAgent', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center', sortable: false }
+]
+
+const modelColumns = [
+  { name: 'name', label: 'Model Name', field: 'name', align: 'left', sortable: true },
+  { name: 'uuid', label: 'UUID', field: 'uuid', align: 'left', sortable: false },
+  { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
+  { name: 'description', label: 'Description', field: 'description', align: 'left', sortable: false },
+  { name: 'selection', label: 'Selection', field: 'selection', align: 'center', sortable: false }
 ]
 
 // Methods - Static implementations (no real logic)
@@ -1160,9 +1240,110 @@ const loadAllData = async () => {
   await Promise.all([
     loadUsers(),
     loadAgents(),
-    loadKnowledgeBases()
+    loadKnowledgeBases(),
+    loadModels()
   ])
   console.log('✅ [AdminPanel2] All data loaded successfully')
+}
+
+// Models tab methods
+const loadModels = async () => {
+  try {
+    isLoadingModels.value = true
+    console.log('🤖 [AdminPanel2] Loading available models...')
+    
+    const response = await fetch('/api/admin-management/models', {
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load models: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    availableModels.value = data.models || []
+    
+    console.log(`✅ [AdminPanel2] Loaded ${availableModels.value.length} available models`)
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Failed to load models:', error)
+    $q.notify({
+      type: 'negative',
+      message: `Failed to load models: ${error.message}`,
+      position: 'top'
+    })
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+const loadCurrentModel = async () => {
+  try {
+    console.log('🤖 [AdminPanel2] Loading current model configuration...')
+    
+    const response = await fetch('/api/admin-management/models/current', {
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('🤖 [AdminPanel2] No current model configured')
+        currentModel.value = null
+        return
+      }
+      throw new Error(`Failed to load current model: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    currentModel.value = data.model
+    console.log(`✅ [AdminPanel2] Current model: ${currentModel.value?.name || 'None'}`)
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Failed to load current model:', error)
+    currentModel.value = null
+  }
+}
+
+const isSelectedModel = (model) => {
+  return currentModel.value && currentModel.value.uuid === model.uuid
+}
+
+const selectModel = async (model) => {
+  try {
+    console.log(`🤖 [AdminPanel2] Selecting model: ${model.name} (${model.uuid})`)
+    
+    const response = await fetch('/api/admin-management/models/current', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model_uuid: model.uuid,
+        model_name: model.name,
+        model_description: model.description
+      }),
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to save model selection: ${response.status}`)
+    }
+    
+    currentModel.value = model
+    
+    $q.notify({
+      type: 'positive',
+      message: `Model ${model.name} selected for new agents`,
+      position: 'top'
+    })
+    
+    console.log(`✅ [AdminPanel2] Model ${model.name} selected successfully`)
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Failed to select model:', error)
+    $q.notify({
+      type: 'negative',
+      message: `Failed to select model: ${error.message}`,
+      position: 'top'
+    })
+  }
 }
 
 // SSE Connection Management
@@ -1280,6 +1461,7 @@ const disconnectAdminEvents = () => {
 onMounted(() => {
   console.log('🔧 AdminPanel2 mounted - Clean architecture version')
   loadAllData()
+  loadCurrentModel()
   connectAdminEvents()
 })
 
@@ -1461,5 +1643,17 @@ onUnmounted(() => {
 
 .admin-table .q-table__body .q-tr:hover {
   background-color: #f5f5f5;
+}
+
+/* Models tab styles */
+.current-model-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.current-model-display .q-badge {
+  font-size: 0.9rem;
+  padding: 6px 12px;
 }
 </style>

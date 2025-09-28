@@ -1012,31 +1012,17 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       console.log(`🤖 [NEW AGENT] Generated agent name: ${agentName}`);
       
-      // Get available models to find the correct model UUID
-      console.log(`🤖 [NEW AGENT] Fetching available models to find correct model UUID...`);
+      // Get the current model configuration from database
+      console.log(`🤖 [NEW AGENT] Loading current model configuration...`);
       
-      const models = await doRequest('/v2/gen-ai/models');
-      const modelArray = models.models || [];
+      const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
       
-      if (!Array.isArray(modelArray)) {
-        throw new Error('Failed to get models from DigitalOcean API');
+      if (!configDoc || !configDoc.current_model) {
+        throw new Error('No model configured for new agents. Please select a model in the Admin Panel Models tab.');
       }
       
-      const validModels = modelArray.filter(m => m && m.name);
-      console.log(`🤖 [NEW AGENT] Available models: ${validModels.map(m => `${m.name} (${m.uuid})`).join(', ')}`);
-      
-      // Find the preferred model: OpenAI GPT-oss-120b
-      const preferredModelName = "OpenAI GPT-oss-120b";
-      const selectedModel = validModels.find(m => 
-        m && m.name && typeof m.name === 'string' && 
-        m.name.toLowerCase().includes(preferredModelName.toLowerCase())
-      );
-      
-      if (!selectedModel) {
-        throw new Error(`Preferred model '${preferredModelName}' not found. Available models: ${validModels.map(m => m.name).join(', ')}`);
-      }
-      
-      console.log(`🤖 [NEW AGENT] Using model: ${selectedModel.name} (${selectedModel.uuid})`);
+      const selectedModel = configDoc.current_model;
+      console.log(`🤖 [NEW AGENT] Using configured model: ${selectedModel.name} (${selectedModel.uuid})`);
       
       // Create agent using DigitalOcean API
       const agentData = {
@@ -2139,6 +2125,103 @@ router.post('/update-activity', async (req, res) => {
   } catch (error) {
     console.error('❌ Error updating activity:', error);
     res.status(500).json({ message: 'Failed to update activity' });
+  }
+});
+
+// Models configuration endpoints
+router.get('/models', requireAdminAuth, async (req, res) => {
+  try {
+    console.log('🤖 [MODELS] Fetching available models from DigitalOcean API...');
+    
+    const models = await doRequest('/v2/gen-ai/models');
+    const modelArray = models.models || [];
+    
+    if (!Array.isArray(modelArray)) {
+      return res.status(500).json({ error: 'Failed to get models from DigitalOcean API' });
+    }
+    
+    const validModels = modelArray.filter(m => m && m.name);
+    
+    console.log(`🤖 [MODELS] Found ${validModels.length} available models`);
+    
+    res.json({
+      models: validModels,
+      count: validModels.length
+    });
+    
+  } catch (error) {
+    console.error('❌ [MODELS] Failed to fetch models:', error);
+    res.status(500).json({ error: `Failed to fetch models: ${error.message}` });
+  }
+});
+
+router.get('/models/current', requireAdminAuth, async (req, res) => {
+  try {
+    console.log('🤖 [MODELS] Loading current model configuration...');
+    
+    const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+    
+    if (!configDoc || !configDoc.current_model) {
+      console.log('🤖 [MODELS] No current model configured');
+      return res.status(404).json({ error: 'No current model configured' });
+    }
+    
+    console.log(`🤖 [MODELS] Current model: ${configDoc.current_model.name}`);
+    
+    res.json({
+      model: configDoc.current_model
+    });
+    
+  } catch (error) {
+    console.error('❌ [MODELS] Failed to load current model:', error);
+    res.status(500).json({ error: `Failed to load current model: ${error.message}` });
+  }
+});
+
+router.post('/models/current', requireAdminAuth, async (req, res) => {
+  try {
+    const { model_uuid, model_name, model_description } = req.body;
+    
+    if (!model_uuid || !model_name) {
+      return res.status(400).json({ error: 'model_uuid and model_name are required' });
+    }
+    
+    console.log(`🤖 [MODELS] Setting current model: ${model_name} (${model_uuid})`);
+    
+    // Get or create config document
+    let configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+    
+    if (!configDoc) {
+      configDoc = {
+        _id: 'maia_config',
+        type: 'config',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+    
+    // Update current model
+    configDoc.current_model = {
+      uuid: model_uuid,
+      name: model_name,
+      description: model_description || null,
+      selectedAt: new Date().toISOString()
+    };
+    
+    configDoc.updatedAt = new Date().toISOString();
+    
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', configDoc);
+    
+    console.log(`✅ [MODELS] Current model set to: ${model_name}`);
+    
+    res.json({
+      message: 'Current model updated successfully',
+      model: configDoc.current_model
+    });
+    
+  } catch (error) {
+    console.error('❌ [MODELS] Failed to set current model:', error);
+    res.status(500).json({ error: `Failed to set current model: ${error.message}` });
   }
 });
 
