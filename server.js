@@ -3239,6 +3239,29 @@ const getAgentApiKey = async (agentId) => {
     if (userWithAgent && userWithAgent.agentApiKey) {
       console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.userId})`);
       
+      // Validate the stored API key by checking if it matches any DigitalOcean keys
+      try {
+        const doApiKeysResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`);
+        const doApiKeys = doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || [];
+        
+        if (Array.isArray(doApiKeys)) {
+          const isValidKey = doApiKeys.some(key => 
+            key.key === userWithAgent.agentApiKey || 
+            key.secret_key === userWithAgent.agentApiKey
+          );
+          
+          if (!isValidKey) {
+            console.error(`🔑 ❌ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) is invalid - does not match any DigitalOcean keys`);
+            throw new Error(`Invalid API key stored for agent ${agentId}`);
+          } else {
+            console.log(`🔑 ✅ Stored API key for agent ${agentId} is valid`);
+          }
+        }
+      } catch (validationError) {
+        console.error(`🔑 ❌ Failed to validate stored API key for agent ${agentId}:`, validationError.message);
+        throw new Error(`Failed to validate API key for agent ${agentId}: ${validationError.message}`);
+      }
+      
       // TEMPORARY FIX: Create new API key for sat272 agent (old key is invalid)
       if (agentId === '43c7473e-9bdd-11f0-b074-4e013e2ddde4') {
         console.log(`🔑 [TEMPORARY FIX] Creating new API key for agent ${agentId} (old key invalid)`);
@@ -3285,9 +3308,16 @@ const getAgentApiKey = async (agentId) => {
     console.warn(`🔑 Could not check database for API key of agent ${agentId}:`, dbError.message);
   }
 
-  // Fallback to global API key if no agent-specific key found
-  console.log(`🔑 No agent-specific key found for ${agentId}, using global key`);
-  return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+  // Only allow fallback to global API key for public agent
+  const isPublicAgent = agentId === '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4'; // public-agent-05102025
+  
+  if (isPublicAgent) {
+    console.log(`🔑 No agent-specific key found for public agent ${agentId}, using global key`);
+    return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
+  } else {
+    console.error(`🔑 ❌ No valid API key found for agent ${agentId} - this should not happen for non-public agents`);
+    throw new Error(`No valid API key available for agent ${agentId}`);
+  }
 };
 
 // Helper function to check if an agent is available to Public User
