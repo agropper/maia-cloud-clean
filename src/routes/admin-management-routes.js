@@ -1012,10 +1012,36 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       console.log(`🤖 [NEW AGENT] Generated agent name: ${agentName}`);
       
+      // Get available models to find the correct model UUID
+      console.log(`🤖 [NEW AGENT] Fetching available models to find correct model UUID...`);
+      
+      const models = await doRequest('/v2/gen-ai/models');
+      const modelArray = models.models || [];
+      
+      if (!Array.isArray(modelArray)) {
+        throw new Error('Failed to get models from DigitalOcean API');
+      }
+      
+      const validModels = modelArray.filter(m => m && m.name);
+      console.log(`🤖 [NEW AGENT] Available models: ${validModels.map(m => `${m.name} (${m.uuid})`).join(', ')}`);
+      
+      // Find the preferred model: OpenAI GPT-oss-120b
+      const preferredModelName = "OpenAI GPT-oss-120b";
+      const selectedModel = validModels.find(m => 
+        m && m.name && typeof m.name === 'string' && 
+        m.name.toLowerCase().includes(preferredModelName.toLowerCase())
+      );
+      
+      if (!selectedModel) {
+        throw new Error(`Preferred model '${preferredModelName}' not found. Available models: ${validModels.map(m => m.name).join(', ')}`);
+      }
+      
+      console.log(`🤖 [NEW AGENT] Using model: ${selectedModel.name} (${selectedModel.uuid})`);
+      
       // Create agent using DigitalOcean API
       const agentData = {
         name: agentName,
-        model: "o1-mini",
+        model_uuid: selectedModel.uuid,
         description: `Private AI agent for ${userDoc.email}`,
         project_id: "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
         region: "tor1"
