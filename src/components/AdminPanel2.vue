@@ -209,6 +209,7 @@
               :loading="isLoadingUsers"
               :pagination="userPagination"
               @request="onUserRequest"
+              @row-click="onUserRowClick"
               class="admin-table"
             >
               <template v-slot:body-cell-workflowStage="props">
@@ -243,7 +244,7 @@
                       size="xs"
                       color="positive"
                       label="Approve"
-                      @click="approveUserFromList(props.row)"
+                      @click.stop="approveUserFromList(props.row)"
                       class="q-mr-xs"
                     />
                     
@@ -253,7 +254,7 @@
                       size="xs"
                       color="negative"
                       label="Reject"
-                      @click="rejectUserFromList(props.row)"
+                      @click.stop="rejectUserFromList(props.row)"
                       class="q-mr-xs"
                     />
                     
@@ -263,7 +264,7 @@
                       size="xs"
                       color="primary"
                       label="Create Agent"
-                      @click="createAgentFromList(props.row)"
+                      @click.stop="createAgentFromList(props.row)"
                       class="q-mr-xs"
                     />
                     
@@ -273,18 +274,10 @@
                       size="xs"
                       color="info"
                       label="View Agent"
-                      @click="viewAgentFromList(props.row)"
+                      @click.stop="viewAgentFromList(props.row)"
                       class="q-mr-xs"
                     />
                     
-                    <!-- View Details Button (always available) -->
-                    <QBtn
-                      size="xs"
-                      color="secondary"
-                      label="Details"
-                      @click="viewUserDetails(props.row.userId)"
-                      class="q-mr-xs"
-                    />
                   </div>
                 </QTd>
               </template>
@@ -734,6 +727,12 @@ const skipPasskeyRegistration = () => {
 // Table request handlers - Static
 const onUserRequest = () => {
   // Static implementation
+}
+
+const onUserRowClick = (evt: any, row: any) => {
+  console.log(`👤 [AdminPanel2] Row clicked for user: ${row.userId}`)
+  // Navigate to user details page
+  window.location.href = `/admin2/user/${row.userId}`
 }
 
 const onAgentRequest = () => {
@@ -1317,5 +1316,15 @@ onMounted(() => {
   min-width: auto;
   padding: 4px 8px;
   font-size: 12px;
+}
+
+/* Make table rows clickable */
+.admin-table .q-table__body .q-tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.admin-table .q-table__body .q-tr:hover {
+  background-color: #f5f5f5;
 }
 </style>
