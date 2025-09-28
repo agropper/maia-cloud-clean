@@ -139,10 +139,11 @@ const checkAgentDeployments = async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              type: 'deployment_completed',
+              type: 'agent_deployment_completed',
               data: {
                 userId: userId,
                 agentName: tracking.agentName,
+                agentId: tracking.agentId || null,
                 duration: durationSeconds,
                 durationMinutes: durationMinutes,
                 message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
@@ -151,10 +152,11 @@ const checkAgentDeployments = async () => {
           });
           
           if (notificationResponse.ok) {
-            console.log(`📡 [SSE] Sent deployment notification to admin`);
+            console.log(`📡 [SSE] [*] Sent agent deployment notification to admin`);
+            console.log(`🎉 [ADMIN NOTIFICATION] [*] Agent ${tracking.agentName} deployed for user ${userId} in ${durationSeconds} seconds`);
           }
         } catch (sseError) {
-          console.error(`❌ [SSE] Error sending admin notification:`, sseError.message);
+          console.error(`❌ [SSE] [*] Error sending agent deployment notification:`, sseError.message);
         }
         
         // Get user document (cache-aware) with retry logic for conflicts

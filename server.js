@@ -1200,13 +1200,16 @@ app.get('/api/admin/events', (req, res) => {
 function sendAdminNotification(type, data) {
   const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
   
+  console.log(`📡 [SSE] [*] Sending ${type} notification to ${adminEventClients.size} admin clients`);
+  console.log(`📡 [SSE] [*] Notification data:`, data);
+  
   adminEventClients.forEach((res, clientId) => {
     try {
       if (!res.writableEnded) {
         res.write(`data: ${message}\n\n`);
       }
     } catch (error) {
-      console.error(`❌ Error sending notification to client ${clientId}:`, error);
+      console.error(`❌ [SSE] [*] Error sending notification to client ${clientId}:`, error);
       adminEventClients.delete(clientId);
     }
   });
@@ -5939,10 +5942,39 @@ async function monitorIndexingProgress(kbId, kbName, startTime) {
           
           if (job.status === 'INDEX_JOB_STATUS_COMPLETED') {
             const totalTime = Math.round((currentTime - startTime) / 1000);
-            // console.log(`\n🎉 INDEXING COMPLETED!`);
-//             console.log(`📊 Total time: ${totalTime} seconds (${elapsedMinutes} minutes)`);
-//             console.log(`📊 Final tokens: ${job.tokens || 'N/A'}`);
-//             console.log(`📊 Job UUID: ${job.uuid}`);
+            const durationMinutes = Math.round(totalTime / 60);
+            
+            console.log(`\n🎉 [ADMIN NOTIFICATION] [*] INDEXING COMPLETED!`);
+            console.log(`📊 [ADMIN NOTIFICATION] [*] Total time: ${totalTime} seconds (${durationMinutes} minutes)`);
+            console.log(`📊 [ADMIN NOTIFICATION] [*] Final tokens: ${job.tokens || 'N/A'}`);
+            console.log(`📊 [ADMIN NOTIFICATION] [*] Job UUID: ${job.uuid}`);
+            
+            // Send SSE notification to admin clients
+            try {
+              const notificationResponse = await fetch('http://localhost:3001/api/admin/notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'kb_indexing_completed',
+                  data: {
+                    kbId: kbId,
+                    kbName: kbName,
+                    duration: totalTime,
+                    durationMinutes: durationMinutes,
+                    tokens: job.tokens || null,
+                    jobUuid: job.uuid,
+                    message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
+                  }
+                })
+              });
+              
+              if (notificationResponse.ok) {
+                console.log(`📡 [SSE] [*] Sent KB indexing completion notification to admin`);
+              }
+            } catch (sseError) {
+              console.error(`❌ [SSE] [*] Error sending KB indexing notification:`, sseError.message);
+            }
+            
             clearInterval(monitorInterval);
             return;
           }

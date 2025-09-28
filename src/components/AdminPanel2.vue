@@ -4,20 +4,27 @@
       <h2>🔧 MAIA Administration Panel</h2>
       
       <div class="q-mt-md">
-        <q-btn 
+        <!-- SSE Connection Status -->
+        <QBadge
+          :color="isSSEConnected ? 'positive' : 'negative'"
+          :label="isSSEConnected ? 'Live Updates' : 'Offline'"
+          class="sse-status-badge q-mr-md"
+        />
+        
+        <QBtn 
           color="secondary" 
           size="sm" 
           label="Reset Welcome Modal (Test)"
           @click="resetWelcomeModal"
           class="q-mr-sm"
         />
-        <q-btn 
+        <QBtn 
           color="info" 
           size="sm" 
           label="Go to Main App"
           @click="goToMainApp"
         />
-        <q-btn 
+        <QBtn 
           color="primary" 
           size="sm" 
           label="Switch to Original Admin"
@@ -516,7 +523,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import {
   QBtn,
@@ -553,6 +560,10 @@ const isRegisteringPasskey = ref(false)
 const showPasskeyRegistration = ref(false)
 const errorMessage = ref('')
 const activeTab = ref('users')
+
+// SSE state
+const adminEventSource = ref(null)
+const isSSEConnected = ref(false)
 
 // Admin form
 const adminForm = ref({
@@ -1154,10 +1165,126 @@ const loadAllData = async () => {
   console.log('✅ [AdminPanel2] All data loaded successfully')
 }
 
+// SSE Connection Management
+const connectAdminEvents = () => {
+  if (adminEventSource.value) {
+    adminEventSource.value.close()
+  }
+  
+  console.log('🔗 [SSE] [*] Connecting to admin notification stream...')
+  adminEventSource.value = new EventSource('/api/admin/events')
+  
+  adminEventSource.value.onopen = () => {
+    console.log('🔗 [SSE] [*] Connected to admin notification stream')
+    isSSEConnected.value = true
+  }
+  
+  adminEventSource.value.onmessage = (event) => {
+    handleSSEMessage(event)
+  }
+  
+  adminEventSource.value.onerror = (error) => {
+    console.error('❌ [SSE] [*] Connection error:', error)
+    isSSEConnected.value = false
+    
+    // Attempt to reconnect after 5 seconds
+    setTimeout(() => {
+      console.log('🔄 [SSE] [*] Attempting to reconnect...')
+      connectAdminEvents()
+    }, 5000)
+  }
+}
+
+const handleSSEMessage = (event) => {
+  try {
+    const notification = JSON.parse(event.data)
+    
+    switch (notification.type) {
+      case 'connected':
+        console.log('📡 [SSE] [*]', notification.message)
+        break
+        
+      case 'agent_deployment_completed':
+        handleAgentDeploymentCompleted(notification.data)
+        break
+        
+      case 'kb_indexing_completed':
+        handleKBIndexingCompleted(notification.data)
+        break
+        
+      case 'heartbeat':
+        // Silent heartbeat
+        break
+        
+      default:
+        console.log('📨 [SSE] [*] Unknown notification type:', notification.type)
+    }
+  } catch (error) {
+    console.error('❌ [SSE] [*] Error parsing notification:', error)
+  }
+}
+
+const handleAgentDeploymentCompleted = (data) => {
+  console.log(`🎉 [ADMIN NOTIFICATION] [*] ${data.message}`)
+  
+  // Update user in local state
+  const userIndex = users.value.findIndex(u => u.userId === data.userId)
+  if (userIndex !== -1) {
+    users.value[userIndex].workflowStage = 'agent_assigned'
+    users.value[userIndex].assignedAgentName = data.agentName
+    users.value[userIndex].assignedAgentId = data.agentId
+  }
+  
+  // Update stats
+  userStats.value.awaitingApproval = users.value.filter(u => 
+    u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
+  ).length
+  
+  // Refresh agents list to show the new agent
+  loadAgents()
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `✅ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleKBIndexingCompleted = (data) => {
+  console.log(`📚 [ADMIN NOTIFICATION] [*] ${data.message}`)
+  
+  // Refresh knowledge bases list
+  loadKnowledgeBases()
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `📚 ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const disconnectAdminEvents = () => {
+  if (adminEventSource.value) {
+    console.log('🔌 [SSE] [*] Disconnecting from admin notification stream')
+    adminEventSource.value.close()
+    adminEventSource.value = null
+    isSSEConnected.value = false
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   console.log('🔧 AdminPanel2 mounted - Clean architecture version')
   loadAllData()
+  connectAdminEvents()
+})
+
+onUnmounted(() => {
+  disconnectAdminEvents()
 })
 </script>
 
@@ -1316,6 +1443,14 @@ onMounted(() => {
   min-width: auto;
   padding: 4px 8px;
   font-size: 12px;
+}
+
+/* SSE Status Badge */
+.sse-status-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 16px;
 }
 
 /* Make table rows clickable */
