@@ -4842,14 +4842,14 @@ app.post('/api/agents', async (req, res) => {
         // Get user document
         const userDoc = await couchDBClient.getDocument('maia_users', userId);
         if (userDoc) {
-          // Update user document with agent information
+          // Update user document with agent information (but keep workflow stage as 'approved' until deployment completes)
           const updatedUserDoc = {
             ...userDoc,
             assignedAgentId: agentId,
             assignedAgentName: agentName,
             agentApiKey: agentApiKey, // Store the API key
             agentAssignedAt: new Date().toISOString(),
-            workflowStage: 'agent_assigned',
+            workflowStage: 'approved', // Keep as 'approved' until deployment completes
             approvalStatus: 'approved',
             updatedAt: new Date().toISOString()
           };
@@ -4864,7 +4864,7 @@ app.post('/api/agents', async (req, res) => {
             agentId: agentId,
             agentName: agentName,
             hasApiKey: !!agentApiKey,
-            workflowStage: 'agent_assigned'
+            workflowStage: 'approved (pending deployment)'
           });
         } else {
           console.warn(`[AGENT CREATE] ⚠️ User ${userId} not found in maia_users database`);
