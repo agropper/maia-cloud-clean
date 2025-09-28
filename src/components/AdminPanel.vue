@@ -2003,7 +2003,6 @@ export default defineComponent({
         
         // Show what database changes will be made
         if (inconsistencies.length > 0) {
-          console.log(`🔍 [CONSISTENCY CHECK] Found ${inconsistencies.length} inconsistencies that will be fixed:`);
           inconsistencies.forEach((issue, index) => {
             console.log(`${index + 1}. ${issue.message}`);
           });

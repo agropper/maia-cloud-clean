@@ -247,10 +247,8 @@ export default defineComponent({
         }
         
         const data = await response.json();
-        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
-          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
           
           // Now that user is authenticated, get session verification
@@ -262,7 +260,6 @@ export default defineComponent({
           }
         } else if (data.redirectTo) {
           // Deep link user detected on main app - redirect them to their deep link page
-          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
           window.location.href = data.redirectTo;
           return;
         } else {
@@ -437,7 +434,6 @@ export default defineComponent({
     };
 
     const handleAgentUpdated = async (agentInfo: any) => {
-      console.log(`🔍 [ChatPrompt] handleAgentUpdated called with:`, agentInfo?.name, `for user:`, currentUser.value?.userId);
       
       if (agentInfo) {
         // Update the current agent with the new information

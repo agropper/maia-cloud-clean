@@ -286,33 +286,25 @@ router.post('/request-approval', async (req, res) => {
         if (email && email.trim()) {
           try {
             if (couchDBClient) {
-              console.log(`[EMAIL UPDATE] Attempting to update email and workflow stage for user ${username}: ${email}`);
               const userDoc = await couchDBClient.getDocument('maia_users', username);
               if (userDoc) {
                 userDoc.email = email.trim();
                 userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
                 await couchDBClient.saveDocument('maia_users', userDoc);
-                console.log(`[EMAIL UPDATE] ✅ Successfully updated email and workflow stage for user ${username}: ${email}`);
-              } else {
-                console.warn(`[EMAIL UPDATE] ❌ User document not found for ${username}`);
               }
-            } else {
-              console.warn(`[EMAIL UPDATE] ❌ CouchDB client not available`);
             }
           } catch (userUpdateError) {
-            console.error(`[EMAIL UPDATE] ❌ Could not update email and workflow stage for user ${username}:`, userUpdateError.message);
+            // Error handling removed for cleaner console
           }
-        } else {
-          console.log(`[EMAIL UPDATE] No email provided for user ${username}`);
         }
 
-    // Note: Approval request logging removed - email notification is sufficient
+        // Note: Approval request logging removed - email notification is sufficient
 
-    res.json({
-      success: true,
-      message: 'Approval request sent successfully',
-      emailId: resendResult.id
-    });
+        res.json({
+          success: true,
+          message: 'Approval request sent successfully',
+          emailId: resendResult.id
+        });
 
   } catch (error) {
     console.error('❌ Error processing admin approval request:', error);

@@ -102,14 +102,6 @@ const checkAgentDeployments = async () => {
         
         // Agent is deployed - update user workflow stage to 'agent_assigned'
         console.log(`✅ Agent ${tracking.agentName} deployed for user ${userId} - updating workflow stage`);
-        console.log(`🎉 ================================================`);
-        console.log(`⏱️ [ADMIN NOTIFICATION] DEPLOYMENT COMPLETED!`);
-        console.log(`👤 User: ${userId}`);
-        console.log(`🤖 Agent: ${tracking.agentName}`);
-        console.log(`⏰ Duration: ${durationSeconds} seconds (${durationMinutes} minutes)`);
-        console.log(`📊 Status: Agent is now ready and assigned to user`);
-        console.log(`🔄 Action: Refresh Admin Panel to see updated status`);
-        console.log(`🎉 ================================================`);
         
         // Send real-time notification to admin via SSE
         try {
@@ -156,7 +148,6 @@ const checkAgentDeployments = async () => {
           
           // Ensure bucket folder exists for knowledge base creation
           try {
-            console.log(`📁 [DEPLOYMENT] Ensuring bucket folder for user ${userId}`);
             const bucketResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -165,12 +156,9 @@ const checkAgentDeployments = async () => {
             
             if (bucketResponse.ok) {
               const bucketData = await bucketResponse.json();
-              console.log(`✅ [DEPLOYMENT] Bucket folder ready for user ${userId}`);
-            } else {
-              console.warn(`⚠️ [DEPLOYMENT] Bucket folder creation failed for user ${userId}`);
             }
           } catch (bucketError) {
-            console.error(`❌ [DEPLOYMENT] Error creating bucket folder for user ${userId}:`, bucketError.message);
+            // Error handling removed for cleaner console
           }
           
           console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
@@ -754,7 +742,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
     
     // Debug: Log email field for user details
-    console.log(`[DEBUG] User details for ${userId} - email field:`, userDoc?.email);
     
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
@@ -1537,7 +1524,6 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
     const agentsResponse = await doRequest('/v2/gen-ai/agents');
     const agents = agentsResponse.agents || [];
     
-    console.log(`🔍 [DB] Found ${agents.length} agents in DO API`);
     
     const syncResults = [];
     
@@ -1548,7 +1534,6 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
       }
     });
     
-    console.log(`🔍 [DB] Found ${usersResponse.docs.length} users with assigned agents`);
     
     for (const user of usersResponse.docs) {
       if (!user.assignedAgentId) continue;

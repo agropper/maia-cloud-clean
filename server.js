@@ -3219,12 +3219,6 @@ const getAgentApiKey = async (agentId) => {
   try {
     // Find user with this agent assigned
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
-    console.log(`🔑 [API KEY DEBUG] getAllDocuments response structure:`, {
-      hasRows: !!allUsers.rows,
-      rowsLength: allUsers.rows?.length,
-      responseKeys: Object.keys(allUsers),
-      responseType: typeof allUsers
-    });
     
     // Handle different response structures from getAllDocuments
     let userList;
@@ -3756,18 +3750,6 @@ app.get('/api/test', (req, res) => {
 
 // Get current agent
 app.get('/api/current-agent', async (req, res) => {
-  // Debug: Show request details
-  const hasSession = !!req.session;
-  const sessionUserId = req.session?.userId;
-  const hasCookie = !!req.headers.cookie;
-  
-  console.log(`[SIGN IN] Current agent request:`, {
-    hasSession,
-    sessionUserId,
-    hasCookie,
-    cookies: req.headers.cookie,
-    timestamp: new Date().toISOString()
-  });
   
   try {
     // Get current user from auth cookie first, then fallback to session
@@ -3784,56 +3766,29 @@ app.get('/api/current-agent', async (req, res) => {
         const expiresAt = new Date(authData.expiresAt);
         const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
         
-        console.log(`[SIGN IN] Auth cookie found:`, {
-          userId: authData.userId,
-          expiresAt: authData.expiresAt,
-          timeToExpiry: `${timeToExpiry} minutes`,
-          isValid: now < expiresAt
-        });
         
         if (now < expiresAt) {
           currentUser = authData.userId;
-          console.log(`[SIGN IN] ✅ Using cookie auth for user: ${currentUser}`);
         } else {
-          console.log(`[SIGN IN] ❌ Cookie expired, clearing`);
           res.clearCookie('maia_auth');
         }
       } catch (error) {
-        console.error(`[SIGN IN] ❌ Invalid cookie format - clearing:`, error.message);
+        console.error(`❌ Invalid cookie format - clearing:`, error.message);
         res.clearCookie('maia_auth');
       }
     } else {
-      console.log(`[SIGN IN] No auth cookie found`);
     }
     
     // Fallback to session-based auth if no valid cookie
     if (currentUser === 'Public User' && req.session && req.session.userId) {
       currentUser = req.session.userId;
-      console.log(`[SIGN IN] ✅ Using session auth for user: ${currentUser}`);
     } else if (currentUser === 'Public User') {
-      console.log(`[SIGN IN] No valid auth found, using Public User`);
     }
     
     // For authenticated users, check if they have an assigned agent
     let agentId = null;
     
-    console.log(`[SECURITY CHECK] Checking agent assignment for user: ${currentUser}`);
     
-    // DEBUG: Check user document for sat273 specifically
-    if (currentUser === 'sat273') {
-      try {
-        const userDoc = await couchDBClient.getDocument('maia_users', 'sat273');
-        console.log(`[DEBUG] sat273 user document:`, {
-          userId: userDoc?.userId,
-          assignedAgentId: userDoc?.assignedAgentId,
-          assignedAgentName: userDoc?.assignedAgentName,
-          workflowStage: userDoc?.workflowStage,
-          hasCredential: !!userDoc?.credentialID
-        });
-      } catch (error) {
-        console.error(`[DEBUG] Error getting sat273 user document:`, error.message);
-      }
-    }
     
     if (currentUser !== 'Public User') {
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
@@ -3996,10 +3951,8 @@ app.get('/api/current-agent', async (req, res) => {
           if (userDoc && userDoc.assignedAgentId) {
             // Use assignedAgentId as the source of truth - no more currentAgentId
             agentId = userDoc.assignedAgentId;
-            console.log(`[SECURITY CHECK] ✅ User ${currentUser} has assigned agent: ${agentId}`);
           } else {
             // No current agent selection found for user
-            console.log(`[SECURITY CHECK] ❌ User ${currentUser} has no assigned agent`);
             return res.json({ 
               agent: null, 
               message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
@@ -4244,13 +4197,6 @@ app.get('/api/current-agent', async (req, res) => {
       response.warning = warning;
     }
 
-        console.log(`[SIGN IN] ✅ Final agent response for user ${currentUser}:`, {
-          agentId: transformedAgent.id,
-          agentName: transformedAgent.name,
-          hasEndpoint: !!endpoint,
-          connectedKBs: connectedKnowledgeBases.length,
-          warning: warning ? 'YES' : 'NO'
-        });
         
         // DEBUG: Show complete agent data being sent to frontend
     // Agent data sent to frontend
@@ -4679,10 +4625,6 @@ app.post('/api/agents', async (req, res) => {
   try {
     const { name, description, model, model_uuid, instructions, patientName, userId, knowledgeBaseId } = req.body;
     
-    console.log('[NEW AGENT] Starting agent creation process:', {
-      requestBody: req.body,
-      timestamp: new Date().toISOString()
-    });
     
     // Handle patient name pattern if provided
     let agentName;
@@ -4804,12 +4746,10 @@ app.post('/api/agents', async (req, res) => {
     }
     
     const agentId = responseData.uuid || responseData.id;
-    console.log(`[AGENT CREATE] Agent created successfully: ${agentName} (${agentId})`);
     
     // Create API key for the agent
     let agentApiKey = null;
     try {
-      console.log(`[AGENT CREATE] Creating API key for agent ${agentId}...`);
       const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
         method: 'POST',
         body: JSON.stringify({
@@ -4822,7 +4762,6 @@ app.post('/api/agents', async (req, res) => {
       agentApiKey = apiKeyData.key || apiKeyData.api_key || apiKeyData.secret_key;
       
       if (agentApiKey) {
-        console.log(`[AGENT CREATE] ✅ API key created successfully for agent ${agentId}`);
         // Store the API key in the agentApiKeys object
         agentApiKeys[agentId] = agentApiKey;
       } else {
@@ -4837,7 +4776,6 @@ app.post('/api/agents', async (req, res) => {
     // Store agent info in maia_users database if userId is provided
     if (userId && agentId) {
       try {
-        console.log(`[AGENT CREATE] Storing agent info in maia_users database for user ${userId}...`);
         
         // Get user document
         const userDoc = await couchDBClient.getDocument('maia_users', userId);
@@ -4860,12 +4798,6 @@ app.post('/api/agents', async (req, res) => {
           // Invalidate user cache
           setCache('users', userId, updatedUserDoc);
           
-          console.log(`[AGENT CREATE] ✅ Agent info stored in maia_users for user ${userId}:`, {
-            agentId: agentId,
-            agentName: agentName,
-            hasApiKey: !!agentApiKey,
-            workflowStage: 'approved (pending deployment)'
-          });
         } else {
           console.warn(`[AGENT CREATE] ⚠️ User ${userId} not found in maia_users database`);
         }
@@ -4877,7 +4809,6 @@ app.post('/api/agents', async (req, res) => {
     
     // Start deployment tracking if userId is provided (from Admin Panel)
     if (userId && responseData.uuid) {
-      console.log(`🚀 [AGENT CREATION] Starting deployment tracking for user ${userId}, agent ${agentName} (${responseData.uuid})`);
       
       // Import and call the deployment tracking function
       const { addToDeploymentTracking } = await import('./src/routes/admin-management-routes.js');

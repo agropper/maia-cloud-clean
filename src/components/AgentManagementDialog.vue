@@ -1637,7 +1637,6 @@ export default defineComponent({
         if (props.currentUser && props.currentUser.userId?.startsWith('deep_link_')) {
           localCurrentUser.value = props.currentUser;
           isAuthenticated.value = true;
-          console.log(`🔗 [AgentManagementDialog] Deep link user authenticated via props: ${props.currentUser.userId}`);
           return;
         }
         
@@ -1650,7 +1649,6 @@ export default defineComponent({
             // User authenticated
           } else if (authData.redirectTo) {
             // Deep link user detected on main app - redirect them to their deep link page
-            console.log(`🔗 [AgentManagementDialog] Deep link user detected on main app, redirecting to: ${authData.redirectTo}`);
             window.location.href = authData.redirectTo;
             return;
           } else {
@@ -2164,27 +2162,10 @@ export default defineComponent({
       localCurrentUser.value = normalizedUser;
       isAuthenticated.value = UserService.isAuthenticated(normalizedUser);
       
-      // DEBUG: Show user authentication and agent assignment status
       const currentUserId = normalizedUser?.userId;
-      console.log(`🔍 [SECURITY CHECK] User authentication status:`, {
-        userId: currentUserId,
-        isAuthenticated: isAuthenticated.value,
-        currentAgent: props.currentAgent?.name || 'none',
-        assignedAgent: props.assignedAgent?.name || 'none',
-        timestamp: new Date().toISOString()
-      });
-      
-      // DEBUG: Show detailed agent data structure
-      console.log(`🔍 [AGENT DEBUG] Detailed agent data:`, {
-        currentAgent: props.currentAgent,
-        assignedAgent: props.assignedAgent,
-        currentAgentKeys: props.currentAgent ? Object.keys(props.currentAgent) : 'null',
-        assignedAgentKeys: props.assignedAgent ? Object.keys(props.assignedAgent) : 'null'
-      });
       
       // Clear cached data if user has changed
       if (previousUserId !== currentUserId) {
-        console.log(`🔄 [AgentManagementDialog] User changed from ${previousUserId} to ${currentUserId}, clearing cached data`);
         // Agent loading removed
         availableKnowledgeBases.value = [];
       }
@@ -2198,23 +2179,8 @@ export default defineComponent({
             // Update the local user with the workflow stage from database
             if (userData.workflowStage) {
               localCurrentUser.value.workflowStage = userData.workflowStage;
-              console.log(`🔍 [AgentManagementDialog] Fetched workflow stage from database: ${userData.workflowStage} for user ${currentUserId}`);
             }
             
-            // DEBUG: Show complete user data from database
-            console.log(`🔍 [DATABASE DEBUG] Complete user data from database:`, {
-              userId: userData.userId,
-              workflowStage: userData.workflowStage,
-              assignedAgentId: userData.assignedAgentId,
-              assignedAgentName: userData.assignedAgentName,
-              hasAgentApiKey: !!userData.agentApiKey,
-              agentAssignedAt: userData.agentAssignedAt,
-              email: userData.email,
-              allKeys: Object.keys(userData)
-            });
-          } else {
-            console.warn(`⚠️ [AgentManagementDialog] Could not fetch user data for ${currentUserId}`);
-          }
         } catch (error) {
           console.error(`❌ [AgentManagementDialog] Error fetching user workflow stage:`, error);
         }
