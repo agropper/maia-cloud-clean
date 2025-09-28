@@ -1997,6 +1997,38 @@ export default defineComponent({
                   message: `SECURITY VIOLATION: User ${userId} has agent ${agentName} whose first word '${firstWord}' doesn't match '${expectedFirstWord}'`
                 });
               }
+              
+              // NEW: Check workflow stage against deployment status
+              const deploymentStatus = agent.deployment?.status;
+              if (deploymentStatus === 'STATUS_RUNNING') {
+                // Agent is deployed - workflow stage should be 'agent_assigned'
+                if (user.workflowStage !== 'agent_assigned') {
+                  inconsistencies.push({
+                    type: 'workflow_stage_mismatch',
+                    userId: userId,
+                    agentId: assignedAgentId,
+                    agentName: agentName,
+                    currentStage: user.workflowStage,
+                    expectedStage: 'agent_assigned',
+                    deploymentStatus: deploymentStatus,
+                    message: `User ${userId} has deployed agent ${agentName} but workflow stage is '${user.workflowStage}' instead of 'agent_assigned'`
+                  });
+                }
+              } else {
+                // Agent exists but not deployed - workflow stage should not be 'agent_assigned'
+                if (user.workflowStage === 'agent_assigned') {
+                  inconsistencies.push({
+                    type: 'workflow_stage_mismatch',
+                    userId: userId,
+                    agentId: assignedAgentId,
+                    agentName: agentName,
+                    currentStage: user.workflowStage,
+                    expectedStage: 'approved', // or whatever it should be
+                    deploymentStatus: deploymentStatus,
+                    message: `User ${userId} has workflow stage 'agent_assigned' but agent ${agentName} deployment status is '${deploymentStatus}' (not running)`
+                  });
+                }
+              }
             }
           }
         }
