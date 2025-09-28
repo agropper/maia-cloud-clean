@@ -226,12 +226,6 @@ const loadUserDetails = async () => {
       throw new Error(`Failed to load user details: ${userResponse.status}`)
     }
     const userData = await userResponse.json()
-    console.log('🔍 [WORKFLOW] UserDetailsPage loaded user data:', userData)
-    console.log('🔍 [WORKFLOW] User workflow stage:', userData.workflowStage)
-    console.log('🔍 [WORKFLOW] User approval status:', userData.approvalStatus)
-    console.log('🔍 [WORKFLOW] User has passkey:', userData.hasPasskey)
-    console.log('🔍 [WORKFLOW] User has valid passkey:', userData.hasValidPasskey)
-    console.log('🔍 [WORKFLOW] User assigned agent:', userData.assignedAgentId)
     user.value = userData
 
     // Fetch bucket status

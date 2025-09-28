@@ -287,19 +287,15 @@ router.post('/request-approval', async (req, res) => {
         if (email && email.trim()) {
           try {
             if (couchDBClient) {
-              console.log(`🔍 [WORKFLOW] Updating user ${username} workflow stage from 'no_request_yet' to 'awaiting_approval'`);
               const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
               if (userDoc) {
-                console.log(`🔍 [WORKFLOW] User ${username} current workflow stage: ${userDoc.workflowStage}`);
                 userDoc.email = email.trim();
                 userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
-                console.log(`🔍 [WORKFLOW] Saving user ${username} with new workflow stage: 'awaiting_approval'`);
                 await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
-                console.log(`✅ [WORKFLOW] Successfully updated user ${username} workflow stage to 'awaiting_approval'`);
               }
             }
           } catch (userUpdateError) {
-            console.error(`❌ [WORKFLOW] Failed to update user ${username} workflow stage:`, userUpdateError.message);
+            console.error(`❌ Failed to update user ${username} workflow stage:`, userUpdateError.message);
           }
         }
 
