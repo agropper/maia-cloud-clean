@@ -247,10 +247,8 @@ export default defineComponent({
         }
         
         const data = await response.json();
-        console.log(`🔍 [ChatPrompt] Auth status response:`, data);
         
         if (data.authenticated && data.user) {
-          console.log(`✅ [ChatPrompt] User authenticated:`, data.user);
           currentUser.value = data.user;
           
           // Now that user is authenticated, get session verification
@@ -262,7 +260,6 @@ export default defineComponent({
           }
         } else if (data.redirectTo) {
           // Deep link user detected on main app - redirect them to their deep link page
-          console.log(`🔗 [ChatPrompt] Deep link user detected on main app, redirecting to: ${data.redirectTo}`);
           window.location.href = data.redirectTo;
           return;
         } else {
@@ -320,14 +317,25 @@ export default defineComponent({
       try {
         const userId = currentUser.value?.userId || currentUser.value?.displayName || 'Public User';
 
-        const response = await fetch('/api/admin-management/agent-activities', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, action })
-        });
+        // High-frequency activities should only update in-memory (no API calls)
+        const highFrequencyActions = ['mouse_click', 'keyboard_input', 'window_focus', 'scroll'];
+        
+        if (highFrequencyActions.includes(action)) {
+          // For high-frequency activities, just update in-memory activity tracker
+          // This will be synced to database by the existing 30-second/60-second sync mechanism
+          // NO API CALLS for high-frequency activities to prevent 429 errors
+          return;
+        } else {
+          // Important activities (app_loaded, query_attempt, no_agent_detected) make immediate API calls
+          const response = await fetch('/api/admin-management/agent-activities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, action })
+          });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
         }
       } catch (activityError) {
         console.error('❌ [Frontend] Activity tracking failed:', activityError.message);
@@ -426,7 +434,6 @@ export default defineComponent({
     };
 
     const handleAgentUpdated = async (agentInfo: any) => {
-      console.log(`🔍 [ChatPrompt] handleAgentUpdated called with:`, agentInfo?.name, `for user:`, currentUser.value?.userId);
       
       if (agentInfo) {
         // Update the current agent with the new information
@@ -463,6 +470,7 @@ export default defineComponent({
     };
 
     const handleUserAuthenticated = async (userData: any) => {
+      console.log('[*] [SIGN IN] handleUserAuthenticated called with userData:', userData)
       // INVALIDATE ALL CACHE FIRST - this prevents cross-user contamination
       apiCallCache.clear();
       
@@ -472,6 +480,7 @@ export default defineComponent({
       appState.currentViewingFile = null;
       appState.popupContent = '';
       
+      console.log('[*] [SIGN IN] Setting currentUser to:', UserService.normalizeUserObject(userData))
       currentUser.value = UserService.normalizeUserObject(userData);
       
       // Fetch the user's current agent and KB from API to update Agent Badge
@@ -644,7 +653,9 @@ export default defineComponent({
           appState.chatHistory,
           appState,
           currentUser.value, // Pass the current user identity
-          () => { showAgentSelectionModal.value = true; } // Callback for agent selection required
+          () => { showAgentSelectionModal.value = true; }, // Callback for agent selection required
+          currentAgent.value, // Pass current agent
+          assignedAgent.value // Pass assigned agent
         );
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";

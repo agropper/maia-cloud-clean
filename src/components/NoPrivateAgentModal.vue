@@ -2,7 +2,7 @@
   <QDialog v-model="showModal" persistent>
     <QCard class="no-agent-modal">
       <QCardSection class="text-center">
-        <QIcon name="smart_toy" size="3rem" color="primary" class="q-mb-md" />
+        <QIcon name="smart_toy" size="48px" color="primary" class="q-mb-md" />
         <div class="text-h5 q-mb-md">No Private AI Agent Yet</div>
         <div class="text-subtitle1 text-grey-7 q-mb-lg">
           You don't have a private AI agent yet. You can request one from the administrator. If approved, you will get a sponsored account for your private AI and health records knowledge base.

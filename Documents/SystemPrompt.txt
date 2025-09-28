@@ -14,12 +14,10 @@ You are MAIA, a medical AI assistant, that can search through a patient's health
 • region string = "tor1"
 
 Welcome Dialog = 
-The Medical AI Assistant (MAIA) has three different privacy modes: Public, Sponsored, and Private.
 
-*Public* is the default for new users. It allows you to become familiar with privacy features such as the difference between a Private AI agent and commercial AI like ChatGPT. The private AI agent has access to complete health records and acts as a gatekeeper so you can control sharing with commercial AIs.
+The Medical AI Assistant (MAIA) lets you choose from different privacy modes: Public, Supported, and Private. 
+*Public* is the default for new users. It allows you to become familiar with privacy features such as the differences between a private AI and a commercial AI like ChatGPT. A private AI has access to your health records and acts as a gatekeeper, so you can control what you share with commercial AIs.
+*Supported* lets you use MAIA at no cost to you. When you sign in, the MAIA administrator agrees to pay for and maintain your private AI and records knowledge base. The administrator approves new accounts and provides technical support only. Your records will be private to you, the administrator and people you share a chat with. As with the public option, you and your private AI control what commercial AI can see. 
+*Private* puts you in complete control of your private AI. You will need to pay for hosting costs at Digital Ocean or another hosting service. For support, you will need to set up an administrator or participate in a community. Only you and the people you specify will be able to access to your MAIA.
 
-*Sponsored* lets you use MAIA with much privacy at no cost to you. When you Sign In and the administrator agrees to sponsor your Private AI agent and records knowledge base, your records will be private to you, the administrator and people you share a chat with. As with Public, you and your agent control what commercial AI can see.
-
-*Private* puts you in complete control of your Private AI agent using an administrator you choose. You will need to pay for hosting costs at Digital Ocean or another commodity hosting service. Because MAIA is Free open source software, the maintainers of MAIA will have no access to your MAIA. 
-
-[I understand] 
+[I understand these options] 

@@ -35,6 +35,15 @@ export const WORKFLOW_CONFIG = {
       requiresAction: 'system',
       isLegacy: true
     },
+    'agent_assigned': {
+      step: 4,
+      name: 'Agent Assigned',
+      color: 'green',
+      description: 'Private AI agent assigned and deployed',
+      canProceed: true,
+      requiresAction: 'user',
+      isLegacy: true
+    },
     'waiting_for_deployment': {
       step: 4,
       name: 'Agent Deployment',
@@ -127,7 +136,8 @@ export const WORKFLOW_CONFIG = {
     'no_passkey': ['awaiting_approval'],
     'awaiting_approval': ['approved', 'rejected', 'suspended'],
     'rejected': ['awaiting_approval'],
-    'approved': ['has_bucket', 'suspended'],
+    'approved': ['agent_assigned', 'has_bucket', 'suspended'],
+    'agent_assigned': ['has_bucket', 'suspended'],
     'has_bucket': ['has_files', 'suspended'],
     'has_files': ['has_kb', 'suspended'],
     'has_kb': ['adding_files', 'complete', 'suspended'],
@@ -142,6 +152,8 @@ export const WORKFLOW_CONFIG = {
     'no_passkey': 'no_passkey',
     'awaiting_approval': 'awaiting_approval', 
     'approved': 'approved',
+    'agent_assigned': 'agent_assigned',
+    'waiting_for_deployment': 'waiting_for_deployment',
     'rejected': 'rejected',
     'suspended': 'suspended'
   }

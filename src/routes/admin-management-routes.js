@@ -1,53 +1,12 @@
 import express from 'express';
-// Removed maia2Client import - using couchDBClient instead
-import UserStateManagerClass from '../utils/UserStateManager.js';
 
-// Create singleton instance
-const UserStateManager = new UserStateManagerClass();
-
-// DigitalOcean API configuration
-const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_PERSONAL_API_KEY;
-const DIGITALOCEAN_BASE_URL = 'https://api.digitalocean.com';
-
-// DigitalOcean API request function
+// DigitalOcean API request function (will use the one from server.js)
 const doRequest = async (endpoint, options = {}) => {
-  if (!DIGITALOCEAN_API_KEY) {
-    throw new Error('DigitalOcean API key not configured');
+  if (!doRequestFunction) {
+    throw new Error('DigitalOcean API function not configured - setDoRequestFunction not called');
   }
-
-  const url = `${DIGITALOCEAN_BASE_URL}${endpoint}`;
   
-  const requestOptions = {
-    method: options.method || 'GET',
-    headers: {
-      'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
-  };
-
-  if (options.body) {
-    requestOptions.body = options.body;
-  }
-
-  try {
-    const response = await fetch(url, requestOptions);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ DigitalOcean API Error Response:`);
-      console.error(`Status: ${response.status}`);
-      console.error(`Headers:`, Object.fromEntries(response.headers.entries()));
-      console.error(`Body: ${errorText}`);
-      throw new Error(`DigitalOcean API error: ${response.status} - ${errorText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`❌ DigitalOcean API request failed:`, error.message);
-    throw error;
-  }
+  return await doRequestFunction(endpoint, options);
 };
 
 const router = express.Router();
@@ -55,11 +14,195 @@ const router = express.Router();
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
+// Cache functions (will be set by server.js)
+let cacheFunctions = null;
+export const setCacheFunctions = (functions) => {
+  cacheFunctions = functions;
+};
+
+// DigitalOcean API function (will be set by server.js)
+let doRequestFunction = null;
+export const setDoRequestFunction = (doRequest) => {
+  doRequestFunction = doRequest;
+};
+
 // General user activity tracking: in-memory + periodic database sync
 const userActivityTracker = new Map(); // userId -> { lastActivity: Date, needsDbUpdate: boolean, lastDbUpdate: Date }
 let lastDatabaseSync = 0;
 const SYNC_INTERVAL = 60 * 1000; // 1 minute
 const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database updates for same user
+
+// User-level deployment tracking for agents
+const userDeploymentTracker = new Map(); // userId -> { agentId, agentName, status, lastCheck, retryCount, maxRetries }
+const DEPLOYMENT_CHECK_INTERVAL = 5 * 1000; // Check every 5 seconds
+const MAX_DEPLOYMENT_RETRIES = 30; // Max 15 minutes of checking
+
+// User-level cache invalidation function
+const invalidateUserCache = (userId) => {
+  if (!cacheFunctions) return;
+  
+  console.log(`🔄 [CACHE] Invalidating user cache for: ${userId}`);
+  
+  // Invalidate user-specific caches
+  cacheFunctions.invalidateCache('users', userId);
+  cacheFunctions.invalidateCache('agents', userId);
+  cacheFunctions.invalidateCache('agentAssignments', userId);
+  
+  // Also invalidate general caches that might contain user data
+  cacheFunctions.invalidateCache('chats');
+};
+
+// Add user to deployment tracking
+const addToDeploymentTracking = (userId, agentId, agentName) => {
+  const startTime = Date.now();
+  const trackingEntry = {
+    agentId,
+    agentName,
+    status: 'deploying',
+    startTime: startTime,
+    lastCheck: startTime,
+    retryCount: 0,
+    maxRetries: MAX_DEPLOYMENT_RETRIES
+  };
+  
+  userDeploymentTracker.set(userId, trackingEntry);
+  
+  console.log(`🚀 Started tracking deployment for user ${userId}, agent ${agentName}`);
+};
+
+// Check agent deployment status and update workflow stage
+const checkAgentDeployments = async () => {
+  if (userDeploymentTracker.size === 0) {
+    return;
+  }
+  
+  const now = Date.now();
+  const usersToRemove = [];
+  
+  for (const [userId, tracking] of userDeploymentTracker.entries()) {
+    const timeSinceLastCheck = now - tracking.lastCheck;
+    
+    // Skip if not enough time has passed since last check
+    if (timeSinceLastCheck < DEPLOYMENT_CHECK_INTERVAL) {
+      continue;
+  }
+
+  try {
+      // Check agent deployment status via DO API
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${tracking.agentId}`);
+      
+      const agentData = agentResponse.agent || agentResponse.data || agentResponse;
+      const deploymentStatus = agentData.deployment?.status;
+      
+      if (deploymentStatus === 'STATUS_RUNNING') {
+        // Calculate deployment duration
+        const deploymentDuration = Date.now() - tracking.startTime;
+        const durationSeconds = Math.round(deploymentDuration / 1000);
+        const durationMinutes = Math.round(durationSeconds / 60);
+        
+        // Agent is deployed - update user workflow stage to 'agent_assigned'
+        console.log(`✅ Agent ${tracking.agentName} deployed for user ${userId} - updating workflow stage`);
+        
+        // Send real-time notification to admin via SSE
+        try {
+          const notificationResponse = await fetch('http://localhost:3001/api/admin/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'deployment_completed',
+              data: {
+                userId: userId,
+                agentName: tracking.agentName,
+                duration: durationSeconds,
+                durationMinutes: durationMinutes,
+                message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
+              }
+            })
+          });
+          
+          if (notificationResponse.ok) {
+            console.log(`📡 [SSE] Sent deployment notification to admin`);
+          }
+        } catch (sseError) {
+          console.error(`❌ [SSE] Error sending admin notification:`, sseError.message);
+        }
+        
+        // Get user document
+        const userDoc = await couchDBClient.getDocument('maia_users', userId);
+        
+        if (userDoc) {
+          const updatedUser = {
+            ...userDoc,
+            workflowStage: 'agent_assigned',
+            assignedAgentId: tracking.agentId,
+            assignedAgentName: tracking.agentName,
+            agentDeployedAt: new Date().toISOString(),
+            agentAssignedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await couchDBClient.saveDocument('maia_users', updatedUser);
+          
+          // Invalidate user cache to ensure fresh data
+          invalidateUserCache(userId);
+          
+          // Ensure bucket folder exists for knowledge base creation
+          try {
+            const bucketResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId })
+            });
+            
+            if (bucketResponse.ok) {
+              const bucketData = await bucketResponse.json();
+            }
+          } catch (bucketError) {
+            // Error handling removed for cleaner console
+          }
+          
+          console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
+        } else {
+          console.error(`❌ User document not found for ${userId}`);
+        }
+        
+        // Remove from tracking
+        usersToRemove.push(userId);
+        
+      } else if (deploymentStatus === 'STATUS_FAILED' || deploymentStatus === 'STATUS_ERROR' || deploymentStatus === 'status_failed' || deploymentStatus === 'status_error') {
+        console.error(`❌ Agent ${tracking.agentName} deployment failed for user ${userId} - status: ${deploymentStatus}`);
+        usersToRemove.push(userId);
+        
+      } else {
+        // Still deploying - increment retry count
+        tracking.retryCount++;
+        tracking.lastCheck = now;
+        
+        if (tracking.retryCount >= tracking.maxRetries) {
+          console.warn(`⚠️ Max retries reached for user ${userId}, agent ${tracking.agentName} - removing from tracking`);
+          usersToRemove.push(userId);
+        }
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error checking deployment for user ${userId}:`, error.message);
+      
+      // Increment retry count on error
+      tracking.retryCount++;
+      tracking.lastCheck = now;
+      
+      if (tracking.retryCount >= tracking.maxRetries) {
+        console.warn(`⚠️ Max retries reached for user ${userId} due to errors - removing from tracking`);
+        usersToRemove.push(userId);
+      }
+    }
+  }
+  
+  // Remove completed/failed tracking entries
+  usersToRemove.forEach(userId => {
+    userDeploymentTracker.delete(userId);
+  });
+};
 
 // Update user activity in memory (fast, no database writes)
 const updateUserActivity = (userId) => {
@@ -504,11 +647,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    // Clear UserStateManager cache to ensure fresh data
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      userStateManager.clearCache();
-    }
+    // Cache will be cleared on next database read
     
     // Get all users from maia_users database
     const allUsers = await couchDBClient.getAllDocuments('maia_users');
@@ -601,17 +740,20 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     
     // Get user document
     const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    
+    // Debug: Log email field for user details
+    
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
     
     
-    // Extract current agent information from ownedAgents if available
-    let currentAgentId = userDoc.currentAgentId || null;
-    let currentAgentName = userDoc.currentAgentName || null;
+    // Extract agent information from assignedAgentId (source of truth)
+    let currentAgentId = userDoc.assignedAgentId || null;
+    let currentAgentName = userDoc.assignedAgentName || null;
     let agentAssignedAt = userDoc.agentAssignedAt || null;
     
-    // If we have ownedAgents but no currentAgentId, use the first owned agent
+    // If we have ownedAgents but no assignedAgentId, use the first owned agent
     if (userDoc.ownedAgents && userDoc.ownedAgents.length > 0 && !currentAgentId) {
       const firstAgent = userDoc.ownedAgents[0];
       currentAgentId = firstAgent.id;
@@ -619,7 +761,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       agentAssignedAt = firstAgent.assignedAt;
     }
     
-    // If we have currentAgentId but no agentAssignedAt, try to get it from ownedAgents
+    // If we have assignedAgentId but no agentAssignedAt, try to get it from ownedAgents
     if (currentAgentId && !agentAssignedAt && userDoc.ownedAgents && userDoc.ownedAgents.length > 0) {
       const matchingAgent = userDoc.ownedAgents.find(agent => agent.id === currentAgentId);
       if (matchingAgent && matchingAgent.assignedAt) {
@@ -631,6 +773,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     const userInfo = {
       userId: userDoc._id || userDoc.userId,
       displayName: userDoc.displayName || userDoc._id,
+      email: userDoc.email || null,
       createdAt: userDoc.createdAt,
       updatedAt: userDoc.updatedAt,
       hasPasskey: !!userDoc.credentialID,
@@ -647,18 +790,16 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       workflowStage: determineWorkflowStage(userDoc),
       adminNotes: userDoc.adminNotes || '',
       approvalStatus: userDoc.approvalStatus,
-      // Agent information - provide both old and new field names for compatibility
-      currentAgentId: currentAgentId,
-      currentAgentName: currentAgentName,
-      assignedAgentId: currentAgentId, // Frontend compatibility
-      assignedAgentName: currentAgentName, // Frontend compatibility
+      // Agent information - use assignedAgentId as source of truth
+      assignedAgentId: currentAgentId,
+      assignedAgentName: currentAgentName,
       ownedAgents: userDoc.ownedAgents || [],
       currentAgentSetAt: userDoc.currentAgentSetAt,
       challenge: userDoc.challenge,
       agentAssignedAt: agentAssignedAt,
-      approvalRequests: [], // TODO: Implement when Maia2Client has these methods
-      agents: [], // TODO: Implement when Maia2Client has these methods
-      knowledgeBases: [] // TODO: Implement when Maia2Client has these methods
+      approvalRequests: [],
+      agents: [],
+      knowledgeBases: []
     };
     
     
@@ -725,10 +866,10 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    // If approved, trigger resource creation workflow
-    if (action === 'approve') {
-      // TODO: Implement automatic agent and KB creation
-    }
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
+    
+    // If approved, admin will manually create agent via Admin Panel
     
     res.json({ 
       message: `User ${action} successfully`,
@@ -737,7 +878,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
       approvalStatus: approvalStatus,
       workflowStage: workflowStage,
       timestamp: new Date().toISOString(),
-      nextSteps: action === 'approve' ? 'Private AI agent and knowledge base will be created automatically' : null
+      nextSteps: action === 'approve' ? 'Admin should create agent manually via Admin Panel' : null
     });
     
   } catch (error) {
@@ -808,6 +949,12 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
+    // Start tracking deployment for this user
+    addToDeploymentTracking(userId, agentId, agentName);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
+    
     res.json({ 
       message: 'Agent assigned successfully',
       userId: userId,
@@ -827,24 +974,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
   try {
     const { userId } = req.params;
     
-    // First try to get from UserStateManager cache
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      const cachedAgentData = userStateManager.getUserStateSection(userId, 'agent');
-      if (cachedAgentData) {
-        // Return cached data without hitting database
-        const assignedAgentId = cachedAgentData.assignedAgentId || cachedAgentData.currentAgentId || null;
-        const assignedAgentName = cachedAgentData.assignedAgentName || cachedAgentData.currentAgentName || null;
-        const agentAssignedAt = cachedAgentData.agentAssignedAt || cachedAgentData.currentAgentSetAt || null;
-        
-        return res.json({
-          userId: userId,
-          assignedAgentId: assignedAgentId,
-          assignedAgentName: assignedAgentName,
-          agentAssignedAt: agentAssignedAt
-        });
-      }
-    }
+    // Get fresh data from database
     
     // Fallback to database if cache miss
     
@@ -871,22 +1001,12 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Return assigned agent information - check both assignedAgentId and currentAgentId
-    const assignedAgentId = userDoc.assignedAgentId || userDoc.currentAgentId || null;
-    const assignedAgentName = userDoc.assignedAgentName || userDoc.currentAgentName || null;
-    const agentAssignedAt = userDoc.agentAssignedAt || userDoc.currentAgentSetAt || null;
+    // Return assigned agent information - use assignedAgentId as source of truth
+    const assignedAgentId = userDoc.assignedAgentId || null;
+    const assignedAgentName = userDoc.assignedAgentName || null;
+    const agentAssignedAt = userDoc.agentAssignedAt || null;
     
-    // Update cache with fresh data
-    if (userStateManager) {
-      userStateManager.updateUserStateSection(userId, 'agent', {
-        assignedAgentId: userDoc.assignedAgentId,
-        assignedAgentName: userDoc.assignedAgentName,
-        currentAgentId: userDoc.currentAgentId,
-        currentAgentName: userDoc.currentAgentName,
-        agentAssignedAt: userDoc.agentAssignedAt,
-        currentAgentSetAt: userDoc.currentAgentSetAt
-      });
-    }
+    // Cache will be updated on next database read
     
     res.json({
       userId: userId,
@@ -950,9 +1070,11 @@ function validateWorkflowConsistency(user) {
   // Define valid combinations
   const validCombinations = {
     'no_passkey': ['no_passkey', undefined], // No approval status needed
+    'no_request_yet': [undefined], // User has passkey but hasn't requested support yet
     'awaiting_approval': ['pending', undefined], // Awaiting approval
-    'waiting_for_deployment': ['approved'], // Approved but waiting for agent deployment
+    'waiting_for_deployment': ['approved', undefined], // Approved but waiting for agent deployment (allow undefined for legacy)
     'approved': ['approved'], // Fully approved
+    'agent_assigned': ['approved', undefined], // Agent has been assigned and deployed (allow undefined for legacy)
     'rejected': ['rejected'], // Rejected
     'suspended': ['suspended'] // Suspended
   };
@@ -993,6 +1115,12 @@ function determineWorkflowStage(user) {
     return 'no_passkey';
   }
   
+  // Check if user has made any approval requests by looking for email field
+  // If no email and no approvalStatus, they haven't requested support yet
+  if (!user.approvalStatus && !user.email) {
+    return 'no_request_yet';
+  }
+  
   // For legacy users without approvalStatus field, assume they need approval
   if (!user.approvalStatus) {
     return 'awaiting_approval';
@@ -1012,7 +1140,6 @@ function determineWorkflowStage(user) {
   
   if (user.approvalStatus === 'approved') {
     // Check if they have resources created
-    // TODO: Implement actual resource checking when Maia2Client has these methods
     return 'approved'; // For now, just return approved
   }
   
@@ -1027,7 +1154,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     
     // Validate workflow stage
-    const validStages = ['no_passkey', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended'];
+    const validStages = ['no_passkey', 'no_request_yet', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
     if (!validStages.includes(workflowStage)) {
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
@@ -1068,12 +1195,8 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     await couchDBClient.saveDocument('maia_users', updatedUser);
     
-    // Update user state cache
-    UserStateManager.updateUserStateSection(userId, 'workflow', {
-      workflowStage: workflowStage,
-      approvalStatus: updatedUser.approvalStatus,
-      adminNotes: updatedUser.adminNotes
-    });
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     
     res.json({ 
@@ -1364,8 +1487,6 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
       ...userDoc,
       assignedAgentId: agentId,
       assignedAgentName: agentName,
-      currentAgentId: agentId, // Set current to match assigned
-      currentAgentName: agentName,
       agentAssignedAt: agentId ? new Date().toISOString() : null,
       updatedAt: new Date().toISOString()
     };
@@ -1373,17 +1494,11 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     // Save updated document
     await couchDBClient.saveDocument('maia_users', updatedUserDoc);
     
-    // Update UserStateManager cache
-    const userStateManager = req.app.locals.userStateManager;
-    if (userStateManager) {
-      userStateManager.updateUserStateSection(userId, 'agent', {
-        assignedAgentId: agentId,
-        assignedAgentName: agentName,
-        currentAgentId: agentId,
-        currentAgentName: agentName,
-        agentAssignedAt: updatedUserDoc.agentAssignedAt
-      });
-    }
+    // Start tracking deployment for this user
+    addToDeploymentTracking(userId, agentId, agentName);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     
     res.json({
@@ -1409,7 +1524,6 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
     const agentsResponse = await doRequest('/v2/gen-ai/agents');
     const agents = agentsResponse.agents || [];
     
-    console.log(`🔍 [DB] Found ${agents.length} agents in DO API`);
     
     const syncResults = [];
     
@@ -1420,7 +1534,6 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
       }
     });
     
-    console.log(`🔍 [DB] Found ${usersResponse.docs.length} users with assigned agents`);
     
     for (const user of usersResponse.docs) {
       if (!user.assignedAgentId) continue;
@@ -1453,14 +1566,7 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
             
             await couchDBClient.saveDocument('maia_users', updatedUserDoc);
             
-            // Update cache
-            const userStateManager = req.app.locals.userStateManager;
-            if (userStateManager) {
-              userStateManager.updateUserStateSection(user._id, 'agent', {
-                assignedAgentName: expectedName,
-                currentAgentName: expectedName
-              });
-            }
+            // Cache will be updated on next database read
             
             syncResults.push({
               userId: user._id,
@@ -1533,10 +1639,8 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
       hasAssignedAgent: !!userDoc.assignedAgentId,
       assignedAgentId: userDoc.assignedAgentId || null,
       assignedAgentName: userDoc.assignedAgentName || null,
-      currentAgentId: userDoc.currentAgentId || null,
-      currentAgentName: userDoc.currentAgentName || null,
       agentAssignedAt: userDoc.agentAssignedAt || null,
-      isConsistent: userDoc.assignedAgentId === userDoc.currentAgentId
+      isConsistent: true // No more currentAgentId to check consistency against
     };
     
     // If user has an assigned agent, verify it exists in DO API
@@ -1597,18 +1701,72 @@ router.post('/database/fix-consistency', async (req, res) => {
             const updatedDoc = {
               ...userDoc,
               assignedAgentId: issue.expectedAgentId,
-              assignedAgentName: issue.agentName
+              assignedAgentName: issue.agentName,
+              workflowStage: 'agent_assigned', // Update workflow stage when agent is assigned
+              approvalStatus: 'approved', // Set approval status when agent is assigned
+              agentAssignedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
             };
             
             await couchDBClient.saveDocument('maia_users', updatedDoc);
             
-            console.log(`✅ [CONSISTENCY FIX] Assigned agent ${issue.agentName} to user ${issue.userId}`);
+            // Start tracking deployment for this user
+            addToDeploymentTracking(issue.userId, issue.expectedAgentId, issue.agentName);
+            
+            // Invalidate user cache to ensure fresh data
+            invalidateUserCache(issue.userId);
+            
+            console.log(`✅ [CONSISTENCY FIX] Assigned agent ${issue.agentName} to user ${issue.userId} and updated workflow stage to 'agent_assigned'`);
             results.push({
               type: issue.type,
               userId: issue.userId,
               agentId: issue.expectedAgentId,
               agentName: issue.agentName,
               status: 'fixed'
+            });
+          } else {
+            console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'failed',
+              error: 'User not found'
+            });
+          }
+        } else if (issue.type === 'workflow_stage_mismatch') {
+          // Fix workflow stage mismatch
+          const userQuery = {
+            selector: {
+              $or: [
+                { _id: issue.userId },
+                { userId: issue.userId }
+              ]
+            },
+            limit: 1
+          };
+          
+          const userResult = await couchDBClient.findDocuments('maia_users', userQuery);
+          
+          if (userResult.docs.length > 0) {
+            const userDoc = userResult.docs[0];
+            const updatedDoc = {
+              ...userDoc,
+              workflowStage: issue.expectedWorkflowStage,
+              approvalStatus: issue.expectedWorkflowStage === 'agent_assigned' ? 'approved' : userDoc.approvalStatus,
+              updatedAt: new Date().toISOString()
+            };
+            
+            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            
+            // Invalidate user cache to ensure fresh data
+            invalidateUserCache(issue.userId);
+            
+            console.log(`✅ [CONSISTENCY FIX] Fixed workflow stage for user ${issue.userId}: ${issue.currentWorkflowStage} → ${issue.expectedWorkflowStage}`);
+            results.push({
+              type: issue.type,
+              userId: issue.userId,
+              status: 'fixed',
+              change: `${issue.currentWorkflowStage} → ${issue.expectedWorkflowStage}`
             });
           } else {
             console.log(`❌ [CONSISTENCY FIX] User ${issue.userId} not found in database`);
@@ -1730,7 +1888,31 @@ router.post('/database/fix-consistency', async (req, res) => {
   }
 });
 
+// New endpoint for high-frequency activity updates (in-memory only)
+router.post('/update-activity', async (req, res) => {
+  try {
+    const { userId, action } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // Only update in-memory activity tracker (no database writes)
+    updateUserActivity(userId);
+    
+    res.json({ 
+      success: true, 
+      message: 'Activity updated in memory',
+      userId,
+      action 
+    });
+  } catch (error) {
+    console.error('❌ Error updating activity:', error);
+    res.status(500).json({ message: 'Failed to update activity' });
+  }
+});
+
 // Export functions for use in main server
-export { updateUserActivity, getAllUserActivities };
+export { updateUserActivity, getAllUserActivities, checkAgentDeployments, addToDeploymentTracking };
 
 export default router;

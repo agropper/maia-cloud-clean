@@ -35,13 +35,14 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 export const useGroupChat = () => {
   // Helper function to convert File objects to base64 for storage
   const processFilesForStorage = async (files: UploadedFile[]): Promise<any[]> => {
-    return Promise.all(files.map(async (file) => {
+    return Promise.all(files.map(async (file, index) => {
       if (file.type === 'pdf') {
         if (file.originalFile instanceof File) {
           try {
             // Fresh PDF file - convert File object to base64 using a proper binary-safe method
             const arrayBuffer = await file.originalFile.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
+            
             
             // Convert to base64 using a binary-safe approach
             const base64 = arrayBufferToBase64(arrayBuffer);
@@ -60,7 +61,7 @@ export const useGroupChat = () => {
             console.warn(`⚠️ Failed to convert PDF to base64: ${file.name}`, error);
             return { ...file, originalFile: null };
           }
-        } else if (file.originalFile && typeof file.originalFile === 'object' && file.originalFile.base64) {
+        } else if (file.originalFile && typeof file.originalFile === 'object' && 'base64' in file.originalFile && (file.originalFile as any).base64) {
           // Database-loaded PDF file with existing base64 data - preserve it
           return file; // Return as-is, already has the correct structure
         } else {
@@ -131,12 +132,14 @@ export const useGroupChat = () => {
       const response = await fetch(`${API_BASE_URL}/shared/${shareId}`)
       
       if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      return await response.json()
+      const data = await response.json();
+      return data;
     } catch (error) {
-      console.error('Failed to load shared chat:', error)
+      console.error('Failed to load shared chat:', error instanceof Error ? error.message : 'Unknown error');
       throw error
     }
   }
@@ -156,12 +159,14 @@ export const useGroupChat = () => {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('❌ [useGroupChat] Failed to load all group chats:', error);
-      console.error('❌ [useGroupChat] Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('❌ [useGroupChat] Failed to load all group chats:', error instanceof Error ? error.message : 'Unknown error');
+      if (error instanceof Error) {
+        console.error('❌ [useGroupChat] Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
       throw error
     }
   }

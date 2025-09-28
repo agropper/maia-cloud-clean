@@ -127,11 +127,17 @@ export default {
           // @ts-ignore
           const task = pdfjsLib.getDocument({ data: buf })
           pdf = await task.promise
-        } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && this.currentFile.originalFile.base64) {
+        } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && 'base64' in this.currentFile.originalFile && (this.currentFile.originalFile as any).base64) {
           // Database-loaded file with base64 data - reconstruct the PDF
   
           try {
-            const base64 = this.currentFile.originalFile.base64
+            const base64 = (this.currentFile.originalFile as any).base64
+            
+            // Check if base64 is suspiciously short (likely corrupted)
+            if (base64.length < 1000) {
+              throw new Error('PDF binary data appears to be corrupted - showing extracted text instead')
+            }
+            
             const binaryString = atob(base64)
             const bytes = new Uint8Array(binaryString.length)
             for (let i = 0; i < binaryString.length; i++) {
@@ -141,7 +147,6 @@ export default {
             const task = pdfjsLib.getDocument({ data: bytes })
             pdf = await task.promise
           } catch (base64Error) {
-            console.error('🔍 [PDF] Base64 decoding failed:', base64Error)
             throw new Error('PDF binary not available - showing extracted text instead')
           }
         } else if (this.currentFile.fileUrl) {
@@ -152,7 +157,6 @@ export default {
         } else {
           // For database-loaded files without base64 data (old format)
           // Fall back to showing extracted text content
-          console.error('🔍 [PDF] No PDF binary data available - structure:', this.currentFile)
           throw new Error('PDF binary not available - showing extracted text instead')
         }
 
@@ -180,10 +184,10 @@ export default {
         }
         
       } catch (e) {
-        console.error('PDF loading error:', e)
+        console.error('PDF loading error:', e instanceof Error ? e.message : 'Unknown error')
         
         // Check if this is a database-loaded file that should show text instead
-        if (e.message && e.message.includes('PDF binary not available')) {
+        if (e instanceof Error && e.message && e.message.includes('PDF binary not available')) {
           // Switch to text view for database files
           this.displayMode = 'text'
           return

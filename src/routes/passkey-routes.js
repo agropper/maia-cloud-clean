@@ -13,7 +13,7 @@ let couchDBClient = null;
 
 // Function to set the CouchDB client (will be called from server.js)
 export const setCouchDBClient = (client) => {
-  console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
+  // console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
   couchDBClient = client;
 };
 
@@ -39,13 +39,15 @@ const rpName = "HIEofOne.org";
 const isLocalhost = process.env.NODE_ENV !== 'production' && (!process.env.DOMAIN && !process.env.PASSKEY_RPID);
 const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NODE_ENV === 'production';
 
-// Log environment detection for debugging
-console.log('🔍 Environment Detection Logic:');
-console.log('  - NODE_ENV:', process.env.NODE_ENV);
-console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
-console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
-console.log('  - isLocalhost:', isLocalhost);
-console.log('  - isCloud:', isCloud);
+// Environment detection (essential for debugging)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('🔍 Environment Detection Logic:');
+  console.log('  - NODE_ENV:', process.env.NODE_ENV);
+  console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
+  console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
+  console.log('  - isLocalhost:', isLocalhost);
+  console.log('  - isCloud:', isCloud);
+}
 
 // Automatic rpID configuration
 const rpID = (() => {
@@ -81,19 +83,21 @@ const origin = (() => {
   return `http://localhost:${port}`;
 })();
 
-// Log configuration for debugging
-console.log("🔍 Passkey Configuration:");
-console.log("  - NODE_ENV:", process.env.NODE_ENV);
-console.log("  - Environment Detection:");
-console.log("    - isLocalhost:", isLocalhost);
-console.log("    - isCloud:", isCloud);
-console.log("  - rpID:", rpID);
-console.log("  - origin:", origin);
-console.log("  - Auto-detected from:");
-console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
-console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
-console.log("    - PORT:", process.env.PORT || '3001 (default)');
-console.log("    - HTTPS:", process.env.HTTPS || 'not set');
+// Passkey configuration (essential for debugging)
+if (process.env.NODE_ENV !== 'production') {
+  console.log("🔍 Passkey Configuration:");
+  console.log("  - NODE_ENV:", process.env.NODE_ENV);
+  console.log("  - Environment Detection:");
+  console.log("    - isLocalhost:", isLocalhost);
+  console.log("    - isCloud:", isCloud);
+  console.log("  - rpID:", rpID);
+  console.log("  - origin:", origin);
+  console.log("  - Auto-detected from:");
+  console.log("    - PASSKEY_RPID:", process.env.PASSKEY_RPID || 'not set');
+  console.log("    - DOMAIN:", process.env.DOMAIN || 'not set');
+  console.log("    - PORT:", process.env.PORT || '3001 (default)');
+  console.log("    - HTTPS:", process.env.HTTPS || 'not set');
+}
 
 // Configuration summary and recommendations
 console.log("📋 Configuration Summary:");
@@ -286,6 +290,7 @@ router.post("/register", async (req, res) => {
       displayName,
       domain: rpID,
       type: 'user', // Add type field for proper filtering
+      workflowStage: 'no_request_yet', // Initial workflow stage for new users
       challenge: options.challenge,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -401,6 +406,13 @@ router.post("/register-verify", async (req, res) => {
       // Save the updated user document to Cloudant
       await couchDBClient.saveDocument("maia_users", updatedUser);
 
+      // Set session data for authenticated user (same as authenticate-verify)
+      req.session.userId = updatedUser._id;
+      req.session.username = updatedUser._id;
+      req.session.displayName = updatedUser.displayName || updatedUser._id;
+      req.session.authenticatedAt = new Date().toISOString();
+      req.session.expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
       console.log("✅ Passkey registration successful for user:", userId);
 
       res.json({
@@ -409,6 +421,7 @@ router.post("/register-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
         },
       });
     } else {
@@ -545,16 +558,30 @@ router.post("/authenticate-verify", async (req, res) => {
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
       
+      // Set authentication cookie with user info and timestamp
+      const authData = {
+        userId: updatedUser._id,
+        displayName: updatedUser.displayName || updatedUser._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+      };
+      
+      res.cookie('maia_auth', JSON.stringify(authData), {
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        path: '/'
+      });
+      
       // Set the user's assigned agent as current when they sign in
       try {
-        console.log(`🔍 [AUTH] Setting assigned agent as current for user: ${updatedUser._id}`);
         
         // Get the user's assigned agent from admin management
         const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${updatedUser._id}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
           if (assignedAgentData.assignedAgentId) {
-            console.log(`🔍 [AUTH] Found assigned agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName} (${assignedAgentData.assignedAgentId})`);
             
             // Set this agent as the current agent for the user
             const currentAgentResponse = await fetch(`http://localhost:3001/api/current-agent`, {
@@ -570,18 +597,11 @@ router.post("/authenticate-verify", async (req, res) => {
             });
             
             if (currentAgentResponse.ok) {
-              console.log(`✅ [AUTH] Successfully set current agent for ${updatedUser._id}: ${assignedAgentData.assignedAgentName}`);
-            } else {
-              console.warn(`⚠️ [AUTH] Failed to set current agent for ${updatedUser._id}: ${currentAgentResponse.status}`);
             }
-          } else {
-            console.log(`🔍 [AUTH] No assigned agent found for ${updatedUser._id} - will show "No Agent Selected"`);
           }
-        } else {
-          console.warn(`⚠️ [AUTH] Failed to get assigned agent for ${updatedUser._id}: ${assignedAgentResponse.status}`);
         }
       } catch (error) {
-        console.error(`❌ [AUTH] Error setting current agent for ${updatedUser._id}:`, error.message);
+        console.error(`❌ Error setting current agent for ${updatedUser._id}:`, error.message);
       }
       
       // Explicitly save the session
@@ -615,6 +635,7 @@ router.post("/authenticate-verify", async (req, res) => {
         user: {
           userId: updatedUser._id, // Use _id instead of userId
           displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
         },
       };
       
@@ -656,9 +677,53 @@ router.get("/user/:userId", async (req, res) => {
 // Check authentication status
 router.get("/auth-status", async (req, res) => {
   try {
-    if (req.session && req.session.userId) {
+    // Check for maia_auth cookie
+    const authCookie = req.cookies.maia_auth;
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60);
+        
+        if (now < expiresAt) {
+          // Cookie is valid
+        } else {
+          // Cookie expired
+        }
+      } catch (error) {
+        // Invalid cookie
+      }
+    } else {
+      // No cookie found
+    }
+    let userId = null;
+    
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        
+        // Check if cookie is still valid (less than 10 minutes old)
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
+        
+        if (now < expiresAt) {
+          userId = authData.userId;
+        } else {
+          res.clearCookie('maia_auth');
+        }
+      } catch (error) {
+        console.error(`❌ Invalid cookie format - clearing`);
+        res.clearCookie('maia_auth');
+      }
+    }
+    
+    // Note: Removed session fallback - we now use cookie-based auth only
+    
+    if (userId) {
       // Check if this is a deep link user - they should not be authenticated on main app
-      if (req.session.userId.startsWith('deep_link_')) {
+      if (userId.startsWith('deep_link_')) {
         // Store deepLinkId before destroying session
         const deepLinkId = req.session.deepLinkId;
         
@@ -675,15 +740,15 @@ router.get("/auth-status", async (req, res) => {
       // Only authenticate passkey users (not deep link users)
       let userDoc = null;
       if (cacheFunctions) {
-        userDoc = cacheFunctions.getCache('users', req.session.userId);
-        if (!cacheFunctions.isCacheValid('users', req.session.userId)) {
-          userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+        userDoc = cacheFunctions.getCache('users', userId);
+        if (!cacheFunctions.isCacheValid('users', userId)) {
+          userDoc = await couchDBClient.getDocument("maia_users", userId);
           if (userDoc) {
-            cacheFunctions.setCache('users', req.session.userId, userDoc);
+            cacheFunctions.setCache('users', userId, userDoc);
           }
         }
       } else {
-        userDoc = await couchDBClient.getDocument("maia_users", req.session.userId);
+        userDoc = await couchDBClient.getDocument("maia_users", userId);
       }
       if (userDoc) {
         // Echo current user to backend console
@@ -703,7 +768,7 @@ router.get("/auth-status", async (req, res) => {
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
-      console.log(`❌ [auth-status] No active session - session: ${!!req.session}, userId: ${req.session?.userId}`);
+      // Public User - no authentication required
       res.json({ authenticated: false, message: "No active session" });
     }
   } catch (error) {
@@ -740,23 +805,24 @@ router.post("/logout", async (req, res) => {
   try {
     console.log(`🚨 BACKEND LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
     
-    if (req.session) {
+    // Clear the auth cookie
+    res.clearCookie('maia_auth');
+    console.log(`🍪 [LOGOUT] Cleared auth cookie`);
+    
+    if (req.session && req.session.userId) {
       const userId = req.session.userId;
       console.log(`👋 User signed out: ${userId}`);
       
       // Group chat filtering is handled by the frontend
       
-      req.session.destroy(async (err) => {
+      req.session.destroy((err) => {
         if (err) {
           console.error("❌ Error destroying session:", err);
           return res.status(500).json({ error: "Failed to logout" });
         }
         console.log(`✅ Session destroyed for user: ${userId}`);
         
-        // Session management is now in-memory only (maia_sessions database removed)
-        console.log('[*] [Session Delete] Session destroyed (in-memory only)');
-        
-        // Send a message to the browser console after session destruction
+        // Send response ONLY after session is actually destroyed
         res.json({ 
           success: true, 
           message: "Logged out successfully",

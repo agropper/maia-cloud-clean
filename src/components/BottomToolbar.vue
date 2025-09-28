@@ -113,7 +113,7 @@
           <div class="status-line">
             <!-- SIGN IN/SIGN OUT Toggle -->
             <q-btn
-              v-if="!currentUser || (currentUser && (currentUser.userId === 'Public User' || currentUser.displayName === 'Public User'))"
+              v-if="!currentUser || !currentUser.isAuthenticated"
               flat
               dense
               size="sm"
@@ -150,7 +150,7 @@
                 size="sm"
                 color="primary"
                 class="group-count-btn q-mr-sm"
-                @click="openGroupModal"
+                @click="triggerLoadSavedChats"
               >
                 <div class="group-count">{{ groupCount }}</div>
               </q-btn>
@@ -175,6 +175,35 @@
                 class="q-ml-sm"
               />
               <div class="tooltip-text">Copy deep link to clipboard</div>
+            </div>
+            
+            <!-- Info and Mail Icons - Bottom right -->
+            <div class="tooltip-wrapper mail-icon-right">
+              <q-btn
+                flat
+                round
+                dense
+                icon="info"
+                color="primary"
+                @click="handleInfoClick"
+                size="sm"
+                class="q-mr-sm"
+              />
+              <div class="tooltip-text">Show help guide</div>
+            </div>
+            
+            <div class="tooltip-wrapper">
+              <q-btn
+                flat
+                round
+                dense
+                icon="mail"
+                color="primary"
+                @click="handleMailClick"
+                size="sm"
+                class="q-ml-sm"
+              />
+              <div class="tooltip-text">Contact support</div>
             </div>
           </div>
           
@@ -215,9 +244,88 @@
       @chatLoaded="handleChatLoaded"
     />
 
-    <!-- Loading Pane - Show when actually loading -->
-    <div v-if="appState.isLoading" :class="'loading-pane ' + appState.isLoading">
-      <q-circular-progress indeterminate rounded size="30px" color="primary" class="q-ma-md" />
+    <!-- Help Welcome Modal -->
+    <HelpWelcomeModal 
+      v-model="showHelpWelcomeModal"
+    />
+
+    <!-- New User Welcome Modal -->
+    <NewUserWelcomeModal 
+      v-model="showNewUserWelcomeModal"
+      :currentUser="currentUser"
+      @support-requested="handleSupportRequested"
+    />
+
+    <!-- Help Page Modal -->
+    <HelpPage 
+      v-if="showHelpModal" 
+      :is-visible="showHelpModal"
+      @close="handleHelpClose"
+    />
+
+    <!-- Contact Support Modal -->
+    <q-dialog v-model="showContactModal" persistent>
+      <q-card style="min-width: 500px; max-width: 600px;">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Contact Support</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <q-form @submit="sendContactMessage" class="q-gutter-md">
+            <q-input
+              v-model="contactForm.email"
+              label="Your Email (optional if you expect an answer)"
+              type="email"
+              hint="We'll use this to respond to your message"
+            />
+            
+            <q-select
+              v-model="contactForm.messageType"
+              :options="contactMessageTypes"
+              label="Message Type"
+              emit-value
+              map-options
+            />
+            
+            <q-input
+              v-model="contactForm.subject"
+              label="Subject *"
+              :rules="[val => !!val || 'Subject is required']"
+              required
+            />
+            
+            <q-input
+              v-model="contactForm.message"
+              label="Message *"
+              type="textarea"
+              rows="4"
+              :rules="[val => !!val || 'Message is required']"
+              required
+            />
+          </q-form>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Cancel" color="primary" v-close-popup />
+          <q-btn 
+            label="Send Message" 
+            color="primary" 
+            @click="sendContactMessage"
+            :loading="isSendingContact"
+            :disable="!contactForm.subject || !contactForm.message"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- AI Loading Indicator -->
+    <div v-if="appState.isLoading" class="ai-loading-indicator">
+      <div class="loading-content">
+        <q-icon name="hourglass_empty" size="24px" color="primary" class="loading-spinner hourglass-animation" />
+        <span class="loading-text">AI responses typically take 5 to 30 seconds...</span>
+      </div>
     </div>
   </div>
 </template>
@@ -226,10 +334,13 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, useQuasar } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, QDialog, QCard, QCardSection, QCardActions, QForm, QSpace, useQuasar } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
+import HelpPage from './HelpPage.vue'
+import HelpWelcomeModal from './HelpWelcomeModal.vue'
+import NewUserWelcomeModal from './NewUserWelcomeModal.vue'
 import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
@@ -250,8 +361,17 @@ export default defineComponent({
     QItemLabel,
     QIcon,
     QTooltip,
+    QDialog,
+    QCard,
+    QCardSection,
+    QCardActions,
+    QForm,
+    QSpace,
     GNAP,
-    GroupManagementModal
+    GroupManagementModal,
+    HelpPage,
+    HelpWelcomeModal,
+    NewUserWelcomeModal
   },
 
   props: {
@@ -318,7 +438,28 @@ export default defineComponent({
     const interimTranscript = ref('')
 
     const showGroupModal = ref(false)
+    const showContactModal = ref(false)
+    const showHelpModal = ref(false)
+    const showHelpWelcomeModal = ref(false)
+    const showNewUserWelcomeModal = ref(false)
+    const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
+
+    const contactForm = ref({
+      email: '',
+      subject: '',
+      message: '',
+      messageType: 'general_question'
+    })
+
+    const contactMessageTypes = [
+      { label: 'General Question', value: 'general_question' },
+      { label: 'Bug Report', value: 'bug_report' },
+      { label: 'Feature Request', value: 'feature_request' },
+      { label: 'Technical Support', value: 'technical_support' },
+      { label: 'Account Issue', value: 'account_issue' },
+      { label: 'Other', value: 'other' }
+    ]
 
     const selectedModel = computed({
       get: () => {
@@ -397,15 +538,15 @@ export default defineComponent({
     }
 
     const getCurrentUserName = () => {
-      if (!props.currentUser) return 'Public User'
+      if (!props.currentUser) return 'Unknown User'
       if (typeof props.currentUser === 'string') return props.currentUser
-      return props.currentUser.displayName || props.currentUser.userId || 'Public User'
+      return props.currentUser.displayName || props.currentUser.userId || 'Unknown User'
     }
 
     const isUserUnknown = computed(() => {
       if (!props.currentUser) return true
-      if (typeof props.currentUser === 'string') return props.currentUser === 'Public User'
-      return props.currentUser.userId === 'Public User' || props.currentUser.displayName === 'Public User'
+      if (typeof props.currentUser === 'string') return props.currentUser === 'Unknown User'
+      return props.currentUser.userId === 'Unknown User' || props.currentUser.displayName === 'Unknown User'
     })
 
     const openGroupModal = () => {
@@ -514,6 +655,143 @@ export default defineComponent({
       }, 1000)
     }
 
+    const handleMailClick = () => {
+      // Handle mail icon click - show contact form
+      console.log('[*] Mail icon clicked - Opening contact form')
+      showContactModal.value = true
+    }
+
+    const handleInfoClick = () => {
+      // Handle info icon click - show help welcome modal first
+      showHelpWelcomeModal.value = true
+    }
+
+    const handleHelpClose = () => {
+      // Handle help page close
+      showHelpModal.value = false
+    }
+
+    // Function to check if we should show the new user welcome modal
+    const shouldShowNewUserWelcomeModal = async (user) => {
+      if (!user || !user.userId || user.userId === 'Public User') {
+        return false
+      }
+      
+      try {
+        // Fetch user's workflow stage from backend
+        const response = await fetch(`/api/admin-management/users/${encodeURIComponent(user.userId)}`)
+        if (response.ok) {
+          const userData = await response.json()
+          // Show modal if user is in "No Request Yet" stage
+          if (userData.workflowStage === 'no_request_yet') {
+            console.log('🔍 [NewUserWelcomeModal] User is in "No Request Yet" stage, showing modal')
+            return true
+          }
+        }
+      } catch (error) {
+        console.error('❌ [NewUserWelcomeModal] Error fetching user workflow stage:', error)
+      }
+      
+      return false
+    }
+
+    // Watch for new user sign-ins to show welcome modal
+    const previousUser = ref(props.currentUser)
+    watch(() => props.currentUser, async (newUser, oldUser) => {
+      // Check if this is a new user signing in (was null/undefined, now has a user)
+      if (newUser && newUser.userId && newUser.userId !== 'Public User' && 
+          (!oldUser || !oldUser.userId || oldUser.userId === 'Public User')) {
+        
+        // Check if we should show the modal for this user
+        const shouldShow = await shouldShowNewUserWelcomeModal(newUser)
+        if (shouldShow) {
+          // Show welcome modal for new authenticated users in "No Request Yet" stage
+          setTimeout(() => {
+            showNewUserWelcomeModal.value = true
+          }, 1000) // Small delay to let UI settle
+        }
+      }
+      previousUser.value = newUser
+    }, { immediate: false })
+
+    // Check on component mount if current user should see the modal
+    const checkInitialUser = async () => {
+      if (props.currentUser && props.currentUser.userId && props.currentUser.userId !== 'Public User') {
+        const shouldShow = await shouldShowNewUserWelcomeModal(props.currentUser)
+        if (shouldShow) {
+          // Small delay to let UI settle
+          setTimeout(() => {
+            showNewUserWelcomeModal.value = true
+          }, 1500)
+        }
+      }
+    }
+
+    // Run initial check
+    checkInitialUser()
+
+    const handleSupportRequested = (data) => {
+      console.log('Support requested for user:', data)
+      // You could emit this to parent component if needed
+      // emit('support-requested', data)
+    }
+
+    const sendContactMessage = async () => {
+      if (!contactForm.value.subject || !contactForm.value.message) {
+        $q.notify({
+          type: 'negative',
+          message: 'Please fill in all required fields',
+          timeout: 3000
+        })
+        return
+      }
+
+      isSendingContact.value = true
+      try {
+        const response = await fetch('/api/admin/contact-support', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: getCurrentUserName(),
+            email: contactForm.value.email,
+            subject: contactForm.value.subject,
+            message: contactForm.value.message,
+            messageType: contactForm.value.messageType
+          }),
+        })
+
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: 'Message sent successfully to administrator!',
+            timeout: 3000
+          })
+          showContactModal.value = false
+          
+          // Reset form
+          contactForm.value = {
+            email: '',
+            subject: '',
+            message: '',
+            messageType: 'general_question'
+          }
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+      } catch (error: any) {
+        console.error('Error sending contact message:', error)
+        $q.notify({
+          type: 'negative',
+          message: `Failed to send message: ${error.message}`,
+          timeout: 5000
+        })
+      } finally {
+        isSendingContact.value = false
+      }
+    }
+
     return {
       isListening,
       isSpeechSupported,
@@ -522,6 +800,13 @@ export default defineComponent({
       getCurrentUserName,
       openGroupModal,
       showGroupModal,
+      showContactModal,
+      showHelpModal,
+      showHelpWelcomeModal,
+      showNewUserWelcomeModal,
+      isSendingContact,
+      contactForm,
+      contactMessageTypes,
       handleGroupDeleted,
       handleChatLoaded,
       handleIconClick,
@@ -529,7 +814,12 @@ export default defineComponent({
       isUserUnknown,
       handleFileUpload,
       pickFiles,
-      fileInput
+      fileInput,
+      handleMailClick,
+      handleInfoClick,
+      handleHelpClose,
+      handleSupportRequested,
+      sendContactMessage
     }
   }
 })
@@ -697,16 +987,47 @@ export default defineComponent({
   color: #d32f2f;
 }
 
-.loading-pane {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.9);
+.ai-loading-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
 }
 
-.loading-pane.true {
-  background: rgba(255, 255, 255, 0.95);
+.loading-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.loading-spinner {
+  flex-shrink: 0;
+}
+
+.hourglass-animation {
+  animation: hourglass-spin 2s ease-in-out infinite;
+}
+
+@keyframes hourglass-spin {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(90deg); }
+  50% { transform: rotate(180deg); }
+  75% { transform: rotate(270deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 14px;
+  color: #666;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .tooltip-wrapper {
@@ -754,6 +1075,11 @@ export default defineComponent({
 /* Ensure clickable icons show pointer cursor */
 .clickable-icon {
   cursor: pointer !important;
+}
+
+/* Right-justify the mail icon */
+.mail-icon-right {
+  margin-left: auto;
 }
 
 </style>

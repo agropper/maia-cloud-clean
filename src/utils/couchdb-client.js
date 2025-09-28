@@ -236,6 +236,7 @@ export class CouchDBClient {
 
   async getChatByShareId(shareId) {
     try {
+      
       // Create a view to find chats by shareId
       const result = await this.database.view('chats', 'by_share_id', {
         key: shareId,
@@ -247,12 +248,18 @@ export class CouchDBClient {
       }
       return null
     } catch (error) {
+      
       // If view doesn't exist, fall back to scanning all documents
       try {
         const allChats = await this.getAllChats()
-        return allChats.find(chat => chat.shareId === shareId) || null
+        
+        const matchingChat = allChats.find(chat => {
+          return chat.shareId === shareId;
+        });
+        
+        return matchingChat || null
       } catch (scanError) {
-        console.error('❌ Failed to get chat by share ID:', scanError)
+        console.error('❌ Error scanning chats for shareId:', scanError)
         throw scanError
       }
     }

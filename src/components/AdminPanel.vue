@@ -274,7 +274,7 @@
 
             <!-- No Agents -->
             <div v-if="agentsAndPatients.length === 0" class="text-center q-pa-md">
-              <QIcon name="smart_toy" size="2rem" color="grey" class="q-mb-md" />
+              <QIcon name="smart_toy" size="32px" color="grey" class="q-mb-md" />
               <div class="text-grey-6">No agents found</div>
             </div>
           </QCardSection>
@@ -391,17 +391,27 @@
     </QDialog>
 
     <!-- User Details Modal -->
-    <QDialog v-model="showUserModal" persistent maximized>
-      <QCard>
-        <QCardSection class="row items-center q-pb-none">
+    <q-dialog v-model="showUserModal" persistent>
+      <q-card style="min-width: 600px; max-width: 90vw;">
+        <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             👤 User Details: {{ selectedUser?.displayName }}
           </div>
-          <QSpace />
-          <QBtn icon="close" flat round dense @click="showUserModal = false" />
-        </QCardSection>
+          <q-space />
+          <q-btn icon="close" flat round dense @click="closeUserModal" />
+        </q-card-section>
 
-        <QCardSection v-if="selectedUser">
+        <q-card-section v-if="selectedUser">
+          <!-- Debug info for Safari -->
+          <div style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc;">
+            <strong>🔍 [SAFARI DEBUG] Modal Content Rendering:</strong><br>
+            showUserModal: {{ showUserModal }}<br>
+            selectedUser exists: {{ !!selectedUser }}<br>
+            selectedUser.userId: {{ selectedUser?.userId }}<br>
+            selectedUser.displayName: {{ selectedUser?.displayName }}<br>
+            Browser: {{ browserInfo }}
+          </div>
+          
           <!-- User Info -->
           <div class="user-info q-mb-lg">
             <h5>User Information</h5>
@@ -409,6 +419,10 @@
               <div class="col-6">
                 <p><strong>User ID:</strong> {{ selectedUser.userId }}</p>
                 <p><strong>Display Name:</strong> {{ selectedUser.displayName }}</p>
+                <p><strong>Email:</strong> 
+                  <span v-if="selectedUser.email">{{ selectedUser.email }}</span>
+                  <span v-else class="text-grey-6">No email provided</span>
+                </p>
                 <p><strong>Created:</strong> {{ formatDate(selectedUser.createdAt) }}</p>
               </div>
               <div class="col-6">
@@ -568,13 +582,13 @@
               />
             </div>
           </div>
-        </QCardSection>
+        </q-card-section>
 
-        <QCardActions align="right">
-          <QBtn flat label="Close" @click="showUserModal = false" />
-        </QCardActions>
-      </QCard>
-    </QDialog>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" @click="closeUserModal" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Agent Assignment Dialog -->
     <QDialog v-model="showAssignAgentDialog" persistent>
@@ -585,12 +599,12 @@
 
         <QCardSection>
           <div v-if="isLoadingAgents" class="text-center q-pa-md">
-            <QIcon name="hourglass_empty" size="2rem" class="q-mb-md" />
+            <QIcon name="hourglass_empty" size="32px" class="q-mb-md" />
             <div>Loading available agents...</div>
           </div>
 
           <div v-else-if="agents.length === 0" class="text-center q-pa-md">
-            <QIcon name="warning" size="2rem" class="q-mb-md" color="warning" />
+            <QIcon name="warning" size="32px" class="q-mb-md" color="warning" />
             <div>No agents available</div>
           </div>
 
@@ -616,7 +630,7 @@
                       <QIcon 
                         name="check_circle" 
                         color="positive" 
-                        size="1.5rem"
+                        size="24px"
                         v-if="selectedUser?.assignedAgentId === agent.id"
                       />
                     </div>
@@ -691,7 +705,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   QCard,
@@ -753,6 +767,7 @@ export default defineComponent({
     const isResettingPasskey = ref(false);
     const isLoadingAgentsPatients = ref(false);
     const isCreatingAgent = ref(false);
+    const pendingDeepLinkUserId = ref(null);
     const isRunningConsistencyCheck = ref(false);
     const users = ref([]);
     const agents = ref([]);
@@ -1029,6 +1044,24 @@ export default defineComponent({
         if (response.ok) {
           const data = await response.json();
           users.value = data.users;
+          
+          // Check if there's a pending deep link user ID to open
+          if (pendingDeepLinkUserId.value) {
+            const deepLinkUser = users.value.find(u => u.userId === pendingDeepLinkUserId.value);
+            if (deepLinkUser) {
+              console.log(`🔗 [Admin Panel] Opening user details modal for deep link user: ${pendingDeepLinkUserId.value}`);
+              await viewUserDetails(deepLinkUser);
+              pendingDeepLinkUserId.value = null; // Clear after opening
+            } else {
+              console.warn(`⚠️ [Admin Panel] Deep link user not found: ${pendingDeepLinkUserId.value}`);
+              $q.notify({
+                type: 'warning',
+                message: `User "${pendingDeepLinkUserId.value}" not found`,
+                timeout: 3000
+              });
+              pendingDeepLinkUserId.value = null; // Clear even if not found
+            }
+          }
         } else {
           const errorData = await response.json().catch(() => ({}));
           
@@ -1064,31 +1097,13 @@ export default defineComponent({
       }
     };
     
-    const viewUserDetails = async (user) => {
-      selectedUser.value = user;
-      adminNotes.value = '';
-      showUserModal.value = true;
-      
-      try {
-        const response = await fetch(`/api/user-state/${user.userId}`);
-        if (response.ok) {
-          const userDetails = await response.json();
-          // Ensure userId is preserved from the original user object
-          selectedUser.value = {
-            ...userDetails,
-            userId: user.userId // Preserve the userId from the table row
-          };
-          // Load existing admin notes if they exist
-          if (userDetails.adminNotes) {
-            adminNotes.value = userDetails.adminNotes;
-          }
-        }
-      } catch (error) {
-        console.error('Error loading user details:', error);
-      }
-      
-      // Load available agents for assignment
-      await loadAgents();
+    const closeUserModal = () => {
+      showUserModal.value = false;
+    };
+
+    const viewUserDetails = (user) => {
+      // Navigate to user details page
+      window.location.href = `/admin/user/${user.userId}`;
     };
     
     const resetUserForAgentCreation = async () => {
@@ -1105,7 +1120,7 @@ export default defineComponent({
         });
         
         // Close the user details modal
-        showUserModal.value = false;
+        closeUserModal();
         
         // Reload users to reflect the change
         await loadUsers();
@@ -1148,53 +1163,70 @@ export default defineComponent({
       }
     };
     
+    // Frontend deployment polling removed - backend monitoring now handles this
     const startDeploymentPolling = (userId, agentUuid) => {
+      // Backend deployment monitoring handles agent deployment tracking
+      // No frontend polling needed
+    };
+
+    // Server-Sent Events for real-time admin notifications
+    let adminEventSource = null;
+    
+    const connectAdminEvents = () => {
+      if (adminEventSource) {
+        adminEventSource.close();
+      }
       
-      const pollInterval = setInterval(async () => {
+      adminEventSource = new EventSource('/api/admin/events');
+      
+      adminEventSource.onopen = () => {
+        console.log('🔗 [SSE] Connected to admin notification stream');
+      };
+      
+      adminEventSource.onmessage = (event) => {
         try {
-          const response = await fetch('/api/agents');
-          if (response.ok) {
-            const agentsData = await response.json();
-            const agent = agentsData.find(a => a.uuid === agentUuid);
+          const notification = JSON.parse(event.data);
+          
+          if (notification.type === 'connected') {
+            console.log('📡 [SSE]', notification.message);
+          } else if (notification.type === 'deployment_completed') {
+            console.log('🎉 [ADMIN NOTIFICATION]', notification.data.message);
             
-            if (agent) {
-              
-              if (agent.deployment?.status === 'STATUS_DEPLOYED' || 
-                  agent.deployment?.status === 'STATUS_RUNNING') {
-                
-                // Stop polling
-                clearInterval(pollInterval);
-                deploymentPolling.value.delete(userId);
-                
-                // Update user to approved
-                await setUserWorkflowStage(userId, 'approved');
-                
-                // Refresh users list
-                await loadUsers();
-                
-                $q.notify({
-                  type: 'positive',
-                  message: `Agent for ${userId} is now deployed and ready!`
-                });
-              }
-            }
+            // Show notification to user
+            $q.notify({
+              type: 'positive',
+              message: `✅ ${notification.data.message}`,
+              timeout: 10000,
+              position: 'top'
+            });
+            
+            // Refresh users list to show updated status
+            loadUsers();
+          } else if (notification.type === 'heartbeat') {
+            // Silent heartbeat - just keep connection alive
           }
         } catch (error) {
-          console.error(`❌ Error checking deployment status:`, error);
+          console.error('❌ [SSE] Error parsing notification:', error);
         }
-      }, 15000); // Poll every 15 seconds
+      };
       
-      // Store the interval ID for cleanup
-      deploymentPolling.value.set(userId, pollInterval);
-      
-      // Set a timeout to stop polling after 10 minutes (40 attempts)
-      setTimeout(() => {
-        if (deploymentPolling.value.has(userId)) {
-          clearInterval(pollInterval);
-          deploymentPolling.value.delete(userId);
-        }
-      }, 600000); // 10 minutes
+      adminEventSource.onerror = (error) => {
+        console.error('❌ [SSE] Connection error:', error);
+        
+        // Attempt to reconnect after 5 seconds
+        setTimeout(() => {
+          console.log('🔄 [SSE] Attempting to reconnect...');
+          connectAdminEvents();
+        }, 5000);
+      };
     };
+    
+    // Clean up connection when component unmounts
+    onUnmounted(() => {
+      if (adminEventSource) {
+        adminEventSource.close();
+      }
+    });
     
     const createAgentForUser = async () => {
       if (!selectedUser.value) return;
@@ -1208,6 +1240,7 @@ export default defineComponent({
           },
           body: JSON.stringify({
             patientName: selectedUser.value.displayName,
+            userId: selectedUser.value.userId,
             model: 'OpenAI GPT-oss-120b' // Will be dynamically resolved to UUID
           })
         });
@@ -1221,7 +1254,7 @@ export default defineComponent({
           await setUserWorkflowStage(selectedUser.value.userId, 'waiting_for_deployment');
           
           // Close the user details modal
-          showUserModal.value = false;
+          closeUserModal();
           
           // Start polling for deployment status
           startDeploymentPolling(selectedUser.value.userId, agentData.uuid);
@@ -1275,7 +1308,7 @@ export default defineComponent({
             selectedUser.value.workflowStage = action;
           }
           
-          showUserModal.value = false;
+          closeUserModal();
         } else {
           throw new Error('Failed to process approval');
         }
@@ -1422,7 +1455,7 @@ export default defineComponent({
     const loadAgents = async () => {
       isLoadingAgents.value = true;
       try {
-        const response = await fetch('/api/agents');
+        const response = await fetch('/api/agents?user=admin');
         if (response.ok) {
           const agentsData = await response.json();
           agents.value = agentsData;
@@ -1495,9 +1528,11 @@ export default defineComponent({
     const getWorkflowStageColor = (stage) => {
       const colors = {
         'no_passkey': 'grey',
+        'no_request_yet': 'blue-grey',
         'awaiting_approval': 'warning',
         'waiting_for_deployment': 'info',
         'approved': 'positive',
+        'agent_assigned': 'positive',
         'hasAgent': 'positive',
         'rejected': 'negative',
         'suspended': 'orange',
@@ -1509,9 +1544,11 @@ export default defineComponent({
     const formatWorkflowStage = (stage) => {
       const labels = {
         'no_passkey': 'No Passkey',
+        'no_request_yet': 'No Request Yet',
         'awaiting_approval': 'Awaiting Approval',
         'waiting_for_deployment': 'Waiting for Deployment',
         'approved': 'Approved',
+        'agent_assigned': 'Agent Assigned',
         'hasAgent': 'Has Agent',
         'rejected': 'Rejected',
         'suspended': 'Suspended',
@@ -1898,6 +1935,32 @@ export default defineComponent({
         for (const user of usersData.users) {
           const userId = user.userId || user._id;
           const assignedAgentId = user.assignedAgentId;
+          const workflowStage = user.workflowStage;
+          
+          // Check for workflow stage inconsistencies
+          if (assignedAgentId && workflowStage !== 'agent_assigned') {
+            // User has an assigned agent but workflow stage is not 'agent_assigned'
+            inconsistencies.push({
+              type: 'workflow_stage_mismatch',
+              userId: userId,
+              agentId: assignedAgentId,
+              agentName: user.assignedAgentName || 'Unknown',
+              currentWorkflowStage: workflowStage,
+              expectedWorkflowStage: 'agent_assigned',
+              message: `User ${userId} has assigned agent ${user.assignedAgentName} but workflow stage is '${workflowStage}' instead of 'agent_assigned'`
+            });
+          } else if (!assignedAgentId && workflowStage === 'agent_assigned') {
+            // User has workflow stage 'agent_assigned' but no assigned agent
+            inconsistencies.push({
+              type: 'workflow_stage_mismatch',
+              userId: userId,
+              agentId: null,
+              agentName: null,
+              currentWorkflowStage: workflowStage,
+              expectedWorkflowStage: 'approved',
+              message: `User ${userId} has workflow stage 'agent_assigned' but no assigned agent`
+            });
+          }
           
           if (assignedAgentId) {
             // Find the agent in DO API
@@ -1940,7 +2003,6 @@ export default defineComponent({
         
         // Show what database changes will be made
         if (inconsistencies.length > 0) {
-          console.log(`🔍 [CONSISTENCY CHECK] Found ${inconsistencies.length} inconsistencies that will be fixed:`);
           inconsistencies.forEach((issue, index) => {
             console.log(`${index + 1}. ${issue.message}`);
           });
@@ -2106,6 +2168,9 @@ export default defineComponent({
     
     // Lifecycle
     onMounted(async () => {
+      // Connect to admin notification stream
+      connectAdminEvents();
+      
       checkUrlParameters();
       await checkAdminStatus();
       
@@ -2127,7 +2192,7 @@ export default defineComponent({
       }
     });
     
-    // Check URL parameters for error messages
+    // Check URL parameters for error messages and deep link user ID
     const checkUrlParameters = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const error = urlParams.get('error');
@@ -2150,6 +2215,14 @@ export default defineComponent({
             errorMessage.value = 'An unknown error occurred.';
         }
       }
+      
+      // Check for deep link user ID from server-side template or URL parameter
+      const deepLinkUserId = window.ADMIN_DEEP_LINK_USER_ID || urlParams.get('userId');
+      if (deepLinkUserId) {
+        console.log(`🔗 [Admin Panel] Deep link detected for user: ${deepLinkUserId}`);
+        // Store the user ID to open modal after users are loaded
+        pendingDeepLinkUserId.value = deepLinkUserId;
+      }
     };
     
     // Computed properties
@@ -2157,6 +2230,22 @@ export default defineComponent({
       // Get the Cloudant Dashboard URL from the server-rendered template
       // The server passes this via the EJS template
       return window.CLOUDANT_DASHBOARD_URL || '#';
+    });
+
+    const browserInfo = computed(() => {
+      if (typeof navigator === 'undefined') return 'Unknown';
+      const isSafari = navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome');
+      return isSafari ? 'Safari' : 'Other';
+    });
+
+    // Watch for modal state changes
+    watch(showUserModal, (newValue, oldValue) => {
+      console.log('🔍 [SAFARI DEBUG] Modal state changed:', {
+        from: oldValue,
+        to: newValue,
+        selectedUser: selectedUser.value,
+        timestamp: new Date().toISOString()
+      });
     });
     
     return {
@@ -2202,6 +2291,7 @@ export default defineComponent({
       handleChatLoaded,
       handleGroupDeleted,
       viewUserDetails,
+      closeUserModal,
       createAgentForUser,
       resetUserForAgentCreation,
       setUserWorkflowStage,
@@ -2224,6 +2314,7 @@ export default defineComponent({
       goToMainApp,
       signOut,
       cloudantDashboardUrl,
+      browserInfo,
       runDatabaseConsistencyCheck,
       runManualConsistencyCheck,
       resetWelcomeModal
@@ -2279,6 +2370,36 @@ export default defineComponent({
 .admin-notes {
   margin-bottom: 20px;
 }
+
+/* Safari viewport shrinking fix - CSS only approach */
+@supports (-webkit-appearance: none) {
+  .q-dialog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 6000 !important;
+  }
+  
+  .q-dialog__inner {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  .q-dialog .q-card {
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    margin: 20px !important;
+  }
+}
+
 
 .user-info h5,
 .approval-requests h5,

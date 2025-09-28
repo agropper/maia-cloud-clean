@@ -11,7 +11,7 @@
         <!-- Step 1: User ID Input -->
         <div v-if="currentStep === 'userId'" class="q-gutter-md">
           <div class="text-center q-pa-md">
-            <q-icon name="login" size="3rem" color="primary" class="q-mb-md" />
+            <q-icon name="login" size="48px" color="primary" class="q-mb-md" />
             <div class="text-h6">Sign In with Passkey</div>
             <div class="text-body2 q-mt-sm">
               Enter your User ID to sign in with your passkey.
@@ -49,7 +49,7 @@
           <div class="text-center q-pa-md">
             <q-icon
               name="fingerprint"
-              size="3rem"
+              size="48px"
               color="primary"
               class="q-mb-md"
             />
@@ -63,7 +63,7 @@
         <!-- Step 3: Error State -->
         <div v-if="currentStep === 'error'" class="q-gutter-md">
           <div class="text-center q-pa-md">
-            <q-icon name="error" size="3rem" color="negative" class="q-mb-md" />
+            <q-icon name="error" size="48px" color="negative" class="q-mb-md" />
             <div class="text-h6">Authentication Failed</div>
             <div class="text-body2 q-mt-sm">{{ errorMessage }}</div>
           </div>

@@ -187,3 +187,153 @@ This suggests the protection document lookup is failing or the logic is incorrec
 - ✅ **Safe for merging branch** - maia_chats is already "unchanged" in MAIA2 design
 - ✅ **Simpler maintenance** - Single source of truth for each data type
 
+-------------------------------
+
+September 24, 2025
+
+- Fixed the reporting of bucket status in Admin User Details
+- Added a New User Welcome modal that bypasses the Agent Mangement panel
+- Removed maia2_admin_approvals references. 
+- Added workflowStage field to new users in maia_users database
+- Added deep link for Admin User Details
+
+New Array: workflowStateMessages with standardized messages for each workflow stage:
+'no_passkey': "No Passkey - Please register a passkey to access private features"
+'no_request_yet': "No Request Yet - You can request support for a private AI agent"
+'awaiting_approval': "Awaiting Approval - Your request for a private agent has been sent to the administrator"
+'approved': "Approved - You have been approved for private AI access"
+'agent_assigned': "Agent Assigned - You have access to your private AI agent"
+'inconsistent': "Inconsistent State - Please contact administrator for assistance"
+
+---
+
+## 📚 KNOWLEDGE BASE CREATION AND INDEXING SEQUENCE
+
+### **🎯 Overview**
+The process involves 6 main steps: **File Upload → Bucket Storage → Knowledge Base Creation → Indexing Job → Monitoring → Completion**
+
+### **📋 Step-by-Step Sequence**
+
+#### **1. File Upload to User's Bucket Folder**
+**Frontend**: `AgentManagementDialog.vue` → `uploadSelectedFilesToBucket()`
+- User selects files in the Agent Management Dialog
+- Files are processed and uploaded to DigitalOcean Spaces bucket
+- **Endpoint**: `POST /api/upload-to-bucket`
+- **Bucket Structure**: `{username}/filename.ext` (e.g., `wed271/document.pdf`)
+- **File Processing**:
+  - **PDFs**: Converted to markdown (`file.transcript`) or raw text (`file.content`)
+  - **RTFs**: Converted to markdown
+  - **Markdown**: Used directly
+  - **Validation**: Ensures files have usable content before upload
+
+#### **2. Knowledge Base Creation**
+**Frontend**: `AgentManagementDialog.vue` → `createKnowledgeBaseFromBucketFiles()`
+- User provides KB name and description
+- **Endpoint**: `POST /api/knowledge-bases`
+- **Backend Processing** (`server.js` lines 4834-4954):
+  ```javascript
+  const kbData = {
+    name: `${username}-${name}`,  // User-prefixed name
+    description: `${kbName} description`,
+    project_id: '90179b7c-8a42-4a71-a036-b4c2bea2fe59',
+    database_id: '881761c6-e72d-4f35-a48e-b320cd1f46e4',
+    region: "tor1",
+    datasources: [{
+      "spaces_data_source": {
+        "bucket_name": "maia",
+        "item_path": `${username}/`,  // Points to user's folder
+        "region": "tor1"
+      }
+    }]
+  };
+  ```
+- **DigitalOcean API Call**: `POST /v2/gen-ai/knowledge_bases`
+- **Embedding Model**: Automatically selects best available (prefers GTE Large)
+
+#### **3. Indexing Job Creation**
+**Frontend**: `AgentManagementDialog.vue` → `startIndexingJob()`
+- **Endpoint**: `POST /api/test-start-indexing`
+- **Backend Processing** (`server.js` lines 5122-5189):
+  1. Get knowledge base details from DigitalOcean API
+  2. Extract data source UUID from the spaces_data_source
+  3. Create indexing job:
+     ```javascript
+     const indexingJobData = {
+       data_source_uuid: dataSource.spaces_data_source.uuid
+     };
+     ```
+  4. **DigitalOcean API Call**: `POST /v2/gen-ai/knowledge_bases/{kbId}/indexing_jobs`
+
+#### **4. Indexing Monitoring**
+**Frontend**: `AgentManagementDialog.vue` → `startIndexingMonitor()`
+- **Monitoring Interval**: Every 10 seconds
+- **Endpoint**: `GET /api/knowledge-bases/{kbId}/indexing-status`
+- **Backend Processing** (`server.js` lines 5042-5119):
+  - Calls DigitalOcean API to get indexing job status
+  - Returns status: `PENDING`, `INDEX_JOB_STATUS_IN_PROGRESS`, `INDEX_JOB_STATUS_COMPLETED`, `FAILED`
+  - Tracks progress and phase information
+
+#### **5. Status Updates and User Feedback**
+**Frontend**: Real-time updates via polling
+- **Workflow Step 6**: "Knowledge base indexing status monitoring"
+- **Status Display**: Shows current indexing status and phase
+- **User Notifications**: Success/error notifications via Quasar
+- **Progress Tracking**: Records start time and completion time
+
+#### **6. Completion and Cleanup**
+**Frontend**: `checkIndexingStatus()` → `stopIndexingMonitor()`
+- **Completion Detection**: When status = `INDEX_JOB_STATUS_COMPLETED`
+- **Workflow Update**: Marks Step 6 as completed
+- **Resource Cleanup**: Stops monitoring interval
+- **User Notification**: Shows success message with timing information
+
+### **🔧 Key Technical Components**
+
+#### **Bucket Management**
+- **User Folders**: Each user gets `{username}/` folder in `maia` bucket
+- **File Organization**: Files stored as `{username}/filename.ext`
+- **Access Control**: Users can only access their own folder
+
+#### **DigitalOcean Integration**
+- **API Endpoints**: Uses DigitalOcean's GenAI API v2
+- **Data Sources**: Spaces data source pointing to user's bucket folder
+- **Embedding Models**: Automatically selects best available model
+- **Indexing Jobs**: Asynchronous processing with status tracking
+
+#### **Error Handling**
+- **Bucket Validation**: Checks if bucket exists before operations
+- **File Validation**: Ensures files have content before upload
+- **API Error Handling**: Comprehensive error messages and fallbacks
+- **Monitoring Timeouts**: Prevents infinite monitoring loops
+
+#### **Security**
+- **User Isolation**: Each user's files in separate bucket folders
+- **Access Control**: Users can only access their own knowledge bases
+- **Data Validation**: Validates file types and content before processing
+
+### **📊 Monitoring and Debugging**
+
+#### **Backend Monitoring**
+- **Server Logs**: Detailed logging of each step
+- **API Response Tracking**: Logs DigitalOcean API responses
+- **Error Logging**: Comprehensive error tracking
+
+#### **Frontend Monitoring**
+- **Console Logs**: Real-time status updates
+- **User Interface**: Progress indicators and status messages
+- **Workflow Steps**: Visual progress through 6-step process
+
+#### **External Monitoring Scripts**
+- **`monitor-indexing.sh`**: Standalone indexing progress monitor
+- **`monitor-digitalocean-indexing.sh`**: Direct DigitalOcean API monitoring
+- **Log Files**: Timestamped progress logs for debugging
+
+### **🎯 Expected Timeline**
+- **File Upload**: 1-5 seconds per file
+- **Knowledge Base Creation**: 2-10 seconds
+- **Indexing Job Creation**: 1-3 seconds
+- **Indexing Process**: 30 seconds to several minutes (depends on file size/number)
+- **Total Process**: Typically 2-10 minutes for small to medium file sets
+
+This comprehensive system ensures reliable knowledge base creation with proper error handling, user feedback, and monitoring throughout the entire process.
+

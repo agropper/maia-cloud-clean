@@ -104,7 +104,8 @@ export class UserService {
    * @returns {Object} Normalized user object
    */
   static normalizeUserObject(userObject) {
-    if (!userObject) return this.createPublicUser();
+    // For deep link users, allow null user initially
+    if (!userObject) return null;
     
     const userId = this.getUserId(userObject);
     const displayName = userObject.displayName || userObject.username || userId;

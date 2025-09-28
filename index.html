@@ -9,6 +9,10 @@
     </head>
     <body>
         <div id="app"></div>
+        <script>
+            // Pass deep link user ID to Vue app if provided
+            window.ADMIN_DEEP_LINK_USER_ID = '<%= typeof ADMIN_DEEP_LINK_USER_ID !== "undefined" ? ADMIN_DEEP_LINK_USER_ID : "" %>';
+        </script>
         <script type="module" src="./src/entry/main.ts"></script>
     </body>
 </html>

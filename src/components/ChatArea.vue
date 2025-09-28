@@ -319,8 +319,8 @@ export default defineComponent({
     },
     currentUser: {
       type: Object as PropType<any>,
-      required: true,
-      default: () => ({ userId: 'Unknown User', displayName: 'Unknown User' })
+      required: false,
+      default: () => null
     }
   },
   data() {
@@ -352,6 +352,7 @@ export default defineComponent({
     'sign-out',
     'group-count-updated',
     'deep-link-updated',
+    'group-saved',
     'clear-warning'
   ],
   methods: {
@@ -386,12 +387,6 @@ export default defineComponent({
       if (idx === -1) return
       
       // Log the deletion for debugging
-      console.log('🗑️ [ChatArea] Deleting message:', {
-        index: idx,
-        role: this.messageToDelete.role,
-        content: this.messageToDelete.content?.substring(0, 100) + '...',
-        hasPrecedingUser: !!this.precedingUserMessage
-      })
       
       // Remove the message
       this.appState.chatHistory.splice(idx, 1)
@@ -400,10 +395,6 @@ export default defineComponent({
       if (this.precedingUserMessage && idx > 0) {
         const userIdx = idx - 1
         if (this.appState.chatHistory[userIdx]?.role === 'user') {
-          console.log('🗑️ [ChatArea] Deleting preceding user message:', {
-            index: userIdx,
-            content: this.precedingUserMessage.content?.substring(0, 100) + '...'
-          })
           this.appState.chatHistory.splice(userIdx, 1)
         }
       }
@@ -550,6 +541,9 @@ export default defineComponent({
         
         // Refresh group count after creating/updating group chat
         this.loadGroupCount()
+        
+        // Emit event to parent component to update group count
+        this.$emit('group-saved')
         
         
       } catch (error) {
@@ -845,9 +839,12 @@ export default defineComponent({
                     },
                     isUserReady(): boolean {
                       // Check if currentUser is properly initialized and valid
-                      return this.currentUser && (
-                        typeof this.currentUser === 'string' || 
-                        (typeof this.currentUser === 'object' && this.currentUser.userId)
+                      // For deep link users, allow null user initially (they'll be identified later)
+                      return this.currentUser === null || (
+                        this.currentUser && (
+                          typeof this.currentUser === 'string' || 
+                          (typeof this.currentUser === 'object' && this.currentUser.userId)
+                        )
                       )
                     },
                     getCurrentUserName(): string {

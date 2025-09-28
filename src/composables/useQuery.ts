@@ -67,9 +67,24 @@ export const sendQuery = async (
   chatHistory: ChatHistoryItem[],
   appState: AppState,
   currentUser?: any,
-  onAgentSelectionRequired?: () => void
+  onAgentSelectionRequired?: () => void,
+  currentAgent?: any,
+  assignedAgent?: any
 ): Promise<ChatHistoryItem[]> => {
   const startTime = Date.now()
+  
+  // Debug logging removed
+  
+  // Defensive check for appState
+  if (!appState) {
+    console.error('❌ [sendQuery] appState is undefined');
+    throw new Error('AppState is undefined');
+  }
+  
+  if (!appState.selectedAI) {
+    console.error('❌ [sendQuery] appState.selectedAI is undefined');
+    throw new Error('AppState.selectedAI is undefined');
+  }
   
   try {
     // Add the user's message to chat history with correct display name
@@ -124,11 +139,13 @@ export const sendQuery = async (
     totalTokens += historyTokens
 
     // Log which agent and knowledge base will be used for this query
-    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
-                      uri.includes('anthropic-chat') ? 'Anthropic' :
-                      uri.includes('gemini-chat') ? 'Gemini' :
-                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
-                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    // Safety check to prevent includes error
+    const uriString = typeof uri === 'string' ? uri : String(uri || '');
+    const aiProvider = uriString.includes('personal-chat') ? 'Personal AI' :
+                      uriString.includes('anthropic-chat') ? 'Anthropic' :
+                      uriString.includes('gemini-chat') ? 'Gemini' :
+                      uriString.includes('chatgpt-chat') ? 'ChatGPT' :
+                      uriString.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     const userInfo = currentUser?.displayName || currentUser?.userId || 'Public User'
     
@@ -150,15 +167,29 @@ export const sendQuery = async (
     const responseTime = Date.now() - startTime
     const contextKB = Math.round(contextSize / 1024 * 100) / 100
     
+    // Add essential console messages to browser console
+    const contextSizeKB = contextKB;
+    const uploadedFilesCount = appState.uploadedFiles?.length || 0;
+    
+    // Debug messages removed
+    
+    const agentName = assignedAgent?.name || currentAgent?.name || 'No Agent';
+    const knowledgeBases = assignedAgent?.knowledgeBases?.map(kb => kb.name || kb).join(', ') || 
+                          currentAgent?.knowledgeBases?.map(kb => kb.name || kb).join(', ') || 'None';
+    
+    console.log(`[*] AI Query: ${totalTokens} tokens, ${contextSizeKB}KB context, ${uploadedFilesCount} files`);
+    console.log(`[*] Current user: ${userInfo}, Agent: ${agentName}, Connected KBs: [${knowledgeBases}]`);
+    console.log(`[*] AI Response time: ${responseTime}ms`);
 
     return response;
   } catch (error: any) {
     const responseTime = Date.now() - startTime
-    const aiProvider = uri.includes('personal-chat') ? 'Personal AI' :
-                      uri.includes('anthropic-chat') ? 'Anthropic' :
-                      uri.includes('gemini-chat') ? 'Gemini' :
-                      uri.includes('chatgpt-chat') ? 'ChatGPT' :
-                      uri.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
+    const uriString = typeof uri === 'string' ? uri : String(uri || '');
+    const aiProvider = uriString.includes('personal-chat') ? 'Personal AI' :
+                      uriString.includes('anthropic-chat') ? 'Anthropic' :
+                      uriString.includes('gemini-chat') ? 'Gemini' :
+                      uriString.includes('chatgpt-chat') ? 'ChatGPT' :
+                      uriString.includes('deepseek-r1-chat') ? 'DeepSeek R1' : 'AI'
     
     
     // Check if this is an agent selection required error
