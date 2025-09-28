@@ -1155,6 +1155,15 @@ function validateWorkflowConsistency(user) {
 }
 
 async function determineWorkflowStage(user) {
+  console.log(`🔍 [WORKFLOW] Determining workflow stage for user ${user._id || user.userId}:`, {
+    workflowStage: user.workflowStage,
+    approvalStatus: user.approvalStatus,
+    assignedAgentId: user.assignedAgentId,
+    assignedAgentName: user.assignedAgentName,
+    credentialID: user.credentialID,
+    email: user.email
+  });
+  
   // CRITICAL: If user has an assigned agent, validate against DO API (source of truth)
   if (user.assignedAgentId && user.assignedAgentName) {
     try {
@@ -1170,6 +1179,7 @@ async function determineWorkflowStage(user) {
           // Schedule automatic database fix
           scheduleWorkflowStageFix(user._id, 'agent_assigned');
         }
+        console.log(`🔍 [WORKFLOW] Returning 'agent_assigned' for user ${user._id || user.userId} (agent deployed)`);
         return 'agent_assigned';
       } else {
         // Agent exists but not deployed - workflow stage should not be 'agent_assigned'
@@ -1190,46 +1200,57 @@ async function determineWorkflowStage(user) {
     } catch (error) {
       console.error(`❌ [WORKFLOW VALIDATION] Error for user ${user._id}:`, error.message);
       // Return a safe default instead of throwing
+      console.log(`🔍 [WORKFLOW] Returning 'inconsistent' for user ${user._id || user.userId} (validation error)`);
       return 'inconsistent';
     }
+    console.log(`🔍 [WORKFLOW] Returning stored workflow stage '${user.workflowStage}' for user ${user._id || user.userId}`);
     return user.workflowStage;
   }
   
   // Fallback for legacy users without workflowStage field
   // Check if user has a passkey (look for credentialID field)
   if (!user.credentialID) {
+    console.log(`🔍 [WORKFLOW] Returning 'no_passkey' for user ${user._id || user.userId} (no credentialID)`);
     return 'no_passkey';
   }
   
   // Check if user has made any approval requests by looking for email field
   // If no email and no approvalStatus, they haven't requested support yet
   if (!user.approvalStatus && !user.email) {
+    console.log(`🔍 [WORKFLOW] Returning 'no_request_yet' for user ${user._id || user.userId} (no approval status or email)`);
     return 'no_request_yet';
   }
   
   // For legacy users without approvalStatus field, assume they need approval
   if (!user.approvalStatus) {
+    console.log(`🔍 [WORKFLOW] Returning 'awaiting_approval' for user ${user._id || user.userId} (no approval status field)`);
     return 'awaiting_approval';
   }
   
   if (user.approvalStatus === 'pending') {
+    console.log(`🔍 [WORKFLOW] Returning 'awaiting_approval' for user ${user._id || user.userId} (approval status: pending)`);
     return 'awaiting_approval';
   }
   
   if (user.approvalStatus === 'rejected') {
+    console.log(`🔍 [WORKFLOW] Returning 'rejected' for user ${user._id || user.userId} (approval status: rejected)`);
     return 'rejected';
   }
   
   if (user.approvalStatus === 'suspended') {
+    console.log(`🔍 [WORKFLOW] Returning 'suspended' for user ${user._id || user.userId} (approval status: suspended)`);
     return 'suspended';
   }
   
   if (user.approvalStatus === 'approved') {
     // Check if they have resources created
+    console.log(`🔍 [WORKFLOW] Returning 'approved' for user ${user._id || user.userId} (approval status: approved)`);
     return 'approved'; // For now, just return approved
   }
   
-  return 'unknown';
+  const finalStage = 'unknown';
+  console.log(`🔍 [WORKFLOW] Final workflow stage for user ${user._id || user.userId}: ${finalStage}`);
+  return finalStage;
 }
 
 // Schedule automatic workflow stage fix to prevent database inconsistencies
