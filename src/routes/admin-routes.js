@@ -1,5 +1,6 @@
 import express from 'express';
 import fetch from 'node-fetch';
+import { cacheManager } from '../utils/CacheManager.js';
 
 const router = express.Router();
 
@@ -286,15 +287,19 @@ router.post('/request-approval', async (req, res) => {
         if (email && email.trim()) {
           try {
             if (couchDBClient) {
-              const userDoc = await couchDBClient.getDocument('maia_users', username);
+              console.log(`🔍 [WORKFLOW] Updating user ${username} workflow stage from 'no_request_yet' to 'awaiting_approval'`);
+              const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
               if (userDoc) {
+                console.log(`🔍 [WORKFLOW] User ${username} current workflow stage: ${userDoc.workflowStage}`);
                 userDoc.email = email.trim();
                 userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
-                await couchDBClient.saveDocument('maia_users', userDoc);
+                console.log(`🔍 [WORKFLOW] Saving user ${username} with new workflow stage: 'awaiting_approval'`);
+                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+                console.log(`✅ [WORKFLOW] Successfully updated user ${username} workflow stage to 'awaiting_approval'`);
               }
             }
           } catch (userUpdateError) {
-            // Error handling removed for cleaner console
+            console.error(`❌ [WORKFLOW] Failed to update user ${username} workflow stage:`, userUpdateError.message);
           }
         }
 

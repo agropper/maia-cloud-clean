@@ -275,10 +275,24 @@ const approveUser = async () => {
     if (!response.ok) {
       throw new Error(`Failed to approve user: ${response.status}`)
     }
-    await loadUserDetails() // Reload to get updated data
+    
+    // Update local state instead of reloading to prevent infinite loop
+    if (user.value) {
+      user.value.workflowStage = 'approved'
+      user.value.approvalStatus = 'approved'
+    }
+    
+    $q.notify({
+      type: 'positive',
+      message: 'User approved successfully'
+    })
   } catch (err) {
     console.error('Error approving user:', err)
     error.value = err.message
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to approve user'
+    })
   } finally {
     approving.value = false
   }
@@ -295,7 +309,17 @@ const rejectUser = async () => {
     if (!response.ok) {
       throw new Error(`Failed to reject user: ${response.status}`)
     }
-    await loadUserDetails()
+    
+    // Update local state instead of reloading to prevent infinite loop
+    if (user.value) {
+      user.value.workflowStage = 'rejected'
+      user.value.approvalStatus = 'rejected'
+    }
+    
+    $q.notify({
+      type: 'negative',
+      message: 'User rejected'
+    })
   } catch (err) {
     console.error('Error rejecting user:', err)
     error.value = err.message
@@ -319,7 +343,20 @@ const createAgent = async () => {
     if (!response.ok) {
       throw new Error(`Failed to create agent: ${response.status}`)
     }
-    await loadUserDetails()
+    
+    const agentData = await response.json()
+    
+    // Update local state instead of reloading to prevent infinite loop
+    if (user.value) {
+      user.value.workflowStage = 'approved'
+      user.value.assignedAgentId = agentData.agentId
+      user.value.assignedAgentName = agentData.agentName
+    }
+    
+    $q.notify({
+      type: 'positive',
+      message: 'Agent created successfully'
+    })
   } catch (err) {
     console.error('Error creating agent:', err)
     error.value = err.message
@@ -417,6 +454,15 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  min-height: calc(100vh - 40px); /* Account for padding */
+  overflow-y: visible; /* Allow natural scrolling */
+  box-sizing: border-box;
+  position: relative; /* Ensure proper stacking context */
+}
+
+/* Override any global height constraints that might interfere with scrolling */
+.user-details-page {
+  height: auto !important;
 }
 
 .page-header {

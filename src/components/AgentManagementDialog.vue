@@ -2180,7 +2180,7 @@ export default defineComponent({
             if (userData.workflowStage) {
               localCurrentUser.value.workflowStage = userData.workflowStage;
             }
-            
+          }
         } catch (error) {
           console.error(`❌ [AgentManagementDialog] Error fetching user workflow stage:`, error);
         }
