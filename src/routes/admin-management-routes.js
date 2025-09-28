@@ -1012,46 +1012,16 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       console.log(`🤖 [NEW AGENT] Generated agent name: ${agentName}`);
       
-      // Get available models first to find the correct model UUID
-      console.log(`🤖 [NEW AGENT] Fetching available models...`);
-      
-      let modelUuid = null;
-      try {
-        const modelsResponse = await doRequest('/v2/gen-ai/models');
-        const models = modelsResponse.models || modelsResponse.data?.models || [];
-        
-        // Find o1-mini model
-        const o1MiniModel = models.find(model => 
-          model.name && model.name.toLowerCase().includes('o1-mini')
-        );
-        
-        if (o1MiniModel) {
-          modelUuid = o1MiniModel.uuid;
-          console.log(`🤖 [NEW AGENT] Found o1-mini model: ${modelUuid}`);
-        } else {
-          console.log(`🤖 [NEW AGENT] o1-mini not found, using first available model`);
-          modelUuid = models[0]?.uuid;
-        }
-        
-        if (!modelUuid) {
-          throw new Error('No models available');
-        }
-        
-      } catch (modelError) {
-        console.error(`🤖 [NEW AGENT] Failed to get models:`, modelError);
-        throw new Error(`Failed to get available models: ${modelError.message}`);
-      }
-      
       // Create agent using DigitalOcean API
       const agentData = {
         name: agentName,
-        model_uuid: modelUuid,
+        model: "o1-mini",
         description: `Private AI agent for ${userDoc.email}`,
         project_id: "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
         region: "tor1"
       };
       
-      console.log(`🤖 [NEW AGENT] Calling DigitalOcean API to create agent with model: ${modelUuid}...`);
+      console.log(`🤖 [NEW AGENT] Calling DigitalOcean API to create agent...`);
       
       try {
         const agentResponse = await doRequest('/v2/gen-ai/agents', {
