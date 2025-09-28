@@ -128,6 +128,29 @@
         </div>
       </div>
 
+      <!-- Admin Notes -->
+      <div class="notes-section">
+        <h4 class="section-title">Administrator Notes</h4>
+        <QInput
+          v-model="adminNotes"
+          type="textarea"
+          outlined
+          rows="3"
+          placeholder="Add notes about this user or decision..."
+          class="notes-input"
+        />
+        <div class="q-mt-sm">
+          <QBtn
+            color="primary"
+            icon="save"
+            label="Save Notes"
+            @click="saveNotes"
+            :loading="isSavingNotes"
+            size="sm"
+          />
+        </div>
+      </div>
+
       <!-- Additional Info -->
       <div class="info-section">
         <h4 class="section-title">Additional Information</h4>
@@ -156,7 +179,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon } from 'quasar'
+import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput } from 'quasar'
 
 const $q = useQuasar()
 
@@ -164,6 +187,8 @@ const $q = useQuasar()
 const user = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const adminNotes = ref('')
+const isSavingNotes = ref(false)
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
@@ -193,6 +218,9 @@ const loadUserDetails = async () => {
     
     const userData = await response.json()
     user.value = userData
+    
+    // Load existing admin notes
+    adminNotes.value = userData.adminNotes || ''
     
     console.log(`✅ [UserDetailsPage2] Loaded user details for ${userId}`)
   } catch (err) {
@@ -364,6 +392,55 @@ const viewAgent = () => {
   })
 }
 
+const saveNotes = async () => {
+  if (!user.value || !adminNotes.value.trim()) {
+    $q.notify({
+      type: 'warning',
+      message: 'Please enter some notes to save',
+      position: 'top'
+    })
+    return
+  }
+  
+  isSavingNotes.value = true
+  try {
+    const response = await fetch(`/api/admin-management/users/${user.value.userId}/notes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        notes: adminNotes.value
+      }),
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to save notes: ${response.status}`)
+    }
+    
+    // Update the user's notes in the local state
+    if (user.value) {
+      user.value.adminNotes = adminNotes.value
+    }
+    
+    $q.notify({
+      type: 'positive',
+      message: 'Notes saved successfully',
+      position: 'top'
+    })
+  } catch (error) {
+    console.error('❌ [UserDetailsPage2] Failed to save notes:', error)
+    $q.notify({
+      type: 'negative',
+      message: `Failed to save notes: ${error.message}`,
+      position: 'top'
+    })
+  } finally {
+    isSavingNotes.value = false
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   loadUserDetails()
@@ -452,6 +529,7 @@ onMounted(() => {
 /* Status Section */
 .status-section,
 .actions-section,
+.notes-section,
 .info-section {
   background: #f8f9fa;
   border-radius: 8px;
@@ -488,6 +566,11 @@ onMounted(() => {
 .action-btn {
   min-width: 140px;
   font-weight: 500;
+}
+
+/* Notes Section */
+.notes-input {
+  margin-bottom: 12px;
 }
 
 /* Info Grid */
