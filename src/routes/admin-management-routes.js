@@ -37,6 +37,7 @@ const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database up
 const userDeploymentTracker = new Map(); // userId -> { agentId, agentName, status, lastCheck, retryCount, maxRetries }
 const DEPLOYMENT_CHECK_INTERVAL = 5 * 1000; // Check every 5 seconds
 const MAX_DEPLOYMENT_RETRIES = 30; // Max 15 minutes of checking
+let deploymentMonitoringInterval = null; // Track the monitoring interval
 
 // User-level cache invalidation function
 const invalidateUserCache = (userId) => {
@@ -53,6 +54,29 @@ const invalidateUserCache = (userId) => {
   cacheFunctions.invalidateCache('chats');
 };
 
+// Start deployment monitoring interval if not already running
+const startDeploymentMonitoring = () => {
+  if (deploymentMonitoringInterval) {
+    return; // Already running
+  }
+  
+  console.log('🚀 [DEPLOYMENT] Starting agent deployment monitoring...');
+  deploymentMonitoringInterval = setInterval(async () => {
+    try {
+      await checkAgentDeployments();
+      
+      // Stop monitoring if no more deployments to track
+      if (userDeploymentTracker.size === 0) {
+        console.log('🛑 [DEPLOYMENT] No active deployments - stopping monitoring');
+        clearInterval(deploymentMonitoringInterval);
+        deploymentMonitoringInterval = null;
+      }
+    } catch (error) {
+      console.error('❌ Error in deployment monitoring:', error);
+    }
+  }, DEPLOYMENT_CHECK_INTERVAL);
+};
+
 // Add user to deployment tracking
 const addToDeploymentTracking = (userId, agentId, agentName) => {
   const startTime = Date.now();
@@ -67,6 +91,11 @@ const addToDeploymentTracking = (userId, agentId, agentName) => {
   };
   
   userDeploymentTracker.set(userId, trackingEntry);
+  
+  // Start monitoring if this is the first deployment being tracked
+  if (userDeploymentTracker.size === 1) {
+    startDeploymentMonitoring();
+  }
   
   console.log(`🚀 Started tracking deployment for user ${userId}, agent ${agentName}`);
 };

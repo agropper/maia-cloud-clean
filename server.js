@@ -6995,15 +6995,8 @@ app.listen(PORT, async () => {
     await ensureAllUserBuckets();
     console.log('✅ [STARTUP] Bucket folder checks completed');
     
-    // Start deployment monitoring for agents
-    console.log('🚀 [STARTUP] Starting agent deployment monitoring...');
-    setInterval(async () => {
-      try {
-        await checkAgentDeployments();
-      } catch (error) {
-        console.error('❌ Error in deployment monitoring:', error);
-      }
-        }, 5 * 1000); // Check every 5 seconds
+    // Deployment monitoring will be started automatically when agents are created
+    // No need to start it on server startup since it only runs when there are active deployments
   
 // Start cleanup job for expired deep links
   setInterval(async () => {
