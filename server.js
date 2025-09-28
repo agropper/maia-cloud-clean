@@ -3251,8 +3251,39 @@ const getAgentApiKey = async (agentId) => {
           );
           
           if (!isValidKey) {
-            console.error(`🔑 ❌ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) is invalid - does not match any DigitalOcean keys`);
-            throw new Error(`Invalid API key stored for agent ${agentId}`);
+            console.warn(`🔑 ⚠️ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) is invalid - creating new key`);
+            // Create a new API key instead of throwing an error
+            try {
+              const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: `${userWithAgent.userId}-agent-${Date.now()}-api-key`
+                })
+              });
+              
+              const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
+              const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
+              
+              if (newApiKey) {
+                console.log(`🔑 ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
+                
+                // Update database with new API key
+                const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userWithAgent.userId);
+                if (userDoc) {
+                  userDoc.agentApiKey = newApiKey;
+                  await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+                  agentApiKeys[agentId] = newApiKey;
+                  console.log(`🔑 ✅ New API key saved to database for agent ${agentId}`);
+                  return newApiKey;
+                }
+              } else {
+                console.error(`🔑 ❌ Failed to extract new API key from response:`, newApiKeyResponse);
+                throw new Error(`Failed to create new API key for agent ${agentId}`);
+              }
+            } catch (createError) {
+              console.error(`🔑 ❌ Failed to create new API key for agent ${agentId}:`, createError.message);
+              throw new Error(`Failed to create new API key for agent ${agentId}: ${createError.message}`);
+            }
           } else {
             console.log(`🔑 ✅ Stored API key for agent ${agentId} is valid`);
           }
