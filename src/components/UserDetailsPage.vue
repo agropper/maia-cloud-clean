@@ -139,6 +139,10 @@
         <QCardSection>
           <h5 class="card-title">Admin Actions</h5>
           <div class="action-buttons">
+            <!-- Debug info -->
+            <div v-if="user" class="q-mb-md text-caption">
+              Debug: workflowStage = "{{ user.workflowStage }}"
+            </div>
             <QBtn
               v-if="user.workflowStage === 'awaiting_approval'"
               color="positive"
@@ -222,6 +226,8 @@ const loadUserDetails = async () => {
       throw new Error(`Failed to load user details: ${userResponse.status}`)
     }
     const userData = await userResponse.json()
+    console.log('🔍 [UserDetailsPage] Loaded user data:', userData)
+    console.log('🔍 [UserDetailsPage] Workflow stage:', userData.workflowStage)
     user.value = userData
 
     // Fetch bucket status
