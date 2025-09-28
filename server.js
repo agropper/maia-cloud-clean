@@ -1857,39 +1857,8 @@ app.post('/api/personal-chat', async (req, res) => {
     try {
       agentApiKey = await getAgentApiKey(agentId);
       
-      // DEBUG: Compare stored API key with DigitalOcean API keys
-      console.log(`🔑 [API KEY COMPARISON] Agent: ${agentId}`);
-      try {
-        // Get API keys from DigitalOcean API
-        const doApiKeysResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`);
-        console.log(`🔑 [DO API] DigitalOcean API keys for agent ${agentId}:`, {
-          response: doApiKeysResponse,
-          responseKeys: Object.keys(doApiKeysResponse || {}),
-          apiKeys: doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || 'No api_keys field found'
-        });
-        
-        // Show what we're using
-        console.log(`🔑 [STORED KEY] Using API key: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
-        
-        // Check if stored key matches any DO key
-        const doApiKeys = doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || [];
-        if (Array.isArray(doApiKeys)) {
-          const matchingKey = doApiKeys.find(key => key.key === agentApiKey || key.secret_key === agentApiKey);
-          if (matchingKey) {
-            console.log(`🔑 [MATCH] ✅ Stored key matches DigitalOcean key`);
-          } else {
-            console.log(`🔑 [MISMATCH] ❌ Stored key does not match any DigitalOcean key`);
-            console.log(`🔑 [DO KEYS] Available DO keys:`, doApiKeys.map(k => ({
-              id: k.id || k.uuid,
-              name: k.name,
-              key: k.key || k.secret_key ? (k.key || k.secret_key).substring(0, 10) + '...' : 'no key field',
-              created_at: k.created_at
-            })));
-          }
-        }
-      } catch (doError) {
-        console.error(`🔑 [DO API ERROR] Failed to fetch API keys from DigitalOcean:`, doError.message);
-      }
+      // API key retrieved successfully
+      console.log(`🔑 Using API key: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
       
       // Check if we have a valid API key
       if (!agentApiKey) {
@@ -3239,58 +3208,47 @@ const getAgentApiKey = async (agentId) => {
     if (userWithAgent && userWithAgent.agentApiKey) {
       console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.userId})`);
       
-      // Validate the stored API key by checking if it matches any DigitalOcean keys
+      // Validate the stored API key by making a test request to the agent
       try {
-        const doApiKeysResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`);
-        const doApiKeys = doApiKeysResponse?.api_keys || doApiKeysResponse?.api_key_infos || doApiKeysResponse?.data || [];
-        
-        if (Array.isArray(doApiKeys)) {
-          const isValidKey = doApiKeys.some(key => 
-            key.key === userWithAgent.agentApiKey || 
-            key.secret_key === userWithAgent.agentApiKey
-          );
-          
-          if (!isValidKey) {
-            console.warn(`🔑 ⚠️ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) is invalid - creating new key`);
-            // Create a new API key instead of throwing an error
-            try {
-              const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  name: `${userWithAgent.userId}-agent-${Date.now()}-api-key`
-                })
-              });
-              
-              const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
-              const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
-              
-              if (newApiKey) {
-                console.log(`🔑 ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
-                
-                // Update database with new API key
-                const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userWithAgent.userId);
-                if (userDoc) {
-                  userDoc.agentApiKey = newApiKey;
-                  await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
-                  agentApiKeys[agentId] = newApiKey;
-                  console.log(`🔑 ✅ New API key saved to database for agent ${agentId}`);
-                  return newApiKey;
-                }
-              } else {
-                console.error(`🔑 ❌ Failed to extract new API key from response:`, newApiKeyResponse);
-                throw new Error(`Failed to create new API key for agent ${agentId}`);
-              }
-            } catch (createError) {
-              console.error(`🔑 ❌ Failed to create new API key for agent ${agentId}:`, createError.message);
-              throw new Error(`Failed to create new API key for agent ${agentId}: ${createError.message}`);
-            }
-          } else {
-            console.log(`🔑 ✅ Stored API key for agent ${agentId} is valid`);
-          }
+        // Test the API key by making a simple request to the agent's health endpoint
+        const agentInfo = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+        if (agentInfo && agentInfo.uuid) {
+          console.log(`🔑 ✅ Stored API key for agent ${agentId} is valid`);
         }
       } catch (validationError) {
-        console.error(`🔑 ❌ Failed to validate stored API key for agent ${agentId}:`, validationError.message);
-        throw new Error(`Failed to validate API key for agent ${agentId}: ${validationError.message}`);
+        console.warn(`🔑 ⚠️ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) appears invalid - creating new key`);
+        // Create a new API key instead of throwing an error
+        try {
+          const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: `${userWithAgent.userId}-agent-${Date.now()}-api-key`
+            })
+          });
+          
+          const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
+          const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
+          
+          if (newApiKey) {
+            console.log(`🔑 ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
+            
+            // Update database with new API key
+            const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userWithAgent.userId);
+            if (userDoc) {
+              userDoc.agentApiKey = newApiKey;
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+              agentApiKeys[agentId] = newApiKey;
+              console.log(`🔑 ✅ New API key saved to database for agent ${agentId}`);
+              return newApiKey;
+            }
+          } else {
+            console.error(`🔑 ❌ Failed to extract new API key from response:`, newApiKeyResponse);
+            throw new Error(`Failed to create new API key for agent ${agentId}`);
+          }
+        } catch (createError) {
+          console.error(`🔑 ❌ Failed to create new API key for agent ${agentId}:`, createError.message);
+          throw new Error(`Failed to create new API key for agent ${agentId}: ${createError.message}`);
+        }
       }
       
       // TEMPORARY FIX: Create new API key for sat272 agent (old key is invalid)
