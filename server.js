@@ -3819,6 +3819,22 @@ app.get('/api/current-agent', async (req, res) => {
     
     console.log(`[SECURITY CHECK] Checking agent assignment for user: ${currentUser}`);
     
+    // DEBUG: Check user document for sat273 specifically
+    if (currentUser === 'sat273') {
+      try {
+        const userDoc = await couchDBClient.getDocument('maia_users', 'sat273');
+        console.log(`[DEBUG] sat273 user document:`, {
+          userId: userDoc?.userId,
+          assignedAgentId: userDoc?.assignedAgentId,
+          assignedAgentName: userDoc?.assignedAgentName,
+          workflowStage: userDoc?.workflowStage,
+          hasCredential: !!userDoc?.credentialID
+        });
+      } catch (error) {
+        console.error(`[DEBUG] Error getting sat273 user document:`, error.message);
+      }
+    }
+    
     if (currentUser !== 'Public User') {
       // Handle deep link users - they should use the agent assigned to the patient whose data is being shared
       if (currentUser.startsWith('deep_link_')) {
@@ -4237,13 +4253,7 @@ app.get('/api/current-agent', async (req, res) => {
         });
         
         // DEBUG: Show complete agent data being sent to frontend
-        console.log(`[AGENT DEBUG] Complete agent data sent to frontend:`, {
-          user: currentUser,
-          agent: transformedAgent,
-          agentKeys: Object.keys(transformedAgent),
-          hasKnowledgeBase: !!transformedAgent.knowledgeBase,
-          hasKnowledgeBases: !!(transformedAgent.knowledgeBases && transformedAgent.knowledgeBases.length > 0)
-        });
+    // Agent data sent to frontend
 
     res.json(response);
   } catch (error) {
