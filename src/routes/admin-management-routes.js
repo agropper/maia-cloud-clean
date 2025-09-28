@@ -157,43 +157,69 @@ const checkAgentDeployments = async () => {
           console.error(`❌ [SSE] Error sending admin notification:`, sseError.message);
         }
         
-        // Get user document (cache-aware)
-        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+        // Get user document (cache-aware) with retry logic for conflicts
+        let userDoc;
+        let retryCount = 0;
+        const maxRetries = 3;
         
-        if (userDoc) {
-          const updatedUser = {
-            ...userDoc,
-            workflowStage: 'agent_assigned',
-            assignedAgentId: tracking.agentId,
-            assignedAgentName: tracking.agentName,
-            agentDeployedAt: new Date().toISOString(),
-            agentAssignedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          
-          await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
-          
-          // Invalidate user cache to ensure fresh data
-          invalidateUserCache(userId);
-          
-          // Ensure bucket folder exists for knowledge base creation
+        while (retryCount < maxRetries) {
           try {
-            const bucketResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId })
-            });
+            userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
             
-            if (bucketResponse.ok) {
-              const bucketData = await bucketResponse.json();
+            if (userDoc) {
+              // Check if user is already in agent_assigned stage to avoid duplicate updates
+              if (userDoc.workflowStage === 'agent_assigned' && userDoc.assignedAgentId === tracking.agentId) {
+                console.log(`ℹ️ User ${userId} already has agent assigned - skipping update`);
+                break;
+              }
+              
+              const updatedUser = {
+                ...userDoc,
+                workflowStage: 'agent_assigned',
+                assignedAgentId: tracking.agentId,
+                assignedAgentName: tracking.agentName,
+                agentDeployedAt: new Date().toISOString(),
+                agentAssignedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+              
+              // Invalidate user cache to ensure fresh data
+              invalidateUserCache(userId);
+              
+              console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
+              break;
+            } else {
+              console.error(`❌ User document not found for ${userId}`);
+              break;
             }
-          } catch (bucketError) {
-            // Error handling removed for cleaner console
+          } catch (saveError) {
+            retryCount++;
+            if (saveError.message.includes('Document update conflict') && retryCount < maxRetries) {
+              console.log(`⚠️ Document conflict for user ${userId}, retrying... (${retryCount}/${maxRetries})`);
+              // Wait a bit before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            } else {
+              console.error(`❌ Failed to update user ${userId} after ${retryCount} retries:`, saveError.message);
+              break;
+            }
           }
+        }
+        
+        // Ensure bucket folder exists for knowledge base creation
+        try {
+          const bucketResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+          });
           
-          console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
-        } else {
-          console.error(`❌ User document not found for ${userId}`);
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json();
+          }
+        } catch (bucketError) {
+          // Error handling removed for cleaner console
         }
         
         // Remove from tracking

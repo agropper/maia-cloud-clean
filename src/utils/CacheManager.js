@@ -166,7 +166,7 @@ export class CacheManager {
       this.onCircuitBreakerSuccess();
       return result;
     } catch (error) {
-      this.onCircuitBreakerFailure();
+      this.onCircuitBreakerFailure(error);
       throw error;
     }
   }
@@ -185,7 +185,14 @@ export class CacheManager {
   /**
    * Circuit breaker failure handler
    */
-  onCircuitBreakerFailure() {
+  onCircuitBreakerFailure(error) {
+    // Don't count document update conflicts as circuit breaker failures
+    // These are just concurrency issues that can be retried
+    if (error && error.message && error.message.includes('Document update conflict')) {
+      console.log(`ℹ️ [CACHE] Document update conflict - not counting as circuit breaker failure`);
+      return;
+    }
+    
     this.circuitBreaker.failureCount++;
     this.circuitBreaker.lastFailureTime = Date.now();
     
