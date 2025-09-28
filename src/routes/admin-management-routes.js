@@ -708,50 +708,53 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
-    const users = allUsers
-      .filter(user => {
-        // Exclude design documents only (Public User should be included)
-        if (user._id.startsWith('_design/')) {
-          return false;
-        }
-        // For wed271, allow it through even if it has isAdmin: true (special case)
-        if (user._id === 'wed271') {
-          return true;
-        }
-        // For all other users, exclude admin users
-        const isAdmin = user.isAdmin;
-        return !isAdmin;
-      })
-      .map(user => {
-        // Extract current agent information from ownedAgents if available
-        let assignedAgentId = user.assignedAgentId || null;
-        let assignedAgentName = user.assignedAgentName || null;
-        
-        // If we have ownedAgents but no assignedAgentId, use the first owned agent
-        if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
-          const firstAgent = user.ownedAgents[0];
-          assignedAgentId = firstAgent.id;
-          assignedAgentName = firstAgent.name;
-        }
-        
-        // Check if passkey is valid (not a test credential)
-        const hasValidPasskey = !!(user.credentialID && 
-          user.credentialID !== 'test-credential-id-wed271' && 
-          user.credentialPublicKey && 
-          user.counter !== undefined);
-        
-        return {
-          userId: user._id,
-          displayName: user.displayName || user._id,
-          createdAt: user.createdAt,
-          hasPasskey: !!user.credentialID,
-          hasValidPasskey: hasValidPasskey,
-          workflowStage: determineWorkflowStage(user),
-          assignedAgentId: assignedAgentId,
-          assignedAgentName: assignedAgentName,
-          email: user.email || null
-        };
-      })
+    const filteredUsers = allUsers.filter(user => {
+      // Exclude design documents only (Public User should be included)
+      if (user._id.startsWith('_design/')) {
+        return false;
+      }
+      // For wed271, allow it through even if it has isAdmin: true (special case)
+      if (user._id === 'wed271') {
+        return true;
+      }
+      // For all other users, exclude admin users
+      const isAdmin = user.isAdmin;
+      return !isAdmin;
+    });
+    
+    // Process users with async workflow stage determination
+    const processedUsers = await Promise.all(filteredUsers.map(async user => {
+      // Extract current agent information from ownedAgents if available
+      let assignedAgentId = user.assignedAgentId || null;
+      let assignedAgentName = user.assignedAgentName || null;
+      
+      // If we have ownedAgents but no assignedAgentId, use the first owned agent
+      if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+        const firstAgent = user.ownedAgents[0];
+        assignedAgentId = firstAgent.id;
+        assignedAgentName = firstAgent.name;
+      }
+      
+      // Check if passkey is valid (not a test credential)
+      const hasValidPasskey = !!(user.credentialID && 
+        user.credentialID !== 'test-credential-id-wed271' && 
+        user.credentialPublicKey && 
+        user.counter !== undefined);
+      
+      return {
+        userId: user._id,
+        displayName: user.displayName || user._id,
+        createdAt: user.createdAt,
+        hasPasskey: !!user.credentialID,
+        hasValidPasskey: hasValidPasskey,
+        workflowStage: await determineWorkflowStage(user),
+        assignedAgentId: assignedAgentId,
+        assignedAgentName: assignedAgentName,
+        email: user.email || null
+      };
+    }));
+    
+    const users = processedUsers
       .filter(processedUser => processedUser.userId !== 'admin') // Exclude admin user from final list
       .sort((a, b) => {
         // Sort "awaiting_approval" to the top
@@ -843,7 +846,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       transports: userDoc.transports,
       domain: userDoc.domain,
       type: userDoc.type,
-      workflowStage: determineWorkflowStage(userDoc),
+      workflowStage: await determineWorkflowStage(userDoc),
       adminNotes: userDoc.adminNotes || '',
       approvalStatus: userDoc.approvalStatus,
       // Agent information - use assignedAgentId as source of truth
@@ -1151,8 +1154,35 @@ function validateWorkflowConsistency(user) {
   
 }
 
-function determineWorkflowStage(user) {
-  // Primary source of truth: stored workflowStage field
+async function determineWorkflowStage(user) {
+  // CRITICAL: If user has an assigned agent, validate against DO API (source of truth)
+  if (user.assignedAgentId && user.assignedAgentName) {
+    try {
+      // Check DO API to see if agent is actually deployed
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${user.assignedAgentId}`);
+      const agentData = agentResponse.agent || agentResponse.data || agentResponse;
+      const deploymentStatus = agentData.deployment?.status;
+      
+      if (deploymentStatus === 'STATUS_RUNNING') {
+        // Agent is deployed and running - workflow stage MUST be 'agent_assigned'
+        if (user.workflowStage !== 'agent_assigned') {
+          console.log(`🔧 [WORKFLOW FIX] User ${user._id} has deployed agent ${user.assignedAgentName} but workflow stage is '${user.workflowStage}' - correcting to 'agent_assigned'`);
+          // Schedule automatic database fix
+          scheduleWorkflowStageFix(user._id, 'agent_assigned');
+        }
+        return 'agent_assigned';
+      } else {
+        // Agent exists but not deployed - workflow stage should not be 'agent_assigned'
+        console.log(`⚠️ [WORKFLOW WARNING] User ${user._id} has agent ${user.assignedAgentName} but deployment status is '${deploymentStatus}' - not 'agent_assigned'`);
+        // Don't return 'agent_assigned' if agent isn't actually running
+      }
+    } catch (error) {
+      console.error(`❌ [WORKFLOW ERROR] Failed to validate agent ${user.assignedAgentId} for user ${user._id}:`, error.message);
+      // If we can't validate against DO API, fall back to database state
+    }
+  }
+  
+  // Primary source of truth: stored workflowStage field (when no agent or validation fails)
   if (user.workflowStage) {
     // Validate consistency between workflowStage and approvalStatus
     try {
@@ -1201,6 +1231,37 @@ function determineWorkflowStage(user) {
   
   return 'unknown';
 }
+
+// Schedule automatic workflow stage fix to prevent database inconsistencies
+const scheduleWorkflowStageFix = async (userId, correctWorkflowStage) => {
+  try {
+    console.log(`🔧 [WORKFLOW FIX] Scheduling automatic fix for user ${userId} to workflow stage '${correctWorkflowStage}'`);
+    
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      console.error(`❌ [WORKFLOW FIX] User ${userId} not found in database`);
+      return;
+    }
+    
+    // Update workflow stage
+    const updatedUser = {
+      ...userDoc,
+      workflowStage: correctWorkflowStage,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save to database
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    // Invalidate cache
+    invalidateUserCache(userId);
+    
+    console.log(`✅ [WORKFLOW FIX] Successfully updated user ${userId} workflow stage to '${correctWorkflowStage}'`);
+  } catch (error) {
+    console.error(`❌ [WORKFLOW FIX] Failed to fix workflow stage for user ${userId}:`, error.message);
+  }
+};
 
 // Admin endpoint to update user workflow stage
 router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) => {
