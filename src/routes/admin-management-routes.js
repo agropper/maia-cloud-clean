@@ -711,9 +711,17 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
     const filteredUsers = allUsers.filter(user => {
-      // Exclude design documents only (Public User should be included)
+      // Exclude design documents
       if (user._id.startsWith('_design/')) {
         return false;
+      }
+      // Exclude configuration documents (not real users)
+      if (user._id === 'maia_config') {
+        return false;
+      }
+      // Always include Public User and deep link users (they should be visible)
+      if (user._id === 'Public User' || user._id.startsWith('deep-')) {
+        return true;
       }
       // For wed271, allow it through even if it has isAdmin: true (special case)
       if (user._id === 'wed271') {
@@ -757,7 +765,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }));
     
     const users = processedUsers
-      .filter(processedUser => processedUser.userId !== 'admin') // Exclude admin user from final list
       .sort((a, b) => {
         // Sort "awaiting_approval" to the top
         if (a.workflowStage === 'awaiting_approval' && b.workflowStage !== 'awaiting_approval') {
