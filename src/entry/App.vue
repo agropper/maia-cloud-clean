@@ -2,7 +2,9 @@
 import ChatPrompt from '../components/ChatPromptRefactored.vue'
 import TooltipTest from '../components/TooltipTest.vue'
 import AdminPanel from '../components/AdminPanel.vue'
+import AdminPanel2 from '../components/AdminPanel2.vue'
 import UserDetailsPage from '../components/UserDetailsPage.vue'
+import UserDetailsPage2 from '../components/UserDetailsPage2.vue'
 import WelcomeModal from '../components/WelcomeModal.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
@@ -35,14 +37,29 @@ const isAdminRoute = computed(() => {
   return window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
 })
 
+// Check if we're on the new admin2 route
+const isAdmin2Route = computed(() => {
+  return window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register'
+})
+
 // Check if we're on a user details route
 const isUserDetailsRoute = computed(() => {
   return window.location.pathname.startsWith('/admin/user/')
 })
 
+// Check if we're on the new admin2 user details route
+const isAdmin2UserDetailsRoute = computed(() => {
+  return window.location.pathname.startsWith('/admin2/user/')
+})
+
 // Check if we're on the admin registration route specifically
 const isAdminRegisterRoute = computed(() => {
   return window.location.pathname === '/admin/register'
+})
+
+// Check if we're on the admin2 registration route specifically
+const isAdmin2RegisterRoute = computed(() => {
+  return window.location.pathname === '/admin2/register'
 })
 
 // Check if we have admin-related error parameters (redirected from admin routes)
@@ -224,7 +241,9 @@ const getLoadingProgress = () => {
     <div v-if="isInitialized && !isLoading" class="app-content">
       <TooltipTest v-if="isTooltipTest" />
       <UserDetailsPage v-else-if="isUserDetailsRoute" />
+      <UserDetailsPage2 v-else-if="isAdmin2UserDetailsRoute" />
       <AdminPanel v-else-if="isAdminRoute" :isRegistrationRoute="isAdminRegisterRoute" />
+      <AdminPanel2 v-else-if="isAdmin2Route" :isRegistrationRoute="isAdmin2RegisterRoute" />
       <div v-else-if="shouldShowBlankPage" class="admin-error-page">
         <div class="error-content">
           <h2>🚫 Admin Access Denied</h2>
