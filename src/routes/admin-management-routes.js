@@ -981,48 +981,132 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
   }
 });
 
-// Assign agent to a user
+// Assign agent to a user or create new agent
 router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { agentId, agentName } = req.body;
+    const { agentId, agentName, action } = req.body;
     
-    if (!agentId || !agentName) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: agentId and agentName' 
+    console.log(`🤖 [NEW AGENT] Assign agent request for user ${userId}:`, req.body);
+    
+    // Handle agent creation request
+    if (action === 'create') {
+      console.log(`🤖 [NEW AGENT] Creating new agent for user: ${userId}`);
+      
+      // Get user document
+      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      if (!userDoc.email) {
+        return res.status(400).json({ 
+          error: 'User must have an email address to create an agent' 
+        });
+      }
+      
+      // Generate agent name based on user ID and date
+      const today = new Date();
+      const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
+      const agentName = `${userId}-agent-${dateStr}`;
+      
+      console.log(`🤖 [NEW AGENT] Generated agent name: ${agentName}`);
+      
+      // Create agent using DigitalOcean API
+      const agentData = {
+        name: agentName,
+        model: "o1-mini",
+        description: `Private AI agent for ${userDoc.email}`,
+        project_id: "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+        region: "tor1"
+      };
+      
+      console.log(`🤖 [NEW AGENT] Calling DigitalOcean API to create agent...`);
+      
+      try {
+        const agentResponse = await doRequest('/v2/gen-ai/agents', {
+          method: 'POST',
+          body: JSON.stringify(agentData)
+        });
+        
+        const newAgent = agentResponse.agent || agentResponse.data?.agent || agentResponse;
+        const newAgentId = newAgent.uuid || newAgent.id;
+        
+        console.log(`🤖 [NEW AGENT] Agent created successfully: ${newAgentId}`);
+        
+        // Update user with assigned agent information
+        const updatedUser = {
+          ...userDoc,
+          assignedAgentId: newAgentId,
+          assignedAgentName: agentName,
+          agentAssignedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+        
+        // Start tracking deployment for this user
+        addToDeploymentTracking(userId, newAgentId, agentName);
+        
+        // Invalidate user cache to ensure fresh data
+        invalidateUserCache(userId);
+        
+        console.log(`🤖 [NEW AGENT] Agent assignment completed for user ${userId}`);
+        
+        res.json({ 
+          message: 'Agent created and assigned successfully',
+          userId: userId,
+          agentId: newAgentId,
+          agentName: agentName,
+          timestamp: new Date().toISOString()
+        });
+        
+      } catch (agentError) {
+        console.error(`🤖 [NEW AGENT] Failed to create agent:`, agentError);
+        return res.status(500).json({ 
+          error: `Failed to create agent: ${agentError.message}` 
+        });
+      }
+      
+    } else {
+      // Handle existing agent assignment
+      if (!agentId || !agentName) {
+        return res.status(400).json({ 
+          error: 'Missing required fields: agentId and agentName' 
+        });
+      }
+      
+      // Get user document
+      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+      if (!userDoc) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Update user with assigned agent information
+      const updatedUser = {
+        ...userDoc,
+        assignedAgentId: agentId,
+        assignedAgentName: agentName,
+        agentAssignedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+      
+      // Start tracking deployment for this user
+      addToDeploymentTracking(userId, agentId, agentName);
+      
+      // Invalidate user cache to ensure fresh data
+      invalidateUserCache(userId);
+      
+      res.json({ 
+        message: 'Agent assigned successfully',
+        userId: userId,
+        agentId: agentId,
+        agentName: agentName,
+        timestamp: new Date().toISOString()
       });
     }
-    
-    // Get user document
-    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
-    if (!userDoc) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // Update user with assigned agent information
-    const updatedUser = {
-      ...userDoc,
-      assignedAgentId: agentId,
-      assignedAgentName: agentName,
-      agentAssignedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
-    
-    // Start tracking deployment for this user
-    addToDeploymentTracking(userId, agentId, agentName);
-    
-    // Invalidate user cache to ensure fresh data
-    invalidateUserCache(userId);
-    
-    res.json({ 
-      message: 'Agent assigned successfully',
-      userId: userId,
-      agentId: agentId,
-      agentName: agentName,
-      timestamp: new Date().toISOString()
-    });
     
   } catch (error) {
     console.error('Error assigning agent:', error);
