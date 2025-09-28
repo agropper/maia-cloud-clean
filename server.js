@@ -36,6 +36,7 @@ import pdf from 'pdf-parse';
 import multer from 'multer';
 import session from 'express-session';
 import fs from 'fs';
+import { cacheManager } from './src/utils/CacheManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -1571,7 +1572,7 @@ app.post('/api/personal-chat', async (req, res) => {
       try {
         // Get the deep link user's session to find the shareId
         // console.log(`🔗 [DEBUG] Step 2: Looking up deep link user document in maia_users...`);
-        const deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        const deepLinkUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
 //         console.log(`🔗 [DEBUG] Step 2 Result:`, deepLinkUserDoc ? {
 //           userId: deepLinkUserDoc.userId,
 //           shareId: deepLinkUserDoc.shareId,
@@ -1729,7 +1730,7 @@ app.post('/api/personal-chat', async (req, res) => {
       if (currentUser !== 'Public User') {
         // Check if user has a current agent selection stored in Cloudant
         try {
-          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
           if (userDoc && userDoc.assignedAgentId) {
             // Get the agent's deployment URL from DigitalOcean API
             const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
@@ -1767,7 +1768,7 @@ app.post('/api/personal-chat', async (req, res) => {
       } else {
         // For Public User, check if they have a current agent selection stored in Cloudant
         try {
-          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
           
           // For Public User, use assignedAgentId as source of truth
           const userAgentId = userDoc?.assignedAgentId;
@@ -1804,7 +1805,7 @@ app.post('/api/personal-chat', async (req, res) => {
                 agentAssignedAt: null,
                 updatedAt: new Date().toISOString()
               };
-              await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
               
               // Update cache to reflect the cleared assignment
               setCache('users', 'Public User', updatedUserDoc);
@@ -3218,7 +3219,7 @@ const getAgentApiKey = async (agentId) => {
   // Check if we have the API key stored in the database
   try {
     // Find user with this agent assigned
-    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
     // Handle different response structures from getAllDocuments
     let userList;
@@ -3260,10 +3261,10 @@ const getAgentApiKey = async (agentId) => {
             console.log(`🔑 [TEMPORARY FIX] ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
             
             // Update database with new API key
-            const userDoc = await couchDBClient.getDocument('maia_users', 'sat272');
+            const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'sat272');
             if (userDoc) {
               userDoc.agentApiKey = newApiKey;
-              await couchDBClient.saveDocument('maia_users', userDoc);
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
               agentApiKeys[agentId] = newApiKey;
               console.log(`🔑 [TEMPORARY FIX] ✅ New API key saved to database for agent ${agentId}`);
               return newApiKey;
@@ -3514,7 +3515,7 @@ app.get('/api/agents', async (req, res) => {
       // Authenticated user should only see their own agents
       try {
         // console.log(`🔍 [DEBUG] Getting owned agents for authenticated user: ${currentUser}`);
-        const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
 //         console.log(`🔍 [DEBUG] User document:`, userDoc);
         
         const ownedAgentIds = new Set();
@@ -3635,7 +3636,7 @@ app.post('/api/agents/:agentId/assign', async (req, res) => {
     // Get or create user document
     let userDoc;
     try {
-      userDoc = await couchDBClient.getDocument('maia_users', userId);
+      userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     } catch (error) {
       if (error.statusCode === 404) {
         // Create new user document
@@ -3677,7 +3678,7 @@ app.post('/api/agents/:agentId/assign', async (req, res) => {
       userDoc.updatedAt = new Date().toISOString();
       
       // Save updated user document
-      await couchDBClient.saveDocument('maia_users', userDoc);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
       
       console.log(`[*] Assigned agent ${selectedAgent.name} (${agentId}) to user ${userId}`);
       res.json({ 
@@ -3709,7 +3710,7 @@ app.delete('/api/agents/:agentId/assign', async (req, res) => {
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
     // Check if agent is assigned (by UUID)
     const agentIndex = userDoc.ownedAgents.findIndex(agent => agent.id === agentId);
@@ -3721,7 +3722,7 @@ app.delete('/api/agents/:agentId/assign', async (req, res) => {
       userDoc.updatedAt = new Date().toISOString();
       
       // Save updated user document
-      await couchDBClient.saveDocument('maia_users', userDoc);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
       
       console.log(`[*] Unassigned agent ${agentName} (${agentId}) from user ${userId}`);
       res.json({ 
@@ -3801,7 +3802,7 @@ app.get('/api/current-agent', async (req, res) => {
           // console.log(`🔗 [DEBUG] Step 2: Looking up deep link user document in maia_users...`);
           let deepLinkUserDoc = getCache('users', currentUser);
           if (!isCacheValid('users', currentUser)) {
-            deepLinkUserDoc = await couchDBClient.getDocument('maia_users', currentUser);
+            deepLinkUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
             if (deepLinkUserDoc) {
               setCache('users', currentUser, deepLinkUserDoc);
             }
@@ -3940,7 +3941,7 @@ app.get('/api/current-agent', async (req, res) => {
           // Get user document from database
           let userDoc = getCache('users', currentUser);
           if (!isCacheValid('users', currentUser)) {
-            userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+            userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
             if (userDoc) {
               setCache('users', currentUser, userDoc);
             }
@@ -3971,7 +3972,7 @@ app.get('/api/current-agent', async (req, res) => {
         // For Public User, check if they have a current agent selection stored in Cloudant
         try {
           // Always get fresh data from database for Public User to ensure validation
-          const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
           
           // Agent choice feature is not implemented yet - clear any current agent selections
           if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
@@ -3982,7 +3983,7 @@ app.get('/api/current-agent', async (req, res) => {
             userDoc.updatedAt = new Date().toISOString();
             
             // Save the corrected document
-            await couchDBClient.saveDocument('maia_users', userDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
           }
           
           // Fix corrupted Public User assigned agent - should only be public agents
@@ -4002,7 +4003,7 @@ app.get('/api/current-agent', async (req, res) => {
                 userDoc.updatedAt = new Date().toISOString();
                 
                 // Save the corrected document
-                await couchDBClient.saveDocument('maia_users', userDoc);
+                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
                 
                 // Update cache
                 setCache('users', 'Public User', userDoc);
@@ -4041,7 +4042,7 @@ app.get('/api/current-agent', async (req, res) => {
                 agentAssignedAt: null,
                 updatedAt: new Date().toISOString()
               };
-              await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
               
               // Update cache to reflect the cleared assignment
               setCache('users', 'Public User', updatedUserDoc);
@@ -4085,7 +4086,7 @@ app.get('/api/current-agent', async (req, res) => {
         
         try {
           // Clear the agent from the user's document
-          const userDoc = await couchDBClient.getDocument('maia_users', currentUser);
+          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
           if (userDoc) {
             const updatedUserDoc = {
               ...userDoc,
@@ -4095,7 +4096,7 @@ app.get('/api/current-agent', async (req, res) => {
               updatedAt: new Date().toISOString()
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
             
             // Clear from cache
             invalidateCache('users', currentUser);
@@ -4351,7 +4352,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
               source: 'digitalocean_sync'
             };
             
-            await couchDBClient.saveDocument("maia_knowledge_bases", newKbDoc);
+            await cacheManager.saveDocument(couchDBClient, "maia_knowledge_bases", newKbDoc);
             // console.log(`✅ [SYNC] Created KB document in Cloudant: ${kbName}`);
             
             // Update our local reference
@@ -4458,7 +4459,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
               attachedAt: new Date().toISOString(),
               attachedBy: currentUser ? currentUser.username : 'unauthenticated'
             };
-            await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+            await cacheManager.saveDocument(couchDBClient, "maia_knowledge_bases", updatedKbDoc);
             // console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
           }
         } catch (cloudantUpdateError) {
@@ -4505,7 +4506,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
                   attachedAt: new Date().toISOString(),
                   attachedBy: currentUser ? currentUser.username : 'unauthenticated'
                 };
-                await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+                await cacheManager.saveDocument(couchDBClient, "maia_knowledge_bases", updatedKbDoc);
                 // console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
               }
             } catch (cloudantUpdateError) {
@@ -4577,7 +4578,7 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
             attachedAt: new Date().toISOString(),
             attachedBy: currentUser ? currentUser.username : 'unauthenticated'
           };
-          await couchDBClient.saveDocument("maia_knowledge_bases", updatedKbDoc);
+          await cacheManager.saveDocument(couchDBClient, "maia_knowledge_bases", updatedKbDoc);
           // console.log(`✅ [CLOUDANT] Updated KB ${kbId} attachment info in Cloudant`);
         }
       } catch (cloudantUpdateError) {
@@ -4778,7 +4779,7 @@ app.post('/api/agents', async (req, res) => {
       try {
         
         // Get user document
-        const userDoc = await couchDBClient.getDocument('maia_users', userId);
+        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         if (userDoc) {
           // Update user document with agent information (but keep workflow stage as 'approved' until deployment completes)
           const updatedUserDoc = {
@@ -4793,7 +4794,7 @@ app.post('/api/agents', async (req, res) => {
           };
           
           // Save updated document
-          await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
           
           // Invalidate user cache
           setCache('users', userId, updatedUserDoc);
@@ -4882,7 +4883,7 @@ app.get('/api/knowledge-bases', async (req, res) => {
     // 2. Fetch protection metadata from Cloudant
     let protectionDocs = [];
     try {
-      protectionDocs = await couchDBClient.getAllDocuments('maia_knowledge_bases');
+      protectionDocs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
     } catch (err) {
       console.warn('Could not fetch KB protection metadata from Cloudant:', err.message);
     }
@@ -4982,7 +4983,7 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
 //     console.log('🔍 [admin] Clearing Public User agent assignment...');
     
     // Get Public User document
-    const userDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
 //     console.log('🔍 [admin] Current Public User document:', {
 //       currentAgentId: userDoc.currentAgentId,
 //       currentAgentName: userDoc.currentAgentName
@@ -4998,7 +4999,7 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
     };
     
     // Save updated document
-    await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
     
     // Update cache
     setCache('users', 'Public User', updatedUserDoc);
@@ -6206,67 +6207,15 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
 import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
 
-// In-memory caching system to prevent redundant Cloudant calls
-const dataCache = {
-  users: new Map(), // userId -> userDocument
-  chats: new Map(), // 'all' -> allChatsArray
-  agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
-  lastUpdated: {
-    users: new Map(), // userId -> timestamp
-    chats: 0, // timestamp
-    agentAssignments: new Map() // userId -> timestamp
-  },
-  
-  // Cache TTL (Time To Live) in milliseconds
-  TTL: {
-    users: 5 * 60 * 1000, // 5 minutes
-    chats: 2 * 60 * 1000, // 2 minutes  
-    agentAssignments: 5 * 60 * 1000 // 5 minutes
-  }
-};
-
-// Cache helper functions
-const isCacheValid = (cacheType, key = null) => {
-  const now = Date.now();
-  if (cacheType === 'chats') {
-    return dataCache.lastUpdated.chats > 0 && (now - dataCache.lastUpdated.chats) < dataCache.TTL.chats;
-  }
-  if (key) {
-    const lastUpdate = dataCache.lastUpdated[cacheType].get(key);
-    return lastUpdate && (now - lastUpdate) < dataCache.TTL[cacheType];
-  }
-  return false;
-};
-
-const setCache = (cacheType, key, data) => {
-  const now = Date.now();
-  if (cacheType === 'chats') {
-    dataCache.chats.set('all', data);
-    dataCache.lastUpdated.chats = now;
-  } else {
-    dataCache[cacheType].set(key, data);
-    dataCache.lastUpdated[cacheType].set(key, now);
-  }
-};
-
-const getCache = (cacheType, key = null) => {
-  if (cacheType === 'chats') {
-    return dataCache.chats.get('all');
-  }
-  return dataCache[cacheType].get(key);
-};
+// Unified cache system using CacheManager
+// The cacheManager is imported from './src/utils/CacheManager.js'
+// Legacy cache functions for backward compatibility
+const isCacheValid = (cacheType, key = null) => cacheManager.isCacheValid(cacheType, key);
+const setCache = (cacheType, key, data) => cacheManager.setCached(cacheType, key, data);
+const getCache = (cacheType, key = null) => cacheManager.getCached(cacheType, key);
 
 const invalidateCache = (cacheType, key = null) => {
-  if (cacheType === 'chats') {
-    dataCache.chats.clear();
-    dataCache.lastUpdated.chats = 0;
-  } else if (key) {
-    dataCache[cacheType].delete(key);
-    dataCache.lastUpdated[cacheType].delete(key);
-  } else {
-    dataCache[cacheType].clear();
-    dataCache.lastUpdated[cacheType].clear();
-  }
+  cacheManager.invalidateCache(cacheType, key);
 };
 
 // Reload chat cache from database
@@ -6354,7 +6303,7 @@ app.post('/api/cleanup-database', async (req, res) => {
     ];
     
     // Get all current documents
-    const allDocs = await couchDBClient.getAllDocuments('maia_users');
+    const allDocs = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
 //     console.log(`📊 Current documents: ${allDocs.length}`);
     
     // Delete all current documents
@@ -6372,7 +6321,7 @@ app.post('/api/cleanup-database', async (req, res) => {
     // console.log('📤 Inserting essential users...');
     for (const user of essentialUsers) {
       try {
-        await couchDBClient.saveDocument('maia_users', user);
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', user);
 //         console.log(`  ✅ Inserted: ${user._id}`);
       } catch (error) {
 //         console.log(`  ❌ Error inserting ${user._id}: ${error.message}`);
@@ -6380,7 +6329,7 @@ app.post('/api/cleanup-database', async (req, res) => {
     }
     
     // Verify cleanup
-    const finalDocs = await couchDBClient.getAllDocuments('maia_users');
+    const finalDocs = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
 //     console.log(`✅ Cleanup complete! Final count: ${finalDocs.length} documents`);
     
     res.json({ 
@@ -6434,7 +6383,7 @@ app.post('/api/fix-agent-ownership', async (req, res) => {
         // Get current user document
         let userDoc;
         try {
-          userDoc = await couchDBClient.getDocument('maia_users', userId);
+          userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         } catch (error) {
           if (error.statusCode === 404) {
 //             console.log(`  ❌ User ${userId} not found, skipping...`);
@@ -6455,7 +6404,7 @@ app.post('/api/fix-agent-ownership', async (req, res) => {
         };
         
         // Save updated document
-        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
 //         console.log(`  ✅ Updated ${userId} with agent ownership`);
         results.push({ userId, status: 'updated', agents: agentData.ownedAgents.map(a => a.name) });
         
@@ -6489,10 +6438,10 @@ app.get('/api/examine-users', async (req, res) => {
 //     console.log('🔍 Examining fri951 and wed271 user documents...');
     
     // Get fri951 user document
-    const fri951Doc = await couchDBClient.getDocument('maia_users', 'fri951');
+    const fri951Doc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'fri951');
     
     // Get wed271 user document
-    const wed271Doc = await couchDBClient.getDocument('maia_users', 'wed271');
+    const wed271Doc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'wed271');
     
     // Compare the documents
     const comparison = {
@@ -6574,7 +6523,7 @@ app.get('/api/fix-agent-ownership', async (req, res) => {
         // Get current user document
         let userDoc;
         try {
-          userDoc = await couchDBClient.getDocument('maia_users', userId);
+          userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         } catch (error) {
           if (error.statusCode === 404) {
 //             console.log(`  ❌ User ${userId} not found, skipping...`);
@@ -6595,7 +6544,7 @@ app.get('/api/fix-agent-ownership', async (req, res) => {
         };
         
         // Save updated document
-        await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
 //         console.log(`  ✅ Updated ${userId} with agent ownership`);
         results.push({ userId, status: 'updated', agents: agentData.ownedAgents.map(a => a.name) });
         
@@ -6676,7 +6625,7 @@ app.post('/api/deep-link-users', async (req, res) => {
           updatedAt: new Date().toISOString()
         };
         
-        await couchDBClient.saveDocument('maia_users', updatedUser);
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
         
         return res.json({
           success: true,
@@ -6734,7 +6683,7 @@ app.post('/api/deep-link-users', async (req, res) => {
     };
 
     // Save to maia_users database
-    await couchDBClient.saveDocument('maia_users', userDoc);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
 //     console.log(`✅ Deep link user saved: ${name} (${email}) for share ${shareId}`);
     
@@ -6773,7 +6722,7 @@ app.post('/api/deep-link-users/choose-email', async (req, res) => {
     // console.log(`🔍 [Deep Link] User chose: ${choice} for existing user: ${existingUserId}`);
 
     // Get the existing user
-    const existingUser = await couchDBClient.getDocument('maia_users', existingUserId);
+    const existingUser = await cacheManager.getDocument(couchDBClient, 'maia_users', existingUserId);
     
     if (!existingUser) {
       return res.status(404).json({ 
@@ -6798,7 +6747,7 @@ app.post('/api/deep-link-users/choose-email', async (req, res) => {
         updatedAt: new Date().toISOString()
       };
       
-      await couchDBClient.saveDocument('maia_users', finalUser);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUser);
       message = 'Updated existing user with new email address';
     } else if (choice === 'existing') {
       // User chose to use the existing email - just update access info
@@ -6813,7 +6762,7 @@ app.post('/api/deep-link-users/choose-email', async (req, res) => {
         updatedAt: new Date().toISOString()
       };
       
-      await couchDBClient.saveDocument('maia_users', finalUser);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUser);
       message = 'Using existing user account';
     } else {
       return res.status(400).json({ 
@@ -6850,7 +6799,7 @@ app.get('/api/deep-link-users/:shareId', async (req, res) => {
     const { shareId } = req.params;
     
     // Get all users and filter by share ID
-    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     const deepLinkUsers = allUsers.filter(user => 
       user.isDeepLinkUser && user.shareId === shareId
     );
@@ -6924,7 +6873,7 @@ app.listen(PORT, async () => {
     console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
     
     // Get all user IDs from database
-    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     const userIds = allUsers.map(user => user.userId || user._id);
     const bucketChecks = [];
     
@@ -7000,7 +6949,7 @@ app.listen(PORT, async () => {
     
     // Database consistency check - verify Public User document exists and is valid
     try {
-      const publicUserDoc = await couchDBClient.getDocument('maia_users', 'Public User');
+      const publicUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
       if (publicUserDoc) {
         console.log(`✅ [Database] Consistency check passed - Public User document valid`);
       } else {

@@ -7,6 +7,7 @@ import {
 } from "@simplewebauthn/server";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import crypto from "crypto";
+import { cacheManager } from '../utils/CacheManager.js';
 
 const router = express.Router();
 let couchDBClient = null;
@@ -130,7 +131,8 @@ router.post("/check-user", async (req, res) => {
 
     // Check if user exists in Cloudant
     try {
-      const existingUser = await couchDBClient.getDocument(
+      const existingUser = await cacheManager.getDocument(
+        couchDBClient,
         "maia_users",
         userId
       );
@@ -199,7 +201,7 @@ router.post("/register", async (req, res) => {
     // Check if user already exists
     let existingUser;
     try {
-      existingUser = await couchDBClient.getDocument("maia_users", userId);
+      existingUser = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
     } catch (error) {
       // If database doesn't exist, that's fine - user can register
       if (error.message.includes("error happened in your connection")) {
@@ -229,7 +231,7 @@ router.post("/register", async (req, res) => {
               passkeyResetExpiry: undefined,
               updatedAt: new Date().toISOString()
             };
-            await couchDBClient.saveDocument("maia_users", clearedUser);
+            await cacheManager.saveDocument(couchDBClient, "maia_users", clearedUser);
             console.log("❌ Passkey reset flag expired for user:", userId);
             return res.status(400).json({ 
               error: "Passkey reset window has expired. Contact admin to reset again.",
@@ -299,7 +301,7 @@ router.post("/register", async (req, res) => {
 
     // Store user document with challenge for verification
     try {
-              await couchDBClient.saveDocument("maia_users", userDoc);
+              await cacheManager.saveDocument(couchDBClient, "maia_users", userDoc);
       console.log("✅ User document saved successfully");
     } catch (error) {
       console.error("❌ Failed to save user document:", error.message);
@@ -307,7 +309,7 @@ router.post("/register", async (req, res) => {
       if (error.message.includes("error happened in your connection")) {
         try {
       await couchDBClient.createDatabase("maia_users");
-          await couchDBClient.saveDocument("maia_users", userDoc);
+          await cacheManager.saveDocument(couchDBClient, "maia_users", userDoc);
           console.log("✅ Database created and user document saved");
         } catch (createError) {
           console.error("❌ Failed to create database:", createError);
@@ -345,7 +347,7 @@ router.post("/register-verify", async (req, res) => {
     // Get the user document with the stored challenge
     let userDoc;
     try {
-              userDoc = await couchDBClient.getDocument("maia_users", userId);
+              userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
       console.log("✅ User document retrieved successfully");
     } catch (error) {
       console.error("❌ Error getting user document:", error);
@@ -404,7 +406,7 @@ router.post("/register-verify", async (req, res) => {
       };
 
       // Save the updated user document to Cloudant
-      await couchDBClient.saveDocument("maia_users", updatedUser);
+      await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
 
       // Set session data for authenticated user (same as authenticate-verify)
       req.session.userId = updatedUser._id;
@@ -447,7 +449,7 @@ router.post("/authenticate", async (req, res) => {
     // Get user document
     let userDoc;
     try {
-      userDoc = await couchDBClient.getDocument("maia_users", userId);
+      userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
     } catch (error) {
       console.error("❌ Error getting user document:", error.message);
       if (error.message.includes("error happened in your connection")) {
@@ -498,7 +500,7 @@ router.post("/authenticate", async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await couchDBClient.saveDocument("maia_users", updatedUser);
+    await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
     res.json(options);
   } catch (error) {
     console.error("❌ Error generating authentication options:", error);
@@ -520,7 +522,7 @@ router.post("/authenticate-verify", async (req, res) => {
     }
 
     // Get user document with challenge
-    const userDoc = await couchDBClient.getDocument("maia_users", userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
     if (!userDoc) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -548,7 +550,7 @@ router.post("/authenticate-verify", async (req, res) => {
         updatedAt: new Date().toISOString(),
       };
 
-      await couchDBClient.saveDocument("maia_users", updatedUser);
+      await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
 
       // Set session data for authenticated user
       req.session.userId = updatedUser._id;
@@ -655,7 +657,7 @@ router.get("/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const userDoc = await couchDBClient.getDocument("maia_users", userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
     if (!userDoc) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -742,13 +744,13 @@ router.get("/auth-status", async (req, res) => {
       if (cacheFunctions) {
         userDoc = cacheFunctions.getCache('users', userId);
         if (!cacheFunctions.isCacheValid('users', userId)) {
-          userDoc = await couchDBClient.getDocument("maia_users", userId);
+          userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
           if (userDoc) {
             cacheFunctions.setCache('users', userId, userDoc);
           }
         }
       } else {
-        userDoc = await couchDBClient.getDocument("maia_users", userId);
+        userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
       }
       if (userDoc) {
         // Echo current user to backend console

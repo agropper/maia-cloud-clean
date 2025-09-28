@@ -1,4 +1,5 @@
 import express from 'express';
+import { cacheManager } from '../utils/CacheManager.js';
 
 // DigitalOcean API request function (will use the one from server.js)
 const doRequest = async (endpoint, options = {}) => {
@@ -127,8 +128,8 @@ const checkAgentDeployments = async () => {
           console.error(`❌ [SSE] Error sending admin notification:`, sseError.message);
         }
         
-        // Get user document
-        const userDoc = await couchDBClient.getDocument('maia_users', userId);
+        // Get user document (cache-aware)
+        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         
         if (userDoc) {
           const updatedUser = {
@@ -141,7 +142,7 @@ const checkAgentDeployments = async () => {
             updatedAt: new Date().toISOString()
           };
           
-          await couchDBClient.saveDocument('maia_users', updatedUser);
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
           
           // Invalidate user cache to ensure fresh data
           invalidateUserCache(userId);
@@ -276,7 +277,7 @@ const syncActivityToDatabase = async () => {
           
           while (retryCount < maxRetries && !success) {
             try {
-              await couchDBClient.saveDocument('maia_users', updatedDoc);
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
               success = true;
               // Mark as synced and update lastDbUpdate time
               data.needsDbUpdate = false;
@@ -292,8 +293,8 @@ const syncActivityToDatabase = async () => {
                   await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
                 }
                 
-                // Get the latest version of the document
-                const latestDoc = await couchDBClient.getDocument('maia_users', userDoc._id);
+                // Get the latest version of the document (cache-aware)
+                const latestDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userDoc._id);
                 if (latestDoc) {
                   // Update with the latest revision and our activity data
                   updatedDoc._rev = latestDoc._rev;
@@ -345,7 +346,7 @@ const getAgentActivity = async (agentId) => {
   if (!couchDBClient) return null;
   
   try {
-    const doc = await couchDBClient.get('maia_users', `agent_activity_${agentId}`);
+    const doc = await cacheManager.getDocument(couchDBClient, 'maia_users', `agent_activity_${agentId}`);
     return {
       agentId: doc.agentId,
       userId: doc.userId,
@@ -455,7 +456,7 @@ const requireAdminAuth = async (req, res, next) => {
 
     // Check if user is admin
     try {
-      const userDoc = await couchDBClient.getDocument('maia_users', session.userId);
+      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', session.userId);
       if (!userDoc || !userDoc.isAdmin) {
         return res.status(403).json({ error: 'Admin privileges required' });
       }
@@ -497,7 +498,7 @@ router.get('/health', requireAdminAuth, async (req, res) => {
     }
     
     // Try to access the maia_users database
-    const users = await couchDBClient.getAllDocuments('maia_users');
+    const users = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     res.json({ 
       status: 'ready',
       message: 'Admin management system is ready',
@@ -544,7 +545,7 @@ const checkDatabaseReady = async (req, res, next) => {
     }
     
     // Try to get a small sample of users to verify system is ready
-    const users = await couchDBClient.getAllDocuments('maia_users');
+    const users = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     next();
   } catch (error) {
     console.log('⏳ Database system readiness check failed:', error.message);
@@ -583,7 +584,7 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
     
         // Check if admin user already exists
     try {
-      const existingUser = await couchDBClient.getDocument('maia_users', username);
+      const existingUser = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
       if (existingUser) {
         if (existingUser.isAdmin) {
           // Admin user exists - allow new passkey registration (replaces old one)
@@ -601,7 +602,7 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
             isAdmin: true,
             updatedAt: new Date().toISOString()
           };
-          await couchDBClient.saveDocument('maia_users', updatedUser);
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
           return res.json({ 
             message: 'Existing user upgraded to admin successfully. You can now register your passkey.',
             username: updatedUser._id,
@@ -620,7 +621,7 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
         createdAt: new Date().toISOString()
       };
       
-      await couchDBClient.saveDocument('maia_users', adminUser);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', adminUser);
       
       return res.json({
         message: 'New admin user created successfully. You can now register your passkey.',
@@ -650,7 +651,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Cache will be cleared on next database read
     
     // Get all users from maia_users database
-    const allUsers = await couchDBClient.getAllDocuments('maia_users');
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
     const users = allUsers
       .filter(user => {
@@ -738,8 +739,8 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    // Get user document (cache-aware)
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
     // Debug: Log email field for user details
     
@@ -825,7 +826,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -864,7 +865,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     // Validate consistency before saving
     validateWorkflowConsistency(updatedUser);
     
-    await couchDBClient.saveDocument('maia_users', updatedUser);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
     // Invalidate user cache to ensure fresh data
     invalidateUserCache(userId);
@@ -894,7 +895,7 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
     const { notes } = req.body;
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -906,7 +907,7 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
     
-    await couchDBClient.saveDocument('maia_users', updatedUser);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
     res.json({ 
       message: 'Notes saved successfully',
@@ -933,7 +934,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -947,7 +948,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       updatedAt: new Date().toISOString()
     };
     
-    await couchDBClient.saveDocument('maia_users', updatedUser);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
     // Start tracking deployment for this user
     addToDeploymentTracking(userId, agentId, agentName);
@@ -985,7 +986,7 @@ router.get('/users/:userId/assigned-agent', requireAdminAuth, async (req, res) =
     
     while (retries < maxRetries && !userDoc) {
       try {
-        userDoc = await couchDBClient.getDocument('maia_users', userId);
+        userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         break;
       } catch (error) {
         if (error.statusCode === 429 && retries < maxRetries - 1) {
@@ -1031,7 +1032,7 @@ router.post('/fix-user-data/:userId', async (req, res) => {
     const { userId } = req.params;
     
     // Get the user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
     // Fix the inconsistency
     if (userDoc.workflowStage === 'approved' && !userDoc.approvalStatus) {
@@ -1040,7 +1041,7 @@ router.post('/fix-user-data/:userId', async (req, res) => {
       userDoc.fixNotes = 'Fixed workflow inconsistency: set approvalStatus to match workflowStage';
       
       // Save the updated document
-      await couchDBClient.saveDocument('maia_users', userDoc);
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
       
       res.json({ 
         message: `User ${userId} data fixed successfully`,
@@ -1162,7 +1163,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1193,7 +1194,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
       }
     }
     
-    await couchDBClient.saveDocument('maia_users', updatedUser);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
     // Invalidate user cache to ensure fresh data
     invalidateUserCache(userId);
@@ -1224,7 +1225,7 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1244,12 +1245,12 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     };
     
     // Save the updated user document
-    await couchDBClient.saveDocument('maia_users', updatedUser);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
     // Set a timer to clear the reset flag after 1 hour
     setTimeout(async () => {
       try {
-        const currentUserDoc = await couchDBClient.getDocument('maia_users', userId);
+        const currentUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
         if (currentUserDoc && currentUserDoc.passkeyResetFlag) {
           const clearedUser = {
             ...currentUserDoc,
@@ -1257,7 +1258,7 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
             passkeyResetExpiry: undefined,
             updatedAt: new Date().toISOString()
           };
-          await couchDBClient.saveDocument('maia_users', clearedUser);
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', clearedUser);
           console.log(`⏰ Passkey reset flag expired and cleared for user: ${userId}`);
         }
       } catch (error) {
@@ -1307,7 +1308,7 @@ router.get('/sessions', requireAdminAuth, async (req, res) => {
     // Get all users once to avoid multiple database calls
     let allUsers = [];
     try {
-      allUsers = await couchDBClient.getAllDocuments('maia_users');
+      allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     } catch (error) {
       console.error('Error fetching users for session info:', error);
     }
@@ -1477,7 +1478,7 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1492,7 +1493,7 @@ router.post('/database/update-user-agent', requireAdminAuth, async (req, res) =>
     };
     
     // Save updated document
-    await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
     
     // Start tracking deployment for this user
     addToDeploymentTracking(userId, agentId, agentName);
@@ -1564,7 +1565,7 @@ router.post('/database/sync-agent-names', requireAdminAuth, async (req, res) => 
               updatedAt: new Date().toISOString()
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedUserDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
             
             // Cache will be updated on next database read
             
@@ -1629,7 +1630,7 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
     }
     
     // Get user document
-    const userDoc = await couchDBClient.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -1708,7 +1709,7 @@ router.post('/database/fix-consistency', async (req, res) => {
               updatedAt: new Date().toISOString()
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
             // Start tracking deployment for this user
             addToDeploymentTracking(issue.userId, issue.expectedAgentId, issue.agentName);
@@ -1756,7 +1757,7 @@ router.post('/database/fix-consistency', async (req, res) => {
               updatedAt: new Date().toISOString()
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
             // Invalidate user cache to ensure fresh data
             invalidateUserCache(issue.userId);
@@ -1799,7 +1800,7 @@ router.post('/database/fix-consistency', async (req, res) => {
               assignedAgentName: null
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
             console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId}`);
             results.push({
@@ -1838,7 +1839,7 @@ router.post('/database/fix-consistency', async (req, res) => {
               assignedAgentName: null
             };
             
-            await couchDBClient.saveDocument('maia_users', updatedDoc);
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
             console.log(`✅ [CONSISTENCY FIX] Removed invalid agent from user ${issue.userId}`);
             results.push({
