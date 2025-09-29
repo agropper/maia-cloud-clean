@@ -1,6 +1,19 @@
 import express from 'express';
 import { cacheManager } from '../utils/CacheManager.js';
 
+// Helper function to get the base URL for internal API calls
+const getBaseUrl = () => {
+  // Try to get from environment variables first
+  if (process.env.ADMIN_BASE_URL) {
+    return process.env.ADMIN_BASE_URL;
+  }
+  if (process.env.ORIGIN) {
+    return process.env.ORIGIN;
+  }
+  // Fallback to localhost for development
+  return 'http://localhost:3001';
+};
+
 // DigitalOcean API request function (will use the one from server.js)
 const doRequest = async (endpoint, options = {}) => {
   if (!doRequestFunction) {
@@ -151,7 +164,7 @@ const checkAgentDeployments = async () => {
         
         // Send real-time notification to admin via SSE
         try {
-          const notificationResponse = await fetch('http://localhost:3001/api/admin/notify', {
+          const notificationResponse = await fetch(`${getBaseUrl()}/api/admin/notify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -227,7 +240,7 @@ const checkAgentDeployments = async () => {
         
         // Ensure bucket folder exists for knowledge base creation
         try {
-          const bucketResponse = await fetch('http://localhost:3001/api/bucket/ensure-user-folder', {
+          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId })
@@ -796,7 +809,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         };
         
         try {
-          const bucketResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${user._id}`, {
+          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
           });
@@ -919,7 +932,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     };
     
     try {
-      const bucketResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${userId}`, {
+      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${userId}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });

@@ -3261,8 +3261,12 @@ const getAgentApiKey = async (agentId) => {
     
     const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
     
+    console.log(`🔍 [DEBUG] Looking for agent ${agentId} in ${userList.length} users`);
+    console.log(`🔍 [DEBUG] Found user with agent: ${userWithAgent ? (userWithAgent._id || userWithAgent.userId) : 'none'}`);
+    console.log(`🔍 [DEBUG] User has API key: ${userWithAgent ? !!userWithAgent.agentApiKey : 'N/A'}`);
+    
     if (userWithAgent && userWithAgent.agentApiKey) {
-      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent.userId})`);
+      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent._id || userWithAgent.userId})`);
       
       // Validate the stored API key by making a test request to the agent
       try {
@@ -5940,7 +5944,7 @@ app.post('/api/test-large-file-indexing', async (req, res) => {
 //     console.log(`🔍 Starting indexing progress monitor...`);
     
     // Start monitoring in background
-    monitorIndexingProgress(kbId, validName, startTime);
+    monitorIndexingProgress(kbId, validName, startTime, baseUrl);
     
     res.json({
       success: true,
@@ -5967,7 +5971,7 @@ app.post('/api/test-large-file-indexing', async (req, res) => {
 });
 
 // Helper function to monitor indexing progress
-async function monitorIndexingProgress(kbId, kbName, startTime) {
+async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http://localhost:3001') {
   let checkCount = 0;
   const maxChecks = 60; // Monitor for up to 60 minutes
   
@@ -6004,7 +6008,7 @@ async function monitorIndexingProgress(kbId, kbName, startTime) {
             
             // Send SSE notification to admin clients
             try {
-              const notificationResponse = await fetch('http://localhost:3001/api/admin/notify', {
+              const notificationResponse = await fetch(`${baseUrl}/api/admin/notify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -7118,6 +7122,11 @@ app.listen(PORT, async () => {
 app.post('/api/test-create-kb', async (req, res) => {
   try {
     // console.log('🧪 TEST ENDPOINT: Creating knowledge base for debugging');
+    
+    // Determine the base URL dynamically from the request
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+    const baseUrl = `${protocol}://${host}`;
     
     // List all environment variables we need
     const envVars = {
