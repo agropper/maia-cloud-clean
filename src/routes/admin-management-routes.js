@@ -2179,28 +2179,53 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
       });
     }
     
-    console.log('🔄 [ADMIN-AGENTS] Cache miss - fetching from database...');
+    console.log('🔄 [ADMIN-AGENTS] Cache miss - fetching from DigitalOcean API...');
     
-    if (!couchDBClient) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
+    // Get agents from DigitalOcean API (same as /api/agents)
+    const agents = await doRequest('/v2/gen-ai/agents');
     
-    // Get all agents from maia_agents database
-    const allAgents = await cacheManager.getAllDocuments(couchDBClient, 'maia_agents');
-    
-    // Filter out design documents
-    const filteredAgents = allAgents.filter(agent => {
-      return !agent._id.startsWith('_design/');
-    });
+    // Transform agents to match frontend expectations and include knowledge bases
+    const allAgents = await Promise.all((agents.agents || []).map(async (agent) => {
+      try {
+        // Get detailed agent info including knowledge bases
+        const agentDetails = await doRequest(`/v2/gen-ai/agents/${agent.id}`);
+        const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data;
+        
+        return {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: agentData?.knowledge_bases || [],
+          endpoint: agentData?.endpoint || null,
+          description: agentData?.description || null
+        };
+      } catch (error) {
+        console.warn(`⚠️ [ADMIN-AGENTS] Failed to get details for agent ${agent.id}:`, error.message);
+        return {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: [],
+          endpoint: null,
+          description: null
+        };
+      }
+    }));
     
     // Cache the agents data
-    await cacheManager.cacheAgents(filteredAgents);
+    await cacheManager.cacheAgents(allAgents);
     
-    console.log(`🤖 [ADMIN-AGENTS] Found ${filteredAgents.length} agents`);
+    console.log(`🤖 [ADMIN-AGENTS] Found ${allAgents.length} agents from DigitalOcean API`);
     
     res.json({
-      agents: filteredAgents,
-      count: filteredAgents.length,
+      agents: allAgents,
+      count: allAgents.length,
       cached: false
     });
     

@@ -807,6 +807,10 @@ const goToMainApp = () => {
   window.location.href = '/'
 }
 
+const goToOriginalAdmin = () => {
+  window.location.href = '/admin'
+}
+
 // Removed old admin route references - now using admin2
 
 const registerAdmin = () => {
