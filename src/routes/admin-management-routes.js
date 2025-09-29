@@ -12,6 +12,19 @@ const doRequest = async (endpoint, options = {}) => {
 
 const router = express.Router();
 
+// HTTP request logging middleware for admin-management routes
+router.use((req, res, next) => {
+  console.log('🌐 [ADMIN-HTTP] Request received:', {
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    timestamp: new Date().toISOString(),
+    userAgent: req.get('User-Agent')?.substring(0, 50),
+    ip: req.ip || req.connection.remoteAddress
+  });
+  next();
+});
+
 // CouchDB client for maia_users database
 let couchDBClient = null;
 
