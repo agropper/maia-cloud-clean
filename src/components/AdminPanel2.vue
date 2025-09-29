@@ -237,6 +237,27 @@
                 </QTd>
               </template>
 
+              <template v-slot:body-cell-bucketStatus="props">
+                <QTd :props="props">
+                  <div v-if="props.value.hasFolder" class="bucket-info">
+                    <QBadge
+                      color="positive"
+                      :label="`${props.value.fileCount} files`"
+                      class="q-mr-xs"
+                    />
+                    <span class="text-caption text-grey-6">
+                      {{ formatFileSize(props.value.totalSize) }}
+                    </span>
+                  </div>
+                  <QBadge
+                    v-else
+                    color="grey"
+                    label="No folder"
+                    class="bucket-empty"
+                  />
+                </QTd>
+              </template>
+
               <template v-slot:body-cell-createdAt="props">
                 <QTd :props="props">
                   <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
@@ -728,6 +749,7 @@ const userColumns = [
   { name: 'email', label: 'Email', field: 'email', align: 'left', sortable: true },
   { name: 'workflowStage', label: 'Workflow Stage', field: 'workflowStage', align: 'center', sortable: true },
   { name: 'assignedAgentName', label: 'Assigned Agent', field: 'assignedAgentName', align: 'left', sortable: true },
+  { name: 'bucketStatus', label: 'Bucket', field: 'bucketStatus', align: 'center', sortable: false },
   { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'center', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center', sortable: false }
 ]
@@ -1057,6 +1079,18 @@ const formatRelativeTime = (dateString: string) => {
   
   // For older dates, show the actual date
   return date.toLocaleDateString()
+}
+
+// Utility function for file size formatting
+const formatFileSize = (bytes: number) => {
+  if (!bytes || bytes === 0) return '0 B'
+  
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  
+  if (i === 0) return `${bytes} ${sizes[i]}`
+  
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`
 }
 
 const getAgentStatusColor = (status: string) => {
@@ -1655,5 +1689,23 @@ onUnmounted(() => {
 .current-model-display .q-badge {
   font-size: 0.9rem;
   padding: 6px 12px;
+}
+
+/* Bucket status styles */
+.bucket-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bucket-info .q-badge {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+}
+
+.bucket-empty {
+  font-size: 0.75rem;
+  padding: 2px 6px;
 }
 </style>

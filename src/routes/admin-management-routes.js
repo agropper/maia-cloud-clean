@@ -751,6 +751,32 @@ router.get('/users', requireAdminAuth, async (req, res) => {
           user.credentialPublicKey && 
           user.counter !== undefined);
         
+        // Get bucket status for the user
+        let bucketStatus = {
+          hasFolder: false,
+          fileCount: 0,
+          totalSize: 0
+        };
+        
+        try {
+          const bucketResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${user._id}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json();
+            bucketStatus = {
+              hasFolder: bucketData.hasFolder || false,
+              fileCount: bucketData.fileCount || 0,
+              totalSize: bucketData.totalSize || 0
+            };
+          }
+        } catch (bucketError) {
+          // Bucket check failed, use default values
+          console.log(`⚠️ [ADMIN] Failed to check bucket status for user ${user._id}:`, bucketError.message);
+        }
+        
         return {
           userId: user._id,
           displayName: user.displayName || user._id,
@@ -760,7 +786,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         workflowStage: await determineWorkflowStage(user),
           assignedAgentId: assignedAgentId,
           assignedAgentName: assignedAgentName,
-          email: user.email || null
+          email: user.email || null,
+          bucketStatus: bucketStatus
         };
     }));
     
