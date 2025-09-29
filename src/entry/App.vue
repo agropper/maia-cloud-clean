@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import ChatPrompt from '../components/ChatPromptRefactored.vue'
 import TooltipTest from '../components/TooltipTest.vue'
-import AdminPanel from '../components/AdminPanel.vue'
 import AdminPanel2 from '../components/AdminPanel2.vue'
-import UserDetailsPage from '../components/UserDetailsPage.vue'
 import UserDetailsPage2 from '../components/UserDetailsPage2.vue'
 import WelcomeModal from '../components/WelcomeModal.vue'
 import AppLoadingState from '../components/AppLoadingState.vue'
@@ -33,29 +31,14 @@ const isTooltipTest = computed(() => {
   return window.location.pathname === '/vue-tooltip-test'
 })
 
-// Check if we're on an admin route
-const isAdminRoute = computed(() => {
-  return window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
-})
-
-// Check if we're on the new admin2 route
+// Check if we're on the admin2 route (migrated from /admin)
 const isAdmin2Route = computed(() => {
   return window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register'
 })
 
-// Check if we're on a user details route
-const isUserDetailsRoute = computed(() => {
-  return window.location.pathname.startsWith('/admin/user/')
-})
-
-// Check if we're on the new admin2 user details route
+// Check if we're on the admin2 user details route
 const isAdmin2UserDetailsRoute = computed(() => {
   return window.location.pathname.startsWith('/admin2/user/')
-})
-
-// Check if we're on the admin registration route specifically
-const isAdminRegisterRoute = computed(() => {
-  return window.location.pathname === '/admin/register'
 })
 
 // Check if we're on the admin2 registration route specifically
@@ -244,9 +227,7 @@ const getLoadingProgress = () => {
     <!-- Main Application Content -->
     <div v-if="isInitialized && !isLoading" class="app-content">
       <TooltipTest v-if="isTooltipTest" />
-      <UserDetailsPage v-else-if="isUserDetailsRoute" />
       <UserDetailsPage2 v-else-if="isAdmin2UserDetailsRoute" />
-      <AdminPanel v-else-if="isAdminRoute" :isRegistrationRoute="isAdminRegisterRoute" />
       <AdminPanel2 v-else-if="isAdmin2Route" :isRegistrationRoute="isAdmin2RegisterRoute" />
       <div v-else-if="shouldShowBlankPage" class="admin-error-page">
         <div class="error-content">
@@ -260,7 +241,7 @@ const getLoadingProgress = () => {
           </div>
           
           <div class="action-buttons">
-            <a href="/admin/register" class="btn btn-primary">Register as Admin</a>
+            <a href="/admin2/register" class="btn btn-primary">Register as Admin</a>
             <a href="/" class="btn btn-secondary">Return to Main App</a>
           </div>
         </div>

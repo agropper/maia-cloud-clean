@@ -248,11 +248,11 @@ router.post('/request-approval', async (req, res) => {
             <h3 style="color: #2c3e50; margin-top: 0;">🔧 Administrator Actions</h3>
             <p>To manage this user and other private AI requests:</p>
             <div style="text-align: center; margin: 20px 0;">
-              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin" 
+              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin2" 
                  style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin-right: 10px;">
                 Access Admin Panel
               </a>
-              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin/user/${username}" 
+              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin2/user/${username}" 
                  style="background-color: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                 View User Details
               </a>
@@ -372,7 +372,7 @@ router.post('/contact-support', async (req, res) => {
             <h3 style="color: #2c3e50; margin-top: 0;">🔧 Administrator Actions</h3>
             <p>To manage this and other contact requests:</p>
             <div style="text-align: center; margin: 20px 0;">
-              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin" 
+              <a href="${process.env.ADMIN_BASE_URL || process.env.ORIGIN || 'http://localhost:3001'}/admin2" 
                  style="background-color: #3498db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
                 Access Admin Panel
               </a>

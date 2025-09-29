@@ -383,9 +383,11 @@ app.get('/', (req, res) => {
   });
 });
 
-// Admin panel route - PROTECTED
-app.get('/admin', (req, res) => {
-//   console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
+// OLD ADMIN ROUTES REMOVED - Now redirect to admin2
+
+// Admin2 panel route - PROTECTED (new admin panel)
+app.get('/admin2', (req, res) => {
+//   console.log('🔓 TEMPORARY: Admin2 access granted without authentication for testing');
   
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
@@ -399,9 +401,9 @@ app.get('/admin', (req, res) => {
   });
 });
 
-// Admin panel deep link route for specific user details - PROTECTED
-app.get('/admin/user/:userId', (req, res) => {
-//   console.log('🔓 TEMPORARY: Admin access granted without authentication for testing');
+// Admin2 panel deep link route for specific user details - PROTECTED
+app.get('/admin2/user/:userId', (req, res) => {
+//   console.log('🔓 TEMPORARY: Admin2 access granted without authentication for testing');
   
   const { userId } = req.params;
   const appTitle = process.env.APP_TITLE || 'MAIA';
@@ -417,16 +419,35 @@ app.get('/admin/user/:userId', (req, res) => {
   });
 });
 
-// Admin registration route - no authentication required (this is how admins initially register)
-app.get('/admin/register', (req, res) => {
+// Admin2 registration route - no authentication required (this is how admins initially register)
+app.get('/admin2/register', (req, res) => {
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
+  const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
   
   res.render('index.ejs', {
     APP_TITLE: appTitle,
     ENVIRONMENT: environment,
-    APP_VERSION: process.env.APP_VERSION || '1.0.0'
+    APP_VERSION: process.env.APP_VERSION || '1.0.0',
+    CLOUDANT_DASHBOARD_URL: cloudantUrl
   });
+});
+
+// REDIRECTS: Redirect old admin routes to admin2 for migration
+app.get('/admin', (req, res) => {
+  console.log('🔄 [Migration] Redirecting /admin to /admin2');
+  res.redirect(301, '/admin2');
+});
+
+app.get('/admin/register', (req, res) => {
+  console.log('🔄 [Migration] Redirecting /admin/register to /admin2/register');
+  res.redirect(301, '/admin2/register');
+});
+
+app.get('/admin/user/:userId', (req, res) => {
+  const { userId } = req.params;
+  console.log(`🔄 [Migration] Redirecting /admin/user/${userId} to /admin2/user/${userId}`);
+  res.redirect(301, `/admin2/user/${userId}`);
 });
 
 // Serve static files with cache busting

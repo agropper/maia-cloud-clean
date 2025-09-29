@@ -799,17 +799,7 @@ const goToMainApp = () => {
   window.location.href = '/'
 }
 
-const goToOriginalAdmin = () => {
-  window.location.href = '/admin'
-}
-
-const goToAdminSignIn = () => {
-  window.location.href = '/admin'
-}
-
-const goToAdminRegister = () => {
-  window.location.href = '/admin/register'
-}
+// Removed old admin route references - now using admin2
 
 const registerAdmin = () => {
   $q.notify({
