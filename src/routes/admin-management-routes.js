@@ -2231,6 +2231,19 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     
   } catch (error) {
     console.error('❌ [ADMIN-AGENTS] Failed to fetch agents:', error);
+    
+    // If rate limited, serve empty data instead of failing
+    if (error.message.includes('Too many requests') || error.message.includes('429') || error.message.includes('DigitalOcean API error: 429')) {
+      console.log('⚠️ [ADMIN-AGENTS] Rate limited - serving empty agents data');
+      return res.json({
+        agents: [],
+        count: 0,
+        cached: false,
+        rateLimited: true,
+        message: 'Agents data temporarily unavailable due to rate limiting'
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to fetch agents',
       details: error.message 
@@ -2270,6 +2283,18 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
     
   } catch (error) {
     console.error('❌ [ADMIN-KB] Failed to fetch knowledge bases:', error);
+    
+    // If rate limited, serve empty data instead of failing
+    if (error.message.includes('Too many requests') || error.message.includes('429') || error.message.includes('DigitalOcean API error: 429')) {
+      console.log('⚠️ [ADMIN-KB] Rate limited - serving empty knowledge bases data');
+      return res.json({
+        knowledgeBases: [],
+        count: 0,
+        rateLimited: true,
+        message: 'Knowledge bases data temporarily unavailable due to rate limiting'
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Failed to fetch knowledge bases',
       details: error.message 
