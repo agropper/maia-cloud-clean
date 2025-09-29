@@ -330,13 +330,6 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    console.log('🚨 [ADMIN-HTTP] Rate limit exceeded for:', {
-      method: req.method,
-      url: req.url,
-      ip: req.ip || req.connection.remoteAddress,
-      timestamp: new Date().toISOString(),
-      userAgent: req.get('User-Agent')?.substring(0, 50)
-    });
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
       timestamp: new Date().toISOString()
@@ -6378,22 +6371,7 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
 
-// HTTP logging middleware for admin-management routes
-app.use('/api/admin-management', (req, res, next) => {
-  console.log('🌐 [ADMIN-HTTP] Server-level request received:', {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    timestamp: new Date().toISOString(),
-    userAgent: req.get('User-Agent')?.substring(0, 50),
-    ip: req.ip || req.connection.remoteAddress,
-    headers: {
-      'content-type': req.get('content-type'),
-      'authorization': req.get('authorization') ? 'present' : 'missing'
-    }
-  });
-  next();
-});
+// Mount admin-management routes
 
 app.use('/api/admin-management', adminManagementRoutes);
 
