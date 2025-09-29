@@ -1164,6 +1164,12 @@ const loadUsers = async () => {
     const data = await throttledFetchJson('/api/admin-management/users')
     users.value = data.users || []
     
+    // Debug: List all users being shown in Admin2 panel
+    console.log(`👥 [ADMIN USERS] Showing ${users.value.length} users in Admin2 panel:`)
+    users.value.forEach((user, index) => {
+      console.log(`👥 [ADMIN USERS] ${index + 1}. ${user.userId} (displayName: ${user.displayName}, workflowStage: ${user.workflowStage})`)
+    })
+    
     // Update stats
     userStats.value.totalUsers = users.value.length
     userStats.value.awaitingApproval = users.value.filter(user => 

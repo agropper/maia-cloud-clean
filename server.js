@@ -6988,6 +6988,12 @@ async function ensureAllUserBuckets() {
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
+    // Debug: List all users found in Cloudant database
+    console.log(`📋 [USERS] Found ${allUsers.length} users in Cloudant database:`);
+    allUsers.forEach((user, index) => {
+      console.log(`📋 [USERS] ${index + 1}. ${user._id} (displayName: ${user.displayName || 'undefined'}, isAdmin: ${user.isAdmin || false})`);
+    });
+    
     // Apply the same processing logic that Admin2 expects
     const processedUsers = allUsers.map(user => ({
       userId: user._id,
