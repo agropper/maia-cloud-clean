@@ -353,10 +353,11 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply rate limiting to API routes (excluding admin-management routes)
+// Apply rate limiting to API routes (excluding admin-management routes and SSE)
 app.use('/api/', (req, res, next) => {
   // Skip rate limiting for admin-management routes since they have their own caching
-  if (req.path.startsWith('/admin-management/')) {
+  // Also skip rate limiting for admin events (SSE) to prevent connection issues
+  if (req.path.startsWith('/admin-management/') || req.path === '/admin/events') {
     return next();
   }
   return apiLimiter(req, res, next);
