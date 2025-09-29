@@ -372,9 +372,13 @@ export class CacheManager {
     if (this.isCacheValid('agents', 'all')) {
       const cached = this.getCached('agents', 'all');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for agents`);
+        console.log(`⚡ [CACHE] Cache HIT for agents (${cached.length} agents)`);
         return cached;
+      } else {
+        console.log(`❌ [CACHE] Cache MISS for agents - no data found`);
       }
+    } else {
+      console.log(`❌ [CACHE] Cache EXPIRED for agents - last updated: ${new Date(this.lastUpdated.agents).toISOString()}`);
     }
     return null;
   }

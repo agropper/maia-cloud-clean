@@ -2181,42 +2181,26 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     
     console.log('🔄 [ADMIN-AGENTS] Cache miss - fetching from DigitalOcean API...');
     
+    // Add delay to prevent rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     // Get agents from DigitalOcean API (same as /api/agents)
     const agents = await doRequest('/v2/gen-ai/agents');
     
-    // Transform agents to match frontend expectations and include knowledge bases
-    const allAgents = await Promise.all((agents.agents || []).map(async (agent) => {
-      try {
-        // Get detailed agent info including knowledge bases
-        const agentDetails = await doRequest(`/v2/gen-ai/agents/${agent.id}`);
-        const agentData = agentDetails.agent || agentDetails.data?.agent || agentDetails.data;
-        
-        return {
-          id: agent.id,
-          name: agent.name,
-          status: agent.status || 'unknown',
-          model: agent.model || 'unknown',
-          createdAt: agent.created_at,
-          updatedAt: agent.updated_at,
-          knowledgeBases: agentData?.knowledge_bases || [],
-          endpoint: agentData?.endpoint || null,
-          description: agentData?.description || null
-        };
-      } catch (error) {
-        console.warn(`⚠️ [ADMIN-AGENTS] Failed to get details for agent ${agent.id}:`, error.message);
-        return {
-          id: agent.id,
-          name: agent.name,
-          status: agent.status || 'unknown',
-          model: agent.model || 'unknown',
-          createdAt: agent.created_at,
-          updatedAt: agent.updated_at,
-          knowledgeBases: [],
-          endpoint: null,
-          description: null
-        };
-      }
-    }));
+    // Transform agents to match frontend expectations (simplified to avoid multiple API calls)
+    const allAgents = (agents.agents || []).map((agent) => {
+      return {
+        id: agent.id,
+        name: agent.name,
+        status: agent.status || 'unknown',
+        model: agent.model || 'unknown',
+        createdAt: agent.created_at,
+        updatedAt: agent.updated_at,
+        knowledgeBases: [], // Simplified - avoid additional API calls
+        endpoint: null,
+        description: null
+      };
+    });
     
     // Cache the agents data
     await cacheManager.cacheAgents(allAgents);
