@@ -2169,7 +2169,7 @@ export default defineComponent({
           }
         } else {
           const errorData = await response.json();
-          console.error(`❌ [Admin Panel] Failed to fix consistency issues:`, errorData.error);
+          console.error('❌ [Admin Panel] Failed to fix consistency issues:', errorData.error);
           $q.notify({
             type: 'negative',
             message: `Failed to fix consistency issues: ${errorData.error}`,
@@ -2213,11 +2213,7 @@ export default defineComponent({
         // Run automatic consistency check
         try {
           const inconsistencies = await runDatabaseConsistencyCheck();
-          if (inconsistencies.length === 0) {
-            console.log('✅ [Admin Panel] Database consistency check passed - no issues found');
-          } else {
-            console.log(`⚠️ [Admin Panel] Found ${inconsistencies.length} inconsistencies on load`);
-          }
+          // Database consistency check completed
         } catch (error) {
           console.error('❌ [Admin Panel] Automatic consistency check failed:', error);
         }
@@ -2272,12 +2268,7 @@ export default defineComponent({
 
     // Watch for modal state changes
     watch(showUserModal, (newValue, oldValue) => {
-      console.log('🔍 [SAFARI DEBUG] Modal state changed:', {
-        from: oldValue,
-        to: newValue,
-        selectedUser: selectedUser.value,
-        timestamp: new Date().toISOString()
-      });
+      // Modal state changed
     });
     
     return {

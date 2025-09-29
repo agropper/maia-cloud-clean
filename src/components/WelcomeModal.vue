@@ -82,18 +82,8 @@ onMounted(() => {
   const hasSeenWelcome = localStorage.getItem('maia-welcome-seen')
   const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
   
-  console.log('🔍 [WelcomeModal] Checking conditions:', {
-    hasSeenWelcome,
-    isAdminRoute,
-    pathname: window.location.pathname,
-    willShow: !hasSeenWelcome && !isAdminRoute
-  })
-  
   if (!hasSeenWelcome && !isAdminRoute) {
-    console.log('✅ [WelcomeModal] Showing welcome modal')
     showModal.value = true
-  } else {
-    console.log('❌ [WelcomeModal] Not showing modal - already seen or admin route')
   }
 })
 </script>

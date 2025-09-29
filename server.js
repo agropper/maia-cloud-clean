@@ -7010,13 +7010,6 @@ async function ensureAllUserBuckets() {
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
-    // Debug: Log all users and their displayNames at startup
-    console.log(`🔍 [USERS] STARTUP - Display names for all ${allUsers.length} users from database:`);
-    allUsers.forEach((user, index) => {
-      const displayName = user.displayName || user._id;
-      console.log(`🔍 [USERS] ${index + 1}. ${user._id}: displayName="${user.displayName}" → final="${displayName}"`);
-    });
-    
     // Apply the same processing logic that Admin2 expects
     const processedUsers = allUsers.map(user => ({
       userId: user._id,
@@ -7029,6 +7022,79 @@ async function ensureAllUserBuckets() {
     // Cache the processed users (not raw database documents)
     await cacheManager.cacheUsers(processedUsers);
     console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users for Admin2`);
+    
+    // Pre-cache agents for Admin2
+    try {
+      console.log('🤖 [STARTUP] Pre-caching agents for Admin2...');
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      await cacheManager.cacheAgents(agents);
+      console.log(`✅ [STARTUP] Cached ${agents.length} agents for Admin2`);
+    } catch (error) {
+      console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
+    }
+    
+    // Pre-cache knowledge bases for Admin2 - fetch from DigitalOcean API and repopulate database
+    try {
+      console.log('📚 [STARTUP] Fetching knowledge bases from DigitalOcean API...');
+      const kbResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+      const doKBs = kbResponse.knowledge_bases || kbResponse.data?.knowledge_bases || kbResponse.data || [];
+      
+      // Transform DO KBs to database format and save to maia_knowledge_bases
+      const kbDocuments = doKBs.map(kb => ({
+        _id: kb.uuid || kb.id,
+        kbId: kb.uuid || kb.id,
+        kbName: kb.name,
+        description: kb.description || 'No description',
+        isProtected: false, // Default to not protected
+        owner: null, // Default to no owner
+        createdAt: kb.created_at || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: 'digitalocean_api',
+        doData: kb // Store original DO data for reference
+      }));
+      
+      // Save each KB document to the database
+      let savedCount = 0;
+      for (const kbDoc of kbDocuments) {
+        try {
+          await cacheManager.saveDocument(couchDBClient, 'maia_knowledge_bases', kbDoc);
+          savedCount++;
+        } catch (saveError) {
+          // If document already exists, that's fine - skip it
+          if (saveError.statusCode === 409) {
+            continue;
+          }
+          console.warn(`⚠️ [STARTUP] Failed to save KB ${kbDoc.kbName}:`, saveError.message);
+        }
+      }
+      
+      // Cache the transformed KBs for Admin2
+      const transformedKBs = kbDocuments.map(doc => ({
+        id: doc.kbId,
+        name: doc.kbName,
+        description: doc.description,
+        isProtected: doc.isProtected,
+        owner: doc.owner,
+        createdAt: doc.createdAt
+      }));
+      
+      await cacheManager.cacheKnowledgeBases(transformedKBs);
+      console.log(`✅ [STARTUP] Fetched ${doKBs.length} KBs from DO API, saved ${savedCount} to database, cached for Admin2`);
+    } catch (error) {
+      console.warn('⚠️ [STARTUP] Failed to fetch and cache knowledge bases:', error.message);
+    }
+    
+    // Pre-cache models for Admin2
+    try {
+      console.log('🤖 [STARTUP] Pre-caching models for Admin2...');
+      const modelsResponse = await doRequest('/v2/gen-ai/models');
+      const models = modelsResponse.models || modelsResponse.data?.models || [];
+      await cacheManager.cacheModels(models);
+      console.log(`✅ [STARTUP] Cached ${models.length} models for Admin2`);
+    } catch (error) {
+      console.warn('⚠️ [STARTUP] Failed to pre-cache models:', error.message);
+    }
     
     const userIds = allUsers.map(user => user.userId || user._id);
     const bucketChecks = [];

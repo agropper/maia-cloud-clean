@@ -27,14 +27,6 @@ const router = express.Router();
 
 // HTTP request logging middleware for admin-management routes
 router.use((req, res, next) => {
-  console.log('🌐 [ADMIN-HTTP] Request received:', {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    timestamp: new Date().toISOString(),
-    userAgent: req.get('User-Agent')?.substring(0, 50),
-    ip: req.ip || req.connection.remoteAddress
-  });
   next();
 });
 
@@ -69,7 +61,6 @@ let deploymentMonitoringInterval = null; // Track the monitoring interval
 const invalidateUserCache = (userId) => {
   if (!cacheFunctions) return;
   
-  console.log(`🔄 [CACHE] Invalidating user cache for: ${userId}`);
   
   // Invalidate user-specific caches
   cacheFunctions.invalidateCache('users', userId);
@@ -734,20 +725,11 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    console.log('👥 [ADMIN-USERS] Fetching all users...');
-    console.log('🔍 [ADMIN-CACHE] Users Request received at:', new Date().toISOString());
     
     // Check cache first (use the same pattern as other endpoints)
     const cachedUsers = cacheManager.getCachedUsers();
-    console.log('🔍 [ADMIN-CACHE] getCachedUsers() returned:', cachedUsers ? `${cachedUsers.length} users` : 'null');
     
     if (cachedUsers) {
-      console.log('⚡ [ADMIN-USERS] Using cached users data');
-      console.log('🔍 [ADMIN-CACHE] Returning cached users data:', {
-        usersCount: cachedUsers.length,
-        cached: true,
-        timestamp: new Date().toISOString()
-      });
       return res.json({
         users: cachedUsers,
         count: cachedUsers.length,
@@ -755,7 +737,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       });
     }
     
-    console.log('🔄 [ADMIN-USERS] Cache miss - fetching from database...');
     
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -857,7 +838,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Cache the processed users data
     await cacheManager.cacheUsers(users);
     
-    console.log(`👥 [ADMIN-USERS] Found ${users.length} users from database`);
     
     res.json({ 
       users,
@@ -2293,25 +2273,11 @@ router.post('/update-activity', async (req, res) => {
 // Get all agents - PROTECTED (cached)
 router.get('/agents', requireAdminAuth, async (req, res) => {
   try {
-    console.log('🤖 [ADMIN-AGENTS] Fetching all agents...');
-    console.log('🔍 [ADMIN-CACHE] Request received at:', new Date().toISOString());
-    console.log('🔍 [ADMIN-CACHE] Cache state check:');
-    console.log('🔍 [ADMIN-CACHE] - cache.agents.has("all"):', cacheManager.cache.agents.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.agents.get("all"):', cacheManager.cache.agents.get('all') ? `${cacheManager.cache.agents.get('all').length} agents` : 'null');
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.agents:', cacheManager.lastUpdated.agents);
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("agents", "all"):', cacheManager.isCacheValid('agents', 'all'));
     
     // Check cache first
     const cachedAgents = cacheManager.getCachedAgents();
-    console.log('🔍 [ADMIN-CACHE] getCachedAgents() returned:', cachedAgents ? `${cachedAgents.length} agents` : 'null');
     
     if (cachedAgents) {
-      console.log('⚡ [ADMIN-AGENTS] Using cached agents data');
-      console.log('🔍 [ADMIN-CACHE] Returning cached data:', {
-        agentsCount: cachedAgents.length,
-        cached: true,
-        timestamp: new Date().toISOString()
-      });
       return res.json({
         agents: cachedAgents,
         count: cachedAgents.length,
@@ -2319,7 +2285,6 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
       });
     }
     
-    console.log('🔄 [ADMIN-AGENTS] Cache miss - fetching from DigitalOcean API...');
     
     // Add delay to prevent rate limiting
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2345,7 +2310,6 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     // Cache the agents data
     await cacheManager.cacheAgents(allAgents);
     
-    console.log(`🤖 [ADMIN-AGENTS] Found ${allAgents.length} agents from DigitalOcean API`);
     
     res.json({
       agents: allAgents,
@@ -2378,26 +2342,11 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
 // Get all knowledge bases - PROTECTED (cached)
 router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
   try {
-    console.log('📚 [ADMIN-KB] Fetching all knowledge bases...');
-    console.log('🔍 [ADMIN-CACHE] KB Request received at:', new Date().toISOString());
-    console.log('🔍 [ADMIN-CACHE] KB Cache state check:');
-    console.log('🔍 [ADMIN-CACHE] - cache.knowledgeBases.has("all"):', cacheManager.cache.knowledgeBases.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.knowledgeBases.get("all"):', cacheManager.cache.knowledgeBases.get('all') ? `${cacheManager.cache.knowledgeBases.get('all').length} KBs` : 'null');
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.knowledgeBases.has("all"):', cacheManager.lastUpdated.knowledgeBases.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.knowledgeBases.get("all"):', cacheManager.lastUpdated.knowledgeBases.get('all'));
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("knowledgeBases", "all"):', cacheManager.isCacheValid('knowledgeBases', 'all'));
     
     // Check cache first
     const cachedKBs = cacheManager.getCachedKnowledgeBases();
-    console.log('🔍 [ADMIN-CACHE] getCachedKnowledgeBases() returned:', cachedKBs ? `${cachedKBs.length} KBs` : 'null');
     
     if (cachedKBs) {
-      console.log('⚡ [ADMIN-KB] Using cached knowledge bases data');
-      console.log('🔍 [ADMIN-CACHE] KB Returning cached data:', {
-        kbCount: cachedKBs.length,
-        cached: true,
-        timestamp: new Date().toISOString()
-      });
       return res.json({
         knowledgeBases: cachedKBs,
         count: cachedKBs.length,
@@ -2454,26 +2403,11 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
 // Models configuration endpoints
 router.get('/models', requireAdminAuth, async (req, res) => {
   try {
-    console.log('🤖 [MODELS] Fetching available models...');
-    console.log('🔍 [ADMIN-CACHE] Models Request received at:', new Date().toISOString());
-    console.log('🔍 [ADMIN-CACHE] Models Cache state check:');
-    console.log('🔍 [ADMIN-CACHE] - cache.models.has("all"):', cacheManager.cache.models.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.models.get("all"):', cacheManager.cache.models.get('all') ? `${cacheManager.cache.models.get('all').length} models` : 'null');
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.models.has("all"):', cacheManager.lastUpdated.models.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.models.get("all"):', cacheManager.lastUpdated.models.get('all'));
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("models", "all"):', cacheManager.isCacheValid('models', 'all'));
     
     // Check cache first
     const cachedModels = cacheManager.getCachedModels();
-    console.log('🔍 [ADMIN-CACHE] getCachedModels() returned:', cachedModels ? `${cachedModels.length} models` : 'null');
     
     if (cachedModels) {
-      console.log('⚡ [MODELS] Using cached models data');
-      console.log('🔍 [ADMIN-CACHE] Models Returning cached data:', {
-        modelsCount: cachedModels.length,
-        cached: true,
-        timestamp: new Date().toISOString()
-      });
       return res.json({
         models: cachedModels,
         count: cachedModels.length,
@@ -2481,7 +2415,6 @@ router.get('/models', requireAdminAuth, async (req, res) => {
       });
     }
     
-    console.log('🔄 [MODELS] Cache miss - fetching from DigitalOcean API...');
     const models = await doRequest('/v2/gen-ai/models');
     const modelArray = models.models || [];
     
@@ -2494,7 +2427,6 @@ router.get('/models', requireAdminAuth, async (req, res) => {
     // Cache the models data
     await cacheManager.cacheModels(validModels);
     
-    console.log(`🤖 [MODELS] Found ${validModels.length} available models`);
     
     res.json({
       models: validModels,
@@ -2510,30 +2442,25 @@ router.get('/models', requireAdminAuth, async (req, res) => {
 
 router.get('/models/current', requireAdminAuth, async (req, res) => {
   try {
-    console.log('🤖 [MODELS] Loading current model configuration...');
     
     // Check cache first
     const cachedCurrentModel = cacheManager.getCachedCurrentModel();
     if (cachedCurrentModel) {
-      console.log('⚡ [MODELS] Using cached current model data');
       return res.json({
         model: cachedCurrentModel,
         cached: true
       });
     }
     
-    console.log('🔄 [MODELS] Cache miss - fetching from database...');
     const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
     
     if (!configDoc || !configDoc.current_model) {
-      console.log('🤖 [MODELS] No current model configured');
       return res.status(404).json({ error: 'No current model configured' });
     }
     
     // Cache the current model
     await cacheManager.cacheCurrentModel(configDoc.current_model);
     
-    console.log(`🤖 [MODELS] Current model: ${configDoc.current_model.name}`);
     
     res.json({
       model: configDoc.current_model,

@@ -46,7 +46,6 @@ class RequestThrottler {
       const request = this.queue.shift()
       
       try {
-        console.log(`🔄 [RequestThrottler] Processing request (${this.queue.length} remaining)`)
         const result = await request.requestFn()
         request.resolve(result)
       } catch (error) {
@@ -55,7 +54,6 @@ class RequestThrottler {
           if (request.retries < this.maxRetries) {
             request.retries++
             const backoffDelay = this.retryDelay * Math.pow(2, request.retries - 1)
-            console.log(`⏳ [RequestThrottler] Rate limited, retrying in ${backoffDelay}ms (attempt ${request.retries}/${this.maxRetries})`)
             
             // Re-queue the request with backoff
             setTimeout(() => {
@@ -65,7 +63,6 @@ class RequestThrottler {
             
             continue
           } else {
-            console.error(`❌ [RequestThrottler] Max retries exceeded for request`)
             request.reject(error)
           }
         } else {

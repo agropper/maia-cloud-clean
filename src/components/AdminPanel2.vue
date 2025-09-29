@@ -380,21 +380,15 @@
           </div>
         </QTabPanel>
 
-        <!-- Knowledge Bases Tab - COMMENTED OUT: Will be moved to User Details -->
+        <!-- Knowledge Bases Tab -->
         <QTabPanel name="knowledge-bases">
           <div class="q-pa-md">
             <div class="q-mb-md">
               <h4 class="q-ma-none">Knowledge Bases</h4>
-              <p class="text-grey-6 q-ma-none">Knowledge base management has been moved to individual User Details pages</p>
+              <p class="text-grey-6 q-ma-none">Manage knowledge bases and their protection settings</p>
             </div>
 
-            <!-- Placeholder content -->
-            <div class="full-width row flex-center text-grey q-gutter-sm q-py-xl">
-              <QIcon name="storage" size="2em" />
-              <span>Knowledge base information is now available in User Details</span>
-            </div>
-
-            <!-- COMMENTED OUT: Original knowledge bases table
+            <!-- Knowledge Bases Table -->
             <QTable
               :rows="knowledgeBases"
               :columns="kbColumns"
@@ -414,14 +408,13 @@
                 </QTd>
               </template>
 
-              <template v-slot:body-cell-created_at="props">
+              <template v-slot:body-cell-createdAt="props">
                 <QTd :props="props">
                   <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
                 </QTd>
               </template>
 
             </QTable>
-            -->
           </div>
         </QTabPanel>
 
@@ -775,7 +768,7 @@ const kbColumns = [
   { name: 'name', label: 'KB Name', field: 'name', align: 'left', sortable: true },
   { name: 'isProtected', label: 'Protection', field: 'isProtected', align: 'center', sortable: true },
   { name: 'owner', label: 'Owner', field: 'owner', align: 'left', sortable: true },
-  { name: 'created_at', label: 'Created', field: 'created_at', align: 'center', sortable: true }
+  { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'center', sortable: true }
 ]
 
 const sessionColumns = [
@@ -1167,7 +1160,6 @@ const loadChatCountsForAgents = async (agents: any[]) => {
 const loadUsers = async () => {
   try {
     isLoadingUsers.value = true
-    console.log('📊 [AdminPanel2] Loading users from cache...')
     
     const data = await throttledFetchJson('/api/admin-management/users')
     users.value = data.users || []
@@ -1178,7 +1170,6 @@ const loadUsers = async () => {
       user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet'
     ).length
     
-    console.log(`✅ [AdminPanel2] Loaded ${users.value.length} users, ${userStats.value.awaitingApproval} awaiting approval`)
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load users:', error)
     $q.notify({
@@ -1194,7 +1185,6 @@ const loadUsers = async () => {
 const loadAgents = async () => {
   try {
     isLoadingAgents.value = true
-    console.log('🤖 [AdminPanel2] Loading agents from cache...')
     
     // Use admin-management endpoint with caching
     const response = await throttledFetchJson('/api/admin-management/agents')
@@ -1209,7 +1199,6 @@ const loadAgents = async () => {
       agent.status === 'running' || agent.status === 'deployed'
     ).length
     
-    console.log(`✅ [AdminPanel2] Loaded ${agents.value.length} agents, ${agentStats.value.deployedAgents} deployed (cached: ${response.cached || false})`)
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load agents:', error)
     $q.notify({
@@ -1219,13 +1208,12 @@ const loadAgents = async () => {
     })
   } finally {
     isLoadingAgents.value = false
-  }
+}
 }
 
 const loadKnowledgeBases = async () => {
   try {
     isLoadingKBs.value = true
-    console.log('📚 [AdminPanel2] Loading knowledge bases from cache...')
     
     // Use admin-management endpoint with caching
     const response = await throttledFetchJson('/api/admin-management/knowledge-bases')
@@ -1235,7 +1223,6 @@ const loadKnowledgeBases = async () => {
     kbStats.value.totalKBs = knowledgeBases.value.length
     kbStats.value.protectedKBs = knowledgeBases.value.filter(kb => kb.isProtected).length
     
-    console.log(`✅ [AdminPanel2] Loaded ${knowledgeBases.value.length} knowledge bases, ${kbStats.value.protectedKBs} protected`)
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load knowledge bases:', error)
     $q.notify({
@@ -1249,27 +1236,21 @@ const loadKnowledgeBases = async () => {
 }
 
 const loadAllData = async () => {
-  console.log('🔄 [AdminPanel2] Loading all data from caches with throttling...')
-  
   // Load data sequentially - throttling is handled by RequestThrottler
   await loadUsers()
   await loadAgents()
   await loadKnowledgeBases()
   await loadModels()
-  
-  console.log('✅ [AdminPanel2] All data loaded successfully')
 }
 
 // Models tab methods
 const loadModels = async () => {
   try {
     isLoadingModels.value = true
-    console.log('🤖 [AdminPanel2] Loading available models...')
     
     const data = await throttledFetchJson('/api/admin-management/models')
     availableModels.value = data.models || []
     
-    console.log(`✅ [AdminPanel2] Loaded ${availableModels.value.length} available models`)
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load models:', error)
     $q.notify({
@@ -1284,14 +1265,11 @@ const loadModels = async () => {
 
 const loadCurrentModel = async () => {
   try {
-    console.log('🤖 [AdminPanel2] Loading current model configuration...')
     
     const data = await throttledFetchJson('/api/admin-management/models/current')
     currentModel.value = data.model
-    console.log(`✅ [AdminPanel2] Current model: ${currentModel.value?.name || 'None'}`)
   } catch (error) {
     if (error.status === 404) {
-      console.log('🤖 [AdminPanel2] No current model configured')
       currentModel.value = null
       return
     }
@@ -1350,11 +1328,9 @@ const connectAdminEvents = () => {
     adminEventSource.value.close()
   }
   
-  console.log('🔗 [SSE] [*] Connecting to admin notification stream...')
   adminEventSource.value = new EventSource('/api/admin/events')
   
   adminEventSource.value.onopen = () => {
-    console.log('🔗 [SSE] [*] Connected to admin notification stream')
     isSSEConnected.value = true
   }
   
@@ -1363,12 +1339,10 @@ const connectAdminEvents = () => {
   }
   
   adminEventSource.value.onerror = (error) => {
-    console.error('❌ [SSE] [*] Connection error:', error)
     isSSEConnected.value = false
     
     // Attempt to reconnect after 5 seconds
     setTimeout(() => {
-      console.log('🔄 [SSE] [*] Attempting to reconnect...')
       connectAdminEvents()
     }, 5000)
   }
@@ -1380,7 +1354,6 @@ const handleSSEMessage = (event) => {
     
     switch (notification.type) {
       case 'connected':
-        console.log('📡 [SSE] [*]', notification.message)
         break
         
       case 'agent_deployment_completed':
@@ -1396,7 +1369,7 @@ const handleSSEMessage = (event) => {
         break
         
       default:
-        console.log('📨 [SSE] [*] Unknown notification type:', notification.type)
+        break
     }
   } catch (error) {
     console.error('❌ [SSE] [*] Error parsing notification:', error)
@@ -1404,8 +1377,6 @@ const handleSSEMessage = (event) => {
 }
 
 const handleAgentDeploymentCompleted = (data) => {
-  console.log(`🎉 [ADMIN NOTIFICATION] [*] ${data.message}`)
-  
   // Update user in local state
   const userIndex = users.value.findIndex(u => u.userId === data.userId)
   if (userIndex !== -1) {
@@ -1432,8 +1403,6 @@ const handleAgentDeploymentCompleted = (data) => {
 }
 
 const handleKBIndexingCompleted = (data) => {
-  console.log(`📚 [ADMIN NOTIFICATION] [*] ${data.message}`)
-  
   // Refresh knowledge bases list
   loadKnowledgeBases()
   
@@ -1448,7 +1417,6 @@ const handleKBIndexingCompleted = (data) => {
 
 const disconnectAdminEvents = () => {
   if (adminEventSource.value) {
-    console.log('🔌 [SSE] [*] Disconnecting from admin notification stream')
     adminEventSource.value.close()
     adminEventSource.value = null
     isSSEConnected.value = false
@@ -1457,8 +1425,6 @@ const disconnectAdminEvents = () => {
 
 // Lifecycle
 onMounted(async () => {
-  console.log('🔧 AdminPanel2 mounted - Clean architecture version')
-  
   // Load data sequentially with throttling to prevent 429 errors
   try {
     await loadAllData()

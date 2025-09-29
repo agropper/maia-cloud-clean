@@ -50,7 +50,6 @@ export class CacheManager {
       recoveryTimeout: 30 * 1000 // 30 seconds
     };
     
-    console.log('🔄 [CACHE] CacheManager initialized with TTL:', this.ttl);
   }
   
   /**
@@ -119,7 +118,6 @@ export class CacheManager {
       this.lastUpdated[cacheType].set(key, now);
     }
     
-    console.log(`💾 [CACHE] Cached ${cacheType}:${key || 'all'} (TTL: ${this.ttl[cacheType]}ms)`);
   }
   
   /**
@@ -141,7 +139,6 @@ export class CacheManager {
       }
     }
     
-    console.log(`🗑️ [CACHE] Invalidated ${cacheType}:${key || 'all'}`);
   }
   
   /**
@@ -176,7 +173,6 @@ export class CacheManager {
     if (this.circuitBreaker.state === 'OPEN') {
       if (now - this.circuitBreaker.lastFailureTime > this.circuitBreaker.recoveryTimeout) {
         this.circuitBreaker.state = 'HALF_OPEN';
-        console.log(`🔄 [CACHE] Circuit breaker moving to HALF_OPEN for ${operationName}`);
       } else {
         console.warn(`🚫 [CACHE] Circuit breaker OPEN for ${operationName} - using cache only`);
         throw new Error(`Database circuit breaker OPEN for ${operationName}`);
@@ -200,7 +196,6 @@ export class CacheManager {
     if (this.circuitBreaker.state === 'HALF_OPEN') {
       this.circuitBreaker.state = 'CLOSED';
       this.circuitBreaker.failureCount = 0;
-      console.log(`✅ [CACHE] Circuit breaker CLOSED after successful operation`);
     }
   }
   
@@ -211,7 +206,6 @@ export class CacheManager {
     // Don't count document update conflicts as circuit breaker failures
     // These are just concurrency issues that can be retried
     if (error && error.message && error.message.includes('Document update conflict')) {
-      console.log(`ℹ️ [CACHE] Document update conflict - not counting as circuit breaker failure`);
       return;
     }
     
@@ -235,7 +229,6 @@ export class CacheManager {
     if (this.isCacheValid(cacheType, documentId)) {
       const cached = this.getCached(cacheType, documentId);
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for ${cacheKey}`);
         return cached;
       }
     }
@@ -247,7 +240,6 @@ export class CacheManager {
     
     // Fetch from database with circuit breaker
     try {
-      console.log(`🔄 [CACHE] Cache MISS for ${cacheKey} - fetching from database`);
       const result = await this.executeWithCircuitBreaker(
         () => couchDBClient.getDocument(databaseName, documentId),
         `getDocument(${cacheKey})`
@@ -277,7 +269,6 @@ export class CacheManager {
     }
     
     try {
-      console.log(`💾 [CACHE] Saving ${cacheKey} to database`);
       const result = await this.executeWithCircuitBreaker(
         () => couchDBClient.saveDocument(databaseName, document),
         `saveDocument(${cacheKey})`
@@ -309,7 +300,6 @@ export class CacheManager {
     if (this.isCacheValid(cacheType, 'all')) {
       const cached = this.getCached(cacheType, 'all');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for ${cacheKey}`);
         return cached;
       }
     }
@@ -320,7 +310,6 @@ export class CacheManager {
     }
     
     try {
-      console.log(`🔄 [CACHE] Cache MISS for ${cacheKey} - fetching from database`);
       const result = await this.executeWithCircuitBreaker(
         () => couchDBClient.getAllDocuments(databaseName),
         `getAllDocuments(${databaseName})`
@@ -358,7 +347,6 @@ export class CacheManager {
    * Invalidate all caches related to a user
    */
   invalidateUserRelatedCaches(userId) {
-    console.log(`🔄 [CACHE] Invalidating all caches for user: ${userId}`);
     
     // Invalidate user document
     this.invalidateCache('users', userId);
@@ -378,31 +366,18 @@ export class CacheManager {
    */
   async cacheAgents(agentsData) {
     this.setCached('agents', 'all', agentsData);
-    console.log(`💾 [CACHE] Cached ${agentsData.length} agents`);
   }
 
   /**
    * Get cached agents data
    */
   getCachedAgents() {
-    console.log('🔍 [ADMIN-CACHE] getCachedAgents() called');
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("agents", "all"):', this.isCacheValid('agents', 'all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.agents:', this.lastUpdated.agents);
-    console.log('🔍 [ADMIN-CACHE] - cache.agents.has("all"):', this.cache.agents.has('all'));
-    
     if (this.isCacheValid('agents', 'all')) {
       const cached = this.getCached('agents', 'all');
-      console.log('🔍 [ADMIN-CACHE] - getCached("agents", "all"):', cached ? `${cached.length} agents` : 'null');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for agents (${cached.length} agents)`);
         return cached;
-      } else {
-        console.log(`❌ [CACHE] Cache MISS for agents - no data found`);
       }
-    } else {
-      console.log(`❌ [CACHE] Cache EXPIRED for agents - last updated: ${new Date(this.lastUpdated.agents).toISOString()}`);
     }
-    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
   }
 
@@ -410,25 +385,20 @@ export class CacheManager {
    * Get cached knowledge bases data
    */
   getCachedKnowledgeBases() {
-    console.log('🔍 [ADMIN-CACHE] getCachedKnowledgeBases() called');
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("knowledgeBases", "all"):', this.isCacheValid('knowledgeBases', 'all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.knowledgeBases.has("all"):', this.lastUpdated.knowledgeBases.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.knowledgeBases.has("all"):', this.cache.knowledgeBases.has('all'));
-    
     if (this.isCacheValid('knowledgeBases', 'all')) {
       const cached = this.getCached('knowledgeBases', 'all');
-      console.log('🔍 [ADMIN-CACHE] - getCached("knowledgeBases", "all"):', cached ? `${cached.length} KBs` : 'null');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for knowledge bases (${cached.length} KBs)`);
         return cached;
-      } else {
-        console.log(`❌ [CACHE] Cache MISS for knowledge bases - no data found`);
       }
-    } else {
-      console.log(`❌ [CACHE] Cache EXPIRED for knowledge bases - last updated: ${this.lastUpdated.knowledgeBases.get('all') ? new Date(this.lastUpdated.knowledgeBases.get('all')).toISOString() : 'never'}`);
     }
-    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
+  }
+
+  /**
+   * Cache knowledge bases data
+   */
+  async cacheKnowledgeBases(knowledgeBasesData) {
+    this.setCached('knowledgeBases', 'all', knowledgeBasesData);
   }
 
   /**
@@ -436,7 +406,6 @@ export class CacheManager {
    */
   async cacheModels(modelsData) {
     this.setCached('models', 'all', modelsData);
-    console.log(`💾 [CACHE] Cached ${modelsData.length} models`);
   }
 
   /**
@@ -444,53 +413,28 @@ export class CacheManager {
    */
   async cacheUsers(usersData) {
     this.setCached('users', 'all', usersData);
-    console.log(`💾 [CACHE] Cached ${usersData.length} users`);
   }
 
   /**
    * Get cached models data
    */
   getCachedModels() {
-    console.log('🔍 [ADMIN-CACHE] getCachedModels() called');
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("models", "all"):', this.isCacheValid('models', 'all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.models.has("all"):', this.lastUpdated.models.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.models.has("all"):', this.cache.models.has('all'));
-
     if (this.isCacheValid('models', 'all')) {
       const cached = this.getCached('models', 'all');
-      console.log('🔍 [ADMIN-CACHE] - getCached("models", "all"):', cached ? `${cached.length} models` : 'null');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for models (${cached.length} models)`);
         return cached;
-      } else {
-        console.log(`❌ [CACHE] Cache MISS for models - no data found`);
       }
-    } else {
-      console.log(`❌ [CACHE] Cache EXPIRED for models - last updated: ${this.lastUpdated.models.get('all') ? new Date(this.lastUpdated.models.get('all')).toISOString() : 'never'}`);
     }
-    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
   }
 
   getCachedUsers() {
-    console.log('🔍 [ADMIN-CACHE] getCachedUsers() called');
-    console.log('🔍 [ADMIN-CACHE] - isCacheValid("users", "all"):', this.isCacheValid('users', 'all'));
-    console.log('🔍 [ADMIN-CACHE] - lastUpdated.users.has("all"):', this.lastUpdated.users.has('all'));
-    console.log('🔍 [ADMIN-CACHE] - cache.users.has("all"):', this.cache.users.has('all'));
-
     if (this.isCacheValid('users', 'all')) {
       const cached = this.getCached('users', 'all');
-      console.log('🔍 [ADMIN-CACHE] - getCached("users", "all"):', cached ? `${cached.length} users` : 'null');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for users (${cached.length} users)`);
         return cached;
-      } else {
-        console.log(`❌ [CACHE] Cache MISS for users - no data found`);
       }
-    } else {
-      console.log(`❌ [CACHE] Cache EXPIRED for users - last updated: ${this.lastUpdated.users.get('all') ? new Date(this.lastUpdated.users.get('all')).toISOString() : 'never'}`);
     }
-    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
   }
 
@@ -499,7 +443,6 @@ export class CacheManager {
    */
   async cacheCurrentModel(modelData) {
     this.setCached('models', 'current', modelData);
-    console.log(`💾 [CACHE] Cached current model: ${modelData?.name || 'None'}`);
   }
 
   /**
@@ -509,7 +452,6 @@ export class CacheManager {
     if (this.isCacheValid('models', 'current')) {
       const cached = this.getCached('models', 'current');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for current model`);
         return cached;
       }
     }
@@ -545,7 +487,6 @@ export class CacheManager {
    * Clear all caches
    */
   clearAllCaches() {
-    console.log('🗑️ [CACHE] Clearing all caches');
     
     Object.keys(this.cache).forEach(cacheType => {
       if (this.cache[cacheType] instanceof Map) {

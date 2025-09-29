@@ -684,7 +684,6 @@ export default defineComponent({
           const userData = await response.json()
           // Show modal if user is in "No Request Yet" stage
           if (userData.workflowStage === 'no_request_yet') {
-            console.log('🔍 [NewUserWelcomeModal] User is in "No Request Yet" stage, showing modal')
             return true
           }
         }
