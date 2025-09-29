@@ -6988,19 +6988,113 @@ async function ensureAllUserBuckets() {
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
-    // Debug: List all users found in Cloudant database
-    console.log(`📋 [USERS] Found ${allUsers.length} users in Cloudant database:`);
-    allUsers.forEach((user, index) => {
-      console.log(`📋 [USERS] ${index + 1}. ${user._id} (displayName: ${user.displayName || 'undefined'}, isAdmin: ${user.isAdmin || false})`);
+    // Filter users (same logic as admin-management-routes.js)
+    const filteredUsers = allUsers.filter(user => {
+      // Exclude design documents
+      if (user._id.startsWith('_design/')) {
+        return false;
+      }
+      // Exclude configuration documents (not real users)
+      if (user._id === 'maia_config') {
+        return false;
+      }
+      // Always include these specific users regardless of admin status
+      if (user._id === 'Public User' || user._id === 'wed271') {
+        return true;
+      }
+      // Always include deep link users
+      if (user._id.startsWith('deep-')) {
+        return true;
+      }
+      // For all other users, exclude admin users
+      const isAdmin = user.isAdmin;
+      return !isAdmin;
     });
     
-    // Apply the same processing logic that Admin2 expects
-    const processedUsers = allUsers.map(user => ({
-      userId: user._id,
-      displayName: user.displayName || user._id,  // Apply fallback logic
-      createdAt: user.createdAt,
-      hasPasskey: !!user.credentialID,
-      // ... other fields that Admin2 expects
+    // Process users with full data (same logic as admin-management-routes.js)
+    const processedUsers = await Promise.all(filteredUsers.map(async user => {
+      // Extract current agent information from ownedAgents if available
+      let assignedAgentId = user.assignedAgentId || null;
+      let assignedAgentName = user.assignedAgentName || null;
+      
+      // If we have ownedAgents but no assignedAgentId, use the first owned agent
+      if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+        const firstAgent = user.ownedAgents[0];
+        assignedAgentId = firstAgent.id;
+        assignedAgentName = firstAgent.name;
+      }
+      
+      // Check if passkey is valid (not a test credential)
+      const hasValidPasskey = !!(user.credentialID && 
+        user.credentialID !== 'test-credential-id-wed271' && 
+        user.credentialPublicKey && 
+        user.counter !== undefined);
+      
+      // Get bucket status for the user
+      let bucketStatus = {
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0
+      };
+      
+      try {
+        const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
+        const bucketResponse = await fetch(`${baseUrl}/api/bucket/user-status/${user._id}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          bucketStatus = {
+            hasFolder: bucketData.hasFolder || false,
+            fileCount: bucketData.fileCount || 0,
+            totalSize: bucketData.totalSize || 0
+          };
+        }
+      } catch (bucketError) {
+        // Bucket check failed, use default values
+        console.log(`⚠️ [STARTUP] Failed to check bucket status for user ${user._id}:`, bucketError.message);
+      }
+      
+      // Determine workflow stage using the same logic as admin-management-routes.js
+      let workflowStage = 'unknown';
+      
+      // Primary source of truth: stored workflowStage field
+      if (user.workflowStage) {
+        workflowStage = user.workflowStage;
+      } else {
+        // Fallback for legacy users without workflowStage field
+        // Check if user has a passkey (look for credentialID field)
+        if (!user.credentialID) {
+          workflowStage = 'no_passkey';
+        } else if (!user.approvalStatus && !user.email) {
+          workflowStage = 'no_request_yet';
+        } else if (!user.approvalStatus) {
+          workflowStage = 'awaiting_approval';
+        } else if (user.approvalStatus === 'pending') {
+          workflowStage = 'awaiting_approval';
+        } else if (user.approvalStatus === 'rejected') {
+          workflowStage = 'rejected';
+        } else if (user.approvalStatus === 'suspended') {
+          workflowStage = 'suspended';
+        } else if (user.approvalStatus === 'approved') {
+          workflowStage = 'approved';
+        }
+      }
+      
+      return {
+        userId: user._id,
+        displayName: user.displayName || user._id,
+        createdAt: user.createdAt,
+        hasPasskey: !!user.credentialID,
+        hasValidPasskey: hasValidPasskey,
+        workflowStage: workflowStage,
+        assignedAgentId: assignedAgentId,
+        assignedAgentName: assignedAgentName,
+        email: user.email || null,
+        bucketStatus: bucketStatus
+      };
     }));
     
     // Cache the processed users (not raw database documents)
