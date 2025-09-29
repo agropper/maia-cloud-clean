@@ -353,8 +353,14 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply rate limiting to API routes
-app.use('/api/', apiLimiter);
+// Apply rate limiting to API routes (excluding admin-management routes)
+app.use('/api/', (req, res, next) => {
+  // Skip rate limiting for admin-management routes since they have their own caching
+  if (req.path.startsWith('/admin-management/')) {
+    return next();
+  }
+  return apiLimiter(req, res, next);
+});
 app.use('/api/parse-pdf', uploadLimiter);
 
 // Cookie parser middleware
