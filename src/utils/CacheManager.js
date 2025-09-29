@@ -380,8 +380,14 @@ export class CacheManager {
    * Get cached agents data
    */
   getCachedAgents() {
+    console.log('🔍 [ADMIN-CACHE] getCachedAgents() called');
+    console.log('🔍 [ADMIN-CACHE] - isCacheValid("agents", "all"):', this.isCacheValid('agents', 'all'));
+    console.log('🔍 [ADMIN-CACHE] - lastUpdated.agents:', this.lastUpdated.agents);
+    console.log('🔍 [ADMIN-CACHE] - cache.agents.has("all"):', this.cache.agents.has('all'));
+    
     if (this.isCacheValid('agents', 'all')) {
       const cached = this.getCached('agents', 'all');
+      console.log('🔍 [ADMIN-CACHE] - getCached("agents", "all"):', cached ? `${cached.length} agents` : 'null');
       if (cached) {
         console.log(`⚡ [CACHE] Cache HIT for agents (${cached.length} agents)`);
         return cached;
@@ -391,6 +397,7 @@ export class CacheManager {
     } else {
       console.log(`❌ [CACHE] Cache EXPIRED for agents - last updated: ${new Date(this.lastUpdated.agents).toISOString()}`);
     }
+    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
   }
 
