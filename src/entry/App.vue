@@ -10,6 +10,7 @@ import AppLoadingState from '../components/AppLoadingState.vue'
 import { computed, watch, ref, onMounted, onUnmounted } from 'vue'
 import { appInitializer } from '../utils/AppInitializer.js'
 import { appStateManager } from '../utils/AppStateManager.js'
+import { useDialogAccessibility } from '../composables/useDialogAccessibility.ts'
 
 // Application state
 const isInitialized = ref(false)
@@ -94,6 +95,9 @@ const getAdminErrorMessage = () => {
       return 'Access denied for administrative reasons.';
   }
 }
+
+// Initialize dialog accessibility fixes
+const { fixDialogAccessibility } = useDialogAccessibility()
 
 // Initialize application
 const initializeApp = async () => {

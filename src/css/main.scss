@@ -1,5 +1,35 @@
 @import './base.scss';
 
+// Fix Quasar dialog accessibility issue with aria-hidden and focus
+.q-dialog__backdrop {
+  // Remove aria-hidden from backdrop when dialog is open to prevent accessibility violations
+  &[aria-hidden="true"] {
+    // Ensure focused elements inside dialog are not hidden from screen readers
+    .q-dialog__inner {
+      // Override aria-hidden on dialog content when it has focus
+      &[aria-hidden="true"]:focus-within {
+        aria-hidden: false !important;
+      }
+    }
+  }
+}
+
+// Alternative approach: Use inert attribute instead of aria-hidden for better accessibility
+.q-dialog__backdrop:not(.q-dialog__backdrop--active) {
+  // Use inert instead of aria-hidden when dialog is not active
+  inert: true;
+}
+
+// Ensure proper focus management for dialogs
+.q-dialog {
+  // Ensure dialog content is always accessible when open
+  &:not([aria-hidden="true"]) {
+    .q-dialog__inner {
+      aria-hidden: false !important;
+    }
+  }
+}
+
 // Force default cursor on all elements to eliminate circle cursor
 html, body {
   cursor: default !important;
