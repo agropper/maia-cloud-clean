@@ -71,7 +71,7 @@ const startDeploymentMonitoring = () => {
         clearInterval(deploymentMonitoringInterval);
         deploymentMonitoringInterval = null;
       }
-    } catch (error) {
+  } catch (error) {
       console.error('❌ Error in deployment monitoring:', error);
     }
   }, DEPLOYMENT_CHECK_INTERVAL);
@@ -711,53 +711,60 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
     const filteredUsers = allUsers.filter(user => {
-      // Exclude design documents only (Public User should be included)
-      if (user._id.startsWith('_design/')) {
+      // Exclude design documents
+        if (user._id.startsWith('_design/')) {
+          return false;
+        }
+      // Exclude configuration documents (not real users)
+      if (user._id === 'maia_config') {
         return false;
       }
-      // For wed271, allow it through even if it has isAdmin: true (special case)
-      if (user._id === 'wed271') {
+      // Always include these specific users regardless of admin status
+      if (user._id === 'Public User' || user._id === 'wed271') {
         return true;
       }
-      // For all other users, exclude admin users
-      const isAdmin = user.isAdmin;
-      return !isAdmin;
+      // Always include deep link users
+      if (user._id.startsWith('deep-')) {
+          return true;
+        }
+        // For all other users, exclude admin users
+        const isAdmin = user.isAdmin;
+        return !isAdmin;
     });
     
     // Process users with async workflow stage determination
     const processedUsers = await Promise.all(filteredUsers.map(async user => {
-      // Extract current agent information from ownedAgents if available
-      let assignedAgentId = user.assignedAgentId || null;
-      let assignedAgentName = user.assignedAgentName || null;
-      
-      // If we have ownedAgents but no assignedAgentId, use the first owned agent
-      if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
-        const firstAgent = user.ownedAgents[0];
-        assignedAgentId = firstAgent.id;
-        assignedAgentName = firstAgent.name;
-      }
-      
-      // Check if passkey is valid (not a test credential)
-      const hasValidPasskey = !!(user.credentialID && 
-        user.credentialID !== 'test-credential-id-wed271' && 
-        user.credentialPublicKey && 
-        user.counter !== undefined);
-      
-      return {
-        userId: user._id,
-        displayName: user.displayName || user._id,
-        createdAt: user.createdAt,
-        hasPasskey: !!user.credentialID,
-        hasValidPasskey: hasValidPasskey,
+        // Extract current agent information from ownedAgents if available
+        let assignedAgentId = user.assignedAgentId || null;
+        let assignedAgentName = user.assignedAgentName || null;
+        
+        // If we have ownedAgents but no assignedAgentId, use the first owned agent
+        if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+          const firstAgent = user.ownedAgents[0];
+          assignedAgentId = firstAgent.id;
+          assignedAgentName = firstAgent.name;
+        }
+        
+        // Check if passkey is valid (not a test credential)
+        const hasValidPasskey = !!(user.credentialID && 
+          user.credentialID !== 'test-credential-id-wed271' && 
+          user.credentialPublicKey && 
+          user.counter !== undefined);
+        
+        return {
+          userId: user._id,
+          displayName: user.displayName || user._id,
+          createdAt: user.createdAt,
+          hasPasskey: !!user.credentialID,
+          hasValidPasskey: hasValidPasskey,
         workflowStage: await determineWorkflowStage(user),
-        assignedAgentId: assignedAgentId,
-        assignedAgentName: assignedAgentName,
-        email: user.email || null
-      };
+          assignedAgentId: assignedAgentId,
+          assignedAgentName: assignedAgentName,
+          email: user.email || null
+        };
     }));
     
     const users = processedUsers
-      .filter(processedUser => processedUser.userId !== 'admin') // Exclude admin user from final list
       .sort((a, b) => {
         // Sort "awaiting_approval" to the top
         if (a.workflowStage === 'awaiting_approval' && b.workflowStage !== 'awaiting_approval') {
@@ -1083,27 +1090,27 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
     } else {
       // Handle existing agent assignment
-      if (!agentId || !agentName) {
-        return res.status(400).json({ 
-          error: 'Missing required fields: agentId and agentName' 
-        });
-      }
-      
-      // Get user document
+    if (!agentId || !agentName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: agentId and agentName' 
+      });
+    }
+    
+    // Get user document
       const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
-      if (!userDoc) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      
-      // Update user with assigned agent information
-      const updatedUser = {
-        ...userDoc,
-        assignedAgentId: agentId,
-        assignedAgentName: agentName,
-        agentAssignedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update user with assigned agent information
+    const updatedUser = {
+      ...userDoc,
+      assignedAgentId: agentId,
+      assignedAgentName: agentName,
+      agentAssignedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
       await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
       
       // Start tracking deployment for this user
@@ -1111,14 +1118,14 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       // Invalidate user cache to ensure fresh data
       invalidateUserCache(userId);
-      
-      res.json({ 
-        message: 'Agent assigned successfully',
-        userId: userId,
-        agentId: agentId,
-        agentName: agentName,
-        timestamp: new Date().toISOString()
-      });
+    
+    res.json({ 
+      message: 'Agent assigned successfully',
+      userId: userId,
+      agentId: agentId,
+      agentName: agentName,
+      timestamp: new Date().toISOString()
+    });
     }
     
   } catch (error) {
