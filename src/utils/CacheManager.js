@@ -67,7 +67,7 @@ export class CacheManager {
       return this.lastUpdated.agents > 0 && (now - this.lastUpdated.agents) < this.ttl.agents;
     }
     
-    if (key && this.lastUpdated[cacheType]) {
+    if (key && this.lastUpdated[cacheType] && this.lastUpdated[cacheType] instanceof Map) {
       const lastUpdate = this.lastUpdated[cacheType].get(key);
       return lastUpdate && (now - lastUpdate) < this.ttl[cacheType];
     }
@@ -87,7 +87,7 @@ export class CacheManager {
       return this.cache.agents.get('all');
     }
     
-    if (key && this.cache[cacheType]) {
+    if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
       return this.cache[cacheType].get(key);
     }
     
@@ -107,10 +107,15 @@ export class CacheManager {
       this.cache.agents.set('all', data);
       this.lastUpdated.agents = now;
     } else if (this.cache[cacheType]) {
-      this.cache[cacheType].set(key, data);
-      if (!this.lastUpdated[cacheType]) {
+      // Ensure both cache and lastUpdated are Maps for this cache type
+      if (!(this.cache[cacheType] instanceof Map)) {
+        this.cache[cacheType] = new Map();
+      }
+      if (!(this.lastUpdated[cacheType] instanceof Map)) {
         this.lastUpdated[cacheType] = new Map();
       }
+      
+      this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
     }
     
@@ -402,6 +407,31 @@ export class CacheManager {
   }
 
   /**
+   * Get cached knowledge bases data
+   */
+  getCachedKnowledgeBases() {
+    console.log('🔍 [ADMIN-CACHE] getCachedKnowledgeBases() called');
+    console.log('🔍 [ADMIN-CACHE] - isCacheValid("knowledgeBases", "all"):', this.isCacheValid('knowledgeBases', 'all'));
+    console.log('🔍 [ADMIN-CACHE] - lastUpdated.knowledgeBases.has("all"):', this.lastUpdated.knowledgeBases.has('all'));
+    console.log('🔍 [ADMIN-CACHE] - cache.knowledgeBases.has("all"):', this.cache.knowledgeBases.has('all'));
+    
+    if (this.isCacheValid('knowledgeBases', 'all')) {
+      const cached = this.getCached('knowledgeBases', 'all');
+      console.log('🔍 [ADMIN-CACHE] - getCached("knowledgeBases", "all"):', cached ? `${cached.length} KBs` : 'null');
+      if (cached) {
+        console.log(`⚡ [CACHE] Cache HIT for knowledge bases (${cached.length} KBs)`);
+        return cached;
+      } else {
+        console.log(`❌ [CACHE] Cache MISS for knowledge bases - no data found`);
+      }
+    } else {
+      console.log(`❌ [CACHE] Cache EXPIRED for knowledge bases - last updated: ${this.lastUpdated.knowledgeBases.get('all') ? new Date(this.lastUpdated.knowledgeBases.get('all')).toISOString() : 'never'}`);
+    }
+    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
+    return null;
+  }
+
+  /**
    * Cache models data
    */
   async cacheModels(modelsData) {
@@ -413,13 +443,24 @@ export class CacheManager {
    * Get cached models data
    */
   getCachedModels() {
+    console.log('🔍 [ADMIN-CACHE] getCachedModels() called');
+    console.log('🔍 [ADMIN-CACHE] - isCacheValid("models", "all"):', this.isCacheValid('models', 'all'));
+    console.log('🔍 [ADMIN-CACHE] - lastUpdated.models.has("all"):', this.lastUpdated.models.has('all'));
+    console.log('🔍 [ADMIN-CACHE] - cache.models.has("all"):', this.cache.models.has('all'));
+    
     if (this.isCacheValid('models', 'all')) {
       const cached = this.getCached('models', 'all');
+      console.log('🔍 [ADMIN-CACHE] - getCached("models", "all"):', cached ? `${cached.length} models` : 'null');
       if (cached) {
-        console.log(`⚡ [CACHE] Cache HIT for models`);
+        console.log(`⚡ [CACHE] Cache HIT for models (${cached.length} models)`);
         return cached;
+      } else {
+        console.log(`❌ [CACHE] Cache MISS for models - no data found`);
       }
+    } else {
+      console.log(`❌ [CACHE] Cache EXPIRED for models - last updated: ${this.lastUpdated.models.get('all') ? new Date(this.lastUpdated.models.get('all')).toISOString() : 'never'}`);
     }
+    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;
   }
 
