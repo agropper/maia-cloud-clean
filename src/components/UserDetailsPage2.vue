@@ -87,11 +87,31 @@
             :label="user.hasBucket ? 'Has Bucket' : 'No Bucket'"
             class="status-badge"
           />
+          
+          <QBadge
+            :color="user.hasApiKey ? 'positive' : 'negative'"
+            :label="user.hasApiKey ? 'Has API Key' : 'No API Key'"
+            class="status-badge"
+          />
         </div>
       </div>
 
       <!-- Admin Actions -->
       <div class="actions-section">
+        <!-- Generate API Key Button -->
+        <div v-if="user && user.assignedAgentId && !user.hasApiKey" class="q-mb-md">
+          <QBtn
+            color="primary"
+            icon="key"
+            label="GET API KEY"
+            @click="generateApiKey"
+            :loading="isGeneratingApiKey"
+            class="generate-api-key-btn"
+          />
+          <div class="text-caption text-grey-6 q-mt-xs">
+            Generate an API key for this user's assigned agent
+          </div>
+        </div>
         <h4 class="section-title">Admin Actions</h4>
         <div class="action-buttons">
           <QBtn
@@ -161,6 +181,9 @@
           <div class="info-item" v-if="user.agentAssignedAt">
             <strong>Agent Assigned:</strong> {{ formatRelativeTime(user.agentAssignedAt) }}
           </div>
+          <div class="info-item">
+            <strong>API Key Status:</strong> {{ user.agentApiKey || 'Not Available' }}
+          </div>
           <div class="info-item" v-if="user.bucketFileCount !== undefined">
             <strong>Bucket Files:</strong> {{ user.bucketFileCount }} files
           </div>
@@ -189,6 +212,7 @@ const loading = ref(true)
 const error = ref(null)
 const adminNotes = ref('')
 const isSavingNotes = ref(false)
+const isGeneratingApiKey = ref(false)
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
@@ -222,6 +246,7 @@ const loadUserDetails = async () => {
     // Load existing admin notes
     adminNotes.value = userData.adminNotes || ''
     
+    
     console.log(`✅ [UserDetailsPage2] Loaded user details for ${userId}`)
   } catch (err) {
     console.error('❌ [UserDetailsPage2] Failed to load user details:', err)
@@ -233,6 +258,53 @@ const loadUserDetails = async () => {
     })
   } finally {
     loading.value = false
+  }
+}
+
+// Generate API key for user's agent
+const generateApiKey = async () => {
+  try {
+    isGeneratingApiKey.value = true
+    
+    const userId = getUserIdFromPath()
+    if (!userId) {
+      throw new Error('User ID not found in URL')
+    }
+    
+    const response = await fetch(`/api/admin-management/users/${userId}/generate-api-key`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || `Failed to generate API key: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    
+    $q.notify({
+      type: 'positive',
+      message: 'API key generated successfully!',
+      position: 'top'
+    })
+    
+    // Reload user details to show updated information
+    await loadUserDetails()
+    
+    console.log(`✅ [UserDetailsPage2] API key generated for user ${userId}`)
+  } catch (err) {
+    console.error('❌ [UserDetailsPage2] Failed to generate API key:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Failed to generate API key',
+      position: 'top'
+    })
+  } finally {
+    isGeneratingApiKey.value = false
   }
 }
 

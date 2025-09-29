@@ -911,6 +911,32 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       }
     }
     
+    // Get bucket status for the user
+    let bucketStatus = {
+      hasFolder: false,
+      fileCount: 0,
+      totalSize: 0
+    };
+    
+    try {
+      const bucketResponse = await fetch(`http://localhost:3001/api/bucket/user-status/${userId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (bucketResponse.ok) {
+        const bucketData = await bucketResponse.json();
+        bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
+      }
+    } catch (bucketError) {
+      // Bucket check failed, use default values
+      console.log(`⚠️ [ADMIN] Failed to check bucket status for user ${userId}:`, bucketError.message);
+    }
+
     // Get user's approval requests, agents, and knowledge bases
     const userInfo = {
       userId: userDoc._id || userDoc.userId,
@@ -939,10 +965,19 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       currentAgentSetAt: userDoc.currentAgentSetAt,
       challenge: userDoc.challenge,
       agentAssignedAt: agentAssignedAt,
+      // API Key information
+      hasApiKey: !!userDoc.agentApiKey,
+      agentApiKey: userDoc.agentApiKey ? 'Present' : 'Missing',
+      // Bucket status information
+      hasBucket: bucketStatus.hasFolder,
+      bucketFileCount: bucketStatus.fileCount,
+      bucketTotalSize: bucketStatus.totalSize,
+      bucketStatus: bucketStatus,
       approvalRequests: [],
       agents: [],
       knowledgeBases: []
     };
+    
     
     
     res.json(userInfo);
@@ -1128,16 +1163,47 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
         
         console.log(`🤖 [NEW AGENT] Agent created successfully: ${newAgentId}`);
         
-        // Update user with assigned agent information
+        // Create API key for the agent
+        let agentApiKey = null;
+        try {
+          console.log(`🔑 [NEW AGENT] Creating API key for agent ${newAgentId}...`);
+          const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${newAgentId}/api_keys`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: `${userId}-agent-${Date.now()}-api-key`
+            })
+          });
+          
+          const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.api_key_info || apiKeyResponse.data || apiKeyResponse;
+          agentApiKey = apiKeyData.key || apiKeyData.secret_key;
+          
+          if (agentApiKey) {
+            console.log(`🔑 [NEW AGENT] ✅ API key created successfully for agent ${newAgentId}`);
+          } else {
+            console.error(`🔑 [NEW AGENT] ❌ Failed to extract API key from response:`, apiKeyResponse);
+          }
+        } catch (apiKeyError) {
+          console.error(`🔑 [NEW AGENT] ❌ Failed to create API key for agent ${newAgentId}:`, apiKeyError.message);
+        }
+        
+        // Update user with assigned agent information and API key
         const updatedUser = {
           ...userDoc,
           assignedAgentId: newAgentId,
           assignedAgentName: agentName,
+          agentApiKey: agentApiKey, // Store the API key in the user document
           agentAssignedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
         await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+        
+        // Cache the API key in memory for immediate access
+        if (agentApiKey) {
+          // Import the agentApiKeys from server.js context (we'll need to access it)
+          // For now, we'll let the getAgentApiKey function handle the database lookup
+          console.log(`🔑 [NEW AGENT] API key stored in user document for agent ${newAgentId}`);
+        }
         
         // Start tracking deployment for this user
         addToDeploymentTracking(userId, newAgentId, agentName);
@@ -1152,6 +1218,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
           userId: userId,
           agentId: newAgentId,
           agentName: agentName,
+          hasApiKey: !!agentApiKey,
           timestamp: new Date().toISOString()
         });
         
@@ -2510,6 +2577,92 @@ router.post('/models/current', requireAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('❌ [MODELS] Failed to set current model:', error);
     res.status(500).json({ error: `Failed to set current model: ${error.message}` });
+  }
+});
+
+// Generate API key for user's existing agent
+router.post('/users/:userId/generate-api-key', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`🔑 [GENERATE API KEY] Request for user: ${userId}`);
+    
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if user has an assigned agent
+    const agentId = userDoc.assignedAgentId;
+    if (!agentId) {
+      return res.status(400).json({ 
+        error: 'User does not have an assigned agent. Please assign an agent first.' 
+      });
+    }
+    
+    // Check if user already has an API key
+    if (userDoc.agentApiKey) {
+      return res.status(400).json({ 
+        error: 'User already has an API key. No need to generate a new one.' 
+      });
+    }
+    
+    console.log(`🔑 [GENERATE API KEY] Creating API key for agent ${agentId}...`);
+    
+    try {
+      // Create API key via DigitalOcean API
+      const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${userId}-agent-${Date.now()}-api-key`
+        })
+      });
+      
+      const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.api_key_info || apiKeyResponse.data || apiKeyResponse;
+      const agentApiKey = apiKeyData.key || apiKeyData.secret_key;
+      
+      if (!agentApiKey) {
+        console.error(`🔑 [GENERATE API KEY] ❌ Failed to extract API key from response:`, apiKeyResponse);
+        return res.status(500).json({ 
+          error: 'Failed to extract API key from DigitalOcean response' 
+        });
+      }
+      
+      console.log(`🔑 [GENERATE API KEY] ✅ API key created successfully for agent ${agentId}`);
+      
+      // Update user document with the new API key
+      const updatedUser = {
+        ...userDoc,
+        agentApiKey: agentApiKey,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+      
+      // Invalidate user cache to ensure fresh data
+      invalidateUserCache(userId);
+      
+      console.log(`🔑 [GENERATE API KEY] ✅ API key saved to database for user ${userId}`);
+      
+      res.json({ 
+        message: 'API key generated successfully',
+        hasApiKey: true,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (apiKeyError) {
+      console.error(`🔑 [GENERATE API KEY] ❌ Failed to create API key for agent ${agentId}:`, apiKeyError.message);
+      return res.status(500).json({ 
+        error: `Failed to create API key: ${apiKeyError.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error(`🔑 [GENERATE API KEY] ❌ Error:`, error);
+    res.status(500).json({ 
+      error: `Failed to generate API key: ${error.message}` 
+    });
   }
 });
 
