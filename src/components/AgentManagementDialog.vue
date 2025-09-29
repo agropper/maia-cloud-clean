@@ -3122,11 +3122,11 @@ export default defineComponent({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            name: kbName,
-            description: kbDescription,
-            userId: localCurrentUser.value?.userId
-          })
+        body: JSON.stringify({
+          name: kbName,
+          description: kbDescription,
+          username: localCurrentUser.value?.userId
+        })
         });
         
         if (!kbResponse.ok) {
@@ -3135,6 +3135,14 @@ export default defineComponent({
         
         const kbResult = await kbResponse.json();
         console.log('[KB CREATE] Knowledge base created:', kbResult);
+        
+        // Extract KB ID from the response (backend returns it in knowledge_base.uuid format)
+        const knowledgeBaseId = kbResult.knowledge_base?.uuid || kbResult.data?.uuid || kbResult.uuid || kbResult.id;
+        console.log('[KB CREATE] Extracted KB ID for attachment:', knowledgeBaseId);
+        
+        if (!knowledgeBaseId) {
+          throw new Error('Failed to extract knowledge base ID from creation response');
+        }
         
         // Step 3: Attach to agent
         console.log('[KB CREATE] Attaching to agent...');
@@ -3148,7 +3156,7 @@ export default defineComponent({
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              knowledgeBaseId: kbResult.id
+              knowledgeBaseId: knowledgeBaseId
             })
           });
           
@@ -3192,12 +3200,38 @@ export default defineComponent({
           // Refresh knowledge bases
           await loadAvailableKnowledgeBases();
           
+          // Update agent state to reflect the new knowledge base
+          if (assignedAgent.value) {
+            // Get the newly created KB from the available KBs list
+            const newKB = availableKnowledgeBases.value.find(kb => kb.uuid === knowledgeBaseId);
+            if (newKB) {
+              // Add the KB to the agent's knowledgeBases array
+              if (!assignedAgent.value.knowledgeBases) {
+                assignedAgent.value.knowledgeBases = [];
+              }
+              // Check if KB is not already in the array
+              const existingKb = assignedAgent.value.knowledgeBases.find(
+                (agentKb: any) => agentKb.uuid === newKB.uuid
+              );
+              if (!existingKb) {
+                assignedAgent.value.knowledgeBases.push(newKB);
+              }
+              // Set as single knowledgeBase property
+              assignedAgent.value.knowledgeBase = newKB;
+              // Update currentAgent to match assignedAgent
+              currentAgent.value = assignedAgent.value;
+            }
+          }
+          
           console.log('[KB CREATE] Knowledge base creation completed successfully');
           
           $q.notify({
             type: 'positive',
             message: 'Knowledge base created and attached to your agent successfully!'
           });
+          
+          // Emit event to parent to update agent badge
+          emit("agent-updated", assignedAgent.value);
         }
         
       } catch (error) {
