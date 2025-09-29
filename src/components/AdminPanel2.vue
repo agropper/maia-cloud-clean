@@ -239,14 +239,14 @@
 
               <template v-slot:body-cell-bucketStatus="props">
                 <QTd :props="props">
-                  <div v-if="props.value.hasFolder" class="bucket-info">
+                  <div v-if="props.value && props.value.hasFolder" class="bucket-info">
                     <QBadge
                       color="positive"
-                      :label="`${props.value.fileCount} files`"
+                      :label="`${props.value.fileCount || 0} files`"
                       class="q-mr-xs"
                     />
                     <span class="text-caption text-grey-6">
-                      {{ formatFileSize(props.value.totalSize) }}
+                      {{ formatFileSize(props.value.totalSize || 0) }}
                     </span>
                   </div>
                   <QBadge
