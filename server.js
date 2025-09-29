@@ -1574,6 +1574,11 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
 
+  // Determine the base URL dynamically from the request
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+  const baseUrl = `${protocol}://${host}`;
+
   try {
     // Process personal chat request
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
@@ -1660,7 +1665,7 @@ app.post('/api/personal-chat', async (req, res) => {
             // console.log(`🔗 [DEBUG] Step 4: Getting assigned agent for patient: ${patientUser}`);
             
             // Get the assigned agent for this patient
-            const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${patientUser}/assigned-agent`);
+            const assignedAgentResponse = await fetch(`${baseUrl}/api/admin-management/users/${patientUser}/assigned-agent`);
             // console.log(`🔗 [DEBUG] Step 4a: Assigned agent response status: ${assignedAgentResponse.status}`);
             
             if (assignedAgentResponse.ok) {
@@ -1746,7 +1751,7 @@ app.post('/api/personal-chat', async (req, res) => {
     // Skip this for deep link users since we already resolved their patient's agent above
     if (currentUser !== 'Public User' && !currentUser.startsWith('deep_link_')) {
       try {
-        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
+        const assignedAgentResponse = await fetch(`${baseUrl}/api/admin-management/users/${currentUser}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
           if (assignedAgentData.assignedAgentId) {
@@ -3830,6 +3835,10 @@ app.get('/api/test', (req, res) => {
 
 // Get current agent
 app.get('/api/current-agent', async (req, res) => {
+  // Determine the base URL dynamically from the request
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+  const baseUrl = `${protocol}://${host}`;
   
   try {
     // Get current user from auth cookie first, then fallback to session
@@ -3926,7 +3935,7 @@ app.get('/api/current-agent', async (req, res) => {
               // console.log(`🔗 [DEBUG] Step 4: Getting assigned agent for patient: ${patientUser}`);
               
               // Get the assigned agent for this patient
-              const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${patientUser}/assigned-agent`);
+              const assignedAgentResponse = await fetch(`${baseUrl}/api/admin-management/users/${patientUser}/assigned-agent`);
               // console.log(`🔗 [DEBUG] Step 4a: Assigned agent response status: ${assignedAgentResponse.status}`);
               
               if (assignedAgentResponse.ok) {
@@ -3968,7 +3977,7 @@ app.get('/api/current-agent', async (req, res) => {
         // Regular authenticated user - check assigned agent
         try {
           // Checking assigned agent for user
-          const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${currentUser}/assigned-agent`);
+          const assignedAgentResponse = await fetch(`${baseUrl}/api/admin-management/users/${currentUser}/assigned-agent`);
           if (assignedAgentResponse.ok) {
             const assignedAgentData = await assignedAgentResponse.json();
             if (assignedAgentData.assignedAgentId) {
@@ -6995,11 +7004,32 @@ app.listen(PORT, async () => {
   // console.log(`📅 Server started at: ${new Date().toISOString()}`);
   
   // Helper function to ensure bucket folders for all users
-  async function ensureAllUserBuckets() {
+async function ensureAllUserBuckets() {
     console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
     
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    
+    // Debug: Log all users and their displayNames at startup
+    console.log(`🔍 [USERS] STARTUP - Display names for all ${allUsers.length} users from database:`);
+    allUsers.forEach((user, index) => {
+      const displayName = user.displayName || user._id;
+      console.log(`🔍 [USERS] ${index + 1}. ${user._id}: displayName="${user.displayName}" → final="${displayName}"`);
+    });
+    
+    // Apply the same processing logic that Admin2 expects
+    const processedUsers = allUsers.map(user => ({
+      userId: user._id,
+      displayName: user.displayName || user._id,  // Apply fallback logic
+      createdAt: user.createdAt,
+      hasPasskey: !!user.credentialID,
+      // ... other fields that Admin2 expects
+    }));
+    
+    // Cache the processed users (not raw database documents)
+    await cacheManager.cacheUsers(processedUsers);
+    console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users for Admin2`);
+    
     const userIds = allUsers.map(user => user.userId || user._id);
     const bucketChecks = [];
     

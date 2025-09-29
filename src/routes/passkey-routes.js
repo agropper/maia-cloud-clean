@@ -512,6 +512,11 @@ router.post("/authenticate", async (req, res) => {
 
 // Verify authentication response
 router.post("/authenticate-verify", async (req, res) => {
+  // Determine the base URL dynamically from the request
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+  const baseUrl = `${protocol}://${host}`;
+
   try {
     const { userId, response } = req.body;
 
@@ -580,13 +585,13 @@ router.post("/authenticate-verify", async (req, res) => {
       try {
         
         // Get the user's assigned agent from admin management
-        const assignedAgentResponse = await fetch(`http://localhost:3001/api/admin-management/users/${updatedUser._id}/assigned-agent`);
+        const assignedAgentResponse = await fetch(`${baseUrl}/api/admin-management/users/${updatedUser._id}/assigned-agent`);
         if (assignedAgentResponse.ok) {
           const assignedAgentData = await assignedAgentResponse.json();
           if (assignedAgentData.assignedAgentId) {
             
             // Set this agent as the current agent for the user
-            const currentAgentResponse = await fetch(`http://localhost:3001/api/current-agent`, {
+            const currentAgentResponse = await fetch(`${baseUrl}/api/current-agent`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
