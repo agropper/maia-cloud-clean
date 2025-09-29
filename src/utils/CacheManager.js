@@ -440,6 +440,14 @@ export class CacheManager {
   }
 
   /**
+   * Cache users data
+   */
+  async cacheUsers(usersData) {
+    this.setCached('users', 'all', usersData);
+    console.log(`💾 [CACHE] Cached ${usersData.length} users`);
+  }
+
+  /**
    * Get cached models data
    */
   getCachedModels() {
@@ -447,7 +455,7 @@ export class CacheManager {
     console.log('🔍 [ADMIN-CACHE] - isCacheValid("models", "all"):', this.isCacheValid('models', 'all'));
     console.log('🔍 [ADMIN-CACHE] - lastUpdated.models.has("all"):', this.lastUpdated.models.has('all'));
     console.log('🔍 [ADMIN-CACHE] - cache.models.has("all"):', this.cache.models.has('all'));
-    
+
     if (this.isCacheValid('models', 'all')) {
       const cached = this.getCached('models', 'all');
       console.log('🔍 [ADMIN-CACHE] - getCached("models", "all"):', cached ? `${cached.length} models` : 'null');
@@ -459,6 +467,28 @@ export class CacheManager {
       }
     } else {
       console.log(`❌ [CACHE] Cache EXPIRED for models - last updated: ${this.lastUpdated.models.get('all') ? new Date(this.lastUpdated.models.get('all')).toISOString() : 'never'}`);
+    }
+    console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
+    return null;
+  }
+
+  getCachedUsers() {
+    console.log('🔍 [ADMIN-CACHE] getCachedUsers() called');
+    console.log('🔍 [ADMIN-CACHE] - isCacheValid("users", "all"):', this.isCacheValid('users', 'all'));
+    console.log('🔍 [ADMIN-CACHE] - lastUpdated.users.has("all"):', this.lastUpdated.users.has('all'));
+    console.log('🔍 [ADMIN-CACHE] - cache.users.has("all"):', this.cache.users.has('all'));
+
+    if (this.isCacheValid('users', 'all')) {
+      const cached = this.getCached('users', 'all');
+      console.log('🔍 [ADMIN-CACHE] - getCached("users", "all"):', cached ? `${cached.length} users` : 'null');
+      if (cached) {
+        console.log(`⚡ [CACHE] Cache HIT for users (${cached.length} users)`);
+        return cached;
+      } else {
+        console.log(`❌ [CACHE] Cache MISS for users - no data found`);
+      }
+    } else {
+      console.log(`❌ [CACHE] Cache EXPIRED for users - last updated: ${this.lastUpdated.users.get('all') ? new Date(this.lastUpdated.users.get('all')).toISOString() : 'never'}`);
     }
     console.log('🔍 [ADMIN-CACHE] - Returning null (cache miss)');
     return null;

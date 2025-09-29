@@ -63,6 +63,9 @@ const invalidateUserCache = (userId) => {
   cacheFunctions.invalidateCache('agents', userId);
   cacheFunctions.invalidateCache('agentAssignments', userId);
   
+  // CRITICAL: Also invalidate the "all" users cache used by Admin2 panel
+  cacheFunctions.invalidateCache('users', 'all');
+  
   // Also invalidate general caches that might contain user data
   cacheFunctions.invalidateCache('chats');
 };
@@ -718,7 +721,28 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    // Cache will be cleared on next database read
+    console.log('👥 [ADMIN-USERS] Fetching all users...');
+    console.log('🔍 [ADMIN-CACHE] Users Request received at:', new Date().toISOString());
+    
+    // Check cache first (use the same pattern as other endpoints)
+    const cachedUsers = cacheManager.getCachedUsers();
+    console.log('🔍 [ADMIN-CACHE] getCachedUsers() returned:', cachedUsers ? `${cachedUsers.length} users` : 'null');
+    
+    if (cachedUsers) {
+      console.log('⚡ [ADMIN-USERS] Using cached users data');
+      console.log('🔍 [ADMIN-CACHE] Returning cached users data:', {
+        usersCount: cachedUsers.length,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+      return res.json({
+        users: cachedUsers,
+        count: cachedUsers.length,
+        cached: true
+      });
+    }
+    
+    console.log('🔄 [ADMIN-USERS] Cache miss - fetching from database...');
     
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -817,7 +841,17 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
-    res.json({ users });
+    // Cache the processed users data
+    await cacheManager.cacheUsers(users);
+    
+    console.log(`👥 [ADMIN-USERS] Found ${users.length} users from database`);
+    
+    res.json({ 
+      users,
+      count: users.length,
+      cached: false,
+      timestamp: new Date().toISOString()
+    });
     
   } catch (error) {
     console.error('Error fetching users:', error);

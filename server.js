@@ -353,15 +353,23 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply rate limiting to API routes (excluding admin-management routes, SSE, and passkey)
+// Apply rate limiting to API routes (excluding essential routes)
 app.use('/api/', (req, res, next) => {
-  // Skip rate limiting for:
+  // Skip rate limiting for essential routes:
   // - admin-management routes (they have their own caching)
   // - admin events (SSE) to prevent connection issues  
   // - passkey routes (essential for authentication)
+  // - current-agent (needed for user initialization)
+  // - group-chats (needed for admin panel functionality)
+  // - bucket routes (needed for file operations)
+  // - admin notify (needed for deployment notifications)
   if (req.path.startsWith('/admin-management/') || 
       req.path === '/admin/events' ||
-      req.path.startsWith('/passkey/')) {
+      req.path.startsWith('/passkey/') ||
+      req.path === '/current-agent' ||
+      req.path === '/group-chats' ||
+      req.path.startsWith('/bucket/') ||
+      req.path === '/admin/notify') {
     return next();
   }
   return apiLimiter(req, res, next);
