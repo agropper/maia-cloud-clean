@@ -3106,14 +3106,14 @@ export default defineComponent({
         // Get all files for KB creation (both uploaded and bucket files)
         const allSelectedFiles = [...selectedUploadedFiles, ...selectedBucketFiles];
         
-        // Generate KB name following the format: sat27-{first8chars}-MMDDYYYY (lowercase, hyphens only)
-        const username = (localCurrentUser.value?.userId || 'unknown').toLowerCase();
+        // Generate KB name following the format: {first8chars}-MMDDYYYY (lowercase, hyphens only)
+        // Note: Backend will add username prefix automatically
         const firstFile = allSelectedFiles[0];
         const fileName = firstFile?.key ? firstFile.key.split('/').pop() : firstFile?.name || 'kb';
         const filePrefix = fileName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toLowerCase();
         const today = new Date();
         const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
-        const kbName = `${username}-${filePrefix}-${dateStr}`.toLowerCase();
+        const kbName = `${filePrefix}-${dateStr}`.toLowerCase();
         const kbDescription = `Knowledge base created from ${allSelectedFiles.length} files`;
         
         // Create knowledge base using the existing function
@@ -3200,29 +3200,6 @@ export default defineComponent({
           // Refresh knowledge bases
           await loadAvailableKnowledgeBases();
           
-          // Update agent state to reflect the new knowledge base
-          if (assignedAgent.value) {
-            // Get the newly created KB from the available KBs list
-            const newKB = availableKnowledgeBases.value.find(kb => kb.uuid === knowledgeBaseId);
-            if (newKB) {
-              // Add the KB to the agent's knowledgeBases array
-              if (!assignedAgent.value.knowledgeBases) {
-                assignedAgent.value.knowledgeBases = [];
-              }
-              // Check if KB is not already in the array
-              const existingKb = assignedAgent.value.knowledgeBases.find(
-                (agentKb: any) => agentKb.uuid === newKB.uuid
-              );
-              if (!existingKb) {
-                assignedAgent.value.knowledgeBases.push(newKB);
-              }
-              // Set as single knowledgeBase property
-              assignedAgent.value.knowledgeBase = newKB;
-              // Update currentAgent to match assignedAgent
-              currentAgent.value = assignedAgent.value;
-            }
-          }
-          
           console.log('[KB CREATE] Knowledge base creation completed successfully');
           
           $q.notify({
@@ -3230,8 +3207,8 @@ export default defineComponent({
             message: 'Knowledge base created and attached to your agent successfully!'
           });
           
-          // Emit event to parent to update agent badge
-          emit("agent-updated", assignedAgent.value);
+          // Emit event to parent to refresh agent data from DigitalOcean API (source of truth)
+          emit("refresh-agent-data");
         }
         
       } catch (error) {
@@ -3880,11 +3857,8 @@ export default defineComponent({
         // Update local knowledge base state
         knowledgeBase.value = null;
         
-        // Emit event to parent to update agent badge
-        emit("agent-updated", assignedAgent.value);
-        
-        // Don't emit refresh-agent-data to prevent overriding the current agent
-        // emit("refresh-agent-data");
+        // Emit event to parent to refresh agent data from DigitalOcean API (source of truth)
+        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to detach KB:", error);
         $q.notify({
@@ -4003,11 +3977,8 @@ export default defineComponent({
         // Update local knowledge base state
         knowledgeBase.value = kb;
         
-        // Emit event to parent to update agent badge
-        emit("agent-updated", assignedAgent.value);
-        
-        // Don't emit refresh-agent-data to prevent overriding the current agent
-        // emit("refresh-agent-data");
+        // Emit event to parent to refresh agent data from DigitalOcean API (source of truth)
+        emit("refresh-agent-data");
       } catch (error: any) {
         console.error("❌ Failed to connect KB:", error);
         $q.notify({

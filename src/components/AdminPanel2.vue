@@ -1271,12 +1271,19 @@ const loadKnowledgeBases = async () => {
 
 const loadAllData = async () => {
   console.log('🔄 [AdminPanel2] Loading all data from caches...')
-  await Promise.all([
-    loadUsers(),
-    loadAgents(),
-    loadKnowledgeBases(),
-    loadModels()
-  ])
+  
+  // Load data sequentially to avoid overwhelming the cache system
+  await loadUsers()
+  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
+  
+  await loadAgents()
+  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
+  
+  await loadKnowledgeBases()
+  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
+  
+  await loadModels()
+  
   console.log('✅ [AdminPanel2] All data loaded successfully')
 }
 

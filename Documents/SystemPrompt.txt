@@ -21,3 +21,15 @@ The Medical AI Assistant (MAIA) lets you choose from different privacy modes: Pu
 *Private* puts you in complete control of your private AI. You will need to pay for hosting costs at Digital Ocean or another hosting service. For support, you will need to set up an administrator or participate in a community. Only you and the people you specify will be able to access to your MAIA.
 
 [I understand these options] 
+
+TO DO: 
+Then, find the code that sets the Agent Information using the instruction string = in /Users/adrian/Desktop/HIEofOne-dev/GitHub/maia-cloud-clean/Documents/SystemPrompt.txt and let's make that editable by the user.
+
+When a new user is created, add the agentInstruction to their document and initialize it with the instruction string.
+
+Then, make the Agent Instructions: in the Agent Management Dialog that displays the instrictions editable by the user if they click  a small pencil icon. Save the edited instructions in the database. 
+
+Then, find the DO API command that changes the instruction string and update it according to @https://docs.digitalocean.com/reference/api/digitalocean/#tag/GradientAI-Platform/operation/genai_update_agent 
+
+
+Then, verify that the Agent Management Dialog is displaying the updated string 
