@@ -10,6 +10,8 @@ export class CacheManager {
       chats: new Map(),           // 'all' -> allChatsArray
       agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
       knowledgeBases: new Map(),   // kbId -> kbDocument
+      agents: new Map(),          // 'all' -> allAgentsArray
+      models: new Map(),          // 'all' -> allModelsArray, 'current' -> currentModel
       health: new Map()           // 'admin' -> health status
     };
     
@@ -18,15 +20,19 @@ export class CacheManager {
       chats: 0,                   // timestamp
       agentAssignments: new Map(), // userId -> timestamp
       knowledgeBases: new Map(),   // kbId -> timestamp
+      agents: 0,                  // timestamp
+      models: new Map(),          // 'all' -> timestamp, 'current' -> timestamp
       health: new Map()           // key -> timestamp
     };
     
     // Cache TTL (Time To Live) in milliseconds
     this.ttl = {
-      users: 5 * 60 * 1000,        // 5 minutes
+      users: 15 * 60 * 1000,       // 15 minutes (admin data changes infrequently)
       chats: 2 * 60 * 1000,        // 2 minutes
-      agentAssignments: 5 * 60 * 1000, // 5 minutes
-      knowledgeBases: 10 * 60 * 1000,  // 10 minutes
+      agentAssignments: 15 * 60 * 1000, // 15 minutes (admin data)
+      knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
+      agents: 15 * 60 * 1000,      // 15 minutes (admin data)
+      models: 60 * 60 * 1000,      // 60 minutes (DigitalOcean models change rarely)
       health: 30 * 1000            // 30 seconds
     };
     
@@ -325,6 +331,8 @@ export class CacheManager {
         return 'chats';
       case 'maia_knowledge_bases':
         return 'knowledgeBases';
+      case 'maia_agents':
+        return 'agents';
       default:
         return 'users'; // Default fallback
     }
@@ -349,6 +357,72 @@ export class CacheManager {
     this.invalidateCache('health', 'admin');
   }
   
+  /**
+   * Cache agents data
+   */
+  async cacheAgents(agentsData) {
+    this.setCached('agents', 'all', agentsData);
+    console.log(`💾 [CACHE] Cached ${agentsData.length} agents`);
+  }
+
+  /**
+   * Get cached agents data
+   */
+  getCachedAgents() {
+    if (this.isCacheValid('agents', 'all')) {
+      const cached = this.getCached('agents', 'all');
+      if (cached) {
+        console.log(`⚡ [CACHE] Cache HIT for agents`);
+        return cached;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Cache models data
+   */
+  async cacheModels(modelsData) {
+    this.setCached('models', 'all', modelsData);
+    console.log(`💾 [CACHE] Cached ${modelsData.length} models`);
+  }
+
+  /**
+   * Get cached models data
+   */
+  getCachedModels() {
+    if (this.isCacheValid('models', 'all')) {
+      const cached = this.getCached('models', 'all');
+      if (cached) {
+        console.log(`⚡ [CACHE] Cache HIT for models`);
+        return cached;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Cache current model
+   */
+  async cacheCurrentModel(modelData) {
+    this.setCached('models', 'current', modelData);
+    console.log(`💾 [CACHE] Cached current model: ${modelData?.name || 'None'}`);
+  }
+
+  /**
+   * Get cached current model
+   */
+  getCachedCurrentModel() {
+    if (this.isCacheValid('models', 'current')) {
+      const cached = this.getCached('models', 'current');
+      if (cached) {
+        console.log(`⚡ [CACHE] Cache HIT for current model`);
+        return cached;
+      }
+    }
+    return null;
+  }
+
   /**
    * Get cache statistics
    */

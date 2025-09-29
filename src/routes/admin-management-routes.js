@@ -2166,8 +2166,20 @@ router.post('/update-activity', async (req, res) => {
 // Models configuration endpoints
 router.get('/models', requireAdminAuth, async (req, res) => {
   try {
-    console.log('🤖 [MODELS] Fetching available models from DigitalOcean API...');
+    console.log('🤖 [MODELS] Fetching available models...');
     
+    // Check cache first
+    const cachedModels = cacheManager.getCachedModels();
+    if (cachedModels) {
+      console.log('⚡ [MODELS] Using cached models data');
+      return res.json({
+        models: cachedModels,
+        count: cachedModels.length,
+        cached: true
+      });
+    }
+    
+    console.log('🔄 [MODELS] Cache miss - fetching from DigitalOcean API...');
     const models = await doRequest('/v2/gen-ai/models');
     const modelArray = models.models || [];
     
@@ -2177,11 +2189,15 @@ router.get('/models', requireAdminAuth, async (req, res) => {
     
     const validModels = modelArray.filter(m => m && m.name);
     
+    // Cache the models data
+    await cacheManager.cacheModels(validModels);
+    
     console.log(`🤖 [MODELS] Found ${validModels.length} available models`);
     
     res.json({
       models: validModels,
-      count: validModels.length
+      count: validModels.length,
+      cached: false
     });
     
   } catch (error) {
@@ -2194,6 +2210,17 @@ router.get('/models/current', requireAdminAuth, async (req, res) => {
   try {
     console.log('🤖 [MODELS] Loading current model configuration...');
     
+    // Check cache first
+    const cachedCurrentModel = cacheManager.getCachedCurrentModel();
+    if (cachedCurrentModel) {
+      console.log('⚡ [MODELS] Using cached current model data');
+      return res.json({
+        model: cachedCurrentModel,
+        cached: true
+      });
+    }
+    
+    console.log('🔄 [MODELS] Cache miss - fetching from database...');
     const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
     
     if (!configDoc || !configDoc.current_model) {
@@ -2201,10 +2228,14 @@ router.get('/models/current', requireAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'No current model configured' });
     }
     
+    // Cache the current model
+    await cacheManager.cacheCurrentModel(configDoc.current_model);
+    
     console.log(`🤖 [MODELS] Current model: ${configDoc.current_model.name}`);
     
     res.json({
-      model: configDoc.current_model
+      model: configDoc.current_model,
+      cached: false
     });
     
   } catch (error) {
