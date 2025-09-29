@@ -2163,6 +2163,95 @@ router.post('/update-activity', async (req, res) => {
   }
 });
 
+// Get all agents - PROTECTED (cached)
+router.get('/agents', requireAdminAuth, async (req, res) => {
+  try {
+    console.log('🤖 [ADMIN-AGENTS] Fetching all agents...');
+    
+    // Check cache first
+    const cachedAgents = cacheManager.getCachedAgents();
+    if (cachedAgents) {
+      console.log('⚡ [ADMIN-AGENTS] Using cached agents data');
+      return res.json({
+        agents: cachedAgents,
+        count: cachedAgents.length,
+        cached: true
+      });
+    }
+    
+    console.log('🔄 [ADMIN-AGENTS] Cache miss - fetching from database...');
+    
+    if (!couchDBClient) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+    
+    // Get all agents from maia_agents database
+    const allAgents = await cacheManager.getAllDocuments(couchDBClient, 'maia_agents');
+    
+    // Filter out design documents
+    const filteredAgents = allAgents.filter(agent => {
+      return !agent._id.startsWith('_design/');
+    });
+    
+    // Cache the agents data
+    await cacheManager.cacheAgents(filteredAgents);
+    
+    console.log(`🤖 [ADMIN-AGENTS] Found ${filteredAgents.length} agents`);
+    
+    res.json({
+      agents: filteredAgents,
+      count: filteredAgents.length,
+      cached: false
+    });
+    
+  } catch (error) {
+    console.error('❌ [ADMIN-AGENTS] Failed to fetch agents:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch agents',
+      details: error.message 
+    });
+  }
+});
+
+// Get all knowledge bases - PROTECTED (cached)
+router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
+  try {
+    console.log('📚 [ADMIN-KB] Fetching all knowledge bases...');
+    
+    if (!couchDBClient) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+    
+    // Get all knowledge bases from maia_knowledge_bases database
+    const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+    
+    // Transform to expected format
+    const knowledgeBases = allKBs.map(doc => ({
+      id: doc.kbId || doc._id,
+      name: doc.kbName || doc.name,
+      description: doc.description || 'No description',
+      isProtected: !!doc.isProtected,
+      owner: doc.owner || 'Unknown',
+      createdAt: doc.createdAt || doc.timestamp,
+      status: doc.status || 'unknown'
+    })).filter(kb => !kb.id.startsWith('_design/'));
+    
+    console.log(`📚 [ADMIN-KB] Found ${knowledgeBases.length} knowledge bases`);
+    
+    res.json({
+      knowledgeBases: knowledgeBases,
+      count: knowledgeBases.length
+    });
+    
+  } catch (error) {
+    console.error('❌ [ADMIN-KB] Failed to fetch knowledge bases:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch knowledge bases',
+      details: error.message 
+    });
+  }
+});
+
 // Models configuration endpoints
 router.get('/models', requireAdminAuth, async (req, res) => {
   try {

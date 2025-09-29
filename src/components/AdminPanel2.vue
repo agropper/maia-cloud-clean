@@ -380,15 +380,21 @@
           </div>
         </QTabPanel>
 
-        <!-- Knowledge Bases Tab -->
+        <!-- Knowledge Bases Tab - COMMENTED OUT: Will be moved to User Details -->
         <QTabPanel name="knowledge-bases">
           <div class="q-pa-md">
             <div class="q-mb-md">
               <h4 class="q-ma-none">Knowledge Bases</h4>
-              <p class="text-grey-6 q-ma-none">Manage knowledge base ownership and protection</p>
+              <p class="text-grey-6 q-ma-none">Knowledge base management has been moved to individual User Details pages</p>
             </div>
 
-            <!-- Knowledge Bases Table -->
+            <!-- Placeholder content -->
+            <div class="full-width row flex-center text-grey q-gutter-sm q-py-xl">
+              <QIcon name="storage" size="2em" />
+              <span>Knowledge base information is now available in User Details</span>
+            </div>
+
+            <!-- COMMENTED OUT: Original knowledge bases table
             <QTable
               :rows="knowledgeBases"
               :columns="kbColumns"
@@ -415,6 +421,7 @@
               </template>
 
             </QTable>
+            -->
           </div>
         </QTabPanel>
 
@@ -1185,9 +1192,9 @@ const loadAgents = async () => {
     isLoadingAgents.value = true
     console.log('🤖 [AdminPanel2] Loading agents from cache...')
     
-    // Use admin parameter to get all agents without filtering
-    const agentsData = await throttledFetchJson('/api/agents?user=admin')
-    agents.value = agentsData || []
+    // Use admin-management endpoint with caching
+    const response = await throttledFetchJson('/api/admin-management/agents')
+    agents.value = response.agents || []
     
     // Load chat counts for agents
     await loadChatCountsForAgents(agents.value)
@@ -1198,7 +1205,7 @@ const loadAgents = async () => {
       agent.status === 'running' || agent.status === 'deployed'
     ).length
     
-    console.log(`✅ [AdminPanel2] Loaded ${agents.value.length} agents, ${agentStats.value.deployedAgents} deployed`)
+    console.log(`✅ [AdminPanel2] Loaded ${agents.value.length} agents, ${agentStats.value.deployedAgents} deployed (cached: ${response.cached || false})`)
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load agents:', error)
     $q.notify({
@@ -1216,8 +1223,9 @@ const loadKnowledgeBases = async () => {
     isLoadingKBs.value = true
     console.log('📚 [AdminPanel2] Loading knowledge bases from cache...')
     
-    const kbData = await throttledFetchJson('/api/knowledge-bases')
-    knowledgeBases.value = kbData || []
+    // Use admin-management endpoint with caching
+    const response = await throttledFetchJson('/api/admin-management/knowledge-bases')
+    knowledgeBases.value = response.knowledgeBases || []
     
     // Update stats
     kbStats.value.totalKBs = knowledgeBases.value.length
