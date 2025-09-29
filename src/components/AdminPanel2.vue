@@ -632,6 +632,7 @@ import {
 } from 'quasar'
 import { useGroupChat } from '../composables/useGroupChat'
 import GroupManagementModal from './GroupManagementModal.vue'
+import { throttledFetchJson } from '../utils/ThrottledFetch.js'
 
 // Props
 const props = defineProps<{
@@ -1157,15 +1158,7 @@ const loadUsers = async () => {
     isLoadingUsers.value = true
     console.log('📊 [AdminPanel2] Loading users from cache...')
     
-    const response = await fetch('/api/admin-management/users', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch users: ${response.status}`)
-    }
-    
-    const data = await response.json()
+    const data = await throttledFetchJson('/api/admin-management/users')
     users.value = data.users || []
     
     // Update stats
@@ -1193,15 +1186,7 @@ const loadAgents = async () => {
     console.log('🤖 [AdminPanel2] Loading agents from cache...')
     
     // Use admin parameter to get all agents without filtering
-    const response = await fetch('/api/agents?user=admin', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch agents: ${response.status}`)
-    }
-    
-    const agentsData = await response.json()
+    const agentsData = await throttledFetchJson('/api/agents?user=admin')
     agents.value = agentsData || []
     
     // Load chat counts for agents
@@ -1231,15 +1216,7 @@ const loadKnowledgeBases = async () => {
     isLoadingKBs.value = true
     console.log('📚 [AdminPanel2] Loading knowledge bases from cache...')
     
-    const response = await fetch('/api/knowledge-bases', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch knowledge bases: ${response.status}`)
-    }
-    
-    const kbData = await response.json()
+    const kbData = await throttledFetchJson('/api/knowledge-bases')
     knowledgeBases.value = kbData || []
     
     // Update stats
@@ -1260,18 +1237,12 @@ const loadKnowledgeBases = async () => {
 }
 
 const loadAllData = async () => {
-  console.log('🔄 [AdminPanel2] Loading all data from caches...')
+  console.log('🔄 [AdminPanel2] Loading all data from caches with throttling...')
   
-  // Load data sequentially to avoid overwhelming the cache system
+  // Load data sequentially - throttling is handled by RequestThrottler
   await loadUsers()
-  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
-  
   await loadAgents()
-  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
-  
   await loadKnowledgeBases()
-  await new Promise(resolve => setTimeout(resolve, 100)) // Small delay
-  
   await loadModels()
   
   console.log('✅ [AdminPanel2] All data loaded successfully')
@@ -1283,15 +1254,7 @@ const loadModels = async () => {
     isLoadingModels.value = true
     console.log('🤖 [AdminPanel2] Loading available models...')
     
-    const response = await fetch('/api/admin-management/models', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to load models: ${response.status}`)
-    }
-    
-    const data = await response.json()
+    const data = await throttledFetchJson('/api/admin-management/models')
     availableModels.value = data.models || []
     
     console.log(`✅ [AdminPanel2] Loaded ${availableModels.value.length} available models`)
@@ -1311,23 +1274,15 @@ const loadCurrentModel = async () => {
   try {
     console.log('🤖 [AdminPanel2] Loading current model configuration...')
     
-    const response = await fetch('/api/admin-management/models/current', {
-      credentials: 'include'
-    })
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.log('🤖 [AdminPanel2] No current model configured')
-        currentModel.value = null
-        return
-      }
-      throw new Error(`Failed to load current model: ${response.status}`)
-    }
-    
-    const data = await response.json()
+    const data = await throttledFetchJson('/api/admin-management/models/current')
     currentModel.value = data.model
     console.log(`✅ [AdminPanel2] Current model: ${currentModel.value?.name || 'None'}`)
   } catch (error) {
+    if (error.status === 404) {
+      console.log('🤖 [AdminPanel2] No current model configured')
+      currentModel.value = null
+      return
+    }
     console.error('❌ [AdminPanel2] Failed to load current model:', error)
     currentModel.value = null
   }
@@ -1489,10 +1444,18 @@ const disconnectAdminEvents = () => {
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   console.log('🔧 AdminPanel2 mounted - Clean architecture version')
-  loadAllData()
-  loadCurrentModel()
+  
+  // Load data sequentially with throttling to prevent 429 errors
+  try {
+    await loadAllData()
+    await loadCurrentModel()
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Error during initialization:', error)
+  }
+  
+  // Connect to admin events after data is loaded
   connectAdminEvents()
 })
 
