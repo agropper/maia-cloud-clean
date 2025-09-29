@@ -63,6 +63,10 @@ export class CacheManager {
       return this.lastUpdated.chats > 0 && (now - this.lastUpdated.chats) < this.ttl.chats;
     }
     
+    if (cacheType === 'agents') {
+      return this.lastUpdated.agents > 0 && (now - this.lastUpdated.agents) < this.ttl.agents;
+    }
+    
     if (key && this.lastUpdated[cacheType]) {
       const lastUpdate = this.lastUpdated[cacheType].get(key);
       return lastUpdate && (now - lastUpdate) < this.ttl[cacheType];
@@ -77,6 +81,10 @@ export class CacheManager {
   getCached(cacheType, key = null) {
     if (cacheType === 'chats') {
       return this.cache.chats.get('all');
+    }
+    
+    if (cacheType === 'agents') {
+      return this.cache.agents.get('all');
     }
     
     if (key && this.cache[cacheType]) {
@@ -95,6 +103,9 @@ export class CacheManager {
     if (cacheType === 'chats') {
       this.cache.chats.set('all', data);
       this.lastUpdated.chats = now;
+    } else if (cacheType === 'agents') {
+      this.cache.agents.set('all', data);
+      this.lastUpdated.agents = now;
     } else if (this.cache[cacheType]) {
       this.cache[cacheType].set(key, data);
       if (!this.lastUpdated[cacheType]) {
