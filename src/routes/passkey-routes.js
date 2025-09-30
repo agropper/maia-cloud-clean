@@ -42,7 +42,7 @@ const isCloud = process.env.DOMAIN || process.env.PASSKEY_RPID || process.env.NO
 
 // Environment detection (essential for debugging)
 if (process.env.NODE_ENV !== 'production') {
-  console.log('🔍 Environment Detection Logic:');
+  // Environment detection
   console.log('  - NODE_ENV:', process.env.NODE_ENV);
   console.log('  - DOMAIN:', process.env.DOMAIN || 'not set');
   console.log('  - PASSKEY_RPID:', process.env.PASSKEY_RPID || 'not set');
@@ -86,7 +86,7 @@ const origin = (() => {
 
 // Passkey configuration (essential for debugging)
 if (process.env.NODE_ENV !== 'production') {
-  console.log("🔍 Passkey Configuration:");
+  // Passkey configuration
   console.log("  - NODE_ENV:", process.env.NODE_ENV);
   console.log("  - Environment Detection:");
   console.log("    - isLocalhost:", isLocalhost);
@@ -332,7 +332,7 @@ router.post("/register", async (req, res) => {
 // Verify registration response
 router.post("/register-verify", async (req, res) => {
   try {
-    console.log("🔍 Registration verification request received");
+    // Registration verification request received
     const { userId, response } = req.body;
 
     if (!userId || !response) {
@@ -342,7 +342,7 @@ router.post("/register-verify", async (req, res) => {
         .json({ error: "User ID and response are required" });
     }
 
-    console.log("🔍 Getting user document for verification:", userId);
+    // Getting user document for verification
 
     // Get the user document with the stored challenge
     let userDoc;
@@ -363,13 +363,10 @@ router.post("/register-verify", async (req, res) => {
       });
     }
 
-    console.log("🔍 Verifying registration response");
+    // Verifying registration response
 
     // Verify the registration response
-    console.log("🔍 Registration verification parameters:");
-    console.log("  - expectedOrigin:", origin);
-    console.log("  - expectedRPID:", rpID);
-    console.log("  - challenge present:", !!userDoc.challenge);
+    // Registration verification parameters
     
     const verification = await verifyRegistrationResponse({
       response,
@@ -378,18 +375,10 @@ router.post("/register-verify", async (req, res) => {
       expectedRPID: rpID,
     });
 
-    console.log("🔍 Registration verification result:", verification.verified);
-    console.log("🔍 Response origin:", response.response.clientExtensionResults?.appid);
-    console.log("🔍 Response type:", response.type);
-    console.log("🔍 Response ID:", response.id);
+    // Registration verification result
 
     if (verification.verified) {
-      console.log("🔍 Updating user document with credential information");
-      console.log("🔍 Verification result structure:", Object.keys(verification.registrationInfo));
-      console.log("🔍 Credential object keys:", Object.keys(verification.registrationInfo.credential));
-      console.log("🔍 Credential ID:", verification.registrationInfo.credential.id);
-      console.log("🔍 Credential Public Key:", verification.registrationInfo.credential.publicKey);
-      console.log("🔍 Counter:", verification.registrationInfo.credential.counter);
+      // Updating user document with credential information
       
       // Update user document with credential information
       // Convert Uint8Array to base64 string for storage
@@ -759,7 +748,7 @@ router.get("/auth-status", async (req, res) => {
       }
       if (userDoc) {
         // Echo current user to backend console
-        console.log(`✅ [auth-status] Current user: ${userDoc._id}`);
+        console.log(`✅ Session: ${userDoc._id}`);
         
         res.json({
           authenticated: true,
@@ -769,7 +758,7 @@ router.get("/auth-status", async (req, res) => {
           },
         });
       } else {
-        console.log(`❌ [auth-status] User document not found for userId: ${req.session.userId}`);
+        console.error(`❌ User document not found for userId: ${req.session.userId}`);
         // Session exists but user document not found, clear session
         req.session.destroy();
         res.json({ authenticated: false, message: "User not found" });

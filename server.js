@@ -1246,8 +1246,7 @@ app.get('/api/admin/events', (req, res) => {
 function sendAdminNotification(type, data) {
   const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
   
-  console.log(`📡 [SSE] [*] Sending ${type} notification to ${adminEventClients.size} admin clients`);
-  console.log(`📡 [SSE] [*] Notification data:`, data);
+  // SSE notification sent
   
   adminEventClients.forEach((res, clientId) => {
     try {
@@ -3279,9 +3278,7 @@ const getAgentApiKey = async (agentId) => {
     const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
     
     const agentName = userWithAgent ? (userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown') : 'Unknown';
-    console.log(`🔍 [DEBUG] Looking for agent ${agentName} (${agentId}) in ${userList.length} users`);
-    console.log(`🔍 [DEBUG] Found user with agent: ${userWithAgent ? (userWithAgent._id || userWithAgent.userId) : 'none'}`);
-    console.log(`🔍 [DEBUG] User has API key: ${userWithAgent ? !!userWithAgent.agentApiKey : 'N/A'}`);
+    // Agent API key lookup
     
     if (userWithAgent && userWithAgent.agentApiKey) {
       console.log(`🔑 Using database-stored API key for agent: ${agentName} (user: ${userWithAgent._id || userWithAgent.userId})`);
@@ -3341,7 +3338,7 @@ const getAgentApiKey = async (agentId) => {
             })
           });
           
-          console.log(`🔑 [TEMPORARY FIX] New API key response:`, newApiKeyResponse);
+          // API key created
           
           // Extract the new API key
           const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
@@ -4316,20 +4313,14 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
     const { agentId } = req.params;
     const { knowledgeBaseId, action } = req.body;
     
-    console.log(`[KB CREATE] Starting KB attachment process:`, {
-      agentId: agentId,
-      knowledgeBaseId: knowledgeBaseId,
-      action: action,
-      requestBody: req.body,
-      timestamp: new Date().toISOString()
-    });
+    // Starting KB attachment process
     
     if (!knowledgeBaseId) {
       console.log(`[KB CREATE] ❌ Validation failed - knowledgeBaseId is required`);
       return res.status(400).json({ message: 'knowledgeBaseId is required' });
     }
     
-    console.log(`[KB CREATE] Attaching knowledge base ${knowledgeBaseId} to agent ${agentId}`);
+    // Attaching knowledge base to agent
     
     // Use the DigitalOcean API to attach the knowledge base to the agent
     const result = await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${knowledgeBaseId}`, {
@@ -5156,19 +5147,11 @@ app.post('/api/knowledge-bases', async (req, res) => {
     });
     
     // Debug: List actual bucket folder structure
-    console.log('[KB CREATE] Bucket folder debug - checking actual folder structure...');
+    // Checking bucket folder structure
     try {
       const bucketFiles = await doRequest(`/v2/spaces/maia.tor1/objects?prefix=${username}/&limit=100`);
       const bucketFileList = bucketFiles.objects || bucketFiles.data?.objects || [];
-      console.log('[KB CREATE] Bucket folder contents:', {
-        folder: `${username}/`,
-        fileCount: bucketFileList.length,
-        files: bucketFileList.map(file => ({
-          key: file.key,
-          size: file.size,
-          lastModified: file.last_modified
-        }))
-      });
+      // Bucket folder contents checked
     } catch (bucketError) {
       console.log('[KB CREATE] Could not list bucket folder:', bucketError.message);
     }

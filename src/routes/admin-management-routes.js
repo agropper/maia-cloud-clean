@@ -173,7 +173,7 @@ const checkAgentDeployments = async () => {
           
           if (notificationResponse.ok) {
             console.log(`📡 [SSE] [*] Sent agent deployment notification to admin`);
-            console.log(`🎉 [ADMIN NOTIFICATION] [*] Agent ${tracking.agentName} deployed for user ${userId} in ${durationSeconds} seconds`);
+            console.log(`[*] Agent ${tracking.agentName} deployed for user ${userId}`);
           }
         } catch (sseError) {
           console.error(`❌ [SSE] [*] Error sending agent deployment notification:`, sseError.message);
@@ -363,7 +363,7 @@ const syncActivityToDatabase = async () => {
               if (conflictError.statusCode === 409) {
                 // Document conflict - get the latest version and retry
                 retryCount++;
-                console.log(`🔄 [User Activity] Document conflict for ${userId}, retry ${retryCount}/${maxRetries}`);
+                // Document conflict, retrying
                 
                 // Add small delay between retries to reduce conflict probability
                 if (retryCount < maxRetries) {
@@ -378,7 +378,7 @@ const syncActivityToDatabase = async () => {
                   updatedDoc.lastActivity = data.lastActivity.toISOString();
                   updatedDoc.updatedAt = new Date().toISOString();
                 } else {
-                  console.log(`❌ [User Activity] Could not retrieve latest document for ${userId}`);
+                  console.error(`❌ Could not retrieve latest document for ${userId}`);
                   break;
                 }
               } else {
@@ -389,10 +389,10 @@ const syncActivityToDatabase = async () => {
           }
           
           if (!success) {
-            console.log(`❌ [User Activity] Failed to update ${userId} after ${maxRetries} retries`);
+            console.error(`❌ Failed to update ${userId} after ${maxRetries} retries`);
           }
         } else {
-          console.log(`❌ [User Activity] User ${userId} not found in database - cannot update lastActivity`);
+          console.error(`❌ User ${userId} not found in database - cannot update lastActivity`);
         }
       } catch (userError) {
         console.error(`❌ Error updating user activity for ${userId}:`, userError);
@@ -805,7 +805,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
           }
         } catch (bucketError) {
           // Bucket check failed, use default values
-          console.log(`⚠️ [ADMIN] Failed to check bucket status for user ${user._id}:`, bucketError.message);
+          console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
         }
         
         return {
@@ -927,7 +927,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       }
     } catch (bucketError) {
       // Bucket check failed, use default values
-      console.log(`⚠️ [ADMIN] Failed to check bucket status for user ${userId}:`, bucketError.message);
+      console.error(`⚠️ Failed to check bucket status for user ${userId}:`, bucketError.message);
     }
 
     // Get user's approval requests, agents, and knowledge bases
@@ -1096,7 +1096,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     const { userId } = req.params;
     const { agentId, agentName, action } = req.body;
     
-    console.log(`🤖 [NEW AGENT] Assign agent request for user ${userId}:`, req.body);
+    console.log(`🤖 [NEW AGENT] Assign agent request for user ${userId}`);
     
     // Handle agent creation request
     if (action === 'create') {
@@ -1119,7 +1119,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
       const agentName = `${userId}-agent-${dateStr}`;
       
-      console.log(`🤖 [NEW AGENT] Generated agent name: ${agentName}`);
+      // Agent name generated
       
       // Get the current model configuration from database
       console.log(`🤖 [NEW AGENT] Loading current model configuration...`);
@@ -1131,7 +1131,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       }
       
       const selectedModel = configDoc.current_model;
-      console.log(`🤖 [NEW AGENT] Using configured model: ${selectedModel.name} (${selectedModel.uuid})`);
+      // Using configured model
       
       // Create agent using DigitalOcean API
       const agentData = {
@@ -2372,7 +2372,7 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
       status: doc.status || 'unknown'
     })).filter(kb => !kb.id.startsWith('_design/'));
     
-    console.log(`📚 [ADMIN-KB] Found ${knowledgeBases.length} knowledge bases`);
+    // Found knowledge bases
     
     res.json({
       knowledgeBases: knowledgeBases,

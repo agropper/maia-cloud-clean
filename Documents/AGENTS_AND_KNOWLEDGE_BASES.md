@@ -337,3 +337,43 @@ The process involves 6 main steps: **File Upload → Bucket Storage → Knowledg
 
 This comprehensive system ensures reliable knowledge base creation with proper error handling, user feedback, and monitoring throughout the entire process.
 
+-------------------------------
+
+Admin Panel Backend Functions Analysis
+Admin-Only Backend Functions (Not Used by Regular App Users)
+1. Authentication & Authorization
+/api/admin-management/register - Admin user registration with secret
+/api/admin/verify-admin - Admin password verification
+requireAdminAuth middleware - Admin privilege checking
+2. User Management & Workflow
+/api/admin-management/users - Get all users with workflow status
+/api/admin-management/users/:userId - Get specific user details
+/api/admin-management/users/:userId/approve - Approve/reject users
+/api/admin-management/users/:userId/workflow-stage - Update workflow stages
+/api/admin-management/users/:userId/assign-agent - Assign agents to users
+/api/admin-management/users/:userId/reset-passkey - Reset user passkeys
+/api/admin-management/users/:userId/notes - Add admin notes
+3. Session Management
+/api/admin-management/sessions - Get all active sessions
+/api/admin-management/sessions/:sessionId/signout - Force signout
+/api/admin-management/sessions/user/:userId - Get user sessions
+/api/admin-management/sessions/active-check - Session activity check
+4. Database Management
+/api/admin-management/database/update-user-agent - Update user-agent mappings
+/api/admin-management/database/sync-agent-names - Sync agent names
+/api/admin-management/database/user-agent-status - Get agent status
+/api/admin-management/database/fix-consistency - Fix data inconsistencies
+5. Knowledge Base Ownership Transfer
+/api/admin/transfer-kb-ownership - Transfer KB ownership
+/api/admin/transfer-history - Get transfer history
+6. Email Notifications
+/api/admin/request-approval - Send approval request emails
+/api/admin/contact-support - Send support emails
+7. Real-time Notifications
+/api/admin/events - SSE stream for admin notifications
+/api/admin/notify - Send SSE notifications
+8. System Health
+/api/admin-management/health - Admin system health check
+9. Activity Tracking
+/api/admin-management/agent-activities - Get agent activities
+/api/admin-management/update-activity - Update activity tracking

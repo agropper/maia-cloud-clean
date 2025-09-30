@@ -83,7 +83,7 @@ export class AppInitializer {
       // Retry logic
       if (this.retryAttempts < this.maxRetries) {
         this.retryAttempts++;
-        console.log(`🔄 [AppInitializer] Retrying initialization (attempt ${this.retryAttempts}/${this.maxRetries})`);
+        // Retrying initialization
         
         setTimeout(() => {
           this.initialize(options);
