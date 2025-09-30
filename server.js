@@ -7093,6 +7093,7 @@ async function ensureAllUserBuckets() {
         assignedAgentId: assignedAgentId,
         assignedAgentName: assignedAgentName,
         email: user.email || null,
+        agentApiKey: user.agentApiKey || null,
         bucketStatus: bucketStatus
       };
     }));
