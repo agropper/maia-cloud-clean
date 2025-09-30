@@ -3233,9 +3233,28 @@ const agentApiKeys = {
 
 // Helper function to get agent-specific API key
 const getAgentApiKey = async (agentId) => {
-  // Check if we have a hardcoded key for this agent
+  // Check if we have a cached key for this agent
   if (agentApiKeys[agentId]) {
-    console.log(`🔑 Using hardcoded API key for agent: ${agentId}`);
+    // Try to get agent name from cached users for better logging
+    let agentName = agentId; // fallback to ID
+    try {
+      const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+      let userList;
+      if (allUsers.rows) {
+        userList = allUsers.rows.map(row => row.doc);
+      } else if (Array.isArray(allUsers)) {
+        userList = allUsers;
+      } else {
+        userList = Object.values(allUsers);
+      }
+      const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
+      if (userWithAgent && userWithAgent.assignedAgentName) {
+        agentName = userWithAgent.assignedAgentName;
+      }
+    } catch (error) {
+      // If we can't get the name, just use the ID
+    }
+    console.log(`🔑 Using cached API key for agent: ${agentName}`);
     return agentApiKeys[agentId];
   }
 
@@ -3259,12 +3278,13 @@ const getAgentApiKey = async (agentId) => {
     
     const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
     
-    console.log(`🔍 [DEBUG] Looking for agent ${agentId} in ${userList.length} users`);
+    const agentName = userWithAgent ? (userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown') : 'Unknown';
+    console.log(`🔍 [DEBUG] Looking for agent ${agentName} (${agentId}) in ${userList.length} users`);
     console.log(`🔍 [DEBUG] Found user with agent: ${userWithAgent ? (userWithAgent._id || userWithAgent.userId) : 'none'}`);
     console.log(`🔍 [DEBUG] User has API key: ${userWithAgent ? !!userWithAgent.agentApiKey : 'N/A'}`);
     
     if (userWithAgent && userWithAgent.agentApiKey) {
-      console.log(`🔑 Using database-stored API key for agent: ${agentId} (user: ${userWithAgent._id || userWithAgent.userId})`);
+      console.log(`🔑 Using database-stored API key for agent: ${agentName} (user: ${userWithAgent._id || userWithAgent.userId})`);
       
       // Validate the stored API key by making a test request to the agent
       try {
@@ -3362,7 +3382,7 @@ const getAgentApiKey = async (agentId) => {
     console.log(`🔑 No agent-specific key found for public agent ${agentId}, using global key`);
     return process.env.DIGITALOCEAN_PERSONAL_API_KEY;
   } else {
-    console.error(`🔑 ❌ No valid API key found for agent ${agentId} - this should not happen for non-public agents`);
+    console.error(`🔑 ❌ No valid API key found for agent ${agentName || agentId} - this should not happen for non-public agents`);
     throw new Error(`No valid API key available for agent ${agentId}`);
   }
 };
