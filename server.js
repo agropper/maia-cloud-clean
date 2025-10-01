@@ -107,15 +107,12 @@ const getSessionTimeout = (userType) => {
 
 const logSessionEvent = async (event, session, reason = null) => {
   try {
-    // Ensure the session logs database exists
+    // Ensure the session logs database exists (only create if it doesn't exist)
     try {
       await couchDBClient.createDatabase('maia_session_logs');
-      console.log(`[SESSION LOG] Created maia_session_logs database`);
     } catch (dbError) {
-      // Database might already exist, ignore error
-      if (!dbError.message.includes('already exists')) {
-        console.warn(`[SESSION LOG] Database creation warning:`, dbError.message);
-      }
+      // Database already exists, ignore error
+      // No need to log this as it's expected behavior
     }
     
     const logDoc = {

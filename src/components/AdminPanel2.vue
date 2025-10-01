@@ -1646,8 +1646,14 @@ const pollForUpdates = async () => {
     
     // Check if we should close the tab due to server being down
     if (consecutiveServerErrors.value >= maxConsecutiveServerErrors) {
-      console.error('[POLLING] Server appears to be down - closing tab')
-      window.close()
+      console.error('[POLLING] Server appears to be down - stopping polling')
+      stopPolling()
+      // Try to close tab, but don't rely on it due to browser restrictions
+      try {
+        window.close()
+      } catch (closeError) {
+        console.log('[POLLING] Cannot close tab due to browser restrictions')
+      }
       return
     }
     
