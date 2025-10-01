@@ -7206,7 +7206,6 @@ app.listen(PORT, async () => {
   
   // Helper function to ensure bucket folders for all users
 async function ensureAllUserBuckets() {
-    console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
     
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -7327,7 +7326,6 @@ async function ensureAllUserBuckets() {
     
     // Pre-cache agents for Admin2
     try {
-      console.log('🤖 [STARTUP] Pre-caching agents for Admin2...');
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
       await cacheManager.cacheAgents(agents);
@@ -7361,7 +7359,6 @@ async function ensureAllUserBuckets() {
     
     // Pre-cache models for Admin2
     try {
-      console.log('🤖 [STARTUP] Pre-caching models for Admin2...');
       const modelsResponse = await doRequest('/v2/gen-ai/models');
       const models = modelsResponse.models || modelsResponse.data?.models || [];
       await cacheManager.cacheModels(models);
@@ -7469,7 +7466,15 @@ async function ensureAllUserBuckets() {
     
     // Ensure bucket folders for all users
     await ensureAllUserBuckets();
-    console.log('✅ [STARTUP] Bucket folder checks completed');
+    
+    // Check session logs database
+    try {
+      await couchDBClient.createDatabase('maia_session_logs');
+      const sessionLogs = await couchDBClient.getAllDocuments(couchDBClient, 'maia_session_logs');
+      console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
+    } catch (error) {
+      console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
+    }
     
     // Deployment monitoring will be started automatically when agents are created
     // No need to start it on server startup since it only runs when there are active deployments

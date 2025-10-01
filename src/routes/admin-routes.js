@@ -449,6 +449,31 @@ router.get('/sessions', (req, res) => {
   }
 });
 
+// Create a new session
+router.post('/sessions', (req, res) => {
+  try {
+    const { userType, userData } = req.body;
+    
+    if (!userType || !userData) {
+      return res.status(400).json({ error: 'userType and userData are required' });
+    }
+    
+    const session = createSession(userType, userData, req);
+    
+    res.json({
+      success: true,
+      sessionId: session.sessionId,
+      userType: session.userType,
+      userId: session.userId,
+      username: session.username,
+      createdAt: session.createdAt
+    });
+  } catch (error) {
+    console.error('Failed to create session:', error);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
 router.delete('/sessions/:sessionId', (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -480,46 +505,6 @@ router.get('/session-logs', async (req, res) => {
   }
 });
 
-// Test endpoint to create sample sessions (for development)
-router.post('/sessions/test', (req, res) => {
-  try {
-    const testSessions = [
-      {
-        userId: 'ag30',
-        username: 'ag30',
-        userEmail: 'ag30@example.com'
-      },
-      {
-        userId: 'admin',
-        username: 'admin',
-        userEmail: 'admin@example.com'
-      },
-      {
-        userId: 'deep_link_12345',
-        username: 'John Doe',
-        userEmail: 'john@example.com',
-        shareId: 'chat-12345'
-      }
-    ];
-    
-    testSessions.forEach((userData, index) => {
-      let userType = 'private';
-      if (userData.userId === 'admin') userType = 'admin';
-      if (userData.userId.startsWith('deep_link_')) userType = 'deep_link';
-      
-      createSession(userType, userData, req);
-    });
-    
-    res.json({ 
-      success: true, 
-      message: `Created ${testSessions.length} test sessions`,
-      totalSessions: activeSessions.length
-    });
-  } catch (error) {
-    console.error('Failed to create test sessions:', error);
-    res.status(500).json({ error: 'Failed to create test sessions' });
-  }
-});
 
 // Polling endpoint for real-time updates
 router.get('/poll/updates', (req, res) => {

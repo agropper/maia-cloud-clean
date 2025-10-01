@@ -32,13 +32,6 @@
           class="q-ml-sm"
         />
         <QBtn 
-          color="orange" 
-          size="sm" 
-          label="Create Test Sessions"
-          @click="createTestSessions"
-          class="q-ml-sm"
-        />
-        <QBtn 
           color="purple" 
           size="sm" 
           label="Test Polling"
@@ -716,6 +709,8 @@ const currentSessionId = ref(null)
 const lastPollTimestamp = ref(null)
 const pollingErrorCount = ref(0)
 const maxPollingErrors = 3
+const consecutiveServerErrors = ref(0)
+const maxConsecutiveServerErrors = 2
 
 
 // Admin form
@@ -1241,36 +1236,6 @@ const destroySession = async (sessionId: string) => {
   }
 }
 
-const createTestSessions = async () => {
-  try {
-    const response = await fetch('/api/admin/sessions/test', {
-      method: 'POST'
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data = await response.json()
-    console.log(`[ADMIN] Created test sessions: ${data.message}`)
-    
-    $q.notify({
-      type: 'positive',
-      message: data.message,
-      position: 'top'
-    })
-    
-    // Refresh sessions list
-    await loadSessions()
-  } catch (error) {
-    console.error('Failed to create test sessions:', error)
-    $q.notify({
-      type: 'negative',
-      message: 'Failed to create test sessions',
-      position: 'top'
-    })
-  }
-}
 
 const testPolling = async () => {
   try {
@@ -1664,6 +1629,7 @@ const pollForUpdates = async () => {
     
     // Reset error count on successful poll
     pollingErrorCount.value = 0
+    consecutiveServerErrors.value = 0
     
     // Process updates
     if (data.updates && data.updates.length > 0) {
@@ -1676,6 +1642,14 @@ const pollForUpdates = async () => {
   } catch (error) {
     console.error('[POLLING] Polling error:', error)
     pollingErrorCount.value++
+    consecutiveServerErrors.value++
+    
+    // Check if we should close the tab due to server being down
+    if (consecutiveServerErrors.value >= maxConsecutiveServerErrors) {
+      console.error('[POLLING] Server appears to be down - closing tab')
+      window.close()
+      return
+    }
     
     if (pollingErrorCount.value >= maxPollingErrors) {
       console.error('[POLLING] Max errors reached, stopping polling')
@@ -1692,22 +1666,28 @@ const pollForUpdates = async () => {
 
 const createAdminSession = async () => {
   try {
-    // Create a test admin session for polling
-    const response = await fetch('/api/admin/sessions/test', {
-      method: 'POST'
+    // Create an admin session for polling by calling the session creation endpoint
+    const response = await fetch('/api/admin/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userType: 'admin',
+        userData: {
+          userId: 'admin',
+          username: 'admin',
+          userEmail: 'admin@localhost'
+        }
+      })
     })
     
     if (response.ok) {
-      // Find the admin session that was created
-      const sessionsResponse = await fetch('/api/admin/sessions')
-      if (sessionsResponse.ok) {
-        const sessionsData = await sessionsResponse.json()
-        const adminSession = sessionsData.sessions.find(s => s.userType === 'admin')
-        if (adminSession) {
-          currentSessionId.value = adminSession.sessionId
-          console.log(`[POLLING] Created admin session: ${currentSessionId.value}`)
-        }
-      }
+      const data = await response.json()
+      currentSessionId.value = data.sessionId
+      console.log(`[POLLING] Created admin session: ${currentSessionId.value}`)
+    } else {
+      console.error('[POLLING] Failed to create admin session:', response.status)
     }
   } catch (error) {
     console.error('[POLLING] Failed to create admin session:', error)
