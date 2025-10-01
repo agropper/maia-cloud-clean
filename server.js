@@ -7362,7 +7362,7 @@ async function ensureAllUserBuckets() {
     
     try {
       await Promise.all(bucketChecks);
-      console.log(`✅ [STARTUP] Completed bucket checks for ${bucketChecks.length} users`);
+      // Bucket checks completed - no logging needed
     } catch (error) {
       console.error('❌ [STARTUP] Error ensuring user buckets:', error);
     }
@@ -7380,7 +7380,7 @@ async function ensureAllUserBuckets() {
 
       // Skip HTTP requests during startup to avoid ECONNREFUSED errors
       // Bucket status checks will happen on-demand when users access the admin panel
-      console.log(`📁 [STARTUP] Skipping bucket status check for ${userId} (startup optimization)`);
+        // Skip bucket status check during startup - no logging needed
     } catch (error) {
       console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
     }

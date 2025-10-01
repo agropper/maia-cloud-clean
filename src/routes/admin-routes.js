@@ -539,9 +539,11 @@ router.get('/poll/updates', requireAdminAuth, (req, res) => {
     const result = getPendingUpdates(sessionId, lastPoll);
     
     // Find the session to get user info for better logging
-    const session = activeSessions.find(s => s.sessionId === sessionId);
-    const userInfo = session ? `${session.userType} user ${session.userId || session.username}` : sessionId;
-    console.log(`[POLLING] ${userInfo} polled - returning ${result.updates.length} updates`);
+    // Show polling activity with dots (only after first poll)
+    if (result.updates.length > 0 || !global.firstPollShown) {
+      process.stdout.write('.');
+      global.firstPollShown = true;
+    }
     
     res.json(result);
   } catch (error) {
