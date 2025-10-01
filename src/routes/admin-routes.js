@@ -597,11 +597,6 @@ router.post('/test-public-user-tracking', requireAdminAuth, (req, res) => {
   }
 });
 
-// Store reference to activeSessions for logging
-let activeSessions = [];
-
-export const setActiveSessions = (sessions) => {
-  activeSessions = sessions;
-};
+// activeSessions is imported from server.js - no need to declare it again
 
 export default router;

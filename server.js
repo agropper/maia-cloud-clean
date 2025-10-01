@@ -6534,7 +6534,7 @@ app.use('/api/connect-kb/:kbId', async (req, res, next) => {
 import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection-routes.js';
 
 // Import admin routes
-import adminRoutes, { setCouchDBClient as setAdminCouchDBClient, setActiveSessions } from './src/routes/admin-routes.js';
+import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
 import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
 
 // Unified cache system using CacheManager
@@ -6580,9 +6580,6 @@ setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
-
-// Pass activeSessions to admin routes for better logging
-setActiveSessions(activeSessions);
 
 // Pass the shared session manager to admin routes
 setSessionManager(sessionManager);
