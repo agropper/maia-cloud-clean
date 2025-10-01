@@ -402,7 +402,7 @@ router.post("/register-verify", async (req, res) => {
       req.session.username = updatedUser._id;
       req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
-      req.session.expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+      req.session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 
       console.log("✅ Passkey registration successful for user:", userId);
 
@@ -559,11 +559,11 @@ router.post("/authenticate-verify", async (req, res) => {
         userId: updatedUser._id,
         displayName: updatedUser.displayName || updatedUser._id,
         authenticatedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       };
       
       res.cookie('maia_auth', JSON.stringify(authData), {
-        maxAge: 10 * 60 * 1000, // 10 minutes
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
@@ -699,7 +699,7 @@ router.get("/auth-status", async (req, res) => {
       try {
         const authData = JSON.parse(authCookie);
         
-        // Check if cookie is still valid (less than 10 minutes old)
+        // Check if cookie is still valid (less than 24 hours old)
         const now = new Date();
         const expiresAt = new Date(authData.expiresAt);
         const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes

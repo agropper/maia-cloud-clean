@@ -87,7 +87,7 @@
     </div>
 
     <!-- Admin Sign-In Form (shown when on sign-in page) -->
-    <div v-if="isSignInPage" class="q-pa-lg">
+    <div v-else-if="isSignInPage" class="q-pa-lg">
       <div class="admin-signin">
         <QCard>
           <QCardSection>
@@ -140,20 +140,28 @@
           <QIcon name="lock" size="64px" color="grey-6" />
           <h4 class="q-mt-md">Admin Access Required</h4>
           <p class="text-grey-6">
-            You need admin privileges to access this panel. Please sign in with an admin account.
+            You need admin privileges to access this panel. Please sign in with your admin passkey.
           </p>
           <div class="q-mt-md">
             <QBtn
               color="primary"
-              label="Sign In"
+              icon="fingerprint"
+              label="Sign In with Passkey"
               @click="goToAdminSignIn"
               class="q-mr-sm"
             />
             <QBtn
               flat
               color="secondary"
-              label="Register as Admin"
+              label="Register New Admin"
               @click="goToAdminRegister"
+              class="q-mr-sm"
+            />
+            <QBtn
+              flat
+              color="secondary"
+              label="Return to Main App"
+              @click="goToMainApp"
             />
           </div>
         </QCardSection>
@@ -2002,10 +2010,16 @@ const disconnectAdminEvents = () => {
 // Admin authentication check
 const checkAdminAuth = async () => {
   try {
+    console.log('🔍 [AdminPanel2] Checking admin authentication...')
     // Try to access an admin-protected endpoint
     const response = await fetch('/api/admin-management/health', {
       credentials: 'include'
     });
+    
+    console.log('🔍 [AdminPanel2] Auth check response:', {
+      status: response.status,
+      ok: response.ok
+    })
     
     if (response.ok) {
       isAdmin.value = true;
@@ -2111,6 +2125,14 @@ const adminSignInWithPasskey = async () => {
 
 
 onMounted(async () => {
+  // Debug route detection
+  console.log('🔍 [AdminPanel2] Route detection:', {
+    currentPath: window.location.pathname,
+    isRegistrationPage: isRegistrationPage.value,
+    isSignInPage: isSignInPage.value,
+    isAdmin: isAdmin.value
+  })
+  
   // Skip authentication check if on registration or sign-in page
   if (isRegistrationPage.value || isSignInPage.value) {
     console.log('📝 [AdminPanel2] On registration/sign-in page - skipping authentication check')
