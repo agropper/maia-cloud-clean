@@ -46,6 +46,87 @@ import { createCouchDBClient } from './src/utils/couchdb-client.js';
 
 const couchDBClient = createCouchDBClient();
 
+// Global session tracking
+const activeSessions = [];
+
+// Session management functions
+const generateSessionId = () => {
+  return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+const createSession = (userType, userData, req) => {
+  const session = {
+    sessionId: generateSessionId(),
+    userType: userType,           // 'public', 'deep_link', 'private', 'admin'
+    userId: userData.userId,
+    username: userData.username,
+    userEmail: userData.userEmail,
+    shareId: userData.shareId,    // For deep link users
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + getSessionTimeout(userType)).toISOString(),
+    ipAddress: req.ip || req.connection.remoteAddress,
+    userAgent: req.headers['user-agent']
+  };
+  
+  activeSessions.push(session);
+  console.log(`[PAGE LOAD] ${userType} session created - ${userData.userId || userData.username}`);
+  
+  // Log to database
+  logSessionEvent('created', session);
+  
+  return session;
+};
+
+const removeSession = (sessionId) => {
+  const sessionIndex = activeSessions.findIndex(s => s.sessionId === sessionId);
+  if (sessionIndex !== -1) {
+    const session = activeSessions[sessionIndex];
+    activeSessions.splice(sessionIndex, 1);
+    
+    console.log(`[PAGE LOAD] ${session.userType} session destroyed - ${session.userId || session.username}`);
+    
+    // Log to database
+    logSessionEvent('destroyed', session);
+  }
+};
+
+const getSessionTimeout = (userType) => {
+  const timeouts = {
+    'public': 0,           // No session tracking
+    'deep_link': 30 * 60 * 1000,      // 30 minutes
+    'private': 24 * 60 * 60 * 1000,   // 24 hours
+    'admin': 24 * 60 * 60 * 1000      // 24 hours
+  };
+  return timeouts[userType] || 24 * 60 * 60 * 1000;
+};
+
+const logSessionEvent = async (event, session, reason = null) => {
+  try {
+    const logDoc = {
+      _id: `session_log_${session.sessionId}_${Date.now()}`,
+      type: 'session_log',
+      event: event,
+      sessionId: session.sessionId,
+      userType: session.userType,
+      userId: session.userId,
+      username: session.username,
+      userEmail: session.userEmail,
+      shareId: session.shareId,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      timestamp: new Date().toISOString(),
+      reason: reason
+    };
+    
+    // TODO: Create maia_session_logs database if it doesn't exist
+    await couchDBClient.insertDocument('maia_session_logs', logDoc);
+    console.log(`[SESSION LOG] ${event} - ${session.userType} user ${session.userId || session.username}`);
+  } catch (error) {
+    console.error(`[SESSION LOG] Failed to log ${event} event:`, error.message);
+  }
+};
+
 const initializeDatabase = async () => {
   try {
     // Debug: Log environment variables (masked for security) - commented out for cleaner logs
@@ -1240,6 +1321,97 @@ app.get('/api/admin/events', (req, res) => {
     clearInterval(heartbeat);
     adminEventClients.delete(clientId);
   });
+});
+
+// Session management API endpoints
+app.get('/api/admin/sessions', (req, res) => {
+  try {
+    res.json({
+      sessions: activeSessions,
+      total: activeSessions.length,
+      byType: {
+        private: activeSessions.filter(s => s.userType === 'private').length,
+        admin: activeSessions.filter(s => s.userType === 'admin').length,
+        deepLink: activeSessions.filter(s => s.userType === 'deep_link').length,
+        public: activeSessions.filter(s => s.userType === 'public').length
+      }
+    });
+  } catch (error) {
+    console.error('Failed to get sessions:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+app.delete('/api/admin/sessions/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = activeSessions.find(s => s.sessionId === sessionId);
+    
+    if (session) {
+      removeSession(sessionId);
+      res.json({ success: true, message: 'Session destroyed' });
+    } else {
+      res.status(404).json({ error: 'Session not found' });
+    }
+  } catch (error) {
+    console.error('Failed to destroy session:', error);
+    res.status(500).json({ error: 'Failed to destroy session' });
+  }
+});
+
+app.get('/api/admin/session-logs', async (req, res) => {
+  try {
+    // TODO: Implement session logs retrieval from maia_session_logs database
+    res.json({ 
+      logs: [], 
+      total: 0,
+      message: 'Session logs endpoint ready - database integration pending'
+    });
+  } catch (error) {
+    console.error('Failed to get session logs:', error);
+    res.status(500).json({ error: 'Failed to get session logs' });
+  }
+});
+
+// Test endpoint to create sample sessions (for development)
+app.post('/api/admin/sessions/test', (req, res) => {
+  try {
+    const testSessions = [
+      {
+        userId: 'ag30',
+        username: 'ag30',
+        userEmail: 'ag30@example.com'
+      },
+      {
+        userId: 'admin',
+        username: 'admin',
+        userEmail: 'admin@example.com'
+      },
+      {
+        userId: 'deep_link_12345',
+        username: 'John Doe',
+        userEmail: 'john@example.com',
+        shareId: 'chat-12345'
+      }
+    ];
+    
+    testSessions.forEach((userData, index) => {
+      let userType = 'private';
+      if (userData.userId === 'admin') userType = 'admin';
+      if (userData.userId.startsWith('deep_link_')) userType = 'deep_link';
+      
+      createSession(userType, userData, req);
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Created ${testSessions.length} test sessions`,
+      totalSessions: activeSessions.length
+    });
+  } catch (error) {
+    console.error('Failed to create test sessions:', error);
+    res.status(500).json({ error: 'Failed to create test sessions' });
+  }
 });
 
 // Helper function to send admin notifications

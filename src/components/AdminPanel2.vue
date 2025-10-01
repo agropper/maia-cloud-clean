@@ -31,6 +31,13 @@
           @click="goToOriginalAdmin"
           class="q-ml-sm"
         />
+        <QBtn 
+          color="orange" 
+          size="sm" 
+          label="Create Test Sessions"
+          @click="createTestSessions"
+          class="q-ml-sm"
+        />
       </div>
     </div>
 
@@ -175,6 +182,20 @@
                 <div class="text-caption text-grey-8">KBs</div>
                 <div class="text-body2 text-accent q-ml-xs">{{ kbStats.totalKBs }}</div>
                 <div class="text-caption text-grey-6 q-ml-xs">({{ kbStats.protectedKBs }} protected)</div>
+              </div>
+            </QCardSection>
+          </QCard>
+        </div>
+
+        <!-- Sessions Card -->
+        <div class="col-auto">
+          <QCard class="compact-status-card">
+            <QCardSection class="q-pa-sm">
+              <div class="row items-center no-wrap">
+                <QIcon name="account_circle" size="20px" color="orange" class="q-mr-xs" />
+                <div class="text-caption text-grey-8">Sessions</div>
+                <div class="text-body2 text-orange q-ml-xs">{{ sessionStats.totalSessions }}</div>
+                <div class="text-caption text-grey-6 q-ml-xs">({{ sessionStats.activeSessions }} active)</div>
               </div>
             </QCardSection>
           </QCard>
@@ -502,7 +523,31 @@
               @request="onSessionRequest"
               class="admin-table"
             >
+              <template v-slot:body-cell-userType="props">
+                <QTd :props="props">
+                  <QBtn
+                    :color="getUserTypeColor(props.value)"
+                    size="sm"
+                    dense
+                    :label="props.value"
+                    class="q-px-sm"
+                  />
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-createdAt="props">
+                <QTd :props="props">
+                  <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
+                </QTd>
+              </template>
+
               <template v-slot:body-cell-lastActivity="props">
+                <QTd :props="props">
+                  <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-expiresAt="props">
                 <QTd :props="props">
                   <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
                 </QTd>
@@ -511,10 +556,10 @@
               <template v-slot:body-cell-actions="props">
                 <QTd :props="props">
                   <QBtn
-                    size="sm"
                     color="negative"
-                    label="Sign Out"
-                    @click="signOutSession(props.row.sessionId)"
+                    size="sm"
+                    icon="logout"
+                    @click="destroySession(props.row.sessionId)"
                     class="q-mr-xs"
                   />
                 </QTd>
@@ -676,6 +721,11 @@ const kbStats = ref({
   protectedKBs: 0
 })
 
+const sessionStats = ref({
+  totalSessions: 0,
+  activeSessions: 0
+})
+
 // Loading states
 const isLoadingUsers = ref(false)
 const isLoadingAgents = ref(false)
@@ -772,10 +822,14 @@ const kbColumns = [
 ]
 
 const sessionColumns = [
+  { name: 'sessionId', label: 'Session ID', field: 'sessionId', align: 'left', sortable: true },
+  { name: 'userType', label: 'Type', field: 'userType', align: 'center', sortable: true },
   { name: 'userId', label: 'User ID', field: 'userId', align: 'left', sortable: true },
+  { name: 'username', label: 'Username', field: 'username', align: 'left', sortable: true },
+  { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'center', sortable: true },
   { name: 'lastActivity', label: 'Last Activity', field: 'lastActivity', align: 'center', sortable: true },
+  { name: 'expiresAt', label: 'Expires', field: 'expiresAt', align: 'center', sortable: true },
   { name: 'ipAddress', label: 'IP Address', field: 'ipAddress', align: 'center', sortable: true },
-  { name: 'userAgent', label: 'User Agent', field: 'userAgent', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center', sortable: false }
 ]
 
@@ -851,8 +905,58 @@ const onKBRequest = () => {
   // Static implementation
 }
 
-const onSessionRequest = () => {
-  // Static implementation
+const onSessionRequest = async () => {
+  await loadSessions()
+}
+
+const loadSessions = async () => {
+  try {
+    isLoadingSessions.value = true
+    
+    const response = await fetch('/api/admin/sessions')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    sessions.value = data.sessions || []
+    
+    // Update session stats
+    sessionStats.value.totalSessions = data.total || 0
+    sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
+    
+    console.log(`[ADMIN] Loaded ${data.total} sessions`)
+    
+  } catch (error) {
+    console.error('Failed to load sessions:', error)
+    
+    // Fallback to mock data if API fails
+    const mockSessions = [
+      {
+        sessionId: 'sess_001',
+        userType: 'private',
+        userId: 'ag30',
+        username: 'ag30',
+        createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        lastActivity: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+      }
+    ]
+    
+    sessions.value = mockSessions
+    sessionStats.value.totalSessions = mockSessions.length
+    sessionStats.value.activeSessions = mockSessions.length
+    
+    $q.notify({
+      type: 'warning',
+      message: 'Using mock session data - API unavailable',
+      position: 'top'
+    })
+  } finally {
+    isLoadingSessions.value = false
+  }
 }
 
 // View methods - Static
@@ -1076,6 +1180,79 @@ const formatRelativeTime = (dateString: string) => {
   return date.toLocaleDateString()
 }
 
+// Session management functions
+const getUserTypeColor = (userType: string) => {
+  const colors = {
+    'public': 'grey',
+    'deep_link': 'blue',
+    'private': 'green',
+    'admin': 'red'
+  }
+  return colors[userType] || 'grey'
+}
+
+const destroySession = async (sessionId: string) => {
+  try {
+    const response = await fetch(`/api/admin/sessions/${sessionId}`, {
+      method: 'DELETE'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Destroyed session: ${sessionId}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: data.message || `Session destroyed`,
+      position: 'top'
+    })
+    
+    // Refresh sessions list
+    await loadSessions()
+  } catch (error) {
+    console.error('Failed to destroy session:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to destroy session',
+      position: 'top'
+    })
+  }
+}
+
+const createTestSessions = async () => {
+  try {
+    const response = await fetch('/api/admin/sessions/test', {
+      method: 'POST'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Created test sessions: ${data.message}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: data.message,
+      position: 'top'
+    })
+    
+    // Refresh sessions list
+    await loadSessions()
+  } catch (error) {
+    console.error('Failed to create test sessions:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to create test sessions',
+      position: 'top'
+    })
+  }
+}
+
 // Utility function for file size formatting
 const formatFileSize = (bytes: number) => {
   if (!bytes || bytes === 0) return '0 B'
@@ -1241,6 +1418,7 @@ const loadAllData = async () => {
   await loadAgents()
   await loadKnowledgeBases()
   await loadModels()
+  await loadSessions()
 }
 
 // Models tab methods
