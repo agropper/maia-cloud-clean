@@ -926,12 +926,74 @@ const registerAdmin = async () => {
   }
 }
 
-const registerPasskey = () => {
-  $q.notify({
-    type: 'info',
-    message: 'Passkey registration (AdminPanel2 - Static)',
-    position: 'top'
-  })
+const registerPasskey = async () => {
+  isRegisteringPasskey.value = true
+  
+  try {
+    // Step 1: Generate registration options
+    const optionsResponse = await fetch('/api/passkey/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        displayName: 'admin'
+      })
+    })
+    
+    if (!optionsResponse.ok) {
+      throw new Error('Failed to generate registration options')
+    }
+    
+    const options = await optionsResponse.json()
+    
+    // Step 2: Create credentials using SimpleWebAuthn
+    const { startRegistration } = await import('@simplewebauthn/browser')
+    const credential = await startRegistration({ optionsJSON: options })
+    
+    // Step 3: Verify registration
+    const verifyResponse = await fetch('/api/passkey/register-verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        response: credential
+      })
+    })
+    
+    const result = await verifyResponse.json()
+    
+    if (result.success) {
+      $q.notify({
+        type: 'positive',
+        message: 'Admin passkey registered successfully! Redirecting to admin panel...',
+        position: 'top'
+      })
+      
+      // Redirect to admin panel after successful registration
+      setTimeout(() => {
+        window.location.href = '/admin2'
+      }, 2000)
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Passkey registration failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Passkey registration failed:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Passkey registration failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isRegisteringPasskey.value = false
+  }
 }
 
 const skipPasskeyRegistration = () => {
