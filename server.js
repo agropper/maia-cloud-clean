@@ -7336,7 +7336,6 @@ async function ensureAllUserBuckets() {
     
     // Pre-cache knowledge bases for Admin2 - read from existing database
     try {
-      console.log('📚 [STARTUP] Loading knowledge bases from database...');
       
       // Get all knowledge bases from maia_knowledge_bases database
       const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
@@ -7469,7 +7468,6 @@ async function ensureAllUserBuckets() {
     
     // Check session logs database
     try {
-      await couchDBClient.createDatabase('maia_session_logs');
       const sessionLogs = await couchDBClient.getAllDocuments(couchDBClient, 'maia_session_logs');
       console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
     } catch (error) {
