@@ -507,6 +507,8 @@ router.get('/session-logs', async (req, res) => {
 
 
 // Polling endpoint for real-time updates
+let staleSessionRejectionCount = 0;
+
 router.get('/poll/updates', (req, res) => {
   try {
     const { sessionId, lastPoll } = req.query;
@@ -521,7 +523,11 @@ router.get('/poll/updates', (req, res) => {
     
     // If session was created before server restart, reject it
     if (sessionTimestamp < serverStartTime) {
-      console.log(`[POLLING] Rejecting stale session ${sessionId} (created before server restart)`);
+      staleSessionRejectionCount++;
+      // Only log every 10th rejection to reduce noise
+      if (staleSessionRejectionCount % 10 === 1) {
+        console.log(`[POLLING] Rejecting stale sessions (${staleSessionRejectionCount} total rejections)`);
+      }
       return res.status(410).json({ 
         error: 'Session expired - server restarted', 
         code: 'SESSION_EXPIRED',

@@ -7473,7 +7473,11 @@ async function ensureAllUserBuckets() {
       const sessionLogs = await couchDBClient.getAllDocuments(couchDBClient, 'maia_session_logs');
       console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
     } catch (error) {
-      console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
+      if (error.message.includes('Database does not exist')) {
+        console.log(`📊 [STARTUP] Session logs database will be created on first use`);
+      } else {
+        console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
+      }
     }
     
     // Deployment monitoring will be started automatically when agents are created
