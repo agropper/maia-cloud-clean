@@ -515,22 +515,24 @@ export const setCouchDBClient = (client) => {
 };
 
 // Admin authentication middleware
-const requireAdminAuth = async (req, res, next) => {
+export const requireAdminAuth = async (req, res, next) => {
   try {
-    // TEMPORARY: Bypass authentication for testing
-    req.adminUser = { _id: 'admin', isAdmin: true };
-    return next();
-    
     const session = req.session;
     if (!session || !session.userId) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        requiresAdminAuth: true
+      });
     }
 
     // Check if user is admin
     try {
       const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', session.userId);
       if (!userDoc || !userDoc.isAdmin) {
-        return res.status(403).json({ error: 'Admin privileges required' });
+        return res.status(403).json({ 
+          error: 'Admin privileges required',
+          requiresAdminAuth: true
+        });
       }
 
       req.adminUser = userDoc;

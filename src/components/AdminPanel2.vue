@@ -695,7 +695,7 @@ const props = defineProps<{
 const $q = useQuasar()
 
 // State - Real data from caches
-const isAdmin = ref(true) // Static for testing
+const isAdmin = ref(false)
 const isRegistering = ref(false)
 const isRegisteringPasskey = ref(false)
 const showPasskeyRegistration = ref(false)
@@ -1794,17 +1794,57 @@ const disconnectAdminEvents = () => {
 }
 
 // Lifecycle
-onMounted(async () => {
-  // Load data sequentially with throttling to prevent 429 errors
+// Admin authentication check
+const checkAdminAuth = async () => {
   try {
-    await loadAllData()
-    await loadCurrentModel()
+    // Try to access an admin-protected endpoint
+    const response = await fetch('/api/admin-management/health', {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      isAdmin.value = true;
+      console.log('✅ [AdminPanel2] Admin authentication verified');
+    } else if (response.status === 401) {
+      isAdmin.value = false;
+      console.log('🔒 [AdminPanel2] Admin authentication required');
+    } else {
+      isAdmin.value = false;
+      console.log('❌ [AdminPanel2] Admin authentication failed:', response.status);
+    }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Error during initialization:', error)
+    isAdmin.value = false;
+    console.error('❌ [AdminPanel2] Admin authentication check failed:', error);
   }
+};
+
+// Navigation functions
+const goToAdminSignIn = () => {
+  // Redirect to the main app with admin sign-in flow
+  window.location.href = '/';
+};
+
+const goToAdminRegister = () => {
+  window.location.href = '/admin2/register';
+};
+
+
+onMounted(async () => {
+  // Check admin authentication first
+  await checkAdminAuth();
   
-  // Start polling for updates after data is loaded
-  startPolling()
+  // Only load data if admin is authenticated
+  if (isAdmin.value) {
+    try {
+      await loadAllData()
+      await loadCurrentModel()
+    } catch (error) {
+      console.error('❌ [AdminPanel2] Error during initialization:', error)
+    }
+    
+    // Start polling for updates after data is loaded
+    startPolling()
+  }
 })
 
 onUnmounted(() => {

@@ -2,6 +2,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import { cacheManager } from '../utils/CacheManager.js';
 import { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity } from '../../server.js';
+import { requireAdminAuth } from './admin-management-routes.js';
 
 const router = express.Router();
 
@@ -431,7 +432,7 @@ router.post('/contact-support', async (req, res) => {
 });
 
 // Session management API endpoints
-router.get('/sessions', (req, res) => {
+router.get('/sessions', requireAdminAuth, (req, res) => {
   try {
     res.json({
       sessions: activeSessions,
@@ -450,7 +451,7 @@ router.get('/sessions', (req, res) => {
 });
 
 // Create a new session
-router.post('/sessions', (req, res) => {
+router.post('/sessions', requireAdminAuth, (req, res) => {
   try {
     const { userType, userData } = req.body;
     
@@ -474,7 +475,7 @@ router.post('/sessions', (req, res) => {
   }
 });
 
-router.delete('/sessions/:sessionId', (req, res) => {
+router.delete('/sessions/:sessionId', requireAdminAuth, (req, res) => {
   try {
     const { sessionId } = req.params;
     const session = activeSessions.find(s => s.sessionId === sessionId);
@@ -491,7 +492,7 @@ router.delete('/sessions/:sessionId', (req, res) => {
   }
 });
 
-router.get('/session-logs', async (req, res) => {
+router.get('/session-logs', requireAdminAuth, async (req, res) => {
   try {
     // TODO: Implement session logs retrieval from maia_session_logs database
     res.json({ 
@@ -509,7 +510,7 @@ router.get('/session-logs', async (req, res) => {
 // Polling endpoint for real-time updates
 let staleSessionRejectionCount = 0;
 
-router.get('/poll/updates', (req, res) => {
+router.get('/poll/updates', requireAdminAuth, (req, res) => {
   try {
     const { sessionId, lastPoll } = req.query;
     
@@ -547,7 +548,7 @@ router.get('/poll/updates', (req, res) => {
 });
 
 // Test endpoint to add sample updates
-router.post('/poll/test-update', (req, res) => {
+router.post('/poll/test-update', requireAdminAuth, (req, res) => {
   try {
     const { sessionId, updateType = 'test_update', updateData = {} } = req.body;
     
@@ -573,7 +574,7 @@ router.post('/poll/test-update', (req, res) => {
 });
 
 // Test endpoint to track Public User activity
-router.post('/test-public-user-tracking', (req, res) => {
+router.post('/test-public-user-tracking', requireAdminAuth, (req, res) => {
   try {
     const session = trackPublicUserActivity(req);
     
