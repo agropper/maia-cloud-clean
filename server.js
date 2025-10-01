@@ -105,6 +105,17 @@ const getSessionTimeout = (userType) => {
 
 const logSessionEvent = async (event, session, reason = null) => {
   try {
+    // Ensure the session logs database exists
+    try {
+      await couchDBClient.createDatabase('maia_session_logs');
+      console.log(`[SESSION LOG] Created maia_session_logs database`);
+    } catch (dbError) {
+      // Database might already exist, ignore error
+      if (!dbError.message.includes('already exists')) {
+        console.warn(`[SESSION LOG] Database creation warning:`, dbError.message);
+      }
+    }
+    
     const logDoc = {
       _id: `session_log_${session.sessionId}_${Date.now()}`,
       type: 'session_log',
@@ -121,7 +132,6 @@ const logSessionEvent = async (event, session, reason = null) => {
       reason: reason
     };
     
-    // TODO: Create maia_session_logs database if it doesn't exist
     await couchDBClient.saveDocument('maia_session_logs', logDoc);
     console.log(`[SESSION LOG] ${event} - ${session.userType} user ${session.userId || session.username}`);
   } catch (error) {
@@ -210,8 +220,50 @@ const getPendingUpdates = (sessionId, lastPollTimestamp) => {
   };
 };
 
+// Public User session management
+let publicUserSession = null;
+
+const getOrCreatePublicUserSession = (req) => {
+  if (!publicUserSession) {
+    publicUserSession = {
+      sessionId: 'public_user_session',
+      userType: 'public',
+      userId: 'Public User',
+      username: 'Public User',
+      userEmail: null,
+      shareId: null,
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      lastPoll: null,
+      expiresAt: null, // Public sessions don't expire
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      pendingUpdates: []
+    };
+    
+    activeSessions.push(publicUserSession);
+    console.log(`[PAGE LOAD] Public User session created - unified tracking`);
+    
+    // Log to database
+    logSessionEvent('created', publicUserSession);
+  } else {
+    // Update last activity for existing session
+    publicUserSession.lastActivity = new Date().toISOString();
+    publicUserSession.ipAddress = req.ip || req.connection.remoteAddress;
+    publicUserSession.userAgent = req.headers['user-agent'];
+  }
+  
+  return publicUserSession;
+};
+
+const trackPublicUserActivity = (req) => {
+  const session = getOrCreatePublicUserSession(req);
+  console.log(`[PAGE LOAD] Public User activity tracked - ${req.path}`);
+  return session;
+};
+
 // Export session management functions for use in route files
-export { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates };
+export { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity };
 
 const initializeDatabase = async () => {
   try {
@@ -563,6 +615,9 @@ app.use((req, res, next) => {
 
 // Custom route for index.html with environment variables (must come before static files)
 app.get('/', (req, res) => {
+  // Track Public User activity
+  trackPublicUserActivity(req);
+  
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
@@ -1733,6 +1788,9 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 // Personal Chat endpoint (DigitalOcean Agent Platform)
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
+
+  // Track Public User activity for chat requests
+  trackPublicUserActivity(req);
 
   // Determine the base URL dynamically from the request
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';

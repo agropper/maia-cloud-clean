@@ -45,6 +45,13 @@
           @click="testPolling"
           class="q-ml-sm"
         />
+        <QBtn 
+          color="teal" 
+          size="sm" 
+          label="Track Public User"
+          @click="testPublicUserTracking"
+          class="q-ml-sm"
+        />
       </div>
     </div>
 
@@ -1305,6 +1312,37 @@ const testPolling = async () => {
     $q.notify({
       type: 'negative',
       message: 'Failed to test polling',
+      position: 'top'
+    })
+  }
+}
+
+const testPublicUserTracking = async () => {
+  try {
+    const response = await fetch('/api/admin/test-public-user-tracking', {
+      method: 'POST'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Public User tracked: ${data.message}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: `Public User activity tracked - Session: ${data.session.sessionId}`,
+      position: 'top'
+    })
+    
+    // Refresh sessions list to show the Public User session
+    await loadSessions()
+  } catch (error) {
+    console.error('Failed to track Public User:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to track Public User',
       position: 'top'
     })
   }

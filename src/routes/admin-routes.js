@@ -1,7 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import { cacheManager } from '../utils/CacheManager.js';
-import { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates } from '../../server.js';
+import { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity } from '../../server.js';
 
 const router = express.Router();
 
@@ -564,6 +564,27 @@ router.post('/poll/test-update', (req, res) => {
   } catch (error) {
     console.error('Failed to add test update:', error);
     res.status(500).json({ error: 'Failed to add test update' });
+  }
+});
+
+// Test endpoint to track Public User activity
+router.post('/test-public-user-tracking', (req, res) => {
+  try {
+    const session = trackPublicUserActivity(req);
+    
+    res.json({ 
+      success: true, 
+      message: 'Public User activity tracked',
+      session: {
+        sessionId: session.sessionId,
+        userType: session.userType,
+        userId: session.userId,
+        lastActivity: session.lastActivity
+      }
+    });
+  } catch (error) {
+    console.error('Failed to track Public User activity:', error);
+    res.status(500).json({ error: 'Failed to track Public User activity' });
   }
 });
 
