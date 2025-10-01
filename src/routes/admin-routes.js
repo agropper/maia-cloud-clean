@@ -532,7 +532,10 @@ router.get('/poll/updates', (req, res) => {
     
     const result = getPendingUpdates(sessionId, lastPoll);
     
-    console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
+    // Only log when there are actual updates to reduce noise
+    if (result.updates.length > 0) {
+      console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
+    }
     
     res.json(result);
   } catch (error) {

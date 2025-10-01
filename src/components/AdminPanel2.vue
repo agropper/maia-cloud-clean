@@ -1662,14 +1662,6 @@ const pollForUpdates = async () => {
       })
     }
     
-    // Adjust polling interval if specified
-    if (data.nextPollIn && pollingInterval.value) {
-      clearInterval(pollingInterval.value)
-      pollingInterval.value = setInterval(async () => {
-        await pollForUpdates()
-      }, data.nextPollIn)
-    }
-    
   } catch (error) {
     console.error('[POLLING] Polling error:', error)
     pollingErrorCount.value++
