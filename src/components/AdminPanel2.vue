@@ -717,6 +717,7 @@ const lastPollTimestamp = ref(null)
 const pollingErrorCount = ref(0)
 const maxPollingErrors = 3
 
+
 // Admin form
 const adminForm = ref({
   username: '',
@@ -1619,7 +1620,6 @@ const startPolling = async () => {
   pollingInterval.value = setInterval(async () => {
     await pollForUpdates()
   }, 5000)
-  
   isPollingConnected.value = true
 }
 
@@ -1643,6 +1643,17 @@ const pollForUpdates = async () => {
     
     const response = await fetch(url)
     if (!response.ok) {
+      if (response.status === 410) {
+        // Session expired - server restarted
+        const errorData = await response.json()
+        console.log(`[POLLING] Session expired: ${errorData.message}`)
+        stopPolling()
+        // Clear the stale session ID so a new one will be created
+        currentSessionId.value = null
+        // Restart polling with a new session
+        setTimeout(() => startPolling(), 1000)
+        return
+      }
       throw new Error(`HTTP ${response.status}`)
     }
     

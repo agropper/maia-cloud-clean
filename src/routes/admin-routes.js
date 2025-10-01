@@ -530,12 +530,23 @@ router.get('/poll/updates', (req, res) => {
       return res.status(400).json({ error: 'sessionId parameter required' });
     }
     
+    // Extract session creation time from sessionId (format: sess_TIMESTAMP_random)
+    const sessionTimestamp = parseInt(sessionId.split('_')[1]);
+    const serverStartTime = parseInt(process.env.SERVER_START_TIME || '0');
+    
+    // If session was created before server restart, reject it
+    if (sessionTimestamp < serverStartTime) {
+      console.log(`[POLLING] Rejecting stale session ${sessionId} (created before server restart)`);
+      return res.status(410).json({ 
+        error: 'Session expired - server restarted', 
+        code: 'SESSION_EXPIRED',
+        message: 'Please refresh the page to reconnect'
+      });
+    }
+    
     const result = getPendingUpdates(sessionId, lastPoll);
     
-    // Only log when there are actual updates to reduce noise
-    if (result.updates.length > 0) {
-      console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
-    }
+    console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
     
     res.json(result);
   } catch (error) {

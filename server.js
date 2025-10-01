@@ -48,6 +48,8 @@ const couchDBClient = createCouchDBClient();
 
 // Global session tracking
 const activeSessions = [];
+const serverStartTime = Date.now(); // Track when this server instance started
+process.env.SERVER_START_TIME = serverStartTime.toString(); // Set for session validation
 
 // Session management functions
 const generateSessionId = () => {
@@ -209,7 +211,7 @@ const getPendingUpdates = (sessionId, lastPollTimestamp) => {
   session.pendingUpdates = session.pendingUpdates.slice(-10);
   
   // Determine next poll interval based on user type
-  const nextPollIn = session.userType === 'admin' ? 10000 : 15000; // 10s for admin, 15s for users
+  const nextPollIn = session.userType === 'admin' ? 5000 : 10000; // 5s for admin, 10s for users
   
   return {
     updates: pendingUpdates,
