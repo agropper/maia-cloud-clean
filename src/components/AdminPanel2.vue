@@ -1,5 +1,34 @@
 <template>
   <div class="admin-panel">
+    <!-- Admin Access Required (shown when not authenticated) -->
+    <div v-if="!isAdmin" class="q-pa-lg">
+      <QCard>
+        <QCardSection>
+          <QIcon name="lock" size="64px" color="grey-6" />
+          <h4 class="q-mt-md">Admin Access Required</h4>
+          <p class="text-grey-6">
+            You need admin privileges to access this panel. Please sign in with an admin account.
+          </p>
+          <div class="q-mt-md">
+            <QBtn
+              color="primary"
+              label="Sign In"
+              @click="goToAdminSignIn"
+              class="q-mr-sm"
+            />
+            <QBtn
+              flat
+              color="secondary"
+              label="Register as Admin"
+              @click="goToAdminRegister"
+            />
+          </div>
+        </QCardSection>
+      </QCard>
+    </div>
+
+    <!-- Full Admin Interface (shown when authenticated) -->
+    <div v-else>
     <div class="admin-header">
       <h2>🔧 MAIA Administration Panel</h2>
       
@@ -625,32 +654,6 @@
       </QTabPanels>
     </div>
 
-    <!-- Non-admin message -->
-    <div v-else class="q-pa-lg text-center">
-      <QCard>
-        <QCardSection>
-          <QIcon name="lock" size="64px" color="grey-6" />
-          <h4 class="q-mt-md">Admin Access Required</h4>
-          <p class="text-grey-6">
-            You need admin privileges to access this panel. Please sign in with an admin account.
-          </p>
-          <div class="q-mt-md">
-            <QBtn
-              color="primary"
-              label="Sign In"
-              @click="goToAdminSignIn"
-              class="q-mr-sm"
-            />
-            <QBtn
-              flat
-              color="secondary"
-              label="Register as Admin"
-              @click="goToAdminRegister"
-            />
-          </div>
-        </QCardSection>
-      </QCard>
-    </div>
 
     <!-- Group Management Modal for Agent Chats -->
     <GroupManagementModal
@@ -659,6 +662,7 @@
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
     />
+    </div> <!-- End of v-else div for authenticated admin interface -->
   </div>
 </template>
 
