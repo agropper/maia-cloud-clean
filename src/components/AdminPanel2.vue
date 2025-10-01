@@ -116,7 +116,18 @@
     <!-- Full Admin Interface (shown when authenticated) -->
     <div v-else>
       <div class="admin-header">
-        <h2>🔧 MAIA Administration Panel</h2>
+        <div class="header-content">
+          <h2>🔧 MAIA Administration Panel</h2>
+          <QBtn
+            color="negative"
+            outline
+            icon="logout"
+            label="Sign Out"
+            @click="adminSignOut"
+            class="admin-signout-btn"
+          />
+        </div>
+      </div>
       
       <div class="q-mt-md">
         <!-- Polling Connection Status -->
@@ -647,7 +658,6 @@
         :onGroupDeleted="handleGroupDeleted"
         @chatLoaded="handleChatLoaded"
       />
-    </div> <!-- End of v-else div for authenticated admin interface -->
 </template>
 
 <script setup lang="ts">
@@ -1002,6 +1012,50 @@ const skipPasskeyRegistration = () => {
     message: 'Passkey registration skipped (AdminPanel2 - Static)',
     position: 'top'
   })
+}
+
+const adminSignOut = async () => {
+  try {
+    // Call the logout endpoint
+    const response = await fetch('/api/passkey/logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    })
+    
+    const result = await response.json()
+    
+    if (result.success) {
+      $q.notify({
+        type: 'positive',
+        message: 'Successfully signed out',
+        position: 'top'
+      })
+      
+      // Clear local admin state
+      isAdmin.value = false
+      
+      // Redirect to main app after a short delay
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 1500)
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Sign out failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Admin sign out failed:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Sign out failed. Please try again.',
+      position: 'top'
+    })
+  }
 }
 
 // Refresh methods removed - will handle stale data properly
@@ -1972,17 +2026,39 @@ onUnmounted(() => {
 }
 
 .admin-header {
-  text-align: center;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 2px solid #e0e0e0;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
 .admin-header h2 {
-  margin: 0 0 10px 0;
+  margin: 0;
   color: #1976d2;
   font-size: 2.5rem;
   font-weight: 600;
+}
+
+.admin-signout-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .admin-header h2 {
+    font-size: 2rem;
+  }
 }
 
 .compact-status-card {
