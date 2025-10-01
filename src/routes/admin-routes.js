@@ -538,7 +538,10 @@ router.get('/poll/updates', requireAdminAuth, (req, res) => {
     
     const result = getPendingUpdates(sessionId, lastPoll);
     
-    console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
+    // Find the session to get user info for better logging
+    const session = activeSessions.find(s => s.sessionId === sessionId);
+    const userInfo = session ? `${session.userType} user ${session.userId || session.username}` : sessionId;
+    console.log(`[POLLING] ${userInfo} polled - returning ${result.updates.length} updates`);
     
     res.json(result);
   } catch (error) {
@@ -593,5 +596,12 @@ router.post('/test-public-user-tracking', requireAdminAuth, (req, res) => {
     res.status(500).json({ error: 'Failed to track Public User activity' });
   }
 });
+
+// Store reference to activeSessions for logging
+let activeSessions = [];
+
+export const setActiveSessions = (sessions) => {
+  activeSessions = sessions;
+};
 
 export default router;

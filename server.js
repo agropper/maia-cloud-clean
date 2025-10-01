@@ -6534,7 +6534,7 @@ app.use('/api/connect-kb/:kbId', async (req, res, next) => {
 import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection-routes.js';
 
 // Import admin routes
-import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
+import adminRoutes, { setCouchDBClient as setAdminCouchDBClient, setActiveSessions } from './src/routes/admin-routes.js';
 import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
 
 // Unified cache system using CacheManager
@@ -6580,6 +6580,9 @@ setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
 setAdminManagementCouchDBClient(couchDBClient);
+
+// Pass activeSessions to admin routes for better logging
+setActiveSessions(activeSessions);
 
 // Pass the shared session manager to admin routes
 setSessionManager(sessionManager);
@@ -7389,46 +7392,9 @@ async function ensureAllUserBuckets() {
         return;
       }
 
-      // First check current status
-      const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
-      const statusResponse = await fetch(`${baseUrl}/api/bucket/user-status/${userId}`);
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
-        
-        // If user has no folder, create one
-        if (!statusData.hasFolder) {
-          console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
-          const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId })
-          });
-          
-          if (createResponse.ok) {
-            const createData = await createResponse.json();
-            // Bucket created successfully
-            console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
-          }
-        } else {
-          // User already has folder, just update cache
-          // Bucket status updated
-        }
-        return;
-      }
-      
-      // If status check failed, try to create folder anyway
-      console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
-      const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      
-      if (createResponse.ok) {
-        const createData = await createResponse.json();
-        // Bucket created successfully
-        console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
-      }
+      // Skip HTTP requests during startup to avoid ECONNREFUSED errors
+      // Bucket status checks will happen on-demand when users access the admin panel
+      console.log(`📁 [STARTUP] Skipping bucket status check for ${userId} (startup optimization)`);
     } catch (error) {
       console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
     }

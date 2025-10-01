@@ -1653,7 +1653,9 @@ const loadUsers = async () => {
   try {
     isLoadingUsers.value = true
     
-    const data = await throttledFetchJson('/api/admin-management/users')
+    // Add cache-busting parameter to ensure fresh data
+    const cacheBuster = `?t=${Date.now()}`
+    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}`)
     users.value = data.users || []
     
     // Update stats
@@ -2206,8 +2208,11 @@ onMounted(async () => {
   // Only load data if admin is authenticated
   if (isAdmin.value) {
     try {
+      // Force fresh data load on page refresh
       await loadAllData()
       await loadCurrentModel()
+      
+      console.log(`✅ [AdminPanel2] Loaded ${users.value.length} users, ${agents.value.length} agents, ${knowledgeBases.value.length} knowledge bases`)
     } catch (error) {
       console.error('❌ [AdminPanel2] Error during initialization:', error)
     }
