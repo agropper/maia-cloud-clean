@@ -1,93 +1,100 @@
 <template>
   <div class="admin-panel">
+
+    <!-- Loading State -->
+    <div v-if="shouldShowLoading" class="q-pa-lg text-center">
+      <QSpinner size="40px" color="primary" />
+      <div class="q-mt-md">Checking admin authentication...</div>
+    </div>
+
     <!-- Admin Registration Form (shown when on registration page) -->
-    <div v-if="isRegistrationPage" class="q-pa-lg">
+    <div v-else-if="shouldShowRegistration" class="q-pa-lg">
       <div class="admin-registration">
-        <QCard>
-          <QCardSection>
-            <h4>🔐 Admin Registration</h4>
-            <p>To access admin privileges, you must register with the reserved admin username and secret.</p>
+      <QCard>
+        <QCardSection>
+          <h4>🔐 Admin Registration</h4>
+          <p>To access admin privileges, you must register with the reserved admin username and secret.</p>
+          
+          <!-- Error Messages -->
+          <div v-if="errorMessage" class="error-message q-mb-md">
+            <QBanner class="bg-negative text-white">
+              {{ errorMessage }}
+            </QBanner>
+          </div>
+          
+          <QForm @submit="registerAdmin" class="q-gutter-md">
+            <QInput
+              v-model="adminForm.username"
+              label="Admin Username"
+              outlined
+              dense
+              :rules="[val => !!val || 'Username is required']"
+              placeholder="Enter reserved admin username"
+            />
             
-            <!-- Error Messages -->
-            <div v-if="errorMessage" class="error-message q-mb-md">
-              <QBanner class="bg-negative text-white">
-                {{ errorMessage }}
-              </QBanner>
-            </div>
+            <QInput
+              v-model="adminForm.adminSecret"
+              label="Admin Secret"
+              type="password"
+              outlined
+              dense
+              :rules="[val => !!val || 'Admin secret is required']"
+              placeholder="Enter admin secret"
+            />
             
-            <QForm @submit="registerAdmin" class="q-gutter-md">
-              <QInput
-                v-model="adminForm.username"
-                label="Admin Username"
-                outlined
-                dense
-                :rules="[val => !!val || 'Username is required']"
-                placeholder="Enter reserved admin username"
-              />
-              
-              <QInput
-                v-model="adminForm.adminSecret"
-                label="Admin Secret"
-                type="password"
-                outlined
-                dense
-                :rules="[val => !!val || 'Admin secret is required']"
-                placeholder="Enter admin secret"
-              />
-              
-              <div class="q-mt-md">
-                <QBtn
-                  type="submit"
-                  color="primary"
-                  :loading="isRegistering"
+            <div class="q-mt-md">
+              <QBtn
+                type="submit"
+                color="primary"
+                :loading="isRegistering"
                   label="Register Admin"
                   icon="person_add"
                   class="q-mr-md"
                 />
-                <QBtn
-                  flat
-                  color="secondary"
-                  label="Sign In Instead"
-                  icon="login"
-                  @click="goToAdminSignIn"
-                  class="q-mr-md"
-                />
-                <QBtn
-                  flat
-                  color="secondary"
-                  label="Return to Main App"
-                  icon="home"
-                  @click="goToMainApp"
-                />
-              </div>
+              <QBtn
+                flat
+                color="secondary"
+                label="Sign In Instead"
+                icon="login"
+                @click="goToAdminSignIn"
+                class="q-mr-md"
+              />
+              <QBtn
+                flat
+                color="secondary"
+                label="Return to Main App"
+                icon="home"
+                @click="goToMainApp"
+              />
+            </div>
             </QForm>
-          </QCardSection>
-        </QCard>
-        
-        <!-- Passkey Registration Section -->
-        <div v-if="showPasskeyRegistration" class="passkey-registration q-mt-lg">
-          <QCard>
-            <QCardSection>
-              <h4>🔑 Create Admin Passkey</h4>
-              <p>Set up a passkey for secure admin access. This will be used for future sign-ins.</p>
-              
-              <div class="q-mt-md">
-                <QBtn
-                  color="primary"
-                  :loading="isRegisteringPasskey"
-                  label="Create Admin Passkey"
-                  icon="fingerprint"
-                  @click="registerPasskey"
-                />
+        </QCardSection>
+      </QCard>
+      
+      <!-- Passkey Registration Section -->
+      <div v-if="showPasskeyRegistration" class="passkey-registration q-mt-lg">
+        <QCard>
+          <QCardSection>
+            <h4>🔑 Create Admin Passkey</h4>
+            <p>Set up a passkey for secure admin access. This will be used for future sign-ins.</p>
+            
+            <div class="q-mt-md">
+              <QBtn
+                color="primary"
+                :loading="isRegisteringPasskey"
+                label="Create Admin Passkey"
+                icon="fingerprint"
+                @click="registerPasskey"
+              />
               </div>
             </QCardSection>
           </QCard>
         </div>
       </div>
-    </div>
-
+            </div>
+            
     <!-- Admin Sign-In Form (shown when on sign-in page) -->
-    <div v-else-if="isSignInPage" class="q-pa-lg">
+    <div v-else-if="shouldShowSignIn" class="q-pa-lg">
       <div class="admin-signin">
         <QCard>
           <QCardSection>
@@ -134,7 +141,7 @@
     </div>
 
     <!-- Admin Access Required (shown when not authenticated and not on registration or sign-in page) -->
-    <div v-else-if="!isAdmin" class="q-pa-lg">
+    <div v-else-if="shouldShowAccessRequired" class="q-pa-lg">
       <QCard>
         <QCardSection>
           <QIcon name="lock" size="64px" color="grey-6" />
@@ -142,7 +149,7 @@
           <p class="text-grey-6">
             You need admin privileges to access this panel. Please sign in with your admin passkey.
           </p>
-          <div class="q-mt-md">
+            <div class="q-mt-md">
             <QBtn
               color="primary"
               icon="fingerprint"
@@ -150,9 +157,9 @@
               @click="goToAdminSignIn"
               class="q-mr-sm"
             />
-            <QBtn
-              flat
-              color="secondary"
+              <QBtn
+                flat
+                color="secondary"
               label="Register New Admin"
               @click="goToAdminRegister"
               class="q-mr-sm"
@@ -162,14 +169,14 @@
               color="secondary"
               label="Return to Main App"
               @click="goToMainApp"
-            />
-          </div>
-        </QCardSection>
-      </QCard>
+              />
+            </div>
+          </QCardSection>
+        </QCard>
     </div>
 
     <!-- Full Admin Interface (shown when authenticated) -->
-    <div v-else>
+    <div v-else-if="shouldShowAdminInterface">
       <div class="admin-header">
         <div class="header-content">
           <h2>🔧 MAIA Administration Panel</h2>
@@ -181,9 +188,8 @@
             @click="adminSignOut"
             class="admin-signout-btn"
           />
-        </div>
       </div>
-      
+
       <div class="q-mt-md">
         <!-- Polling Connection Status -->
         <QBadge
@@ -704,24 +710,28 @@
         </QTabPanel>
       </QTabPanels>
     </div>
+    </div>
 
-
-      <!-- Group Management Modal for Agent Chats -->
-      <GroupManagementModal
-        v-model="showGroupModal"
-        :currentUser="selectedAgentForChats?.owner || 'Public User'"
-        :onGroupDeleted="handleGroupDeleted"
-        @chatLoaded="handleChatLoaded"
-      />
+    <!-- Group Management Modal for Agent Chats -->
+    <!-- TEMPORARILY COMMENTED OUT TO DEBUG -->
+    <!--
+    <GroupManagementModal
+      v-model="showGroupModal"
+      :currentUser="selectedAgentForChats?.owner || 'Public User'"
+      :onGroupDeleted="handleGroupDeleted"
+      @chatLoaded="handleChatLoaded"
+    />
+    -->
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import {
   QBtn,
   QBanner,
   QInput,
+  QSpinner,
   QForm,
   QCard,
   QCardSection,
@@ -749,6 +759,7 @@ const $q = useQuasar()
 
 // State - Real data from caches
 const isAdmin = ref(false)
+const authCheckComplete = ref(false)
 const isRegistering = ref(false)
 const isRegisteringPasskey = ref(false)
 const isSigningIn = ref(false)
@@ -759,6 +770,36 @@ const activeTab = ref('users')
 // Check if we're on the registration page or sign-in page
 const isRegistrationPage = ref(window.location.pathname === '/admin2/register')
 const isSignInPage = ref(window.location.pathname === '/admin2/signin')
+
+// Make route detection reactive
+const updateRouteDetection = () => {
+  isRegistrationPage.value = window.location.pathname === '/admin2/register'
+  isSignInPage.value = window.location.pathname === '/admin2/signin'
+}
+
+// Single computed property for current state
+const currentState = computed(() => {
+  if (!authCheckComplete.value) {
+    return 'loading'
+  }
+  if (isRegistrationPage.value) {
+    return 'registration'
+  }
+  if (isSignInPage.value) {
+    return 'signin'
+  }
+  if (isAdmin.value) {
+    return 'admin'
+  }
+  return 'access-required'
+})
+
+// Computed properties for template rendering
+const shouldShowRegistration = computed(() => currentState.value === 'registration')
+const shouldShowSignIn = computed(() => currentState.value === 'signin')
+const shouldShowAccessRequired = computed(() => currentState.value === 'access-required')
+const shouldShowAdminInterface = computed(() => currentState.value === 'admin')
+const shouldShowLoading = computed(() => currentState.value === 'loading')
 
 // Admin registration form data
 const adminForm = ref({
@@ -1030,22 +1071,22 @@ const registerPasskey = async () => {
     const result = await verifyResponse.json()
     
     if (result.success) {
-      $q.notify({
+  $q.notify({
         type: 'positive',
         message: 'Admin passkey registered successfully! Redirecting to admin panel...',
-        position: 'top'
-      })
+    position: 'top'
+  })
       
       // Redirect to admin panel after successful registration
       setTimeout(() => {
         window.location.href = '/admin2'
       }, 2000)
     } else {
-      $q.notify({
+  $q.notify({
         type: 'negative',
         message: result.error || 'Passkey registration failed',
-        position: 'top'
-      })
+    position: 'top'
+  })
     }
   } catch (error) {
     console.error('❌ [AdminPanel2] Passkey registration failed:', error)
@@ -1659,7 +1700,7 @@ const loadAgents = async () => {
     })
   } finally {
     isLoadingAgents.value = false
-}
+  }
 }
 
 const loadKnowledgeBases = async () => {
@@ -1722,9 +1763,9 @@ const loadCurrentModel = async () => {
     currentModel.value = data.model
   } catch (error) {
     if (error.status === 404) {
-      currentModel.value = null
-      return
-    }
+        currentModel.value = null
+        return
+      }
     console.error('❌ [AdminPanel2] Failed to load current model:', error)
     currentModel.value = null
   }
@@ -1875,7 +1916,7 @@ const pollForUpdates = async () => {
       stopPolling()
       
       // Attempt to reconnect after 10 seconds
-      setTimeout(() => {
+    setTimeout(() => {
         console.log('[POLLING] Attempting to reconnect...')
         startPolling()
       }, 10000)
@@ -2041,10 +2082,18 @@ const checkAdminAuth = async () => {
 const goToAdminSignIn = () => {
   // Redirect to dedicated admin sign-in page
   window.location.href = '/admin2/signin';
+  // Update route detection after navigation
+  setTimeout(() => {
+    updateRouteDetection();
+  }, 100);
 };
 
 const goToAdminRegister = () => {
   window.location.href = '/admin2/register';
+  // Update route detection after navigation
+  setTimeout(() => {
+    updateRouteDetection();
+  }, 100);
 };
 
 const goToMainApp = () => {
@@ -2136,11 +2185,23 @@ onMounted(async () => {
   // Skip authentication check if on registration or sign-in page
   if (isRegistrationPage.value || isSignInPage.value) {
     console.log('📝 [AdminPanel2] On registration/sign-in page - skipping authentication check')
+    authCheckComplete.value = true; // Mark as complete for these pages
     return
   }
   
   // Check admin authentication first
   await checkAdminAuth();
+  
+  // Mark auth check as complete
+  authCheckComplete.value = true;
+  
+  // Debug after auth check
+  console.log('🔍 [AdminPanel2] After auth check:', {
+    isAdmin: isAdmin.value,
+    authCheckComplete: authCheckComplete.value,
+    shouldShowAdminInterface: isAdmin.value && authCheckComplete.value,
+    shouldShowAccessRequired: !isAdmin.value && !isRegistrationPage.value && !isSignInPage.value && authCheckComplete.value
+  })
   
   // Only load data if admin is authenticated
   if (isAdmin.value) {
