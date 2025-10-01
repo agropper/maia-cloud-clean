@@ -904,6 +904,9 @@ const registerAdmin = async () => {
       }
     } else {
       errorMessage.value = result.error || 'Registration failed'
+      if (result.hint) {
+        errorMessage.value += `\n\nHint: ${result.hint}`
+      }
       $q.notify({
         type: 'negative',
         message: result.error || 'Registration failed',

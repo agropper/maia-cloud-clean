@@ -646,14 +646,28 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
   try {
     const { username, adminSecret } = req.body;
     
+    // Check if environment variables are set
+    if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_SECRET) {
+      return res.status(500).json({ 
+        error: 'Admin configuration not set. Please set ADMIN_USERNAME and ADMIN_SECRET environment variables.',
+        hint: 'Set ADMIN_USERNAME=admin and ADMIN_SECRET=admin123 for development'
+      });
+    }
+    
     // Check if this is the reserved admin username
     if (username !== process.env.ADMIN_USERNAME) {
-      return res.status(400).json({ error: 'Invalid admin username' });
+      return res.status(400).json({ 
+        error: 'Invalid admin username',
+        hint: `Expected: ${process.env.ADMIN_USERNAME}`
+      });
     }
     
     // Verify admin secret
     if (adminSecret !== process.env.ADMIN_SECRET) {
-      return res.status(400).json({ error: 'Invalid admin secret' });
+      return res.status(400).json({ 
+        error: 'Invalid admin secret',
+        hint: 'Check your ADMIN_SECRET environment variable'
+      });
     }
     
         // Check if admin user already exists
