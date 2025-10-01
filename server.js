@@ -64,9 +64,11 @@ const createSession = (userType, userData, req) => {
     shareId: userData.shareId,    // For deep link users
     createdAt: new Date().toISOString(),
     lastActivity: new Date().toISOString(),
+    lastPoll: null,               // When client last polled for updates
     expiresAt: new Date(Date.now() + getSessionTimeout(userType)).toISOString(),
     ipAddress: req.ip || req.connection.remoteAddress,
-    userAgent: req.headers['user-agent']
+    userAgent: req.headers['user-agent'],
+    pendingUpdates: []            // Queue of updates to send to this session
   };
   
   activeSessions.push(session);
@@ -127,8 +129,89 @@ const logSessionEvent = async (event, session, reason = null) => {
   }
 };
 
+// Update management functions
+const addUpdateToSession = (sessionId, updateType, updateData) => {
+  const session = activeSessions.find(s => s.sessionId === sessionId);
+  if (session) {
+    const update = {
+      type: updateType,
+      data: updateData,
+      timestamp: new Date().toISOString(),
+      id: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
+    
+    session.pendingUpdates.push(update);
+    
+    // Keep only last 50 updates to prevent memory bloat
+    if (session.pendingUpdates.length > 50) {
+      session.pendingUpdates = session.pendingUpdates.slice(-50);
+    }
+    
+    console.log(`[POLLING] Added ${updateType} update to session ${sessionId}`);
+    return update;
+  }
+  return null;
+};
+
+const addUpdateToUser = (userId, updateType, updateData) => {
+  const session = activeSessions.find(s => s.userId === userId);
+  if (session) {
+    return addUpdateToSession(session.sessionId, updateType, updateData);
+  }
+  return null;
+};
+
+const addUpdateToAllAdmins = (updateType, updateData) => {
+  const adminSessions = activeSessions.filter(s => s.userType === 'admin');
+  const updates = [];
+  
+  adminSessions.forEach(session => {
+    const update = addUpdateToSession(session.sessionId, updateType, updateData);
+    if (update) {
+      updates.push({ sessionId: session.sessionId, update });
+    }
+  });
+  
+  console.log(`[POLLING] Added ${updateType} update to ${updates.length} admin sessions`);
+  return updates;
+};
+
+const getPendingUpdates = (sessionId, lastPollTimestamp) => {
+  const session = activeSessions.find(s => s.sessionId === sessionId);
+  if (!session) {
+    return { updates: [], hasMore: false, nextPollIn: 5000 };
+  }
+  
+  // Update lastPoll timestamp
+  session.lastPoll = new Date().toISOString();
+  session.lastActivity = new Date().toISOString();
+  
+  // Filter updates newer than lastPollTimestamp
+  let pendingUpdates = session.pendingUpdates;
+  if (lastPollTimestamp) {
+    const lastPoll = new Date(lastPollTimestamp);
+    pendingUpdates = session.pendingUpdates.filter(update => 
+      new Date(update.timestamp) > lastPoll
+    );
+  }
+  
+  // Clear delivered updates (keep only last 10 for debugging)
+  session.pendingUpdates = session.pendingUpdates.slice(-10);
+  
+  // Determine next poll interval based on user type
+  const nextPollIn = session.userType === 'admin' ? 5000 : 10000; // 5s for admin, 10s for users
+  
+  return {
+    updates: pendingUpdates,
+    hasMore: false,
+    nextPollIn: nextPollIn,
+    sessionId: sessionId,
+    userType: session.userType
+  };
+};
+
 // Export session management functions for use in route files
-export { activeSessions, createSession, removeSession, logSessionEvent };
+export { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates };
 
 const initializeDatabase = async () => {
   try {
@@ -6096,30 +6179,22 @@ async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http:
             console.log(`📊 [ADMIN NOTIFICATION] [*] Final tokens: ${job.tokens || 'N/A'}`);
             console.log(`📊 [ADMIN NOTIFICATION] [*] Job UUID: ${job.uuid}`);
             
-            // Send SSE notification to admin clients
+            // Send polling notification to admin clients
             try {
-              const notificationResponse = await fetch(`${baseUrl}/api/admin/notify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  type: 'kb_indexing_completed',
-                  data: {
-                    kbId: kbId,
-                    kbName: kbName,
-                    duration: totalTime,
-                    durationMinutes: durationMinutes,
-                    tokens: job.tokens || null,
-                    jobUuid: job.uuid,
-                    message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
-                  }
-                })
-              });
+              const updateData = {
+                kbId: kbId,
+                kbName: kbName,
+                duration: totalTime,
+                durationMinutes: durationMinutes,
+                tokens: job.tokens || null,
+                jobUuid: job.uuid,
+                message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
+              };
               
-              if (notificationResponse.ok) {
-                console.log(`📡 [SSE] [*] Sent KB indexing completion notification to admin`);
-              }
-            } catch (sseError) {
-              console.error(`❌ [SSE] [*] Error sending KB indexing notification:`, sseError.message);
+              addUpdateToAllAdmins('kb_indexing_completed', updateData);
+              console.log(`📡 [POLLING] [*] Added KB indexing completion notification to admin sessions`);
+            } catch (pollingError) {
+              console.error(`❌ [POLLING] [*] Error adding KB indexing notification:`, pollingError.message);
             }
             
             clearInterval(monitorInterval);

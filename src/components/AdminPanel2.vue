@@ -4,11 +4,11 @@
       <h2>🔧 MAIA Administration Panel</h2>
       
       <div class="q-mt-md">
-        <!-- SSE Connection Status -->
+        <!-- Polling Connection Status -->
         <QBadge
-          :color="isSSEConnected ? 'positive' : 'negative'"
-          :label="isSSEConnected ? 'Live Updates' : 'Offline'"
-          class="sse-status-badge q-mr-md"
+          :color="isPollingConnected ? 'positive' : 'negative'"
+          :label="isPollingConnected ? 'Live Updates' : 'Offline'"
+          class="polling-status-badge q-mr-md"
         />
         
         <QBtn 
@@ -36,6 +36,13 @@
           size="sm" 
           label="Create Test Sessions"
           @click="createTestSessions"
+          class="q-ml-sm"
+        />
+        <QBtn 
+          color="purple" 
+          size="sm" 
+          label="Test Polling"
+          @click="testPolling"
           class="q-ml-sm"
         />
       </div>
@@ -695,9 +702,13 @@ const showPasskeyRegistration = ref(false)
 const errorMessage = ref('')
 const activeTab = ref('users')
 
-// SSE state
-const adminEventSource = ref(null)
-const isSSEConnected = ref(false)
+// Polling state
+const pollingInterval = ref(null)
+const isPollingConnected = ref(false)
+const currentSessionId = ref(null)
+const lastPollTimestamp = ref(null)
+const pollingErrorCount = ref(0)
+const maxPollingErrors = 3
 
 // Admin form
 const adminForm = ref({
@@ -1253,6 +1264,52 @@ const createTestSessions = async () => {
   }
 }
 
+const testPolling = async () => {
+  try {
+    if (!currentSessionId.value) {
+      $q.notify({
+        type: 'warning',
+        message: 'No active session for polling test',
+        position: 'top'
+      })
+      return
+    }
+    
+    const response = await fetch('/api/admin/poll/test-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: currentSessionId.value,
+        updateType: 'test_update',
+        updateData: {
+          message: `Test polling update at ${new Date().toLocaleTimeString()}`,
+          testId: Date.now()
+        }
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Test update added: ${data.message}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: 'Test update sent - should appear in next poll',
+      position: 'top'
+    })
+  } catch (error) {
+    console.error('Failed to test polling:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to test polling',
+      position: 'top'
+    })
+  }
+}
+
 // Utility function for file size formatting
 const formatFileSize = (bytes: number) => {
   if (!bytes || bytes === 0) return '0 B'
@@ -1500,57 +1557,145 @@ const selectModel = async (model) => {
   }
 }
 
-// SSE Connection Management
-const connectAdminEvents = () => {
-  if (adminEventSource.value) {
-    adminEventSource.value.close()
+// Polling Connection Management
+const startPolling = async () => {
+  // Get or create admin session
+  if (!currentSessionId.value) {
+    await createAdminSession()
   }
   
-  adminEventSource.value = new EventSource('/api/admin/events')
-  
-  adminEventSource.value.onopen = () => {
-    isSSEConnected.value = true
+  if (!currentSessionId.value) {
+    console.error('[POLLING] No admin session available for polling')
+    return
   }
   
-  adminEventSource.value.onmessage = (event) => {
-    handleSSEMessage(event)
-  }
+  // Clear any existing polling
+  stopPolling()
   
-  adminEventSource.value.onerror = (error) => {
-    isSSEConnected.value = false
+  console.log(`[POLLING] Starting polling for session ${currentSessionId.value}`)
+  
+  // Start immediate poll
+  await pollForUpdates()
+  
+  // Set up polling interval (5 seconds for admin)
+  pollingInterval.value = setInterval(async () => {
+    await pollForUpdates()
+  }, 5000)
+  
+  isPollingConnected.value = true
+}
+
+const stopPolling = () => {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value)
+    pollingInterval.value = null
+  }
+  isPollingConnected.value = false
+}
+
+const pollForUpdates = async () => {
+  if (!currentSessionId.value) return
+  
+  try {
+    const url = new URL('/api/admin/poll/updates', window.location.origin)
+    url.searchParams.set('sessionId', currentSessionId.value)
+    if (lastPollTimestamp.value) {
+      url.searchParams.set('lastPoll', lastPollTimestamp.value)
+    }
     
-    // Attempt to reconnect after 5 seconds
-    setTimeout(() => {
-      connectAdminEvents()
-    }, 5000)
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    // Update last poll timestamp
+    lastPollTimestamp.value = new Date().toISOString()
+    
+    // Reset error count on successful poll
+    pollingErrorCount.value = 0
+    
+    // Process updates
+    if (data.updates && data.updates.length > 0) {
+      console.log(`[POLLING] Received ${data.updates.length} updates`)
+      data.updates.forEach(update => {
+        handlePollingUpdate(update)
+      })
+    }
+    
+    // Adjust polling interval if specified
+    if (data.nextPollIn && pollingInterval.value) {
+      clearInterval(pollingInterval.value)
+      pollingInterval.value = setInterval(async () => {
+        await pollForUpdates()
+      }, data.nextPollIn)
+    }
+    
+  } catch (error) {
+    console.error('[POLLING] Polling error:', error)
+    pollingErrorCount.value++
+    
+    if (pollingErrorCount.value >= maxPollingErrors) {
+      console.error('[POLLING] Max errors reached, stopping polling')
+      stopPolling()
+      
+      // Attempt to reconnect after 10 seconds
+      setTimeout(() => {
+        console.log('[POLLING] Attempting to reconnect...')
+        startPolling()
+      }, 10000)
+    }
   }
 }
 
-const handleSSEMessage = (event) => {
+const createAdminSession = async () => {
   try {
-    const notification = JSON.parse(event.data)
+    // Create a test admin session for polling
+    const response = await fetch('/api/admin/sessions/test', {
+      method: 'POST'
+    })
     
-    switch (notification.type) {
-      case 'connected':
-        break
-        
+    if (response.ok) {
+      // Find the admin session that was created
+      const sessionsResponse = await fetch('/api/admin/sessions')
+      if (sessionsResponse.ok) {
+        const sessionsData = await sessionsResponse.json()
+        const adminSession = sessionsData.sessions.find(s => s.userType === 'admin')
+        if (adminSession) {
+          currentSessionId.value = adminSession.sessionId
+          console.log(`[POLLING] Created admin session: ${currentSessionId.value}`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[POLLING] Failed to create admin session:', error)
+  }
+}
+
+const handlePollingUpdate = (update) => {
+  try {
+    console.log(`[POLLING] Processing update: ${update.type}`)
+    
+    switch (update.type) {
       case 'agent_deployment_completed':
-        handleAgentDeploymentCompleted(notification.data)
+        handleAgentDeploymentCompleted(update.data)
         break
         
       case 'kb_indexing_completed':
-        handleKBIndexingCompleted(notification.data)
+        handleKBIndexingCompleted(update.data)
         break
         
-      case 'heartbeat':
-        // Silent heartbeat
+      case 'test_update':
+        handleTestUpdate(update.data)
         break
         
       default:
+        console.log(`[POLLING] Unknown update type: ${update.type}`)
         break
     }
   } catch (error) {
-    console.error('❌ [SSE] [*] Error parsing notification:', error)
+    console.error('❌ [POLLING] Error processing update:', error)
   }
 }
 
@@ -1593,12 +1738,19 @@ const handleKBIndexingCompleted = (data) => {
   })
 }
 
+const handleTestUpdate = (data) => {
+  console.log('[POLLING] Test update received:', data)
+  
+  $q.notify({
+    type: 'info',
+    message: `Test update: ${data.message}`,
+    position: 'top',
+    timeout: 3000
+  })
+}
+
 const disconnectAdminEvents = () => {
-  if (adminEventSource.value) {
-    adminEventSource.value.close()
-    adminEventSource.value = null
-    isSSEConnected.value = false
-  }
+  stopPolling()
 }
 
 // Lifecycle
@@ -1611,8 +1763,8 @@ onMounted(async () => {
     console.error('❌ [AdminPanel2] Error during initialization:', error)
   }
   
-  // Connect to admin events after data is loaded
-  connectAdminEvents()
+  // Start polling for updates after data is loaded
+  startPolling()
 })
 
 onUnmounted(() => {

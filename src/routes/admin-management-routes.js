@@ -153,30 +153,25 @@ const checkAgentDeployments = async () => {
         // Agent is deployed - update user workflow stage to 'agent_assigned'
         console.log(`✅ Agent ${tracking.agentName} deployed for user ${userId} - updating workflow stage`);
         
-        // Send real-time notification to admin via SSE
+        // Send real-time notification to admin via polling system
         try {
-          const notificationResponse = await fetch(`${getBaseUrl()}/api/admin/notify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'agent_deployment_completed',
-              data: {
-                userId: userId,
-                agentName: tracking.agentName,
-                agentId: tracking.agentId || null,
-                duration: durationSeconds,
-                durationMinutes: durationMinutes,
-                message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
-              }
-            })
-          });
+          // Import polling functions
+          const { addUpdateToAllAdmins } = await import('../../server.js');
           
-          if (notificationResponse.ok) {
-            console.log(`📡 [SSE] [*] Sent agent deployment notification to admin`);
-            console.log(`[*] Agent ${tracking.agentName} deployed for user ${userId}`);
-          }
-        } catch (sseError) {
-          console.error(`❌ [SSE] [*] Error sending agent deployment notification:`, sseError.message);
+          const updateData = {
+            userId: userId,
+            agentName: tracking.agentName,
+            agentId: tracking.agentId || null,
+            duration: durationSeconds,
+            durationMinutes: durationMinutes,
+            message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
+          };
+          
+          addUpdateToAllAdmins('agent_deployment_completed', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment notification to admin sessions`);
+          console.log(`[*] Agent ${tracking.agentName} deployed for user ${userId}`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment notification:`, pollingError.message);
         }
         
         // Get user document (cache-aware) with retry logic for conflicts

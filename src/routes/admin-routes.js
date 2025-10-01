@@ -1,7 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import { cacheManager } from '../utils/CacheManager.js';
-import { activeSessions, createSession, removeSession, logSessionEvent } from '../../server.js';
+import { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates } from '../../server.js';
 
 const router = express.Router();
 
@@ -518,6 +518,52 @@ router.post('/sessions/test', (req, res) => {
   } catch (error) {
     console.error('Failed to create test sessions:', error);
     res.status(500).json({ error: 'Failed to create test sessions' });
+  }
+});
+
+// Polling endpoint for real-time updates
+router.get('/poll/updates', (req, res) => {
+  try {
+    const { sessionId, lastPoll } = req.query;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId parameter required' });
+    }
+    
+    const result = getPendingUpdates(sessionId, lastPoll);
+    
+    console.log(`[POLLING] Session ${sessionId} polled - returning ${result.updates.length} updates`);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to get pending updates:', error);
+    res.status(500).json({ error: 'Failed to get pending updates' });
+  }
+});
+
+// Test endpoint to add sample updates
+router.post('/poll/test-update', (req, res) => {
+  try {
+    const { sessionId, updateType = 'test_update', updateData = {} } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId required' });
+    }
+    
+    const update = addUpdateToSession(sessionId, updateType, {
+      message: 'This is a test update',
+      timestamp: new Date().toISOString(),
+      ...updateData
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Test update added',
+      update: update
+    });
+  } catch (error) {
+    console.error('Failed to add test update:', error);
+    res.status(500).json({ error: 'Failed to add test update' });
   }
 });
 
