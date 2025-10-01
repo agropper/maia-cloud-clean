@@ -7468,7 +7468,7 @@ async function ensureAllUserBuckets() {
     
     // Check session logs database
     try {
-      const sessionLogs = await couchDBClient.getAllDocuments(couchDBClient, 'maia_session_logs');
+      const sessionLogs = await cacheManager.getAllDocuments(couchDBClient, 'maia_session_logs');
       console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
     } catch (error) {
       if (error.message.includes('Database does not exist')) {
