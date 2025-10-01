@@ -648,7 +648,6 @@
         @chatLoaded="handleChatLoaded"
       />
     </div> <!-- End of v-else div for authenticated admin interface -->
-  </div>
 </template>
 
 <script setup lang="ts">
