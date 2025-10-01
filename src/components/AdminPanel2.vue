@@ -1,7 +1,93 @@
 <template>
   <div class="admin-panel">
-    <!-- Admin Access Required (shown when not authenticated) -->
-    <div v-if="!isAdmin" class="q-pa-lg">
+    <!-- Admin Registration Form (shown when on registration page) -->
+    <div v-if="isRegistrationPage" class="q-pa-lg">
+      <div class="admin-registration">
+        <QCard>
+          <QCardSection>
+            <h4>🔐 Admin Registration</h4>
+            <p>To access admin privileges, you must register with the reserved admin username and secret.</p>
+            
+            <!-- Error Messages -->
+            <div v-if="errorMessage" class="error-message q-mb-md">
+              <QBanner class="bg-negative text-white">
+                {{ errorMessage }}
+              </QBanner>
+            </div>
+            
+            <QForm @submit="registerAdmin" class="q-gutter-md">
+              <QInput
+                v-model="adminForm.username"
+                label="Admin Username"
+                outlined
+                dense
+                :rules="[val => !!val || 'Username is required']"
+                placeholder="Enter reserved admin username"
+              />
+              
+              <QInput
+                v-model="adminForm.adminSecret"
+                label="Admin Secret"
+                type="password"
+                outlined
+                dense
+                :rules="[val => !!val || 'Admin secret is required']"
+                placeholder="Enter admin secret"
+              />
+              
+              <div class="q-mt-md">
+                <QBtn
+                  type="submit"
+                  color="primary"
+                  :loading="isRegistering"
+                  label="Register Admin"
+                  icon="person_add"
+                  class="q-mr-md"
+                />
+                <QBtn
+                  flat
+                  color="secondary"
+                  label="Sign In Instead"
+                  icon="login"
+                  @click="goToAdminSignIn"
+                  class="q-mr-md"
+                />
+                <QBtn
+                  flat
+                  color="secondary"
+                  label="Return to Main App"
+                  icon="home"
+                  @click="goToMainApp"
+                />
+              </div>
+            </QForm>
+          </QCardSection>
+        </QCard>
+        
+        <!-- Passkey Registration Section -->
+        <div v-if="showPasskeyRegistration" class="passkey-registration q-mt-lg">
+          <QCard>
+            <QCardSection>
+              <h4>🔑 Create Admin Passkey</h4>
+              <p>Set up a passkey for secure admin access. This will be used for future sign-ins.</p>
+              
+              <div class="q-mt-md">
+                <QBtn
+                  color="primary"
+                  :loading="isRegisteringPasskey"
+                  label="Create Admin Passkey"
+                  icon="fingerprint"
+                  @click="registerPasskey"
+                />
+              </div>
+            </QCardSection>
+          </QCard>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Access Required (shown when not authenticated and not on registration page) -->
+    <div v-else-if="!isAdmin" class="q-pa-lg">
       <QCard>
         <QCardSection>
           <QIcon name="lock" size="64px" color="grey-6" />
@@ -28,7 +114,7 @@
     </div>
 
     <!-- Full Admin Interface (shown when authenticated) -->
-    <div v-else>
+    <div v-else-if="isAdmin">
     <div class="admin-header">
       <h2>🔧 MAIA Administration Panel</h2>
       
@@ -77,108 +163,7 @@
       </div>
     </div>
 
-    <!-- Admin Registration Section -->
-    <div v-if="!isAdmin && isRegistrationRoute" class="admin-registration q-mb-lg">
-      <QCard>
-        <QCardSection>
-          <h4>🔐 Admin Registration</h4>
-          <p>To access admin privileges, you must register with the reserved admin username and secret.</p>
-          
-          <!-- Error Messages -->
-          <div v-if="errorMessage" class="error-message q-mb-md">
-            <QBanner class="bg-negative text-white">
-              {{ errorMessage }}
-            </QBanner>
-          </div>
-          
-          <QForm @submit="registerAdmin" class="q-gutter-md">
-            <QInput
-              v-model="adminForm.username"
-              label="Admin Username"
-              outlined
-              dense
-              :rules="[val => !!val || 'Username is required']"
-              placeholder="Enter reserved admin username"
-            />
-            
-            <QInput
-              v-model="adminForm.adminSecret"
-              label="Admin Secret"
-              type="password"
-              outlined
-              dense
-              :rules="[val => !!val || 'Admin secret is required']"
-              placeholder="Enter admin secret"
-            />
-            
-            <div class="q-mt-md">
-              <QBtn
-                type="submit"
-                color="primary"
-                :loading="isRegistering"
-                label="Register as Admin"
-                icon="admin_panel_settings"
-              />
-            </div>
-          </QForm>
-          
-          <div class="q-mt-md">
-            <p class="text-caption">
-              <strong>Note:</strong> After successful registration, you can sign in with your passkey to access the admin panel.
-            </p>
-            <div class="q-mt-md">
-              <QBtn
-                flat
-                color="secondary"
-                label="Sign In Instead"
-                icon="login"
-                @click="goToAdminSignIn"
-                class="q-mr-md"
-              />
-              <QBtn
-                flat
-                color="secondary"
-                label="Return to Main App"
-                icon="home"
-                @click="goToMainApp"
-              />
-            </div>
-          </div>
-        </QCardSection>
-      </QCard>
-      
-      <!-- Passkey Registration Section -->
-      <div v-if="showPasskeyRegistration" class="passkey-registration q-mt-lg">
-        <QCard>
-          <QCardSection>
-            <h4>🔑 Create Admin Passkey</h4>
-            <p>Set up a passkey for secure admin access. This will be used for future sign-ins.</p>
-            
-            <div class="q-mt-md">
-              <QBtn
-                color="primary"
-                :loading="isRegisteringPasskey"
-                label="Create Admin Passkey"
-                icon="fingerprint"
-                @click="registerPasskey"
-              />
-            </div>
-            
-            <div class="q-mt-md">
-              <QBtn
-                flat
-                color="secondary"
-                label="Skip Passkey (Less Secure)"
-                @click="skipPasskeyRegistration"
-              />
-            </div>
-          </QCardSection>
-        </QCard>
-      </div>
-    </div>
 
-    <!-- Main Admin Panel Content -->
-    <div v-else-if="isAdmin" class="admin-content">
       <!-- Status Cards - Compact -->
       <div class="row q-gutter-sm q-mb-lg">
         <!-- Private AI Users Card -->
@@ -706,6 +691,15 @@ const showPasskeyRegistration = ref(false)
 const errorMessage = ref('')
 const activeTab = ref('users')
 
+// Check if we're on the registration page
+const isRegistrationPage = ref(window.location.pathname === '/admin2/register')
+
+// Admin registration form data
+const adminForm = ref({
+  username: '',
+  adminSecret: ''
+})
+
 // Polling state
 const pollingInterval = ref(null)
 const isPollingConnected = ref(false)
@@ -717,11 +711,6 @@ const consecutiveServerErrors = ref(0)
 const maxConsecutiveServerErrors = 2
 
 
-// Admin form
-const adminForm = ref({
-  username: '',
-  adminSecret: ''
-})
 
 // Stats - Real data from caches
 const userStats = ref({
@@ -878,12 +867,61 @@ const goToOriginalAdmin = () => {
 
 // Removed old admin route references - now using admin2
 
-const registerAdmin = () => {
-  $q.notify({
-    type: 'info',
-    message: 'Admin registration (AdminPanel2 - Static)',
-    position: 'top'
-  })
+const registerAdmin = async () => {
+  try {
+    isRegistering.value = true
+    errorMessage.value = ''
+    
+    const response = await fetch('/api/admin-management/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        username: adminForm.value.username,
+        adminSecret: adminForm.value.adminSecret
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok) {
+      if (result.canProceedToPasskey) {
+        // Registration successful, show passkey registration
+        showPasskeyRegistration.value = true
+        $q.notify({
+          type: 'positive',
+          message: result.message,
+          position: 'top'
+        })
+      } else {
+        // Registration completed
+        $q.notify({
+          type: 'positive',
+          message: result.message,
+          position: 'top'
+        })
+      }
+    } else {
+      errorMessage.value = result.error || 'Registration failed'
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Registration failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Admin registration failed:', error)
+    errorMessage.value = 'Registration failed. Please try again.'
+    $q.notify({
+      type: 'negative',
+      message: 'Registration failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isRegistering.value = false
+  }
 }
 
 const registerPasskey = () => {
