@@ -120,12 +120,15 @@ const logSessionEvent = async (event, session, reason = null) => {
     };
     
     // TODO: Create maia_session_logs database if it doesn't exist
-    await couchDBClient.insertDocument('maia_session_logs', logDoc);
+    await couchDBClient.saveDocument('maia_session_logs', logDoc);
     console.log(`[SESSION LOG] ${event} - ${session.userType} user ${session.userId || session.username}`);
   } catch (error) {
     console.error(`[SESSION LOG] Failed to log ${event} event:`, error.message);
   }
 };
+
+// Export session management functions for use in route files
+export { activeSessions, createSession, removeSession, logSessionEvent };
 
 const initializeDatabase = async () => {
   try {
@@ -1323,96 +1326,6 @@ app.get('/api/admin/events', (req, res) => {
   });
 });
 
-// Session management API endpoints
-app.get('/api/admin/sessions', (req, res) => {
-  try {
-    res.json({
-      sessions: activeSessions,
-      total: activeSessions.length,
-      byType: {
-        private: activeSessions.filter(s => s.userType === 'private').length,
-        admin: activeSessions.filter(s => s.userType === 'admin').length,
-        deepLink: activeSessions.filter(s => s.userType === 'deep_link').length,
-        public: activeSessions.filter(s => s.userType === 'public').length
-      }
-    });
-  } catch (error) {
-    console.error('Failed to get sessions:', error);
-    res.status(500).json({ error: 'Failed to get sessions' });
-  }
-});
-
-app.delete('/api/admin/sessions/:sessionId', (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const session = activeSessions.find(s => s.sessionId === sessionId);
-    
-    if (session) {
-      removeSession(sessionId);
-      res.json({ success: true, message: 'Session destroyed' });
-    } else {
-      res.status(404).json({ error: 'Session not found' });
-    }
-  } catch (error) {
-    console.error('Failed to destroy session:', error);
-    res.status(500).json({ error: 'Failed to destroy session' });
-  }
-});
-
-app.get('/api/admin/session-logs', async (req, res) => {
-  try {
-    // TODO: Implement session logs retrieval from maia_session_logs database
-    res.json({ 
-      logs: [], 
-      total: 0,
-      message: 'Session logs endpoint ready - database integration pending'
-    });
-  } catch (error) {
-    console.error('Failed to get session logs:', error);
-    res.status(500).json({ error: 'Failed to get session logs' });
-  }
-});
-
-// Test endpoint to create sample sessions (for development)
-app.post('/api/admin/sessions/test', (req, res) => {
-  try {
-    const testSessions = [
-      {
-        userId: 'ag30',
-        username: 'ag30',
-        userEmail: 'ag30@example.com'
-      },
-      {
-        userId: 'admin',
-        username: 'admin',
-        userEmail: 'admin@example.com'
-      },
-      {
-        userId: 'deep_link_12345',
-        username: 'John Doe',
-        userEmail: 'john@example.com',
-        shareId: 'chat-12345'
-      }
-    ];
-    
-    testSessions.forEach((userData, index) => {
-      let userType = 'private';
-      if (userData.userId === 'admin') userType = 'admin';
-      if (userData.userId.startsWith('deep_link_')) userType = 'deep_link';
-      
-      createSession(userType, userData, req);
-    });
-    
-    res.json({ 
-      success: true, 
-      message: `Created ${testSessions.length} test sessions`,
-      totalSessions: activeSessions.length
-    });
-  } catch (error) {
-    console.error('Failed to create test sessions:', error);
-    res.status(500).json({ error: 'Failed to create test sessions' });
-  }
-});
 
 // Helper function to send admin notifications
 function sendAdminNotification(type, data) {
@@ -7420,7 +7333,6 @@ async function ensureAllUserBuckets() {
     }
     
     // Ensure bucket folders for all users
-    console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
     await ensureAllUserBuckets();
     console.log('✅ [STARTUP] Bucket folder checks completed');
     
