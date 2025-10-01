@@ -114,9 +114,9 @@
     </div>
 
     <!-- Full Admin Interface (shown when authenticated) -->
-    <div v-else-if="isAdmin">
-    <div class="admin-header">
-      <h2>🔧 MAIA Administration Panel</h2>
+    <div v-else>
+      <div class="admin-header">
+        <h2>🔧 MAIA Administration Panel</h2>
       
       <div class="q-mt-md">
         <!-- Polling Connection Status -->
@@ -640,13 +640,13 @@
     </div>
 
 
-    <!-- Group Management Modal for Agent Chats -->
-    <GroupManagementModal
-      v-model="showGroupModal"
-      :currentUser="selectedAgentForChats?.owner || 'Public User'"
-      :onGroupDeleted="handleGroupDeleted"
-      @chatLoaded="handleChatLoaded"
-    />
+      <!-- Group Management Modal for Agent Chats -->
+      <GroupManagementModal
+        v-model="showGroupModal"
+        :currentUser="selectedAgentForChats?.owner || 'Public User'"
+        :onGroupDeleted="handleGroupDeleted"
+        @chatLoaded="handleChatLoaded"
+      />
     </div> <!-- End of v-else div for authenticated admin interface -->
   </div>
 </template>
@@ -1872,6 +1872,12 @@ const goToAdminRegister = () => {
 
 
 onMounted(async () => {
+  // Skip authentication check if on registration page
+  if (isRegistrationPage.value) {
+    console.log('📝 [AdminPanel2] On registration page - skipping authentication check')
+    return
+  }
+  
   // Check admin authentication first
   await checkAdminAuth();
   
