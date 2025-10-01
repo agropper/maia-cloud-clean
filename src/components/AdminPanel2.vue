@@ -86,7 +86,54 @@
       </div>
     </div>
 
-    <!-- Admin Access Required (shown when not authenticated and not on registration page) -->
+    <!-- Admin Sign-In Form (shown when on sign-in page) -->
+    <div v-if="isSignInPage" class="q-pa-lg">
+      <div class="admin-signin">
+        <QCard>
+          <QCardSection>
+            <h4>🔐 Admin Sign-In</h4>
+            <p>Sign in with your admin passkey to access the administration panel.</p>
+            
+            <!-- Error Messages -->
+            <div v-if="errorMessage" class="error-message q-mb-md">
+              <QBanner class="bg-negative text-white">
+                {{ errorMessage }}
+              </QBanner>
+            </div>
+            
+            <div class="q-mt-lg">
+              <QBtn
+                color="primary"
+                size="lg"
+                icon="fingerprint"
+                label="Sign In with Passkey"
+                @click="adminSignInWithPasskey"
+                :loading="isSigningIn"
+                class="full-width"
+              />
+            </div>
+            
+            <div class="q-mt-md text-center">
+              <QBtn
+                flat
+                color="secondary"
+                label="Register as Admin Instead"
+                @click="goToAdminRegister"
+                class="q-mr-md"
+              />
+              <QBtn
+                flat
+                color="secondary"
+                label="Return to Main App"
+                @click="goToMainApp"
+              />
+            </div>
+          </QCardSection>
+        </QCard>
+      </div>
+    </div>
+
+    <!-- Admin Access Required (shown when not authenticated and not on registration or sign-in page) -->
     <div v-else-if="!isAdmin" class="q-pa-lg">
       <QCard>
         <QCardSection>
@@ -696,12 +743,14 @@ const $q = useQuasar()
 const isAdmin = ref(false)
 const isRegistering = ref(false)
 const isRegisteringPasskey = ref(false)
+const isSigningIn = ref(false)
 const showPasskeyRegistration = ref(false)
 const errorMessage = ref('')
 const activeTab = ref('users')
 
-// Check if we're on the registration page
+// Check if we're on the registration page or sign-in page
 const isRegistrationPage = ref(window.location.pathname === '/admin2/register')
+const isSignInPage = ref(window.location.pathname === '/admin2/signin')
 
 // Admin registration form data
 const adminForm = ref({
@@ -864,10 +913,6 @@ const resetWelcomeModal = () => {
     message: 'Welcome modal reset (AdminPanel2 - Static)',
     position: 'top'
   })
-}
-
-const goToMainApp = () => {
-  window.location.href = '/'
 }
 
 const goToOriginalAdmin = () => {
@@ -1980,19 +2025,95 @@ const checkAdminAuth = async () => {
 
 // Navigation functions
 const goToAdminSignIn = () => {
-  // Redirect to the main app with admin sign-in flow
-  window.location.href = '/';
+  // Redirect to dedicated admin sign-in page
+  window.location.href = '/admin2/signin';
 };
 
 const goToAdminRegister = () => {
   window.location.href = '/admin2/register';
 };
 
+const goToMainApp = () => {
+  window.location.href = '/';
+};
+
+const adminSignInWithPasskey = async () => {
+  isSigningIn.value = true
+  errorMessage.value = ''
+  
+  try {
+    // Step 1: Generate authentication options for admin user
+    const optionsResponse = await fetch('/api/passkey/authenticate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin'
+      })
+    })
+    
+    if (!optionsResponse.ok) {
+      throw new Error('Failed to generate authentication options')
+    }
+    
+    const options = await optionsResponse.json()
+    
+    // Step 2: Authenticate using SimpleWebAuthn
+    const { startAuthentication } = await import('@simplewebauthn/browser')
+    const credential = await startAuthentication({ optionsJSON: options })
+    
+    // Step 3: Verify authentication
+    const verifyResponse = await fetch('/api/passkey/authenticate-verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        response: credential
+      })
+    })
+    
+    const result = await verifyResponse.json()
+    
+    if (result.success) {
+      $q.notify({
+        type: 'positive',
+        message: 'Successfully signed in as admin!',
+        position: 'top'
+      })
+      
+      // Redirect to admin panel after successful sign-in
+      setTimeout(() => {
+        window.location.href = '/admin2'
+      }, 1500)
+    } else {
+      errorMessage.value = result.error || 'Sign-in failed'
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Sign-in failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Admin sign-in failed:', error)
+    errorMessage.value = 'Sign-in failed. Please try again.'
+    $q.notify({
+      type: 'negative',
+      message: 'Sign-in failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isSigningIn.value = false
+  }
+}
+
 
 onMounted(async () => {
-  // Skip authentication check if on registration page
-  if (isRegistrationPage.value) {
-    console.log('📝 [AdminPanel2] On registration page - skipping authentication check')
+  // Skip authentication check if on registration or sign-in page
+  if (isRegistrationPage.value || isSignInPage.value) {
+    console.log('📝 [AdminPanel2] On registration/sign-in page - skipping authentication check')
     return
   }
   
