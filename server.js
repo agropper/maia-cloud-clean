@@ -7256,25 +7256,14 @@ async function ensureAllUserBuckets() {
         totalSize: 0
       };
       
-      try {
-        const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
-        const bucketResponse = await fetch(`${baseUrl}/api/bucket/user-status/${user._id}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (bucketResponse.ok) {
-          const bucketData = await bucketResponse.json();
-          bucketStatus = {
-            hasFolder: bucketData.hasFolder || false,
-            fileCount: bucketData.fileCount || 0,
-            totalSize: bucketData.totalSize || 0
-          };
-        }
-      } catch (bucketError) {
-        // Bucket check failed, use default values
-        console.log(`⚠️ [STARTUP] Failed to check bucket status for user ${user._id}:`, bucketError.message);
-      }
+      // Skip bucket status check during startup to avoid ECONNREFUSED errors
+      // Bucket status will be checked on-demand when admin panel loads
+      // Use default values for now
+      bucketStatus = {
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0
+      };
       
       // Determine workflow stage using the same logic as admin-management-routes.js
       let workflowStage = 'unknown';
