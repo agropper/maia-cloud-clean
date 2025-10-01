@@ -1672,7 +1672,20 @@ const pollForUpdates = async () => {
 
 const createAdminSession = async () => {
   try {
-    // Create an admin session for polling by calling the session creation endpoint
+    // First, try to find an existing admin session
+    const sessionsResponse = await fetch('/api/admin/sessions')
+    if (sessionsResponse.ok) {
+      const sessionsData = await sessionsResponse.json()
+      const existingAdminSession = sessionsData.sessions.find(s => s.userType === 'admin')
+      
+      if (existingAdminSession) {
+        currentSessionId.value = existingAdminSession.sessionId
+        console.log(`[POLLING] Using existing admin session: ${currentSessionId.value}`)
+        return
+      }
+    }
+    
+    // No existing admin session found, create a new one
     const response = await fetch('/api/admin/sessions', {
       method: 'POST',
       headers: {
@@ -1691,7 +1704,7 @@ const createAdminSession = async () => {
     if (response.ok) {
       const data = await response.json()
       currentSessionId.value = data.sessionId
-      console.log(`[POLLING] Created admin session: ${currentSessionId.value}`)
+      console.log(`[POLLING] Created new admin session: ${currentSessionId.value}`)
     } else {
       console.error('[POLLING] Failed to create admin session:', response.status)
     }
