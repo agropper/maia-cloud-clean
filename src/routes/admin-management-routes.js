@@ -517,6 +517,17 @@ export const setCouchDBClient = (client) => {
 // Admin-specific authentication middleware (separate from regular user auth)
 export const requireAdminAuth = async (req, res, next) => {
   try {
+    // Development bypass: Skip admin authentication on localhost:3001
+    const isLocalhost = req.hostname === 'localhost' && req.get('host')?.includes('3001');
+    if (isLocalhost) {
+      console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001');
+      // Set mock admin user for development
+      req.adminUser = { _id: 'admin', isAdmin: true, displayName: 'Admin (Dev)' };
+      req.adminAuthData = { userId: 'admin', authenticatedAt: new Date().toISOString() };
+      next();
+      return;
+    }
+
     // Check admin-specific cookie instead of regular session
     const adminCookie = req.cookies.maia_admin_auth;
     

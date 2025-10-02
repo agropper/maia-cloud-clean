@@ -257,7 +257,10 @@ const getOrCreatePublicUserSession = (req) => {
 
 const trackPublicUserActivity = (req) => {
   const session = getOrCreatePublicUserSession(req);
-  console.log(`[PAGE LOAD] Public User activity tracked - ${req.path}`);
+  // Only log on initial page load, not on every polling request
+  if (req.path === '/') {
+    console.log(`[PAGE LOAD] Public User polling started`);
+  }
   return session;
 };
 

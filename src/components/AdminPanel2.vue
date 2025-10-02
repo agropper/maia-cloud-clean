@@ -2053,6 +2053,13 @@ const disconnectAdminEvents = () => {
 // Admin authentication check
 const checkAdminAuth = async () => {
   try {
+    // Development bypass: Skip admin authentication on localhost
+    if (window.location.hostname === 'localhost' && window.location.port === '3001') {
+      console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001');
+      isAdmin.value = true;
+      return;
+    }
+
     console.log('🔍 [AdminPanel2] Checking admin authentication...')
     // Try to access an admin-protected endpoint
     const response = await fetch('/api/admin-management/health', {
@@ -2103,10 +2110,18 @@ const goToMainApp = () => {
 };
 
 const adminSignInWithPasskey = async () => {
+  // Prevent double authentication
+  if (isSigningIn.value) {
+    console.log('🔒 [AdminPanel2] Authentication already in progress, skipping');
+    return;
+  }
+  
   isSigningIn.value = true
   errorMessage.value = ''
   
   try {
+    console.log('🔐 [AdminPanel2] Starting admin authentication...');
+    
     // Step 1: Generate authentication options for admin user
     const optionsResponse = await fetch('/api/passkey/authenticate', {
       method: 'POST',
@@ -2123,10 +2138,12 @@ const adminSignInWithPasskey = async () => {
     }
     
     const options = await optionsResponse.json()
+    console.log('🔐 [AdminPanel2] Authentication options received, starting WebAuthn...');
     
     // Step 2: Authenticate using SimpleWebAuthn
     const { startAuthentication } = await import('@simplewebauthn/browser')
     const credential = await startAuthentication({ optionsJSON: options })
+    console.log('🔐 [AdminPanel2] WebAuthn authentication completed');
     
     // Step 3: Verify authentication using admin-specific endpoint
     const verifyResponse = await fetch('/api/passkey/admin-authenticate-verify', {
