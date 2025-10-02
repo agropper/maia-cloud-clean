@@ -1110,8 +1110,8 @@ const skipPasskeyRegistration = () => {
 
 const adminSignOut = async () => {
   try {
-    // Call the logout endpoint
-    const response = await fetch('/api/passkey/logout', {
+    // Call the admin-specific logout endpoint
+    const response = await fetch('/api/passkey/admin-logout', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1124,14 +1124,14 @@ const adminSignOut = async () => {
     if (result.success) {
       $q.notify({
         type: 'positive',
-        message: 'Successfully signed out',
+        message: 'Successfully signed out of admin panel!',
         position: 'top'
       })
       
       // Clear local admin state
       isAdmin.value = false
       
-      // Redirect to main app after a short delay
+      // Redirect to main app after a short delay (admin can still access as Public User)
       setTimeout(() => {
         window.location.href = '/'
       }, 1500)
@@ -2128,8 +2128,8 @@ const adminSignInWithPasskey = async () => {
     const { startAuthentication } = await import('@simplewebauthn/browser')
     const credential = await startAuthentication({ optionsJSON: options })
     
-    // Step 3: Verify authentication
-    const verifyResponse = await fetch('/api/passkey/authenticate-verify', {
+    // Step 3: Verify authentication using admin-specific endpoint
+    const verifyResponse = await fetch('/api/passkey/admin-authenticate-verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

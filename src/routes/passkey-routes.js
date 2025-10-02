@@ -718,6 +718,17 @@ router.get("/auth-status", async (req, res) => {
     // Note: Removed session fallback - we now use cookie-based auth only
     
     if (userId) {
+      // Check if this is an admin user - they should not be authenticated as regular users on main app
+      if (userId === 'admin') {
+        // Admin users should access main app as Public User, not as authenticated admin
+        res.json({ 
+          authenticated: false, 
+          message: "Admin users access main app as Public User",
+          userType: "admin_as_public"
+        });
+        return;
+      }
+      
       // Check if this is a deep link user - they should not be authenticated on main app
       if (userId.startsWith('deep_link_')) {
         // Store deepLinkId before destroying session
@@ -832,6 +843,113 @@ router.post("/logout", async (req, res) => {
   } catch (error) {
     console.error("❌ Error during logout:", error);
     res.status(500).json({ error: "Failed to logout" });
+  }
+});
+
+// Admin-specific authentication endpoint (separate from regular user auth)
+router.post("/admin-authenticate-verify", async (req, res) => {
+  // Determine the base URL dynamically from the request
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+  const baseUrl = `${protocol}://${host}`;
+
+  try {
+    const { userId, response } = req.body;
+
+    if (!userId || !response) {
+      return res
+        .status(400)
+        .json({ error: "User ID and response are required" });
+    }
+
+    // Verify this is an admin user
+    const userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!userDoc.isAdmin) {
+      return res.status(403).json({ error: "Admin privileges required" });
+    }
+
+    // Verify the authentication response
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge: userDoc.challenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      credential: {
+        publicKey: isoBase64URL.toBuffer(userDoc.credentialPublicKey),
+        id: userDoc.credentialID,
+        counter: userDoc.counter || 0,
+      },
+    });
+
+    if (verification.verified) {
+      // Update counter
+      const updatedUser = {
+        ...userDoc,
+        counter: verification.authenticationInfo.newCounter,
+        challenge: undefined, // Remove challenge
+        updatedAt: new Date().toISOString(),
+      };
+
+      await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
+
+      console.log(`✅ Admin session created for user: ${updatedUser._id}`);
+      
+      // Set admin-specific authentication cookie (NOT regular session)
+      const adminAuthData = {
+        userId: updatedUser._id,
+        displayName: updatedUser.displayName || updatedUser._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      
+      res.cookie('maia_admin_auth', JSON.stringify(adminAuthData), {
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        path: '/admin2' // Admin cookie only valid on admin routes
+      });
+
+      res.json({
+        success: true,
+        message: "Admin authentication successful",
+        user: {
+          userId: updatedUser._id,
+          displayName: updatedUser.displayName || updatedUser._id,
+          isAdmin: true,
+        },
+      });
+    } else {
+      console.error("❌ Admin authentication verification failed for user:", userId);
+      res.status(400).json({ error: "Authentication verification failed" });
+    }
+  } catch (error) {
+    console.error("❌ Admin authentication error:", error);
+    res.status(500).json({ error: "Failed to verify admin authentication" });
+  }
+});
+
+// Admin-specific logout endpoint
+router.post("/admin-logout", async (req, res) => {
+  try {
+    console.log(`🚨 ADMIN LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
+    
+    // Clear only the admin cookie (not regular user session)
+    res.clearCookie('maia_admin_auth');
+    console.log(`🍪 [ADMIN LOGOUT] Cleared admin auth cookie`);
+    
+    res.json({ 
+      success: true, 
+      message: "Admin logged out successfully",
+      consoleMessage: `🔍 Admin Logout: Admin auth cookie cleared | Admin panel access revoked`
+    });
+  } catch (error) {
+    console.error("❌ Error during admin logout:", error);
+    res.status(500).json({ error: "Failed to logout admin" });
   }
 });
 

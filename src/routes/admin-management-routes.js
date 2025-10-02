@@ -514,21 +514,53 @@ export const setCouchDBClient = (client) => {
   loadUserActivityFromDatabase();
 };
 
-// Admin authentication middleware
+// Admin-specific authentication middleware (separate from regular user auth)
 export const requireAdminAuth = async (req, res, next) => {
   try {
-    const session = req.session;
-    if (!session || !session.userId) {
+    // Check admin-specific cookie instead of regular session
+    const adminCookie = req.cookies.maia_admin_auth;
+    
+    if (!adminCookie) {
       return res.status(401).json({ 
-        error: 'Authentication required',
+        error: 'Admin authentication required',
         requiresAdminAuth: true
       });
     }
 
-    // Check if user is admin
+    let adminAuthData;
     try {
-      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', session.userId);
+      adminAuthData = JSON.parse(adminCookie);
+    } catch (parseError) {
+      return res.status(401).json({ 
+        error: 'Invalid admin authentication cookie',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Validate admin cookie data
+    if (!adminAuthData.userId || !adminAuthData.authenticatedAt || !adminAuthData.expiresAt) {
+      return res.status(401).json({ 
+        error: 'Invalid admin authentication data',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Check if admin cookie is still valid (not expired)
+    const now = new Date();
+    const expiresAt = new Date(adminAuthData.expiresAt);
+    if (now >= expiresAt) {
+      res.clearCookie('maia_admin_auth');
+      return res.status(401).json({ 
+        error: 'Admin authentication expired',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Verify admin user exists and is actually an admin
+    try {
+      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', adminAuthData.userId);
       if (!userDoc || !userDoc.isAdmin) {
+        res.clearCookie('maia_admin_auth');
         return res.status(403).json({ 
           error: 'Admin privileges required',
           requiresAdminAuth: true
@@ -536,6 +568,7 @@ export const requireAdminAuth = async (req, res, next) => {
       }
 
       req.adminUser = userDoc;
+      req.adminAuthData = adminAuthData;
       next();
     } catch (dbError) {
       console.error('❌ Database error during admin auth:', dbError);
