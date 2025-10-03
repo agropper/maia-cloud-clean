@@ -884,10 +884,30 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         };
     }));
     
+    // Get sorting parameters from query
+    const sortBy = req.query.sortBy || 'createdAt';
+    const descending = req.query.descending === 'true';
+    
     const users = processedUsers
       .sort((a, b) => {
-        // Sort by creation date (newest first)
-        return new Date(b.createdAt) - new Date(a.createdAt);
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        
+        // Handle date sorting
+        if (sortBy === 'createdAt') {
+          aVal = new Date(aVal);
+          bVal = new Date(bVal);
+        }
+        
+        // Handle string sorting
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        
+        if (aVal < bVal) return descending ? 1 : -1;
+        if (aVal > bVal) return descending ? -1 : 1;
+        return 0;
       });
     
     // Cache the processed users data

@@ -330,6 +330,7 @@
               row-key="userId"
               :loading="isLoadingUsers"
               :pagination="userPagination"
+              binary-state-sort
               @request="onUserRequest"
               @row-click="onUserRowClick"
               class="admin-table"
@@ -1155,14 +1156,22 @@ const adminSignOut = async () => {
 // Refresh methods removed - will handle stale data properly
 
 // Table request handlers
-const onUserRequest = (props: any) => {
+const onUserRequest = async (props: any) => {
   const { page, rowsPerPage, sortBy, descending } = props.pagination
+  
+  // Check if sorting changed before updating
+  const sortingChanged = sortBy !== userPagination.value.sortBy || descending !== userPagination.value.descending
   
   // Update pagination
   userPagination.value.page = page
   userPagination.value.rowsPerPage = rowsPerPage
   userPagination.value.sortBy = sortBy
   userPagination.value.descending = descending
+  
+  // Reload data if sorting changed
+  if (sortingChanged) {
+    await loadUsers()
+  }
 }
 
 const onUserRowClick = (evt: any, row: any) => {
@@ -1659,9 +1668,10 @@ const loadUsers = async () => {
   try {
     isLoadingUsers.value = true
     
-    // Add cache-busting parameter to ensure fresh data
+    // Add cache-busting and sorting parameters
     const cacheBuster = `?t=${Date.now()}`
-    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}`)
+    const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
+    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}`)
     users.value = data.users || []
     
     // Update stats
