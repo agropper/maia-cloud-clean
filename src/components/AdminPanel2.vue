@@ -1654,7 +1654,7 @@ const loadUsers = async () => {
     isLoadingUsers.value = true
     
     // Add cache-busting parameter to ensure fresh data
-    const cacheBuster = `?t=${Date.now()}`
+    const cacheBuster = `?t=${Date.now()}&forceRefresh=true`
     const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}`)
     users.value = data.users || []
     
