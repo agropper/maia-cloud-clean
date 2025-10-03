@@ -792,16 +792,11 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const forceRefresh = req.query.forceRefresh === 'true';
     
     if (cachedUsers && !forceRefresh) {
-      console.log(`🔍 [DEBUG] Using cached users (${cachedUsers.length} users), add ?forceRefresh=true to bypass cache`);
       return res.json({
         users: cachedUsers,
         count: cachedUsers.length,
         cached: true
       });
-    }
-    
-    if (forceRefresh) {
-      console.log(`🔍 [DEBUG] Force refresh requested - bypassing cache`);
     }
     
     
@@ -891,14 +886,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     const users = processedUsers
       .sort((a, b) => {
-        // Sort "awaiting_approval" to the top
-        if (a.workflowStage === 'awaiting_approval' && b.workflowStage !== 'awaiting_approval') {
-          return -1;
-        }
-        if (b.workflowStage === 'awaiting_approval' && a.workflowStage !== 'awaiting_approval') {
-          return 1;
-        }
-        // Then sort by creation date (newest first)
+        // Sort by creation date (newest first)
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     
