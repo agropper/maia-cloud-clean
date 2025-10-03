@@ -406,6 +406,23 @@ router.post("/register-verify", async (req, res) => {
 
       console.log("✅ Passkey registration successful for user:", userId);
 
+      // Send real-time notification to admin panel about new user registration
+      try {
+        const { addUpdateToAllAdmins } = await import('../../server.js');
+        
+        const updateData = {
+          userId: updatedUser._id,
+          displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
+          message: `New user ${updatedUser.displayName || updatedUser._id} registered with passkey`
+        };
+        
+        addUpdateToAllAdmins('user_registered', updateData);
+        console.log(`📡 [POLLING] [*] Added user registration notification to admin sessions`);
+      } catch (pollingError) {
+        console.error(`❌ [POLLING] [*] Error adding user registration notification:`, pollingError.message);
+      }
+
       res.json({
         success: true,
         message: "Passkey registration successful",

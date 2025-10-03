@@ -1842,7 +1842,7 @@ const startPolling = async () => {
   
   // Set up polling interval (5 seconds for admin)
   pollingInterval.value = setInterval(async () => {
-    console.log('🔄 [POLLING] Polling interval triggered')
+    // Silent polling - no console spam
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true
@@ -1871,7 +1871,7 @@ const pollForUpdates = async () => {
       url.searchParams.set('lastPoll', lastPollTimestamp.value)
     }
     
-    console.log('🔄 [POLLING] Making poll request to:', url.toString())
+    // Silent polling - no console spam
     const response = await fetch(url)
     if (!response.ok) {
       if (response.status === 410) {
@@ -1992,6 +1992,10 @@ const handlePollingUpdate = (update) => {
         handleKBIndexingCompleted(update.data)
         break
         
+      case 'user_registered':
+        handleUserRegistered(update.data)
+        break
+        
       case 'test_update':
         handleTestUpdate(update.data)
         break
@@ -2039,6 +2043,25 @@ const handleKBIndexingCompleted = (data) => {
   $q.notify({
     type: 'positive',
     message: `📚 ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleUserRegistered = (data) => {
+  // Refresh users list to show the new user
+  loadUsers()
+  
+  // Update stats
+  userStats.value.totalUsers = users.value.length
+  userStats.value.awaitingApproval = users.value.filter(u => 
+    u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
+  ).length
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `👤 ${data.message}`,
     timeout: 10000,
     position: 'top'
   })
