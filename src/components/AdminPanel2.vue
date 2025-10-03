@@ -1819,11 +1819,8 @@ const selectModel = async (model) => {
 
 // Polling Connection Management
 const startPolling = async () => {
-  console.log('🔄 [POLLING] startPolling called')
-  
   // Get or create admin session
   if (!currentSessionId.value) {
-    console.log('🔄 [POLLING] No current session, creating admin session...')
     await createAdminSession()
   }
   
@@ -1835,8 +1832,6 @@ const startPolling = async () => {
   // Clear any existing polling
   stopPolling()
   
-  console.log(`[POLLING] Starting polling for session ${currentSessionId.value}`)
-  
   // Start immediate poll
   await pollForUpdates()
   
@@ -1846,8 +1841,6 @@ const startPolling = async () => {
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true
-  
-  console.log('✅ [POLLING] Polling setup complete')
 }
 
 const stopPolling = () => {
@@ -1860,7 +1853,6 @@ const stopPolling = () => {
 
 const pollForUpdates = async () => {
   if (!currentSessionId.value) {
-    console.log('🔄 [POLLING] No session ID, skipping poll')
     return
   }
   
@@ -1871,7 +1863,6 @@ const pollForUpdates = async () => {
       url.searchParams.set('lastPoll', lastPollTimestamp.value)
     }
     
-    // Silent polling - no console spam
     const response = await fetch(url)
     if (!response.ok) {
       if (response.status === 410) {
@@ -1899,7 +1890,6 @@ const pollForUpdates = async () => {
     
     // Process updates
     if (data.updates && data.updates.length > 0) {
-      console.log(`[POLLING] Received ${data.updates.length} updates`)
       data.updates.forEach(update => {
         handlePollingUpdate(update)
       })
@@ -1981,8 +1971,6 @@ const createAdminSession = async () => {
 
 const handlePollingUpdate = (update) => {
   try {
-    console.log(`[POLLING] Processing update: ${update.type}`)
-    
     switch (update.type) {
       case 'agent_deployment_completed':
         handleAgentDeploymentCompleted(update.data)
@@ -2001,7 +1989,6 @@ const handlePollingUpdate = (update) => {
         break
         
       default:
-        console.log(`[POLLING] Unknown update type: ${update.type}`)
         break
     }
   } catch (error) {
@@ -2268,7 +2255,6 @@ onMounted(async () => {
     }
     
     // Start polling for updates after data is loaded
-    console.log('🚀 [AdminPanel2] Starting polling after admin authentication...')
     startPolling()
   }
 })
