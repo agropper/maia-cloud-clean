@@ -791,10 +791,47 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Add cache-busting parameter to force fresh data when needed
     const forceRefresh = req.query.forceRefresh === 'true';
     
+    // Get sorting and pagination parameters from query
+    const sortBy = req.query.sortBy || 'createdAt';
+    const descending = req.query.descending === 'true';
+    const page = parseInt(req.query.page) || 1;
+    const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
+    
     if (cachedUsers && !forceRefresh) {
+      // Apply sorting to cached data
+      const sortedUsers = cachedUsers.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        
+        // Handle date sorting
+        if (sortBy === 'createdAt') {
+          aVal = new Date(aVal);
+          bVal = new Date(bVal);
+        }
+        
+        // Handle string sorting
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        
+        if (aVal < bVal) return descending ? 1 : -1;
+        if (aVal > bVal) return descending ? -1 : 1;
+        return 0;
+      });
+      
+      // Apply pagination to sorted cached data
+      let paginatedUsers = sortedUsers;
+      if (rowsPerPage > 0) {
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+      }
+      
       return res.json({
-        users: cachedUsers,
-        count: cachedUsers.length,
+        users: paginatedUsers,
+        count: paginatedUsers.length,
+        totalCount: sortedUsers.length,
         cached: true
       });
     }
@@ -884,47 +921,44 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         };
     }));
     
-    // Get sorting and pagination parameters from query
-    const sortBy = req.query.sortBy || 'createdAt';
-    const descending = req.query.descending === 'true';
-    const page = parseInt(req.query.page) || 1;
-    const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
-    
-    const users = processedUsers
-      .sort((a, b) => {
-        let aVal = a[sortBy];
-        let bVal = b[sortBy];
-        
-        // Handle date sorting
-        if (sortBy === 'createdAt') {
-          aVal = new Date(aVal);
-          bVal = new Date(bVal);
-        }
-        
-        // Handle string sorting
-        if (typeof aVal === 'string') {
-          aVal = aVal.toLowerCase();
-          bVal = bVal.toLowerCase();
-        }
-        
-        if (aVal < bVal) return descending ? 1 : -1;
-        if (aVal > bVal) return descending ? -1 : 1;
-        return 0;
-      });
+    // Apply sorting to processed users
+    const sortedUsers = processedUsers.sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      
+      // Handle date sorting
+      if (sortBy === 'createdAt') {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+      
+      // Handle string sorting
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (aVal < bVal) return descending ? 1 : -1;
+      if (aVal > bVal) return descending ? -1 : 1;
+      return 0;
+    });
     
     // Apply pagination
-    const startIndex = (page - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
-    const paginatedUsers = users.slice(startIndex, endIndex);
+    let paginatedUsers = sortedUsers;
+    if (rowsPerPage > 0) {
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + rowsPerPage;
+      paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+    }
     
     // Cache the processed users data
-    await cacheManager.cacheUsers(users);
+    await cacheManager.cacheUsers(sortedUsers);
     
     
     res.json({ 
       users: paginatedUsers,
       count: paginatedUsers.length,
-      totalCount: users.length, // Total count for pagination
+      totalCount: sortedUsers.length, // Total count for pagination
       cached: false,
       timestamp: new Date().toISOString()
     });
