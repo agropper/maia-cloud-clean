@@ -330,12 +330,34 @@
               row-key="userId"
               :loading="isLoadingUsers"
               :pagination="userPagination"
-              :rows-per-page-options="[0, 5, 10, 25]"
+              :rows-per-page-options="[-1, 5, 10, 25]"
               binary-state-sort
               @request="onUserRequest"
               @row-click="onUserRowClick"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ users.length }} of {{ userPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="userPagination.rowsPerPage === -1 ? 'All' : userPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { userPagination.rowsPerPage = value; loadUsers(); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-workflowStage="props">
                 <QTd :props="props">
                   <QBadge
@@ -869,9 +891,9 @@ const userPagination = ref({
   sortBy: 'createdAt',
   descending: true,
   page: 1,
-  rowsPerPage: 0, // 0 means "All" - show all records
+  rowsPerPage: -1, // -1 means "All" - show all records
   rowsNumber: 0,
-  rowsPerPageOptions: [0, 5, 10, 25] // 0 = All, 5, 10, 25
+  rowsPerPageOptions: [-1, 5, 10, 25] // -1 = All, 5, 10, 25
 })
 
 const agentPagination = ref({
@@ -1669,7 +1691,7 @@ const loadUsers = async () => {
     const cacheBuster = `?t=${Date.now()}`
     const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
     
-    // Only add pagination params if rowsPerPage is not 0 (0 means "All")
+    // Only add pagination params if rowsPerPage is not -1 (-1 means "All")
     let paginationParams = ''
     if (userPagination.value.rowsPerPage > 0) {
       paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
