@@ -7210,6 +7210,20 @@ async function ensureAllUserBuckets() {
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
+    // Debug: Check fri103 during startup
+    const fri103User = allUsers.find(user => user._id === 'fri103');
+    if (fri103User) {
+      console.log(`🔍 [STARTUP DEBUG] Found fri103 in database:`, {
+        _id: fri103User._id,
+        isAdmin: fri103User.isAdmin,
+        type: fri103User.type,
+        hasCredentialID: !!fri103User.credentialID,
+        workflowStage: fri103User.workflowStage
+      });
+    } else {
+      console.log(`🔍 [STARTUP DEBUG] fri103 NOT found in database during startup`);
+    }
+    
     // Filter users (same logic as admin-management-routes.js)
     const filteredUsers = allUsers.filter(user => {
       // Exclude design documents
@@ -7230,8 +7244,21 @@ async function ensureAllUserBuckets() {
       }
       // For all other users, exclude admin users
       const isAdmin = user.isAdmin;
-      return !isAdmin;
+      const shouldInclude = !isAdmin;
+      
+      // Debug: Log filtering decision for fri103 during startup
+      if (user._id === 'fri103') {
+        console.log(`🔍 [STARTUP DEBUG] fri103 filtering decision:`, {
+          isAdmin: isAdmin,
+          shouldInclude: shouldInclude,
+          reason: isAdmin ? 'excluded (isAdmin=true)' : 'included (not admin)'
+        });
+      }
+      
+      return shouldInclude;
     });
+    
+    console.log(`🔍 [STARTUP DEBUG] User filtering results: ${allUsers.length} total users, ${filteredUsers.length} after filtering`);
     
     // Process users with full data (same logic as admin-management-routes.js)
     const processedUsers = await Promise.all(filteredUsers.map(async user => {
