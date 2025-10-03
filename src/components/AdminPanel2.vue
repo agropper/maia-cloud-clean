@@ -372,7 +372,7 @@
                         { label: '10', value: 10 },
                         { label: '25', value: 25 }
                       ]"
-                      @update:model-value="(value) => { userPagination.rowsPerPage = value; userPagination.page = 1; loadUsers(); }"
+                      @update:model-value="(value) => { userPagination.rowsPerPage = value; userPagination.page = 1; onUserRequest({ pagination: userPagination }); }"
                       dense
                       style="min-width: 60px"
                     />
@@ -1223,7 +1223,7 @@ const onUserRowClick = (evt: any, row: any) => {
 
 const changePage = (newPage: number) => {
   userPagination.value.page = newPage
-  loadUsers()
+  onUserRequest({ pagination: userPagination.value })
 }
 
 const onAgentRequest = () => {
