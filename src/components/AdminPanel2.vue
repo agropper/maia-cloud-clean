@@ -1819,8 +1819,11 @@ const selectModel = async (model) => {
 
 // Polling Connection Management
 const startPolling = async () => {
+  console.log('🔄 [POLLING] startPolling called')
+  
   // Get or create admin session
   if (!currentSessionId.value) {
+    console.log('🔄 [POLLING] No current session, creating admin session...')
     await createAdminSession()
   }
   
@@ -1839,9 +1842,12 @@ const startPolling = async () => {
   
   // Set up polling interval (5 seconds for admin)
   pollingInterval.value = setInterval(async () => {
+    console.log('🔄 [POLLING] Polling interval triggered')
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true
+  
+  console.log('✅ [POLLING] Polling setup complete')
 }
 
 const stopPolling = () => {
@@ -1853,7 +1859,10 @@ const stopPolling = () => {
 }
 
 const pollForUpdates = async () => {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) {
+    console.log('🔄 [POLLING] No session ID, skipping poll')
+    return
+  }
   
   try {
     const url = new URL('/api/admin/poll/updates', window.location.origin)
@@ -1862,6 +1871,7 @@ const pollForUpdates = async () => {
       url.searchParams.set('lastPoll', lastPollTimestamp.value)
     }
     
+    console.log('🔄 [POLLING] Making poll request to:', url.toString())
     const response = await fetch(url)
     if (!response.ok) {
       if (response.status === 410) {
@@ -2235,6 +2245,7 @@ onMounted(async () => {
     }
     
     // Start polling for updates after data is loaded
+    console.log('🚀 [AdminPanel2] Starting polling after admin authentication...')
     startPolling()
   }
 })

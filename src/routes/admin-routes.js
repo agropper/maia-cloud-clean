@@ -538,11 +538,15 @@ router.get('/poll/updates', requireAdminAuth, (req, res) => {
     
     const result = getPendingUpdates(sessionId, lastPoll);
     
-    // Find the session to get user info for better logging
     // Show polling activity with dots (only after first poll)
-    if (result.updates.length > 0 || !global.firstPollShown) {
-      process.stdout.write('.');
+    if (!global.firstPollShown) {
+      console.log('[POLLING] Admin panel polling started');
       global.firstPollShown = true;
+    }
+    
+    // Show dots for ongoing polling activity
+    if (result.updates.length > 0) {
+      process.stdout.write('.');
     }
     
     res.json(result);

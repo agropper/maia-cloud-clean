@@ -520,7 +520,11 @@ export const requireAdminAuth = async (req, res, next) => {
     // Development bypass: Skip admin authentication on localhost:3001
     const isLocalhost = req.hostname === 'localhost' && req.get('host')?.includes('3001');
     if (isLocalhost) {
-      console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001');
+      // Only log the bypass message once per session to avoid spam
+      if (!global.devBypassLogged) {
+        console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001 (development mode)');
+        global.devBypassLogged = true;
+      }
       // Set mock admin user for development
       req.adminUser = { _id: 'admin', isAdmin: true, displayName: 'Admin (Dev)' };
       req.adminAuthData = { userId: 'admin', authenticatedAt: new Date().toISOString() };
