@@ -330,6 +330,7 @@
               row-key="userId"
               :loading="isLoadingUsers"
               :pagination="userPagination"
+              :rows-per-page-options="[0, 5, 10, 25]"
               binary-state-sort
               @request="onUserRequest"
               @row-click="onUserRowClick"
@@ -868,8 +869,9 @@ const userPagination = ref({
   sortBy: 'createdAt',
   descending: true,
   page: 1,
-  rowsPerPage: 10,
-  rowsNumber: 0
+  rowsPerPage: 0, // 0 means "All" - show all records
+  rowsNumber: 0,
+  rowsPerPageOptions: [0, 5, 10, 25] // 0 = All, 5, 10, 25
 })
 
 const agentPagination = ref({
@@ -1666,7 +1668,12 @@ const loadUsers = async () => {
     // Add cache-busting and sorting/pagination parameters
     const cacheBuster = `?t=${Date.now()}`
     const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
-    const paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
+    
+    // Only add pagination params if rowsPerPage is not 0 (0 means "All")
+    let paginationParams = ''
+    if (userPagination.value.rowsPerPage > 0) {
+      paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
+    }
     
     const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}`)
     users.value = data.users || []
