@@ -372,7 +372,7 @@
                         { label: '10', value: 10 },
                         { label: '25', value: 25 }
                       ]"
-                      @update:model-value="(value) => { userPagination.rowsPerPage = value; userPagination.page = 1; onUserRequest({ pagination: userPagination }); }"
+                      @update:model-value="(value) => { console.log('🔍 [AdminPanel2] Dropdown changed to:', value); const rowsPerPage = typeof value === 'object' ? value.value : value; userPagination.rowsPerPage = rowsPerPage; userPagination.page = 1; onUserRequest({ pagination: userPagination }); }"
                       dense
                       style="min-width: 60px"
                     />
@@ -1203,6 +1203,7 @@ const adminSignOut = async () => {
 
 // Table request handlers
 const onUserRequest = async (props: any) => {
+  console.log('🔍 [AdminPanel2] onUserRequest called with:', props)
   const { page, rowsPerPage, sortBy, descending } = props.pagination
   
   // Update pagination
@@ -1210,6 +1211,8 @@ const onUserRequest = async (props: any) => {
   userPagination.value.rowsPerPage = rowsPerPage
   userPagination.value.sortBy = sortBy
   userPagination.value.descending = descending
+  
+  console.log('🔍 [AdminPanel2] Updated userPagination:', userPagination.value)
   
   // Reload data with new sorting and pagination parameters
   await loadUsers()
