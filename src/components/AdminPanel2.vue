@@ -1658,11 +1658,32 @@ const loadUsers = async () => {
     const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}`)
     users.value = data.users || []
     
+    // Debug: Check if fri103 is in the data received by admin panel
+    const fri103InData = data.users?.find(user => user.userId === 'fri103');
+    if (fri103InData) {
+      console.log(`🔍 [ADMIN PANEL DEBUG] fri103 found in received data:`, {
+        userId: fri103InData.userId,
+        displayName: fri103InData.displayName,
+        workflowStage: fri103InData.workflowStage
+      });
+    } else {
+      console.log(`🔍 [ADMIN PANEL DEBUG] fri103 NOT found in received data!`);
+      console.log(`🔍 [ADMIN PANEL DEBUG] Received users:`, data.users?.map(u => u.userId));
+    }
+    
     // Update stats
     userStats.value.totalUsers = users.value.length
     userStats.value.awaitingApproval = users.value.filter(user => 
       user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet'
     ).length
+    
+    // Debug: Check pagination settings
+    console.log(`🔍 [ADMIN PANEL DEBUG] Pagination settings:`, {
+      rowsPerPage: userPagination.value.rowsPerPage,
+      page: userPagination.value.page,
+      totalUsers: users.value.length,
+      fri103Index: users.value.findIndex(u => u.userId === 'fri103')
+    });
     
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load users:', error)

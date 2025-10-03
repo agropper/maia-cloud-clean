@@ -808,20 +808,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
-    // Debug: Check if fri103 is in the database and what its properties are
-    const fri103User = allUsers.find(user => user._id === 'fri103');
-    if (fri103User) {
-      console.log(`🔍 [DEBUG] Found fri103 in database:`, {
-        _id: fri103User._id,
-        isAdmin: fri103User.isAdmin,
-        type: fri103User.type,
-        hasCredentialID: !!fri103User.credentialID,
-        workflowStage: fri103User.workflowStage
-      });
-    } else {
-      console.log(`🔍 [DEBUG] fri103 NOT found in database`);
-    }
-    
     const filteredUsers = allUsers.filter(user => {
       // Exclude design documents
         if (user._id.startsWith('_design/')) {
@@ -841,21 +827,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         }
         // For all other users, exclude admin users
         const isAdmin = user.isAdmin;
-        const shouldInclude = !isAdmin;
-        
-        // Debug: Log filtering decision for fri103
-        if (user._id === 'fri103') {
-          console.log(`🔍 [DEBUG] fri103 filtering decision:`, {
-            isAdmin: isAdmin,
-            shouldInclude: shouldInclude,
-            reason: isAdmin ? 'excluded (isAdmin=true)' : 'included (not admin)'
-          });
-        }
-        
-        return shouldInclude;
+        return !isAdmin;
     });
-    
-    console.log(`🔍 [DEBUG] User filtering results: ${allUsers.length} total users, ${filteredUsers.length} after filtering`);
     
     // Process users with async workflow stage determination
     const processedUsers = await Promise.all(filteredUsers.map(async user => {
