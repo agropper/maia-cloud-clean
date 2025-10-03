@@ -788,12 +788,20 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Check cache first (use the same pattern as other endpoints)
     const cachedUsers = cacheManager.getCachedUsers();
     
-    if (cachedUsers) {
+    // Add cache-busting parameter to force fresh data when needed
+    const forceRefresh = req.query.forceRefresh === 'true';
+    
+    if (cachedUsers && !forceRefresh) {
+      console.log(`🔍 [DEBUG] Using cached users (${cachedUsers.length} users), add ?forceRefresh=true to bypass cache`);
       return res.json({
         users: cachedUsers,
         count: cachedUsers.length,
         cached: true
       });
+    }
+    
+    if (forceRefresh) {
+      console.log(`🔍 [DEBUG] Force refresh requested - bypassing cache`);
     }
     
     
