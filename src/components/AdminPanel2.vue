@@ -342,6 +342,27 @@
                     Showing {{ users.length }} of {{ userPagination.rowsNumber }} records
                   </div>
                   <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="userPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="userPagination.page <= 1"
+                        @click="changePage(userPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ userPagination.page }} of {{ Math.ceil(userPagination.rowsNumber / userPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="userPagination.page >= Math.ceil(userPagination.rowsNumber / userPagination.rowsPerPage)"
+                        @click="changePage(userPagination.page + 1)"
+                      />
+                    </template>
+                    
                     <span class="text-grey-6">Records per page:</span>
                     <QSelect
                       :model-value="userPagination.rowsPerPage === -1 ? 'All' : userPagination.rowsPerPage"
@@ -351,7 +372,7 @@
                         { label: '10', value: 10 },
                         { label: '25', value: 25 }
                       ]"
-                      @update:model-value="(value) => { userPagination.rowsPerPage = value; loadUsers(); }"
+                      @update:model-value="(value) => { userPagination.rowsPerPage = value; userPagination.page = 1; loadUsers(); }"
                       dense
                       style="min-width: 60px"
                     />
@@ -1200,6 +1221,11 @@ const onUserRowClick = (evt: any, row: any) => {
   window.location.href = `/admin2/user/${row.userId}`
 }
 
+const changePage = (newPage: number) => {
+  userPagination.value.page = newPage
+  loadUsers()
+}
+
 const onAgentRequest = () => {
   // Static implementation
 }
@@ -1692,9 +1718,12 @@ const loadUsers = async () => {
     const cacheBuster = `?t=${Date.now()}`
     const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
     
-    // Only add pagination params if rowsPerPage is not -1 (-1 means "All")
+    // Add pagination params - send -1 for "All" to backend
     let paginationParams = ''
-    if (userPagination.value.rowsPerPage > 0) {
+    if (userPagination.value.rowsPerPage === -1) {
+      // Send -1 to backend to indicate "All" records
+      paginationParams = `&page=1&rowsPerPage=-1`
+    } else {
       paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
     }
     

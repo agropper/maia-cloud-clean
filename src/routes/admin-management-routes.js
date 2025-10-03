@@ -827,6 +827,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         const endIndex = startIndex + rowsPerPage;
         paginatedUsers = sortedUsers.slice(startIndex, endIndex);
       }
+      // If rowsPerPage is -1 or 0, show all records (no pagination)
       
       return res.json({
         users: paginatedUsers,
@@ -950,6 +951,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       const endIndex = startIndex + rowsPerPage;
       paginatedUsers = sortedUsers.slice(startIndex, endIndex);
     }
+    // If rowsPerPage is -1 or 0, show all records (no pagination)
     
     // Cache the processed users data
     await cacheManager.cacheUsers(sortedUsers);
