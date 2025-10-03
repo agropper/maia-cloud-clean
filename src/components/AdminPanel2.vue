@@ -767,7 +767,8 @@ import {
   QTd,
   QTable,
   QTabPanel,
-  QTabPanels
+  QTabPanels,
+  QSelect
 } from 'quasar'
 import { useGroupChat } from '../composables/useGroupChat'
 import GroupManagementModal from './GroupManagementModal.vue'
