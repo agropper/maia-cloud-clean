@@ -173,7 +173,7 @@
             </div>
           </QCardSection>
         </QCard>
-    </div>
+      </div>
 
     <!-- Full Admin Interface (shown when authenticated) -->
     <div v-else-if="shouldShowAdminInterface">
@@ -188,7 +188,7 @@
             @click="adminSignOut"
             class="admin-signout-btn"
           />
-      </div>
+    </div>
 
       <div class="q-mt-md">
         <!-- Polling Connection Status -->
@@ -1159,19 +1159,14 @@ const adminSignOut = async () => {
 const onUserRequest = async (props: any) => {
   const { page, rowsPerPage, sortBy, descending } = props.pagination
   
-  // Check if sorting changed before updating
-  const sortingChanged = sortBy !== userPagination.value.sortBy || descending !== userPagination.value.descending
-  
   // Update pagination
   userPagination.value.page = page
   userPagination.value.rowsPerPage = rowsPerPage
   userPagination.value.sortBy = sortBy
   userPagination.value.descending = descending
   
-  // Reload data if sorting changed
-  if (sortingChanged) {
-    await loadUsers()
-  }
+  // Reload data with new sorting and pagination parameters
+  await loadUsers()
 }
 
 const onUserRowClick = (evt: any, row: any) => {
@@ -1668,14 +1663,19 @@ const loadUsers = async () => {
   try {
     isLoadingUsers.value = true
     
-    // Add cache-busting and sorting parameters
+    // Add cache-busting and sorting/pagination parameters
     const cacheBuster = `?t=${Date.now()}`
     const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
-    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}`)
+    const paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
+    
+    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}`)
     users.value = data.users || []
     
+    // Update total rows number for pagination
+    userPagination.value.rowsNumber = data.totalCount || 0
+    
     // Update stats
-    userStats.value.totalUsers = users.value.length
+    userStats.value.totalUsers = data.totalCount || 0
     userStats.value.awaitingApproval = users.value.filter(user => 
       user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet'
     ).length

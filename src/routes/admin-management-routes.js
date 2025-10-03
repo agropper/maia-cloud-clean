@@ -884,9 +884,11 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         };
     }));
     
-    // Get sorting parameters from query
+    // Get sorting and pagination parameters from query
     const sortBy = req.query.sortBy || 'createdAt';
     const descending = req.query.descending === 'true';
+    const page = parseInt(req.query.page) || 1;
+    const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
     
     const users = processedUsers
       .sort((a, b) => {
@@ -910,13 +912,19 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return 0;
       });
     
+    // Apply pagination
+    const startIndex = (page - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedUsers = users.slice(startIndex, endIndex);
+    
     // Cache the processed users data
     await cacheManager.cacheUsers(users);
     
     
     res.json({ 
-      users,
-      count: users.length,
+      users: paginatedUsers,
+      count: paginatedUsers.length,
+      totalCount: users.length, // Total count for pagination
       cached: false,
       timestamp: new Date().toISOString()
     });
