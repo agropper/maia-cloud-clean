@@ -2723,9 +2723,28 @@ router.get('/models', requireAdminAuth, async (req, res) => {
         );
       }
       
-      // Apply sorting
+      // Get current selected model for prioritization
+      let currentSelectedModel = null;
+      try {
+        const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+        if (configDoc && configDoc.current_model) {
+          currentSelectedModel = configDoc.current_model;
+        }
+      } catch (error) {
+        console.warn('Could not get current model for sorting:', error.message);
+      }
+      
+      // Apply sorting with selected model priority
       if (sortBy) {
         processedModels.sort((a, b) => {
+          // First priority: selected model always comes first
+          const aIsSelected = currentSelectedModel && a.uuid === currentSelectedModel.uuid;
+          const bIsSelected = currentSelectedModel && b.uuid === currentSelectedModel.uuid;
+          
+          if (aIsSelected && !bIsSelected) return -1;
+          if (!aIsSelected && bIsSelected) return 1;
+          
+          // If both or neither are selected, use normal sorting
           let aVal = a[sortBy];
           let bVal = b[sortBy];
           
@@ -2741,6 +2760,18 @@ router.get('/models', requireAdminAuth, async (req, res) => {
             return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
           }
         });
+      } else {
+        // Even without sortBy, prioritize selected model
+        if (currentSelectedModel) {
+          processedModels.sort((a, b) => {
+            const aIsSelected = a.uuid === currentSelectedModel.uuid;
+            const bIsSelected = b.uuid === currentSelectedModel.uuid;
+            
+            if (aIsSelected && !bIsSelected) return -1;
+            if (!aIsSelected && bIsSelected) return 1;
+            return 0; // Keep original order for non-selected models
+          });
+        }
       }
       
       // Apply pagination
