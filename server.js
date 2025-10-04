@@ -7352,26 +7352,112 @@ async function ensureAllUserBuckets() {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
-    // Pre-cache knowledge bases for Admin2 - read from existing database
+    // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
     try {
+      console.log('🔄 [STARTUP] Syncing knowledge bases with DigitalOcean API source of truth...');
       
-      // Get all knowledge bases from maia_knowledge_bases database
-      const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+      // 1. Get knowledge bases from DigitalOcean API (source of truth)
+      const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+      const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
-      // Transform to expected format for Admin2
-      const transformedKBs = allKBs.map(doc => ({
-        id: doc.kbId || doc._id,
-        name: doc.kbName || doc.name,
-        description: doc.description || 'No description',
-        isProtected: !!doc.isProtected,
-        owner: doc.owner || null,
-        createdAt: doc.createdAt || doc.timestamp
-      })).filter(kb => !kb.id.startsWith('_design/'));
+      // 2. Get existing protection metadata from local database
+      const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+      const existingKBsMap = {};
+      for (const doc of existingKBs) {
+        if (doc.kbId || doc.id || doc._id) {
+          existingKBsMap[doc.kbId || doc.id || doc._id] = doc;
+        }
+      }
+      
+      // 3. Check for inconsistencies and update database
+      const doKBIds = new Set(doKBs.map(kb => kb.uuid));
+      const existingKBIds = new Set(Object.keys(existingKBsMap));
+      
+      // Find KBs that exist in local DB but not in DO (deleted from DO)
+      const deletedKBIds = [...existingKBIds].filter(id => !doKBIds.has(id));
+      // Find KBs that exist in DO but not in local DB (new KBs created via DO dashboard)
+      const newKBIds = [...doKBIds].filter(id => !existingKBIds.has(id));
+      
+      let dbUpdated = false;
+      
+      // Remove deleted KBs from local database
+      if (deletedKBIds.length > 0) {
+        console.log(`🔄 [STARTUP] Updating database to match DO API - removing ${deletedKBIds.length} deleted knowledge bases`);
+        for (const kbId of deletedKBIds) {
+          try {
+            await couchDBClient.deleteDocument('maia_knowledge_bases', existingKBsMap[kbId]._id);
+            dbUpdated = true;
+          } catch (deleteError) {
+            console.warn(`⚠️ [STARTUP] Failed to remove deleted KB ${kbId}:`, deleteError.message);
+          }
+        }
+      }
+      
+      // Add new KBs to local database (with default protection settings)
+      if (newKBIds.length > 0) {
+        console.log(`🔄 [STARTUP] Updating database to match DO API - adding ${newKBIds.length} new knowledge bases`);
+        for (const kbId of newKBIds) {
+          const doKB = doKBs.find(kb => kb.uuid === kbId);
+          if (doKB) {
+            try {
+              const protectionDoc = {
+                _id: `kb_${kbId}`,
+                kbId: kbId,
+                kbName: doKB.name,
+                owner: null, // Will be set when user attaches KB to their agent
+                isProtected: false, // Default to public
+                createdAt: doKB.created_at || new Date().toISOString()
+              };
+              await couchDBClient.saveDocument('maia_knowledge_bases', protectionDoc);
+              existingKBsMap[kbId] = protectionDoc;
+              dbUpdated = true;
+            } catch (saveError) {
+              console.warn(`⚠️ [STARTUP] Failed to add new KB ${kbId}:`, saveError.message);
+            }
+          }
+        }
+      }
+      
+      if (dbUpdated) {
+        console.log('✅ [STARTUP] Database updated to match DigitalOcean API');
+      }
+      
+      // 4. Merge DO KBs with protection info for caching
+      const transformedKBs = doKBs.map(kb => {
+        const protection = existingKBsMap[kb.uuid] || {};
+        return {
+          id: kb.uuid,
+          name: kb.name,
+          description: kb.description || 'No description',
+          isProtected: !!protection.isProtected,
+          owner: protection.owner || null,
+          createdAt: kb.created_at || kb.createdAt
+        };
+      });
       
       await cacheManager.cacheKnowledgeBases(transformedKBs);
-      console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from database and cached for Admin2`);
+      console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from DigitalOcean API and cached for Admin2`);
+      
     } catch (error) {
-      console.warn('⚠️ [STARTUP] Failed to load knowledge bases from database:', error.message);
+      console.warn('⚠️ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
+      
+      // Fallback to local database if DO API fails
+      try {
+        const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+        const transformedKBs = allKBs.map(doc => ({
+          id: doc.kbId || doc._id,
+          name: doc.kbName || doc.name,
+          description: doc.description || 'No description',
+          isProtected: !!doc.isProtected,
+          owner: doc.owner || null,
+          createdAt: doc.createdAt || doc.timestamp
+        })).filter(kb => !kb.id.startsWith('_design/'));
+        
+        await cacheManager.cacheKnowledgeBases(transformedKBs);
+        console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from database (fallback) and cached for Admin2`);
+      } catch (fallbackError) {
+        console.warn('⚠️ [STARTUP] Failed to load knowledge bases from database (fallback):', fallbackError.message);
+      }
     }
     
     // Pre-cache models for Admin2
