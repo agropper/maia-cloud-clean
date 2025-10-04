@@ -5,8 +5,7 @@ import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
 import { useTranscript } from "../composables/useTranscript";
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import html2pdf from 'html2pdf.js';
 import ChatArea from "./ChatArea.vue";
 import BottomToolbar from "./BottomToolbar.vue";
 import {
@@ -549,68 +548,31 @@ export default defineComponent({
           throw new Error('Chat area element not found');
         }
         
-        // Capture the chat area as canvas
-        const canvas = await html2canvas(chatAreaElement, {
-          scale: 2, // Higher quality
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          width: chatAreaElement.scrollWidth,
-          height: chatAreaElement.scrollHeight
-        });
+        // Configure html2pdf options for selectable text and good quality
+        const opt = {
+          margin: 0.5, // Small margin
+          filename: 'transcript.pdf',
+          image: { 
+            type: 'jpeg', 
+            quality: 0.98 
+          },
+          html2canvas: { 
+            scale: 2, // High quality
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff'
+          },
+          jsPDF: { 
+            unit: 'in', 
+            format: 'a4', 
+            orientation: 'portrait' 
+          }
+        };
         
-        // Create PDF document
-        const doc = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
+        // Generate PDF with selectable text
+        await html2pdf().from(chatAreaElement).set(opt).save();
         
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 10;
-        const contentWidth = pageWidth - (margin * 2);
-        const contentHeight = pageHeight - (margin * 2);
-        
-        // Calculate scaling to fit content
-        const canvasAspectRatio = canvas.width / canvas.height;
-        const pageAspectRatio = contentWidth / contentHeight;
-        
-        let imgWidth, imgHeight;
-        if (canvasAspectRatio > pageAspectRatio) {
-          // Canvas is wider, fit to width
-          imgWidth = contentWidth;
-          imgHeight = contentWidth / canvasAspectRatio;
-        } else {
-          // Canvas is taller, fit to height
-          imgHeight = contentHeight;
-          imgWidth = contentHeight * canvasAspectRatio;
-        }
-        
-        // Center the image on the page
-        const x = margin + (contentWidth - imgWidth) / 2;
-        const y = margin + (contentHeight - imgHeight) / 2;
-        
-        // Add the canvas image to PDF
-        const imgData = canvas.toDataURL('image/png');
-        doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-        
-        // If content is taller than one page, we might need multiple pages
-        if (imgHeight > contentHeight) {
-          // For now, we'll fit it to one page, but this could be extended
-          // to split across multiple pages if needed
-        }
-        
-        // Save the PDF
-        const pdfBlob = doc.output('blob');
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "transcript.pdf";
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        logSystemEvent("Chat area saved as PDF", {}, appState);
+        logSystemEvent("Chat area saved as PDF with selectable text", {}, appState);
         
       } catch (error) {
         console.error('Error in saveToFile:', error);
