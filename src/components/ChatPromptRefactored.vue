@@ -161,7 +161,23 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      // This is now handled by the centralized state manager
+      // Refresh agent data from DO API and update centralized state
+      console.log('🔄 Refreshing agent data from DO API...');
+      try {
+        const response = await fetch(`${API_BASE_URL}/current-agent`);
+        const data = await response.json();
+
+        if (data.agent) {
+          appStateManager.setAgent(data.agent);
+          if (data.agent.knowledgeBase) {
+            appStateManager.setState({ currentKnowledgeBase: data.agent.knowledgeBase });
+          }
+        } else {
+          appStateManager.clearAgent();
+        }
+      } catch (error) {
+        console.error("❌ Error refreshing agent data:", error);
+      }
     };
 
     const showPopup = () => {

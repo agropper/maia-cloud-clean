@@ -527,7 +527,6 @@ router.get('/poll/updates', requireAdminAuth, (req, res) => {
       staleSessionRejectionCount++;
       // Only log every 10th rejection to reduce noise
       if (staleSessionRejectionCount % 10 === 1) {
-        console.log(`[POLLING] Rejecting stale sessions (${staleSessionRejectionCount} total rejections)`);
       }
       return res.status(410).json({ 
         error: 'Session expired - server restarted', 
@@ -540,7 +539,6 @@ router.get('/poll/updates', requireAdminAuth, (req, res) => {
     
     // Show polling activity with dots (only after first poll)
     if (!global.firstPollShown) {
-      console.log('[POLLING] Admin panel polling started');
       global.firstPollShown = true;
     }
     

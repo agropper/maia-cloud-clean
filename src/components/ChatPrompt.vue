@@ -364,13 +364,9 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      // Only fetch if we don't already have an agent to prevent overriding
-      // the agent that was just selected
-      if (!currentAgent.value) {
-        await fetchCurrentAgent();
-      } else {
-        // Agent already exists, skipping fetch
-      }
+      // Always refresh agent data from DO API to get latest KB attachments
+      console.log('🔄 Refreshing agent data from DO API...');
+      await fetchCurrentAgent();
     };
 
     const showPopup = () => {

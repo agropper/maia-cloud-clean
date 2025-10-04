@@ -169,36 +169,25 @@ class SessionManager {
   // Get all active sessions for admin dashboard
   async getAllActiveSessions() {
     try {
-      // First, let's see ALL sessions in the database for debugging
-      // Note: maia_sessions database removed - sessions are now in-memory only
-      const allSessions = [];
-      console.log('🔍 [SessionManager] All sessions in database:', allSessions.map(s => ({
-        _id: s._id,
-        sessionType: s.sessionType,
-        userId: s.userId,
-        isActive: s.isActive,
-        deactivatedBy: s.deactivatedBy,
-        deactivatedAt: s.deactivatedAt
-      })));
+      // Get in-memory sessions from server.js
+      let inMemorySessions = [];
+      try {
+        // Import the activeSessions from server.js
+        const { activeSessions } = await import('../../server.js');
+        inMemorySessions = activeSessions || [];
+        console.log('🔍 [SessionManager] Retrieved in-memory sessions:', inMemorySessions.length);
+      } catch (importError) {
+        console.error('❌ [SessionManager] Error importing activeSessions:', importError.message);
+      }
       
-      // Use findDocuments instead of getAllDocuments to avoid connection issues
-      const query = {
-        selector: {
-          type: 'session',
-          isActive: true
-        }
-      };
-      
-      // Note: maia_sessions database removed - sessions are now in-memory only
-      const result = { docs: [] };
-      const activeSessions = result.docs;
+      const activeSessions = inMemorySessions;
       
       if (activeSessions.length > 0) {
         console.log('🔍 [SessionManager] Active sessions found:', activeSessions.map(s => ({
-          _id: s._id,
-          sessionType: s.sessionType,
+          sessionId: s.sessionId,
+          userType: s.userType,
           userId: s.userId,
-          isActive: s.isActive
+          username: s.username
         })));
       }
 
@@ -208,16 +197,19 @@ class SessionManager {
         const inactiveMinutes = Math.round((now - lastActivity) / (1000 * 60));
         
         const sessionInfo = {
-          sessionId: session._id.replace('session_', ''),
-          sessionType: session.sessionType,
+          sessionId: session.sessionId,
+          sessionType: session.userType, // Map userType to sessionType for compatibility
           userId: session.userId,
+          username: session.username,
           lastActivity: session.lastActivity,
           inactiveMinutes,
-          createdAt: session.createdAt
+          createdAt: session.createdAt,
+          ipAddress: session.ipAddress,
+          userAgent: session.userAgent
         };
 
         // Add deep link specific info
-        if (session.sessionType === 'deeplink') {
+        if (session.userType === 'deeplink') {
           const cleanupDate = new Date(session.cleanupDate);
           const cleanupInHours = Math.round((cleanupDate - now) / (1000 * 60 * 60));
           sessionInfo.deepLinkId = session.deepLinkId;

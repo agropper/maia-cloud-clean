@@ -1333,6 +1333,25 @@ app.post('/api/upload-to-bucket', async (req, res) => {
     await s3Client.send(uploadCommand);
 //     console.log(`✅ Successfully uploaded file to bucket: ${bucketKey}`);
     
+    // Send admin notification if file was uploaded to a user folder
+    if (userFolder && userFolder !== 'root') {
+      try {
+        const userId = userFolder.replace('/', ''); // Remove trailing slash
+        const updateData = {
+          userId: userId,
+          fileName: fileName,
+          bucketKey: bucketKey,
+          fileSize: content.length,
+          message: `User ${userId} uploaded file ${fileName} to their bucket`
+        };
+        
+        addUpdateToAllAdmins('user_file_uploaded', updateData);
+        console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
+      } catch (notificationError) {
+        console.error(`❌ Error sending file upload notification:`, notificationError.message);
+      }
+    }
+    
     res.json({
       success: true,
       message: 'File uploaded successfully',
