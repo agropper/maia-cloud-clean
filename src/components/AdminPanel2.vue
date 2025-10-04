@@ -528,23 +528,37 @@
                     <!-- Pagination arrows (only show when not "All") -->
                     <template v-if="agentPagination.rowsPerPage > 0">
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_left"
-                        :disable="agentPagination.page === 1"
+                        size="sm"
+                        flat
+                        :disable="agentPagination.page <= 1"
                         @click="changeAgentPage(agentPagination.page - 1)"
                       />
-                      <span class="text-grey-6">{{ agentPagination.page }} / {{ Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage) }}</span>
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ agentPagination.page }} of {{ Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage) }}
+                      </span>
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_right"
+                        size="sm"
+                        flat
                         :disable="agentPagination.page >= Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage)"
                         @click="changeAgentPage(agentPagination.page + 1)"
                       />
                     </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="agentPagination.rowsPerPage === -1 ? 'All' : agentPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; agentPagination.rowsPerPage = rowsPerPage; agentPagination.page = 1; onAgentRequest({ pagination: agentPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
                   </div>
                 </div>
               </template>
@@ -625,23 +639,37 @@
                     <!-- Pagination arrows (only show when not "All") -->
                     <template v-if="kbPagination.rowsPerPage > 0">
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_left"
-                        :disable="kbPagination.page === 1"
+                        size="sm"
+                        flat
+                        :disable="kbPagination.page <= 1"
                         @click="changeKBPage(kbPagination.page - 1)"
                       />
-                      <span class="text-grey-6">{{ kbPagination.page }} / {{ Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage) }}</span>
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ kbPagination.page }} of {{ Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage) }}
+                      </span>
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_right"
+                        size="sm"
+                        flat
                         :disable="kbPagination.page >= Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage)"
                         @click="changeKBPage(kbPagination.page + 1)"
                       />
                     </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="kbPagination.rowsPerPage === -1 ? 'All' : kbPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; kbPagination.rowsPerPage = rowsPerPage; kbPagination.page = 1; onKBRequest({ pagination: kbPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
                   </div>
                 </div>
               </template>
@@ -712,23 +740,37 @@
                     <!-- Pagination arrows (only show when not "All") -->
                     <template v-if="modelPagination.rowsPerPage > 0">
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_left"
-                        :disable="modelPagination.page === 1"
+                        size="sm"
+                        flat
+                        :disable="modelPagination.page <= 1"
                         @click="changeModelPage(modelPagination.page - 1)"
                       />
-                      <span class="text-grey-6">{{ modelPagination.page }} / {{ Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage) }}</span>
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ modelPagination.page }} of {{ Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage) }}
+                      </span>
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_right"
+                        size="sm"
+                        flat
                         :disable="modelPagination.page >= Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage)"
                         @click="changeModelPage(modelPagination.page + 1)"
                       />
                     </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="modelPagination.rowsPerPage === -1 ? 'All' : modelPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; modelPagination.rowsPerPage = rowsPerPage; modelPagination.page = 1; onModelRequest({ pagination: modelPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
                   </div>
                 </div>
               </template>
@@ -793,23 +835,37 @@
                     <!-- Pagination arrows (only show when not "All") -->
                     <template v-if="sessionPagination.rowsPerPage > 0">
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_left"
-                        :disable="sessionPagination.page === 1"
+                        size="sm"
+                        flat
+                        :disable="sessionPagination.page <= 1"
                         @click="changeSessionPage(sessionPagination.page - 1)"
                       />
-                      <span class="text-grey-6">{{ sessionPagination.page }} / {{ Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage) }}</span>
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ sessionPagination.page }} of {{ Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage) }}
+                      </span>
                       <QBtn
-                        flat
-                        round
-                        dense
                         icon="chevron_right"
+                        size="sm"
+                        flat
                         :disable="sessionPagination.page >= Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage)"
                         @click="changeSessionPage(sessionPagination.page + 1)"
                       />
                     </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="sessionPagination.rowsPerPage === -1 ? 'All' : sessionPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; sessionPagination.rowsPerPage = rowsPerPage; sessionPagination.page = 1; onSessionRequest({ pagination: sessionPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
                   </div>
                 </div>
               </template>
