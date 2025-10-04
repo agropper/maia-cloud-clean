@@ -2484,14 +2484,59 @@ router.post('/update-activity', async (req, res) => {
 // Get all agents - PROTECTED (cached)
 router.get('/agents', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'createdAt', descending = 'true', filter } = req.query;
     
     // Check cache first
     const cachedAgents = cacheManager.getCachedAgents();
     
     if (cachedAgents) {
+      let processedAgents = [...cachedAgents];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedAgents = processedAgents.filter(agent => 
+          agent.name?.toLowerCase().includes(filterLower) ||
+          agent.status?.toLowerCase().includes(filterLower) ||
+          agent.model?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Apply sorting
+      if (sortBy) {
+        processedAgents.sort((a, b) => {
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle date strings
+          if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+            aVal = new Date(aVal || 0);
+            bVal = new Date(bVal || 0);
+          }
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      }
+      
+      // Apply pagination
+      const totalCount = processedAgents.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedAgents = rowsPerPage === -1 ? processedAgents : processedAgents.slice(startIndex, endIndex);
+      
       return res.json({
-        agents: cachedAgents,
-        count: cachedAgents.length,
+        agents: paginatedAgents,
+        count: totalCount,
         cached: true
       });
     }
@@ -2553,14 +2598,60 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
 // Get all knowledge bases - PROTECTED (cached)
 router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'createdAt', descending = 'true', filter } = req.query;
     
     // Check cache first
     const cachedKBs = cacheManager.getCachedKnowledgeBases();
     
     if (cachedKBs) {
+      let processedKBs = [...cachedKBs];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedKBs = processedKBs.filter(kb => 
+          kb.name?.toLowerCase().includes(filterLower) ||
+          kb.description?.toLowerCase().includes(filterLower) ||
+          kb.owner?.toLowerCase().includes(filterLower) ||
+          kb.status?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Apply sorting
+      if (sortBy) {
+        processedKBs.sort((a, b) => {
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle date strings
+          if (sortBy === 'createdAt') {
+            aVal = new Date(aVal || 0);
+            bVal = new Date(bVal || 0);
+          }
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      }
+      
+      // Apply pagination
+      const totalCount = processedKBs.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedKBs = rowsPerPage === -1 ? processedKBs : processedKBs.slice(startIndex, endIndex);
+      
       return res.json({
-        knowledgeBases: cachedKBs,
-        count: cachedKBs.length,
+        knowledgeBases: paginatedKBs,
+        count: totalCount,
         cached: true
       });
     }
@@ -2614,14 +2705,53 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
 // Models configuration endpoints
 router.get('/models', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'name', descending = 'false', filter } = req.query;
     
     // Check cache first
     const cachedModels = cacheManager.getCachedModels();
     
     if (cachedModels) {
+      let processedModels = [...cachedModels];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedModels = processedModels.filter(model => 
+          model.name?.toLowerCase().includes(filterLower) ||
+          model.description?.toLowerCase().includes(filterLower) ||
+          model.provider?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Apply sorting
+      if (sortBy) {
+        processedModels.sort((a, b) => {
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      }
+      
+      // Apply pagination
+      const totalCount = processedModels.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedModels = rowsPerPage === -1 ? processedModels : processedModels.slice(startIndex, endIndex);
+      
       return res.json({
-        models: cachedModels,
-        count: cachedModels.length,
+        models: paginatedModels,
+        count: totalCount,
         cached: true
       });
     }

@@ -635,6 +635,8 @@
               :columns="modelColumns"
               row-key="uuid"
               :loading="isLoadingModels"
+              :pagination="modelPagination"
+              @request="onModelRequest"
               class="admin-table"
             >
               <template v-slot:body-cell-selection="props">
@@ -968,6 +970,14 @@ const sessionPagination = ref({
   rowsNumber: 0
 })
 
+const modelPagination = ref({
+  sortBy: 'name',
+  descending: false,
+  page: 1,
+  rowsPerPage: 10,
+  rowsNumber: 0
+})
+
 // Health status - Static
 const healthStatus = ref({
   database: true,
@@ -1252,16 +1262,200 @@ const changePage = (newPage: number) => {
   onUserRequest({ pagination: userPagination.value })
 }
 
-const onAgentRequest = () => {
-  // Static implementation
+const onAgentRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingAgents.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/agents?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    agents.value = data.agents || []
+    
+    // Update pagination info
+    agentPagination.value.page = page
+    agentPagination.value.rowsPerPage = rowsPerPage
+    agentPagination.value.sortBy = sortBy
+    agentPagination.value.descending = descending
+    agentPagination.value.rowsNumber = data.count || data.agents?.length || 0
+    
+    console.log(`[ADMIN] Loaded ${data.count || data.agents?.length || 0} agents`)
+    
+  } catch (error) {
+    console.error('Failed to load agents:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load agents',
+      position: 'top'
+    })
+  } finally {
+    isLoadingAgents.value = false
+  }
 }
 
-const onKBRequest = () => {
-  // Static implementation
+const onKBRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingKnowledgeBases.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/knowledge-bases?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    knowledgeBases.value = data.knowledgeBases || []
+    
+    // Update pagination info
+    kbPagination.value.page = page
+    kbPagination.value.rowsPerPage = rowsPerPage
+    kbPagination.value.sortBy = sortBy
+    kbPagination.value.descending = descending
+    kbPagination.value.rowsNumber = data.count || data.knowledgeBases?.length || 0
+    
+    console.log(`[ADMIN] Loaded ${data.count || data.knowledgeBases?.length || 0} knowledge bases`)
+    
+  } catch (error) {
+    console.error('Failed to load knowledge bases:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load knowledge bases',
+      position: 'top'
+    })
+  } finally {
+    isLoadingKnowledgeBases.value = false
+  }
 }
 
-const onSessionRequest = async () => {
-  await loadSessions()
+const onSessionRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingSessions.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin/sessions?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    sessions.value = data.sessions || []
+    
+    // Update pagination info
+    sessionPagination.value.page = page
+    sessionPagination.value.rowsPerPage = rowsPerPage
+    sessionPagination.value.sortBy = sortBy
+    sessionPagination.value.descending = descending
+    sessionPagination.value.rowsNumber = data.total || data.sessions?.length || 0
+    
+    // Update session stats
+    sessionStats.value.totalSessions = data.total || 0
+    sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
+    
+    console.log(`[ADMIN] Loaded ${data.total || data.sessions?.length || 0} sessions`)
+    
+  } catch (error) {
+    console.error('Failed to load sessions:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load sessions',
+      position: 'top'
+    })
+  } finally {
+    isLoadingSessions.value = false
+  }
+}
+
+const onModelRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingModels.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/models?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    availableModels.value = data.models || []
+    
+    // Update pagination info
+    modelPagination.value.page = page
+    modelPagination.value.rowsPerPage = rowsPerPage
+    modelPagination.value.sortBy = sortBy
+    modelPagination.value.descending = descending
+    modelPagination.value.rowsNumber = data.count || data.models?.length || 0
+    
+    console.log(`[ADMIN] Loaded ${data.count || data.models?.length || 0} models`)
+    
+  } catch (error) {
+    console.error('Failed to load models:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load models',
+      position: 'top'
+    })
+  } finally {
+    isLoadingModels.value = false
+  }
 }
 
 const loadSessions = async () => {

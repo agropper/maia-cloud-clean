@@ -434,9 +434,56 @@ router.post('/contact-support', async (req, res) => {
 // Session management API endpoints
 router.get('/sessions', requireAdminAuth, (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'lastActivity', descending = 'true', filter } = req.query;
+    
+    let processedSessions = [...activeSessions];
+    
+    // Apply filtering if provided
+    if (filter) {
+      const filterLower = filter.toLowerCase();
+      processedSessions = processedSessions.filter(session => 
+        session.userId?.toLowerCase().includes(filterLower) ||
+        session.username?.toLowerCase().includes(filterLower) ||
+        session.userType?.toLowerCase().includes(filterLower) ||
+        session.ipAddress?.toLowerCase().includes(filterLower)
+      );
+    }
+    
+    // Apply sorting
+    if (sortBy) {
+      processedSessions.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        
+        // Handle date strings
+        if (sortBy === 'lastActivity' || sortBy === 'createdAt') {
+          aVal = new Date(aVal || 0);
+          bVal = new Date(bVal || 0);
+        }
+        
+        // Handle strings
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = (bVal || '').toLowerCase();
+        }
+        
+        if (descending === 'true') {
+          return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+        } else {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        }
+      });
+    }
+    
+    // Apply pagination
+    const totalCount = processedSessions.length;
+    const startIndex = (page - 1) * rowsPerPage;
+    const endIndex = startIndex + parseInt(rowsPerPage);
+    const paginatedSessions = rowsPerPage === -1 ? processedSessions : processedSessions.slice(startIndex, endIndex);
+    
     res.json({
-      sessions: activeSessions,
-      total: activeSessions.length,
+      sessions: paginatedSessions,
+      total: totalCount,
       byType: {
         private: activeSessions.filter(s => s.userType === 'private').length,
         admin: activeSessions.filter(s => s.userType === 'admin').length,
