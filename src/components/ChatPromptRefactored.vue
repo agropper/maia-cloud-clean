@@ -5,6 +5,7 @@ import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
 import { useTranscript } from "../composables/useTranscript";
+import jsPDF from 'jspdf';
 import ChatArea from "./ChatArea.vue";
 import BottomToolbar from "./BottomToolbar.vue";
 import {
@@ -539,14 +540,76 @@ export default defineComponent({
         appState.userName = userName;
         
         const transcriptContent = generateTranscript(appState, true);
-        const blob = new Blob([transcriptContent], { type: "text/markdown" });
-        const url = URL.createObjectURL(blob);
+        
+        // Create PDF document
+        const doc = new jsPDF();
+        
+        // Split content into lines and add to PDF
+        const lines = transcriptContent.split('\n');
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 20;
+        let y = margin;
+        const lineHeight = 7;
+        
+        doc.setFontSize(12);
+        
+        for (const line of lines) {
+          // Check if we need a new page
+          if (y + lineHeight > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          
+          // Handle different content types
+          if (line.startsWith('# ')) {
+            // Main title
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text(line.substring(2), margin, y);
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            y += lineHeight + 2;
+          } else if (line.startsWith('## ')) {
+            // Section title
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text(line.substring(3), margin, y);
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            y += lineHeight + 1;
+          } else if (line.startsWith('### ')) {
+            // Subsection title
+            doc.setFontSize(13);
+            doc.setFont(undefined, 'bold');
+            doc.text(line.substring(4), margin, y);
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'normal');
+            y += lineHeight + 1;
+          } else if (line.startsWith('- ') || line.startsWith('* ')) {
+            // Bullet point
+            doc.text('• ' + line.substring(2), margin + 10, y);
+            y += lineHeight;
+          } else if (line.trim() === '') {
+            // Empty line
+            y += lineHeight / 2;
+          } else {
+            // Regular text
+            const text = line.replace(/^\*\*(.*?)\*\*/, '$1'); // Remove markdown bold
+            doc.text(text, margin, y);
+            y += lineHeight;
+          }
+        }
+        
+        // Save the PDF
+        const pdfBlob = doc.output('blob');
+        const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "transcript.md";
+        a.download = "transcript.pdf";
         a.click();
         URL.revokeObjectURL(url);
-        logSystemEvent("Transcript saved to file", {}, appState);
+        
+        logSystemEvent("Transcript saved to PDF file", {}, appState);
         
       } catch (error) {
         console.error('Error in saveToFile:', error);
