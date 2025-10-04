@@ -6595,7 +6595,6 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Mount admin-management routes
-
 app.use('/api/admin-management', adminManagementRoutes);
 
 // =============================================================================
@@ -7259,14 +7258,25 @@ async function ensureAllUserBuckets() {
         totalSize: 0
       };
       
-      // Skip bucket status check during startup to avoid ECONNREFUSED errors
-      // Bucket status will be checked on-demand when admin panel loads
-      // Use default values for now
-      bucketStatus = {
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
-      };
+      // Check bucket status during startup (server is now fully ready)
+      try {
+        const bucketUrl = `http://localhost:${PORT}/api/bucket/user-status/${user._id}`;
+        const bucketResponse = await fetch(bucketUrl, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          bucketStatus = {
+            hasFolder: bucketData.hasFolder || false,
+            fileCount: bucketData.fileCount || 0,
+            totalSize: bucketData.totalSize || 0
+          };
+        }
+      } catch (bucketError) {
+        // Use default values if bucket check fails
+      }
       
       // Determine workflow stage using the same logic as admin-management-routes.js
       let workflowStage = 'unknown';

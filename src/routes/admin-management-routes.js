@@ -53,8 +53,8 @@ const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database up
 
 // User-level deployment tracking for agents
 const userDeploymentTracker = new Map(); // userId -> { agentId, agentName, status, lastCheck, retryCount, maxRetries }
-const DEPLOYMENT_CHECK_INTERVAL = 5 * 1000; // Check every 5 seconds
-const MAX_DEPLOYMENT_RETRIES = 30; // Max 15 minutes of checking
+const DEPLOYMENT_CHECK_INTERVAL = 15 * 1000; // Check every 15 seconds
+const MAX_DEPLOYMENT_RETRIES = 40; // Max 10 minutes of checking (40 * 15s = 600s = 10min)
 let deploymentMonitoringInterval = null; // Track the monitoring interval
 
 // User-level cache invalidation function
@@ -244,6 +244,25 @@ const checkAgentDeployments = async () => {
         
       } else if (deploymentStatus === 'STATUS_FAILED' || deploymentStatus === 'STATUS_ERROR' || deploymentStatus === 'status_failed' || deploymentStatus === 'status_error') {
         console.error(`❌ Agent ${tracking.agentName} deployment failed for user ${userId} - status: ${deploymentStatus}`);
+        
+        // Send failure notification to admin via polling system
+        try {
+          const { addUpdateToAllAdmins } = await import('../../server.js');
+          
+          const updateData = {
+            userId: userId,
+            agentName: tracking.agentName,
+            agentId: tracking.agentId || null,
+            status: deploymentStatus,
+            message: `Agent ${tracking.agentName} deployment failed for user ${userId} - status: ${deploymentStatus}`
+          };
+          
+          addUpdateToAllAdmins('agent_deployment_failed', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment failure notification to admin sessions`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment failure notification:`, pollingError.message);
+        }
+        
         usersToRemove.push(userId);
         
       } else {
@@ -253,6 +272,26 @@ const checkAgentDeployments = async () => {
         
         if (tracking.retryCount >= tracking.maxRetries) {
           console.warn(`⚠️ Max retries reached for user ${userId}, agent ${tracking.agentName} - removing from tracking`);
+          
+          // Send timeout failure notification to admin via polling system
+          try {
+            const { addUpdateToAllAdmins } = await import('../../server.js');
+            
+            const updateData = {
+              userId: userId,
+              agentName: tracking.agentName,
+              agentId: tracking.agentId || null,
+              retryCount: tracking.retryCount,
+              maxRetries: tracking.maxRetries,
+              message: `Agent ${tracking.agentName} deployment timed out for user ${userId} after ${tracking.retryCount} attempts`
+            };
+            
+            addUpdateToAllAdmins('agent_deployment_timeout', updateData);
+            console.log(`📡 [POLLING] [*] Added agent deployment timeout notification to admin sessions`);
+          } catch (pollingError) {
+            console.error(`❌ [POLLING] [*] Error adding agent deployment timeout notification:`, pollingError.message);
+          }
+          
           usersToRemove.push(userId);
         }
       }
@@ -266,6 +305,27 @@ const checkAgentDeployments = async () => {
       
       if (tracking.retryCount >= tracking.maxRetries) {
         console.warn(`⚠️ Max retries reached for user ${userId} due to errors - removing from tracking`);
+        
+        // Send error timeout failure notification to admin via polling system
+        try {
+          const { addUpdateToAllAdmins } = await import('../../server.js');
+          
+          const updateData = {
+            userId: userId,
+            agentName: tracking.agentName,
+            agentId: tracking.agentId || null,
+            retryCount: tracking.retryCount,
+            maxRetries: tracking.maxRetries,
+            error: error.message,
+            message: `Agent ${tracking.agentName} deployment failed with errors for user ${userId} after ${tracking.retryCount} attempts: ${error.message}`
+          };
+          
+          addUpdateToAllAdmins('agent_deployment_error_timeout', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment error timeout notification to admin sessions`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment error timeout notification:`, pollingError.message);
+        }
+        
         usersToRemove.push(userId);
       }
     }
@@ -812,6 +872,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         // Handle string sorting
         if (typeof aVal === 'string') {
           aVal = aVal.toLowerCase();
+        }
+        if (typeof bVal === 'string') {
           bVal = bVal.toLowerCase();
         }
         
@@ -842,6 +904,10 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
     const filteredUsers = allUsers.filter(user => {
+      // Skip users without _id
+      if (!user._id) {
+        return false;
+      }
       // Exclude design documents
         if (user._id.startsWith('_design/')) {
           return false;
@@ -855,7 +921,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return true;
       }
       // Always include deep link users
-      if (user._id.startsWith('deep-')) {
+      if (user._id.startsWith('deep_link_')) {
           return true;
         }
         // For all other users, exclude admin users
@@ -1139,6 +1205,10 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
         approvalStatus = 'pending';
         workflowStage = 'awaiting_approval';
         break;
+      case 'move_to_review':
+        approvalStatus = 'pending';
+        workflowStage = 'awaiting_approval';
+        break;
     }
     
     // Update user approval status and workflow stage
@@ -1157,6 +1227,27 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     
     // Invalidate user cache to ensure fresh data
     invalidateUserCache(userId);
+    
+    // If approved, create bucket folder for the user
+    if (action === 'approve') {
+      try {
+        console.log(`🪣 [BUCKET] Creating bucket folder for approved user: ${userId}`);
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          console.log(`✅ [BUCKET] Bucket folder created successfully for user ${userId}`);
+        } else {
+          console.error(`❌ [BUCKET] Failed to create bucket folder for user ${userId}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.error(`❌ [BUCKET] Error creating bucket folder for user ${userId}:`, bucketError.message);
+      }
+    }
     
     // If approved, admin will manually create agent via Admin Panel
     
@@ -1305,6 +1396,7 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
           assignedAgentName: agentName,
           agentApiKey: agentApiKey, // Store the API key in the user document
           agentAssignedAt: new Date().toISOString(),
+          workflowStage: 'polling_for_deployment', // Set workflow stage to show deployment polling
           updatedAt: new Date().toISOString()
         };
         
@@ -2489,7 +2581,7 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
       owner: doc.owner || 'Unknown',
       createdAt: doc.createdAt || doc.timestamp,
       status: doc.status || 'unknown'
-    })).filter(kb => !kb.id.startsWith('_design/'));
+    })).filter(kb => kb.id && !kb.id.startsWith('_design/'));
     
     // Found knowledge bases
     

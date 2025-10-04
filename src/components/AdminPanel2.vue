@@ -408,6 +408,14 @@
                       {{ formatFileSize(props.value.totalSize || 0) }}
                     </span>
                   </div>
+                  <QBtn
+                    v-else-if="isPrivateAIUser(props.row)"
+                    size="xs"
+                    color="primary"
+                    label="Create"
+                    @click.stop="createBucketFolder(props.row)"
+                    class="q-mr-xs"
+                  />
                   <QBadge
                     v-else
                     color="grey"
@@ -426,6 +434,16 @@
               <template v-slot:body-cell-actions="props">
                 <QTd :props="props">
                   <div class="action-buttons-row">
+                    <!-- Move to Awaiting Approval Button -->
+                    <QBtn
+                      v-if="props.row.workflowStage === 'request_email_sent'"
+                      size="xs"
+                      color="info"
+                      label="Move to Review"
+                      @click.stop="moveToAwaitingApproval(props.row)"
+                      class="q-mr-xs"
+                    />
+                    
                     <!-- Approve User Button -->
                     <QBtn
                       v-if="props.row.workflowStage === 'awaiting_approval'"
@@ -453,6 +471,14 @@
                       color="primary"
                       label="Create Agent"
                       @click.stop="createAgentFromList(props.row)"
+                      class="q-mr-xs"
+                    />
+                    
+                    <!-- Polling for Deployment Status -->
+                    <QBadge
+                      v-if="props.row.workflowStage === 'polling_for_deployment'"
+                      color="purple"
+                      label="Polling for Deployment"
                       class="q-mr-xs"
                     />
                     
@@ -1328,6 +1354,41 @@ const handleGroupDeleted = () => {
 }
 
 // User action methods - same as UserDetailsPage2
+const moveToAwaitingApproval = async (user: any) => {
+  try {
+    const response = await fetch(`/api/admin-management/users/${user.userId}/approval`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'move_to_review'
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to move user to review: ${response.statusText}`)
+    }
+    
+    // Refresh the user list to get the latest data from database
+    await loadUsers()
+    
+    $q.notify({
+      type: 'positive',
+      message: `User ${user.displayName || user.userId} moved to review`,
+      position: 'top'
+    })
+    
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Failed to move user to review:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to move user to review',
+      position: 'top'
+    })
+  }
+}
+
 const approveUserFromList = async (user: any) => {
   try {
     console.log(`✅ [AdminPanel2] Approving user: ${user.userId}`)
@@ -1343,17 +1404,8 @@ const approveUserFromList = async (user: any) => {
       throw new Error(`Failed to approve user: ${response.status}`)
     }
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'approved'
-      users.value[userIndex].approvalStatus = 'approved'
-    }
-    
-    // Update stats
-    userStats.value.awaitingApproval = users.value.filter(u => 
-      u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-    ).length
+    // Refresh the user list to get the latest data from database
+    await loadUsers()
     
     $q.notify({
       type: 'positive',
@@ -1385,17 +1437,8 @@ const rejectUserFromList = async (user: any) => {
       throw new Error(`Failed to reject user: ${response.status}`)
     }
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'rejected'
-      users.value[userIndex].approvalStatus = 'rejected'
-    }
-    
-    // Update stats
-    userStats.value.awaitingApproval = users.value.filter(u => 
-      u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-    ).length
+    // Refresh the user list to get the latest data from database
+    await loadUsers()
     
     $q.notify({
       type: 'positive',
@@ -1416,6 +1459,12 @@ const createAgentFromList = async (user: any) => {
   try {
     console.log(`🤖 [AdminPanel2] Creating agent for user: ${user.userId}`)
     
+    // Immediately update local state to show "Polling for Deployment"
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].workflowStage = 'polling_for_deployment'
+    }
+    
     const response = await fetch(`/api/admin-management/users/${user.userId}/assign-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1429,13 +1478,8 @@ const createAgentFromList = async (user: any) => {
     
     const agentData = await response.json()
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'approved'
-      users.value[userIndex].assignedAgentId = agentData.agentId
-      users.value[userIndex].assignedAgentName = agentData.agentName
-    }
+    // Refresh the user list to get the latest data from database
+    await loadUsers()
     
     // Refresh agents list to show the new agent
     await loadAgents()
@@ -1475,11 +1519,61 @@ const signOutSession = (sessionId: string) => {
 }
 
 // Utility methods
+const isPrivateAIUser = (user: any) => {
+  // Check if user is a private AI user (not Public User or deep_link user)
+  return user.userId !== 'Public User' && !user.userId.startsWith('deep_link_')
+}
+
+const createBucketFolder = async (user: any) => {
+  try {
+    
+    const response = await fetch('/api/bucket/ensure-user-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.userId }),
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create bucket folder: ${response.statusText}`)
+    }
+    
+    // Update local state immediately to show bucket was created
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].bucketStatus = {
+        hasFolder: true,
+        fileCount: 0,
+        totalSize: 0
+      }
+    }
+    
+    // Also refresh the user list to get the latest data from backend (force refresh to bypass cache)
+    await loadUsers(true)
+    
+    $q.notify({
+      type: 'positive',
+      message: `Bucket folder created successfully for ${user.displayName || user.userId}`,
+      position: 'top'
+    })
+    
+  } catch (error) {
+    console.error('❌ [AdminPanel2] Failed to create bucket folder:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to create bucket folder',
+      position: 'top'
+    })
+  }
+}
+
 const getWorkflowStageColor = (stage: string) => {
   const colors = {
     'no_passkey': 'orange',
     'no_request_yet': 'grey',
+    'request_email_sent': 'blue',
     'awaiting_approval': 'warning',
+    'polling_for_deployment': 'purple',
     'waiting_for_deployment': 'info',
     'approved': 'positive',
     'rejected': 'negative',
@@ -1710,7 +1804,7 @@ const loadChatCountsForAgents = async (agents: any[]) => {
 }
 
 // Data fetching functions
-const loadUsers = async () => {
+const loadUsers = async (forceRefresh = false) => {
   try {
     isLoadingUsers.value = true
     
@@ -1727,7 +1821,10 @@ const loadUsers = async () => {
       paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
     }
     
-    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}`)
+    // Add forceRefresh parameter if requested
+    const forceRefreshParam = forceRefresh ? '&forceRefresh=true' : ''
+    
+    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`)
     users.value = data.users || []
     
     // Update total rows number for pagination
@@ -1736,7 +1833,7 @@ const loadUsers = async () => {
     // Update stats
     userStats.value.totalUsers = data.totalCount || 0
     userStats.value.awaitingApproval = users.value.filter(user => 
-      user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet'
+      user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet' || user.workflowStage === 'request_email_sent'
     ).length
     
   } catch (error) {
@@ -2051,6 +2148,18 @@ const handlePollingUpdate = (update) => {
         handleAgentDeploymentCompleted(update.data)
         break
         
+      case 'agent_deployment_failed':
+        handleAgentDeploymentFailed(update.data)
+        break
+        
+      case 'agent_deployment_timeout':
+        handleAgentDeploymentTimeout(update.data)
+        break
+        
+      case 'agent_deployment_error_timeout':
+        handleAgentDeploymentErrorTimeout(update.data)
+        break
+        
       case 'kb_indexing_completed':
         handleKBIndexingCompleted(update.data)
         break
@@ -2072,18 +2181,8 @@ const handlePollingUpdate = (update) => {
 }
 
 const handleAgentDeploymentCompleted = (data) => {
-  // Update user in local state
-  const userIndex = users.value.findIndex(u => u.userId === data.userId)
-  if (userIndex !== -1) {
-    users.value[userIndex].workflowStage = 'agent_assigned'
-    users.value[userIndex].assignedAgentName = data.agentName
-    users.value[userIndex].assignedAgentId = data.agentId
-  }
-  
-  // Update stats
-  userStats.value.awaitingApproval = users.value.filter(u => 
-    u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-  ).length
+  // Refresh the user list to get the latest data from database
+  loadUsers()
   
   // Refresh agents list to show the new agent
   loadAgents()
@@ -2092,6 +2191,45 @@ const handleAgentDeploymentCompleted = (data) => {
   $q.notify({
     type: 'positive',
     message: `✅ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentDeploymentFailed = (data) => {
+  // Refresh the user list to get the latest data from database
+  loadUsers()
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `❌ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentDeploymentTimeout = (data) => {
+  // Refresh the user list to get the latest data from database
+  loadUsers()
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `⏰ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentDeploymentErrorTimeout = (data) => {
+  // Refresh the user list to get the latest data from database
+  loadUsers()
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `💥 ${data.message}`,
     timeout: 10000,
     position: 'top'
   })
@@ -2113,12 +2251,6 @@ const handleKBIndexingCompleted = (data) => {
 const handleUserRegistered = (data) => {
   // Refresh users list to show the new user
   loadUsers()
-  
-  // Update stats
-  userStats.value.totalUsers = users.value.length
-  userStats.value.awaitingApproval = users.value.filter(u => 
-    u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-  ).length
   
   // Show notification
   $q.notify({

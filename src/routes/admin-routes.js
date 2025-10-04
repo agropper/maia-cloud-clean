@@ -297,7 +297,7 @@ router.post('/request-approval', async (req, res) => {
               const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
               if (userDoc) {
                 userDoc.email = email.trim();
-                userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
+                userDoc.workflowStage = 'request_email_sent'; // Update workflow stage to show email was sent
                 await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
               }
             }

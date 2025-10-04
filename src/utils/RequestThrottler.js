@@ -50,7 +50,7 @@ class RequestThrottler {
         request.resolve(result)
       } catch (error) {
         // Handle 429 errors with exponential backoff
-        if (error.status === 429 || (error.message && error.message.includes('429'))) {
+        if (error.status === 429 || (error.message && typeof error.message === 'string' && error.message.includes('429'))) {
           if (request.retries < this.maxRetries) {
             request.retries++
             const backoffDelay = this.retryDelay * Math.pow(2, request.retries - 1)
