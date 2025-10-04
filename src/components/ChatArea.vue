@@ -426,8 +426,6 @@ export default defineComponent({
       this.$emit('view-file', file)
     },
     saveToFile() {
-      console.log('[SAVE] ChatArea saveToFile method called');
-      console.log('[SAVE] Emitting save-to-file event');
       this.$emit('save-to-file')
     },
     triggerSaveToCouchDB() {

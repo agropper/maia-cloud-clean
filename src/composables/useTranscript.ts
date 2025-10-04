@@ -102,14 +102,6 @@ export function useTranscript() {
   }
 
   const generateTranscript = (appState: AppState, includeSystem: boolean = false): string => {
-    console.log('[SAVE] generateTranscript called with:', {
-      includeSystem,
-      messageCount: appState.chatHistory.length,
-      hasChunkedTimeline: appState.hasChunkedTimeline,
-      userName: appState.userName,
-      uploadedFilesCount: appState.uploadedFiles?.length || 0
-    });
-    
     logSystemEvent(
       'Generating transcript',
       {
@@ -120,31 +112,12 @@ export function useTranscript() {
       appState
     )
 
-    console.log('[SAVE] Starting to generate transcript sections...');
-    
-    console.log('[SAVE] Generating session info...');
     const sessionContent = generateSessionInfo(appState);
-    console.log('[SAVE] Session info generated, length:', sessionContent.length);
-    
-    console.log('[SAVE] Generating uploaded files...');
     const uploadedFilesContent = generateUploadedFiles(appState.uploadedFiles);
-    console.log('[SAVE] Uploaded files generated, length:', uploadedFilesContent.length);
-    
-    console.log('[SAVE] Generating conversation...');
     const conversationContent = generateConversation(appState.chatHistory);
-    console.log('[SAVE] Conversation generated, length:', conversationContent.length);
-    
-    console.log('[SAVE] Generating epochs...');
     const epochsContent = generateEpochs(appState.timelineChunks);
-    console.log('[SAVE] Epochs generated, length:', epochsContent.length);
-    
-    console.log('[SAVE] Generating audit section...');
     const auditContent = generateAuditSection();
-    console.log('[SAVE] Audit section generated, length:', auditContent.length);
-    
-    console.log('[SAVE] Generating signature...');
     const signatureContent = generateSignature(appState.userName);
-    console.log('[SAVE] Signature generated, length:', signatureContent.length);
 
     const sections: TranscriptSection[] = [
       {
@@ -174,18 +147,14 @@ export function useTranscript() {
     ]
 
     if (includeSystem) {
-      console.log('[SAVE] Generating timeline...');
       const timelineContent = generateTimeline(appState.timeline, appState.timelineChunks);
-      console.log('[SAVE] Timeline generated, length:', timelineContent.length);
       sections.push({
         type: 'timeline',
         content: timelineContent
       })
     }
 
-    console.log('[SAVE] Assembling final transcript from', sections.length, 'sections...');
     const finalTranscript = sections.map((section) => section.content).join('\n\n') + '\n';
-    console.log('[SAVE] Final transcript assembled, total length:', finalTranscript.length);
     
     return finalTranscript;
   }
