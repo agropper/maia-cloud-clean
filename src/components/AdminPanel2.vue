@@ -514,9 +514,40 @@
               row-key="id"
               :loading="isLoadingAgents"
               :pagination="agentPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onAgentRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ agents.length }} of {{ agentPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="agentPagination.rowsPerPage > 0">
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_left"
+                        :disable="agentPagination.page === 1"
+                        @click="changeAgentPage(agentPagination.page - 1)"
+                      />
+                      <span class="text-grey-6">{{ agentPagination.page }} / {{ Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage) }}</span>
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_right"
+                        :disable="agentPagination.page >= Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage)"
+                        @click="changeAgentPage(agentPagination.page + 1)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-status="props">
                 <QTd :props="props">
                   <QBadge
@@ -580,9 +611,40 @@
               row-key="id"
               :loading="isLoadingKBs"
               :pagination="kbPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onKBRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ knowledgeBases.length }} of {{ kbPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="kbPagination.rowsPerPage > 0">
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_left"
+                        :disable="kbPagination.page === 1"
+                        @click="changeKBPage(kbPagination.page - 1)"
+                      />
+                      <span class="text-grey-6">{{ kbPagination.page }} / {{ Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage) }}</span>
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_right"
+                        :disable="kbPagination.page >= Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage)"
+                        @click="changeKBPage(kbPagination.page + 1)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-isProtected="props">
                 <QTd :props="props">
                   <QBadge
@@ -636,9 +698,40 @@
               row-key="uuid"
               :loading="isLoadingModels"
               :pagination="modelPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onModelRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ availableModels.length }} of {{ modelPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="modelPagination.rowsPerPage > 0">
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_left"
+                        :disable="modelPagination.page === 1"
+                        @click="changeModelPage(modelPagination.page - 1)"
+                      />
+                      <span class="text-grey-6">{{ modelPagination.page }} / {{ Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage) }}</span>
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_right"
+                        :disable="modelPagination.page >= Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage)"
+                        @click="changeModelPage(modelPagination.page + 1)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-selection="props">
                 <QTd :props="props">
                   <QBtn
@@ -686,9 +779,40 @@
               row-key="sessionId"
               :loading="isLoadingSessions"
               :pagination="sessionPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onSessionRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ sessions.length }} of {{ sessionPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="sessionPagination.rowsPerPage > 0">
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_left"
+                        :disable="sessionPagination.page === 1"
+                        @click="changeSessionPage(sessionPagination.page - 1)"
+                      />
+                      <span class="text-grey-6">{{ sessionPagination.page }} / {{ Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage) }}</span>
+                      <QBtn
+                        flat
+                        round
+                        dense
+                        icon="chevron_right"
+                        :disable="sessionPagination.page >= Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage)"
+                        @click="changeSessionPage(sessionPagination.page + 1)"
+                      />
+                    </template>
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-userType="props">
                 <QTd :props="props">
                   <QBtn
@@ -1260,6 +1384,26 @@ const onUserRowClick = (evt: any, row: any) => {
 const changePage = (newPage: number) => {
   userPagination.value.page = newPage
   onUserRequest({ pagination: userPagination.value })
+}
+
+const changeAgentPage = (newPage: number) => {
+  agentPagination.value.page = newPage
+  onAgentRequest({ pagination: agentPagination.value })
+}
+
+const changeKBPage = (newPage: number) => {
+  kbPagination.value.page = newPage
+  onKBRequest({ pagination: kbPagination.value })
+}
+
+const changeModelPage = (newPage: number) => {
+  modelPagination.value.page = newPage
+  onModelRequest({ pagination: modelPagination.value })
+}
+
+const changeSessionPage = (newPage: number) => {
+  sessionPagination.value.page = newPage
+  onSessionRequest({ pagination: sessionPagination.value })
 }
 
 const onAgentRequest = async (props: any) => {
