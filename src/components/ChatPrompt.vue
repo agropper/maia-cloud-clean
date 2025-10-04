@@ -742,29 +742,23 @@ export default defineComponent({
             y = margin;
           }
           
-          // Handle different content types
+          // Handle different content types - all using same font size
           if (line.startsWith('# ')) {
             // Main title
-            doc.setFontSize(16);
             doc.setFont(undefined, 'bold');
             doc.text(line.substring(2), margin, y);
-            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
             y += lineHeight + 2;
           } else if (line.startsWith('## ')) {
             // Section title
-            doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
             doc.text(line.substring(3), margin, y);
-            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
             y += lineHeight + 1;
           } else if (line.startsWith('### ')) {
             // Subsection title
-            doc.setFontSize(13);
             doc.setFont(undefined, 'bold');
             doc.text(line.substring(4), margin, y);
-            doc.setFontSize(12);
             doc.setFont(undefined, 'normal');
             y += lineHeight + 1;
           } else if (line.startsWith('- ') || line.startsWith('* ')) {
