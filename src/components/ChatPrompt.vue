@@ -716,6 +716,7 @@ export default defineComponent({
 
     const saveToFile = () => {
       try {
+        console.log('[SAVE] ===== SAVETOFILE FUNCTION CALLED =====');
         console.log('[SAVE] Starting saveToFile function');
         
         // Ensure userName is set from currentUser for transcript generation
@@ -955,7 +956,7 @@ export default defineComponent({
       }
     "
     @view-file="viewFile"
-    @save-to-file="saveToFile"
+    @save-to-file="() => { console.log('[SAVE] Event handler called in template'); saveToFile(); }"
     @trigger-save-to-couchdb="triggerSaveToCouchDB"
     @close-no-save="closeNoSave"
     @clear-warning="agentWarning = ''"
