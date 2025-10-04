@@ -1521,7 +1521,7 @@ const signOutSession = (sessionId: string) => {
 // Utility methods
 const isPrivateAIUser = (user: any) => {
   // Check if user is a private AI user (not Public User or deep_link user)
-  return user.userId !== 'Public User' && !user.userId.startsWith('deep_link_')
+  return user.userId !== 'Public User' && !user.userId?.startsWith('deep_link_')
 }
 
 const createBucketFolder = async (user: any) => {
