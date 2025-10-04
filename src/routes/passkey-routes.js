@@ -791,8 +791,26 @@ router.get("/auth-status", async (req, res) => {
         userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
       }
       if (userDoc) {
-        // Echo current user to backend console
-        console.log(`✅ Session: ${userDoc._id}`);
+        // Echo current user to backend console (only log once per startup)
+        if (!global.loggedUsers || !global.loggedUsers.has(userDoc._id)) {
+          if (!global.loggedUsers) global.loggedUsers = new Set();
+          global.loggedUsers.add(userDoc._id);
+          console.log(`✅ Session: ${userDoc._id}`);
+        }
+        
+        // Check if user already has an active session, if not create one
+        const { activeSessions, createSession } = await import('../../server.js');
+        const existingSession = activeSessions.find(s => s.userId === userDoc._id && s.userType === 'private');
+        
+        if (!existingSession) {
+          // Create session for user who has valid cookie but no active session entry
+          createSession('private', {
+            userId: userDoc._id,
+            username: userDoc._id,
+            userEmail: userDoc.email || null
+          }, req);
+          console.log(`[SESSION RESTORE] Created session for existing user: ${userDoc._id}`);
+        }
         
         res.json({
           authenticated: true,
