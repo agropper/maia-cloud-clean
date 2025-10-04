@@ -404,6 +404,14 @@ router.post("/register-verify", async (req, res) => {
       req.session.authenticatedAt = new Date().toISOString();
       req.session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 
+      // Add session to activeSessions array for admin panel tracking
+      const { createSession } = await import('../../server.js');
+      createSession('private', {
+        userId: updatedUser._id,
+        username: updatedUser._id,
+        userEmail: updatedUser.email || null
+      }, req);
+
       console.log("✅ Passkey registration successful for user:", userId);
 
       // Send real-time notification to admin panel about new user registration
@@ -568,6 +576,14 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.username = updatedUser._id;
       req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
+
+      // Add session to activeSessions array for admin panel tracking
+      const { createSession } = await import('../../server.js');
+      createSession('private', {
+        userId: updatedUser._id,
+        username: updatedUser._id,
+        userEmail: updatedUser.email || null
+      }, req);
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
       
