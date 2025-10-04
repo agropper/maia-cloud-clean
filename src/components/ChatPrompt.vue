@@ -6,6 +6,7 @@ import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
 import { useTranscript } from "../composables/useTranscript";
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import ChatArea from "./ChatArea.vue";
 import BottomToolbar from "./BottomToolbar.vue";
 import {
@@ -715,65 +716,71 @@ export default defineComponent({
       });
     };
 
-    const saveToFile = () => {
+    const saveToFile = async () => {
       try {
         // Ensure userName is set from currentUser for transcript generation
         const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
         appState.userName = userName;
         
-        const transcriptContent = generateTranscript(appState, true);
+        // Find the chat area element to capture
+        const chatAreaElement = document.querySelector('.chat-area') || 
+                               document.querySelector('.q-scrollarea') ||
+                               document.querySelector('.chat-container');
+        
+        if (!chatAreaElement) {
+          throw new Error('Chat area element not found');
+        }
+        
+        // Capture the chat area as canvas
+        const canvas = await html2canvas(chatAreaElement, {
+          scale: 2, // Higher quality
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          width: chatAreaElement.scrollWidth,
+          height: chatAreaElement.scrollHeight
+        });
         
         // Create PDF document
-        const doc = new jsPDF();
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
         
-        // Split content into lines and add to PDF
-        const lines = transcriptContent.split('\n');
-        const pageHeight = doc.internal.pageSize.height;
-        const margin = 20;
-        let y = margin;
-        const lineHeight = 7;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 10;
+        const contentWidth = pageWidth - (margin * 2);
+        const contentHeight = pageHeight - (margin * 2);
         
-        doc.setFontSize(12);
+        // Calculate scaling to fit content
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const pageAspectRatio = contentWidth / contentHeight;
         
-        for (const line of lines) {
-          // Check if we need a new page
-          if (y + lineHeight > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
-          }
-          
-          // Handle different content types - all using same font size
-          if (line.startsWith('# ')) {
-            // Main title
-            doc.setFont(undefined, 'bold');
-            doc.text(line.substring(2), margin, y);
-            doc.setFont(undefined, 'normal');
-            y += lineHeight + 2;
-          } else if (line.startsWith('## ')) {
-            // Section title
-            doc.setFont(undefined, 'bold');
-            doc.text(line.substring(3), margin, y);
-            doc.setFont(undefined, 'normal');
-            y += lineHeight + 1;
-          } else if (line.startsWith('### ')) {
-            // Subsection title
-            doc.setFont(undefined, 'bold');
-            doc.text(line.substring(4), margin, y);
-            doc.setFont(undefined, 'normal');
-            y += lineHeight + 1;
-          } else if (line.startsWith('- ') || line.startsWith('* ')) {
-            // Bullet point
-            doc.text('• ' + line.substring(2), margin + 10, y);
-            y += lineHeight;
-          } else if (line.trim() === '') {
-            // Empty line
-            y += lineHeight / 2;
-          } else {
-            // Regular text
-            const text = line.replace(/^\*\*(.*?)\*\*/, '$1'); // Remove markdown bold
-            doc.text(text, margin, y);
-            y += lineHeight;
-          }
+        let imgWidth, imgHeight;
+        if (canvasAspectRatio > pageAspectRatio) {
+          // Canvas is wider, fit to width
+          imgWidth = contentWidth;
+          imgHeight = contentWidth / canvasAspectRatio;
+        } else {
+          // Canvas is taller, fit to height
+          imgHeight = contentHeight;
+          imgWidth = contentHeight * canvasAspectRatio;
+        }
+        
+        // Center the image on the page
+        const x = margin + (contentWidth - imgWidth) / 2;
+        const y = margin + (contentHeight - imgHeight) / 2;
+        
+        // Add the canvas image to PDF
+        const imgData = canvas.toDataURL('image/png');
+        doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+        
+        // If content is taller than one page, we might need multiple pages
+        if (imgHeight > contentHeight) {
+          // For now, we'll fit it to one page, but this could be extended
+          // to split across multiple pages if needed
         }
         
         // Save the PDF
@@ -785,7 +792,7 @@ export default defineComponent({
         a.click();
         URL.revokeObjectURL(url);
         
-        logSystemEvent("Transcript saved to PDF file", {}, appState);
+        logSystemEvent("Chat area saved as PDF", {}, appState);
         
       } catch (error) {
         console.error('Error in saveToFile:', error);
