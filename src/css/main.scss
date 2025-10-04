@@ -109,6 +109,19 @@ input, textarea, select {
   padding: 1em 2em; /* Remove fixed bottom padding - now handled dynamically */
   user-select: text !important; // Allow text selection in chat area
   
+  // Override Quasar chat message width to make AI inferences wider
+  .q-chat-message {
+    max-width: 90% !important; // Make messages use 90% of available width
+    
+    .q-message-text {
+      max-width: 100% !important;
+    }
+    
+    .q-message-text-content {
+      max-width: 100% !important;
+    }
+  }
+  
   .q-message-text-content {
     textarea {
       width: 100%;
