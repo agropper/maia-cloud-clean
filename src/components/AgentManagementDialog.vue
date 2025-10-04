@@ -2247,11 +2247,11 @@ export default defineComponent({
         const currentUserId = localCurrentUser.value?.userId;
         const agentName = newAgent.name;
         
-        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId.startsWith('deep_link_')) {
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
           // Authenticated users should only see agents that match their user ID pattern
           const expectedPrefix = `${currentUserId}-agent-`;
           
-          if (!agentName.startsWith(expectedPrefix)) {
+          if (!agentName?.startsWith(expectedPrefix)) {
             console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
             console.log(`🚨 SECURITY FIX: Clearing agent assignment for user ${currentUserId}`);
             currentAgent.value = null;

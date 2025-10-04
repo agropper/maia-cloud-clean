@@ -297,7 +297,7 @@ export class AppInitializer {
         if (data.agent) {
           executionLogger.step('Performing security check on agent');
           // SECURITY CHECK: Public User should only get public agents
-          if (!data.agent.name.startsWith('public-')) {
+          if (!data.agent.name?.startsWith('public-')) {
             executionLogger.error('Security violation detected', { 
               agentName: data.agent.name, 
               expectedPrefix: 'public-' 
