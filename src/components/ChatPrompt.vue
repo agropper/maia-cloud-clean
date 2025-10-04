@@ -715,6 +715,10 @@ export default defineComponent({
     };
 
     const saveToFile = () => {
+      // Ensure userName is set from currentUser for transcript generation
+      const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
+      appState.userName = userName;
+      
       const transcriptContent = generateTranscript(appState, true);
       const blob = new Blob([transcriptContent], { type: "text/markdown" });
       const url = URL.createObjectURL(blob);

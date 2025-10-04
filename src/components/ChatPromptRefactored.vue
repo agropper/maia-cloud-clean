@@ -532,7 +532,21 @@ export default defineComponent({
     };
     const triggerUploadFile = uploadFile;
     const saveMessage = () => {};
-    const saveToFile = () => {};
+    const saveToFile = () => {
+      // Ensure userName is set from currentUser for transcript generation
+      const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
+      appState.userName = userName;
+      
+      const transcriptContent = generateTranscript(appState, true);
+      const blob = new Blob([transcriptContent], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "transcript.md";
+      a.click();
+      URL.revokeObjectURL(url);
+      logSystemEvent("Transcript saved to file", {}, appState);
+    };
     const closeNoSave = () => {};
     const closeSession = () => {};
     const viewFile = (file: UploadedFile) => {
