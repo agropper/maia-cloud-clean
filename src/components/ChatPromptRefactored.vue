@@ -533,19 +533,53 @@ export default defineComponent({
     const triggerUploadFile = uploadFile;
     const saveMessage = () => {};
     const saveToFile = () => {
-      // Ensure userName is set from currentUser for transcript generation
-      const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
-      appState.userName = userName;
-      
-      const transcriptContent = generateTranscript(appState, true);
-      const blob = new Blob([transcriptContent], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "transcript.md";
-      a.click();
-      URL.revokeObjectURL(url);
-      logSystemEvent("Transcript saved to file", {}, appState);
+      try {
+        console.log('[SAVE] ===== SAVETOFILE FUNCTION CALLED IN REFACTORED =====');
+        console.log('[SAVE] Starting saveToFile function in ChatPromptRefactored');
+        
+        // Ensure userName is set from currentUser for transcript generation
+        const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
+        console.log('[SAVE] Setting userName:', userName);
+        appState.userName = userName;
+        
+        console.log('[SAVE] About to generate transcript...');
+        const transcriptContent = generateTranscript(appState, true);
+        console.log('[SAVE] Transcript generated, length:', transcriptContent.length);
+        
+        console.log('[SAVE] Creating blob...');
+        const blob = new Blob([transcriptContent], { type: "text/markdown" });
+        console.log('[SAVE] Blob created, size:', blob.size);
+        
+        console.log('[SAVE] Creating object URL...');
+        const url = URL.createObjectURL(blob);
+        console.log('[SAVE] Object URL created:', url);
+        
+        console.log('[SAVE] Creating download link...');
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "transcript.md";
+        console.log('[SAVE] Download link created, about to click...');
+        
+        a.click();
+        console.log('[SAVE] Download link clicked');
+        
+        URL.revokeObjectURL(url);
+        console.log('[SAVE] Object URL revoked');
+        
+        logSystemEvent("Transcript saved to file", {}, appState);
+        console.log('[SAVE] System event logged - saveToFile completed successfully');
+        
+      } catch (error) {
+        console.error('[SAVE] Error in saveToFile:', error);
+        console.error('[SAVE] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          userName: currentUser.value?.displayName || currentUser.value?.userId || 'Unknown',
+          chatHistoryLength: appState.chatHistory.length,
+          appStateKeys: Object.keys(appState)
+        });
+        writeMessage("Failed to save transcript: " + error.message, "error");
+      }
     };
     const closeNoSave = () => {};
     const closeSession = () => {};
@@ -830,6 +864,17 @@ export default defineComponent({
       @clear-warning="agentWarning = ''"
       @view-file="viewFile"
       @group-saved="handleGroupSaved"
+      @edit-message="editMessage"
+      @save-message="saveMessage"
+      @view-system-message="
+        (content: string) => {
+          appState.popupContent = content;
+          showPopup();
+        }
+      "
+      @save-to-file="() => { console.log('[SAVE] Event handler called in ChatPromptRefactored'); saveToFile(); }"
+      @trigger-save-to-couchdb="triggerSaveToCouchDB"
+      @close-no-save="closeNoSave"
     />
 
     <!-- Bottom Toolbar -->
