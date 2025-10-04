@@ -3209,6 +3209,9 @@ export default defineComponent({
           
           // Emit event to parent to refresh agent data from DigitalOcean API (source of truth)
           emit("refresh-agent-data");
+          
+          // Close the Agent Management Dialog so user sees updated Agent Badge
+          emit("update:modelValue", false);
         }
         
       } catch (error) {
@@ -3750,6 +3753,9 @@ export default defineComponent({
             type: "positive",
             message: "Knowledge base attached to agent successfully!",
           });
+          
+          // Close the Agent Management Dialog so user sees updated Agent Badge
+          emit("update:modelValue", false);
         } else {
           console.error(`❌ Failed to attach KB to agent: ${response.status}`);
           $q.notify({
