@@ -87,11 +87,9 @@ const createSession = (userType, userData, req) => {
       userId: userData.userId || userData.username,
       message: `${userType} session created for ${userData.userId || userData.username}`
     };
-    console.log('[SESSIONS] Sending session_created update:', updateData);
     addUpdateToAllAdmins('session_created', updateData);
-    console.log('[SESSIONS] session_created update sent successfully');
   } catch (error) {
-    console.error('[SESSIONS] Error sending session created update:', error.message);
+    console.error('Error sending session created update:', error.message);
   }
   
   return session;
@@ -308,11 +306,9 @@ const getOrCreatePublicUserSession = (req) => {
         userId: 'Public User',
         message: `public session created for Public User`
       };
-      console.log('[SESSIONS] Sending session_created update for Public User:', updateData);
       addUpdateToAllAdmins('session_created', updateData);
-      console.log('[SESSIONS] session_created update sent successfully for Public User');
     } catch (error) {
-      console.error('[SESSIONS] Error sending Public User session created update:', error.message);
+      console.error('Error sending Public User session created update:', error.message);
     }
   } else {
     // Update last activity for existing session

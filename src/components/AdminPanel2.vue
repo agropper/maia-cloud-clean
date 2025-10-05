@@ -1559,13 +1559,11 @@ const onKBRequest = async (props: any) => {
 }
 
 const onSessionRequest = async (props: any) => {
-  console.log('[SESSIONS] onSessionRequest called with props:', props)
   const { page, rowsPerPage, sortBy, descending } = props.pagination
   const filter = props.filter
   
   try {
     isLoadingSessions.value = true
-    console.log('[SESSIONS] Starting session request - loading state set to true')
     
     // Build query parameters
     const params = new URLSearchParams()
@@ -1579,17 +1577,13 @@ const onSessionRequest = async (props: any) => {
       params.append('filter', filter)
     }
     
-    const url = `/api/admin/sessions?${params}`
-    console.log('[SESSIONS] Making request to:', url)
-    const response = await fetch(url)
+    const response = await fetch(`/api/admin/sessions?${params}`)
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
     const data = await response.json()
-    console.log('[SESSIONS] Received response data:', data)
     sessions.value = data.sessions || []
-    console.log('[SESSIONS] Updated sessions.value with:', sessions.value.length, 'sessions')
     
     // Update pagination info
     sessionPagination.value.page = page
@@ -1602,10 +1596,10 @@ const onSessionRequest = async (props: any) => {
     sessionStats.value.totalSessions = data.total || 0
     sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
     
-    console.log(`[SESSIONS] Loaded ${data.total || data.sessions?.length || 0} sessions successfully`)
+    console.log(`[ADMIN] Loaded ${data.total || data.sessions?.length || 0} sessions`)
     
   } catch (error) {
-    console.error('[SESSIONS] Failed to load sessions:', error)
+    console.error('Failed to load sessions:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to load sessions',
@@ -1613,7 +1607,6 @@ const onSessionRequest = async (props: any) => {
     })
   } finally {
     isLoadingSessions.value = false
-    console.log('[SESSIONS] Session request completed - loading state set to false')
   }
 }
 
@@ -2463,12 +2456,9 @@ const pollForUpdates = async () => {
     
     // Process updates
     if (data.updates && data.updates.length > 0) {
-      console.log('[SESSIONS] Processing', data.updates.length, 'polling updates:', data.updates.map(u => u.type));
       data.updates.forEach(update => {
         handlePollingUpdate(update)
       })
-    } else {
-      console.log('[SESSIONS] No updates in polling response');
     }
     
   } catch (error) {
@@ -2547,7 +2537,6 @@ const createAdminSession = async () => {
 
 const handlePollingUpdate = (update) => {
   try {
-    console.log('[SESSIONS] handlePollingUpdate received update:', update.type, update.data)
     switch (update.type) {
       case 'agent_deployment_completed':
         handleAgentDeploymentCompleted(update.data)
@@ -2594,7 +2583,6 @@ const handlePollingUpdate = (update) => {
         break
         
       default:
-        console.log('[SESSIONS] Unhandled update type:', update.type)
         break
     }
   } catch (error) {
@@ -2695,9 +2683,7 @@ const handleTestUpdate = (data) => {
 }
 
 const handleUserFileUploaded = (data) => {
-  console.log('[SESSIONS] handleUserFileUploaded called:', data)
   // Refresh sessions list to show updated user activity
-  console.log('[SESSIONS] Calling onSessionRequest with pagination:', sessionPagination.value)
   onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
@@ -2710,9 +2696,7 @@ const handleUserFileUploaded = (data) => {
 }
 
 const handleSessionCreated = (data) => {
-  console.log('[SESSIONS] handleSessionCreated called:', data)
   // Refresh sessions list to show new session
-  console.log('[SESSIONS] Calling onSessionRequest with pagination:', sessionPagination.value)
   onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
@@ -2725,9 +2709,7 @@ const handleSessionCreated = (data) => {
 }
 
 const handleSessionUpdated = (data) => {
-  console.log('[SESSIONS] handleSessionUpdated called:', data)
   // Refresh sessions list to show updated session activity
-  console.log('[SESSIONS] Calling onSessionRequest with pagination:', sessionPagination.value)
   onSessionRequest({ pagination: sessionPagination.value })
   
   // Optional: Show a subtle notification for session updates
@@ -2740,9 +2722,7 @@ const handleSessionUpdated = (data) => {
 }
 
 const handleSessionEnded = (data) => {
-  console.log('[SESSIONS] handleSessionEnded called:', data)
   // Refresh sessions list to remove ended session
-  console.log('[SESSIONS] Calling onSessionRequest with pagination:', sessionPagination.value)
   onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
