@@ -42,7 +42,7 @@
       <q-chat-message
         :name="getModelLabel(x, appState, AIoptions)"
         v-if="x.role !== 'system' && !appState.editBox.includes(idx)"
-        size="8"
+        size="11"
         :sent="x.role === 'user'"
       >
         <div>
@@ -64,7 +64,7 @@
 
       <!-- Editable Chat Message -->
       <q-chat-message
-        size="8"
+        size="11"
         class="edit-chat"
         :name="getModelLabel(x, appState, AIoptions)"
         :sent="x.role === 'user'"
@@ -93,7 +93,7 @@
       </q-chat-message>
 
       <!-- System Message -->
-      <q-chat-message :name="x.role" v-if="x.role === 'system'" size="8" sent>
+      <q-chat-message :name="x.role" v-if="x.role === 'system'" size="11" sent>
         <q-card color="secondary">
           <q-card-section>
             <vue-markdown :source="typeof x.content === 'string' ? getSystemMessageType(x.content) : '[Non-string content]'" class="attachment-message" />
@@ -106,7 +106,7 @@
     </div>
 
     <!-- Active Question - Only show when there's a current query being typed -->
-    <q-chat-message :name="getCurrentUserName()" v-if="appState.currentQuery && appState.currentQuery.trim() !== ''" size="8" sent>
+    <q-chat-message :name="getCurrentUserName()" v-if="appState.currentQuery && appState.currentQuery.trim() !== ''" size="11" sent>
       <vue-markdown :source="appState.currentQuery" />
 
     </q-chat-message>
