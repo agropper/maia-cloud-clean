@@ -64,7 +64,7 @@
                 <q-btn
                   color="primary"
                   label="Request Support"
-                  @click="handleRequestSupport"
+                  @click="showAdminApprovalDialog = true"
                   icon="support_agent"
                   class="q-px-lg"
                   size="sm"
@@ -548,48 +548,6 @@
         </div>
       </q-card-section>
     </q-card>
-
-    <!-- Email Request Modal -->
-    <q-dialog v-model="showEmailModal" persistent>
-      <q-card style="min-width: 400px">
-        <q-card-section class="row items-center q-pb-none">
-          <q-avatar icon="email" color="primary" text-color="white" />
-          <span class="q-ml-sm text-h6">Request Support</span>
-        </q-card-section>
-        <q-card-section>
-          <div class="text-body2 q-mb-md">
-            Please provide your email address to request support for setting up your private AI agent and knowledge base access.
-          </div>
-          <q-input
-            v-model="userEmail"
-            label="Email Address"
-            type="email"
-            outlined
-            :rules="[val => !!val || 'Email is required', val => /.+@.+\..+/.test(val) || 'Please enter a valid email']"
-            :disable="isSendingRequest"
-          />
-        </q-card-section>
-        <q-card-actions class="q-px-xl q-pb-xl">
-          <q-space />
-          <q-btn
-            flat
-            label="Cancel"
-            @click="showEmailModal = false"
-            :disable="isSendingRequest"
-            class="q-mr-sm"
-          />
-          <q-btn
-            color="primary"
-            label="Send Request"
-            @click="sendSupportRequest"
-            :loading="isSendingRequest"
-            :disable="!userEmail || !/.+@.+\..+/.test(userEmail)"
-            icon="send"
-            class="q-px-lg"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
 
     <!-- Knowledge Base Link Suggestion Modal -->
     <q-dialog v-model="showKbLinkSuggestionDialog" persistent>
@@ -1444,8 +1402,6 @@ export default defineComponent({
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
     const showKbLinkSuggestionDialog = ref(false);
-    const showEmailModal = ref(false);
-    const isSendingRequest = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
@@ -1809,61 +1765,6 @@ export default defineComponent({
         });
       } finally {
         isSendingHelpEmail.value = false;
-      }
-    };
-
-    // Handle request support button click
-    const handleRequestSupport = () => {
-      showEmailModal.value = true;
-    };
-
-    // Send support request email
-    const sendSupportRequest = async () => {
-      if (!userEmail.value || !localCurrentUser.value) {
-        return;
-      }
-
-      isSendingRequest.value = true;
-      try {
-        // Send email notification to admin using the existing API
-        const response = await fetch('/api/admin/request-approval', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: localCurrentUser.value.userId,
-            email: userEmail.value,
-            requestType: 'new_user_support_request',
-            message: `New user ${localCurrentUser.value.userId} (${userEmail.value}) is requesting support to set up their private AI agent and knowledge base access.`
-          }),
-        });
-
-        if (response.ok) {
-          // Close the email modal
-          showEmailModal.value = false;
-          
-          // Show success message
-          $q.notify({
-            type: "positive",
-            message: "Support request sent successfully! The administrator will review your request.",
-          });
-          
-          // Update local user workflow stage to reflect the change
-          if (localCurrentUser.value) {
-            localCurrentUser.value.workflowStage = 'awaiting_approval';
-          }
-        } else {
-          throw new Error('Failed to send support request');
-        }
-      } catch (error) {
-        console.error('Error sending support request:', error);
-        $q.notify({
-          type: "negative",
-          message: "Failed to send support request. Please try again.",
-        });
-      } finally {
-        isSendingRequest.value = false;
       }
     };
 
@@ -4573,8 +4474,6 @@ export default defineComponent({
       showCreateKbDialog,
       showSwitchKbDialog,
       showKbLinkSuggestionDialog,
-      showEmailModal,
-      isSendingRequest,
       selectedKnowledgeBase,
       newKbName,
       newKbDescription,
@@ -4638,8 +4537,6 @@ export default defineComponent({
       helpEmailData,
       isSendingHelpEmail,
       sendHelpEmail,
-      handleRequestSupport,
-      sendSupportRequest,
       hasRequestedApproval,
       updateWorkflowProgressForAgent,
       cleanupBucket,
