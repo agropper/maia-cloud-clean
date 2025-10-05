@@ -1028,6 +1028,7 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
     
     res.json({
       success: true,
+      text: data.text, // Keep the extracted text for AI context
       // markdown, // Commented out - PDF conversion to text not needed for larger AIs
       pages: data.numpages,
       characters: data.text.length
