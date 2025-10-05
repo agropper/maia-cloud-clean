@@ -2566,6 +2566,22 @@ const handlePollingUpdate = (update) => {
         handleTestUpdate(update.data)
         break
         
+      case 'user_file_uploaded':
+        handleUserFileUploaded(update.data)
+        break
+        
+      case 'session_created':
+        handleSessionCreated(update.data)
+        break
+        
+      case 'session_updated':
+        handleSessionUpdated(update.data)
+        break
+        
+      case 'session_ended':
+        handleSessionEnded(update.data)
+        break
+        
       default:
         break
     }
@@ -2663,6 +2679,58 @@ const handleTestUpdate = (data) => {
     message: `Test update: ${data.message}`,
     position: 'top',
     timeout: 3000
+  })
+}
+
+const handleUserFileUploaded = (data) => {
+  // Refresh sessions list to show updated user activity
+  loadSessions()
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `📁 ${data.message}`,
+    timeout: 5000,
+    position: 'top'
+  })
+}
+
+const handleSessionCreated = (data) => {
+  // Refresh sessions list to show new session
+  loadSessions()
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `👤 New session: ${data.message}`,
+    timeout: 3000,
+    position: 'top'
+  })
+}
+
+const handleSessionUpdated = (data) => {
+  // Refresh sessions list to show updated session activity
+  loadSessions()
+  
+  // Optional: Show a subtle notification for session updates
+  // $q.notify({
+  //   type: 'info',
+  //   message: `🔄 Session updated: ${data.message}`,
+  //   timeout: 2000,
+  //   position: 'top'
+  // })
+}
+
+const handleSessionEnded = (data) => {
+  // Refresh sessions list to remove ended session
+  loadSessions()
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `👋 Session ended: ${data.message}`,
+    timeout: 3000,
+    position: 'top'
   })
 }
 

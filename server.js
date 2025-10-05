@@ -79,6 +79,19 @@ const createSession = (userType, userData, req) => {
   // Log to database
   logSessionEvent('created', session);
   
+  // Send session creation update to admin panels
+  try {
+    const updateData = {
+      sessionId: session.sessionId,
+      userType: userType,
+      userId: userData.userId || userData.username,
+      message: `${userType} session created for ${userData.userId || userData.username}`
+    };
+    addUpdateToAllAdmins('session_created', updateData);
+  } catch (error) {
+    console.error('Error sending session created update:', error.message);
+  }
+  
   return session;
 };
 
@@ -92,6 +105,45 @@ const removeSession = (sessionId) => {
     
     // Log to database
     logSessionEvent('destroyed', session);
+    
+    // Send session ended update to admin panels
+    try {
+      const updateData = {
+        sessionId: sessionId,
+        userType: session.userType,
+        userId: session.userId || session.username,
+        message: `${session.userType} session ended for ${session.userId || session.username}`
+      };
+      addUpdateToAllAdmins('session_ended', updateData);
+    } catch (error) {
+      console.error('Error sending session ended update:', error.message);
+    }
+  }
+};
+
+const updateSessionActivity = (sessionId, activityType = 'api_request') => {
+  const sessionIndex = activeSessions.findIndex(s => s.sessionId === sessionId);
+  if (sessionIndex !== -1) {
+    const session = activeSessions[sessionIndex];
+    const previousActivity = session.lastActivity;
+    session.lastActivity = new Date().toISOString();
+    
+    // Only send session_updated notifications for significant activities
+    // (not for every API request to avoid spam)
+    if (activityType === 'user_action' || activityType === 'file_upload') {
+      try {
+        const updateData = {
+          sessionId: sessionId,
+          userType: session.userType,
+          userId: session.userId || session.username,
+          activityType: activityType,
+          message: `${session.userType} session activity: ${activityType} for ${session.userId || session.username}`
+        };
+        addUpdateToAllAdmins('session_updated', updateData);
+      } catch (error) {
+        console.error('Error sending session updated update:', error.message);
+      }
+    }
   }
 };
 
@@ -265,7 +317,7 @@ const trackPublicUserActivity = (req) => {
 };
 
 // Export session management functions for use in route files
-export { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity };
+export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity };
 
 const initializeDatabase = async () => {
   try {
@@ -1347,6 +1399,11 @@ app.post('/api/upload-to-bucket', async (req, res) => {
         
         addUpdateToAllAdmins('user_file_uploaded', updateData);
         console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
+        
+        // Update session activity for the user who uploaded the file
+        if (req.sessionID) {
+          updateSessionActivity(req.sessionID, 'file_upload');
+        }
       } catch (notificationError) {
         console.error(`❌ Error sending file upload notification:`, notificationError.message);
       }
