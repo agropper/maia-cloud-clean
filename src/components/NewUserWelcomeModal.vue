@@ -134,13 +134,6 @@ watch(isOpen, (newValue) => {
 
 const handleCancel = () => {
   isOpen.value = false
-  
-  // Save that user has dismissed the welcome modal to prevent it from showing again
-  if (props.currentUser && props.currentUser.userId) {
-    localStorage.setItem(`maia-welcome-dismissed-${props.currentUser.userId}`, 'true')
-    localStorage.setItem(`maia-welcome-dismissed-timestamp-${props.currentUser.userId}`, new Date().toISOString())
-    console.log(`✅ [NewUserWelcomeModal] User ${props.currentUser.userId} dismissed welcome modal`)
-  }
 }
 
 const handleRequestSupport = () => {

@@ -677,13 +677,6 @@ export default defineComponent({
         return false
       }
       
-      // Check if user has already dismissed the welcome modal
-      const hasDismissed = localStorage.getItem(`maia-welcome-dismissed-${user.userId}`)
-      if (hasDismissed) {
-        console.log(`ℹ️ [NewUserWelcomeModal] User ${user.userId} has already dismissed welcome modal`)
-        return false
-      }
-      
       try {
         // Fetch user's workflow stage from backend
         const response = await fetch(`/api/admin-management/users/${encodeURIComponent(user.userId)}`)
