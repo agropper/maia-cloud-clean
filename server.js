@@ -87,9 +87,11 @@ const createSession = (userType, userData, req) => {
       userId: userData.userId || userData.username,
       message: `${userType} session created for ${userData.userId || userData.username}`
     };
+    console.log('[SESSIONS] Sending session_created update:', updateData);
     addUpdateToAllAdmins('session_created', updateData);
+    console.log('[SESSIONS] session_created update sent successfully');
   } catch (error) {
-    console.error('Error sending session created update:', error.message);
+    console.error('[SESSIONS] Error sending session created update:', error.message);
   }
   
   return session;
