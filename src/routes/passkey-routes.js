@@ -12,6 +12,19 @@ import { cacheManager } from '../utils/CacheManager.js';
 const router = express.Router();
 let couchDBClient = null;
 
+// Helper function to get the base URL for internal API calls
+const getBaseUrl = () => {
+  // Try to get from environment variables first
+  if (process.env.ADMIN_BASE_URL) {
+    return process.env.ADMIN_BASE_URL;
+  }
+  if (process.env.ORIGIN) {
+    return process.env.ORIGIN;
+  }
+  // Fallback to localhost for development
+  return 'http://localhost:3001';
+};
+
 // Function to set the CouchDB client (will be called from server.js)
 export const setCouchDBClient = (client) => {
   // console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
@@ -414,6 +427,26 @@ router.post("/register-verify", async (req, res) => {
 
       console.log("✅ Passkey registration successful for user:", userId);
 
+      // Ensure user has a bucket folder
+      try {
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: updatedUser._id })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          if (!bucketData.folderExists) {
+            console.log(`✅ [BUCKET] Created bucket folder for new user: ${updatedUser._id}`);
+          }
+        } else {
+          console.warn(`⚠️ [BUCKET] Failed to ensure bucket folder for new user ${updatedUser._id}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.warn(`⚠️ [BUCKET] Error ensuring bucket folder for new user ${updatedUser._id}:`, bucketError.message);
+      }
+
       // Send real-time notification to admin panel about new user registration
       try {
         const { addUpdateToAllAdmins } = await import('../../server.js');
@@ -586,6 +619,26 @@ router.post("/authenticate-verify", async (req, res) => {
       }, req);
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
+      
+      // Ensure user has a bucket folder
+      try {
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: updatedUser._id })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          if (!bucketData.folderExists) {
+            console.log(`✅ [BUCKET] Created bucket folder for authenticated user: ${updatedUser._id}`);
+          }
+        } else {
+          console.warn(`⚠️ [BUCKET] Failed to ensure bucket folder for user ${updatedUser._id}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.warn(`⚠️ [BUCKET] Error ensuring bucket folder for user ${updatedUser._id}:`, bucketError.message);
+      }
       
       // Set authentication cookie with user info and timestamp
       const authData = {

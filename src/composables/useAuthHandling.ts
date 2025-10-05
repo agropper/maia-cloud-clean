@@ -294,8 +294,38 @@ const uploadPDFFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
+      console.log('🔍 [PDF UPLOAD] Debug current user object:', {
+        currentUser: appState.currentUser,
+        userId: appState.currentUser?.userId,
+        displayName: appState.currentUser?.displayName,
+        isAuthenticated: appState.currentUser?.isAuthenticated
+      })
       const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
       const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      console.log('🔍 [PDF UPLOAD] Resolved currentUser:', currentUser, 'userFolder:', userFolder)
+      
+      // Ensure user has a bucket folder if they're authenticated (not Public User)
+      if (currentUser !== 'Public User' && appState.currentUser?.isAuthenticated) {
+        try {
+          console.log('🔍 [PDF UPLOAD] Ensuring bucket folder exists for user:', currentUser)
+          const bucketResponse = await fetch('/api/bucket/ensure-user-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser })
+          })
+          
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json()
+            if (!bucketData.folderExists) {
+              console.log(`✅ [PDF UPLOAD] Created bucket folder for user: ${currentUser}`)
+            }
+          } else {
+            console.warn(`⚠️ [PDF UPLOAD] Failed to ensure bucket folder for user ${currentUser}: ${bucketResponse.status}`)
+          }
+        } catch (bucketError) {
+          console.warn(`⚠️ [PDF UPLOAD] Error ensuring bucket folder for user ${currentUser}:`, bucketError)
+        }
+      }
       
       // Convert file to base64 for bucket storage
       const fileReader = new FileReader()
