@@ -2853,13 +2853,16 @@ app.post('/api/save-group-chat', async (req, res) => {
     // console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
 
     // Files are already processed by frontend (base64 conversion done there)
-    // Just ensure they're properly formatted for storage
-    const processedUploadedFiles = (uploadedFiles || []).map(file => {
-      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
-      }
-      return file;
-    });
+    // For database storage, exclude large content to prevent document size limits
+    const processedUploadedFiles = (uploadedFiles || []).map(file => ({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: file.uploadedAt,
+      // Exclude large content fields to prevent Cloudant document size limits
+      // content and originalFile contain large data that shouldn't be stored in chat documents
+    }));
 
     // Generate a secure, random share ID
     const generateShareId = () => {
@@ -3198,13 +3201,16 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     }
 
     // Files are already processed by frontend (base64 conversion done there)
-    // Just ensure they're properly formatted for storage
-    const processedUploadedFiles = (uploadedFiles || []).map(file => {
-      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
-      }
-      return file;
-    });
+    // For database storage, exclude large content to prevent document size limits
+    const processedUploadedFiles = (uploadedFiles || []).map(file => ({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: file.uploadedAt,
+      // Exclude large content fields to prevent Cloudant document size limits
+      // content and originalFile contain large data that shouldn't be stored in chat documents
+    }));
 
     // Update the chat document
     // For existing chats, preserve the original currentUser (owner) and patientOwner, only update content
