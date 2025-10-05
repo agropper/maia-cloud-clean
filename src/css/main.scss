@@ -105,68 +105,9 @@ input, textarea, select {
   -ms-user-select: text !important;
 }
 
-// Global override for Quasar chat message width
-.q-chat-message {
-  max-width: 90% !important;
-  width: 90% !important;
-}
-
-.q-chat-message .q-message-text {
-  max-width: 100% !important;
-  width: 100% !important;
-}
-
-.q-chat-message .q-message-text-content {
-  max-width: 100% !important;
-  width: 100% !important;
-}
-
 .chat-area {
   padding: 1em 2em; /* Remove fixed bottom padding - now handled dynamically */
   user-select: text !important; // Allow text selection in chat area
-  
-  // Override Quasar chat message width to make AI inferences wider
-  .q-chat-message {
-    max-width: 90% !important; // Make messages use 90% of available width
-    width: 90% !important;
-    
-    .q-message-text {
-      max-width: 100% !important;
-      width: 100% !important;
-    }
-    
-    .q-message-text-content {
-      max-width: 100% !important;
-      width: 100% !important;
-    }
-    
-    .q-message-text-content > div {
-      max-width: 100% !important;
-      width: 100% !important;
-    }
-  }
-  
-  // Additional specific overrides for Quasar chat message components
-  .chat-area .q-chat-message {
-    max-width: 90% !important;
-    width: 90% !important;
-  }
-  
-  .chat-area .q-chat-message .q-message-text {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-  
-  .chat-area .q-chat-message .q-message-text-content {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-  
-  // Override any inline styles that might be set by Quasar
-  .chat-area .q-chat-message[style] {
-    max-width: 90% !important;
-    width: 90% !important;
-  }
   
   .q-message-text-content {
     textarea {
