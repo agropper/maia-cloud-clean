@@ -1388,7 +1388,7 @@ app.post('/api/user-file-metadata', async (req, res) => {
     }
 
     // Save the updated user document
-    await cacheManager.saveDocument('maia_users', userId, userDoc);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
     console.log(`✅ Updated file metadata for user ${userId}: ${fileMetadata.fileName}`);
     
@@ -1473,7 +1473,7 @@ app.post('/api/user-file-kb-association', async (req, res) => {
     userDoc.files[fileIndex].updatedAt = new Date().toISOString();
 
     // Save the updated user document
-    await cacheManager.saveDocument('maia_users', userId, userDoc);
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
     console.log(`✅ Updated KB association for user ${userId}, file ${fileName}, action: ${action}`);
     
