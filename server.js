@@ -1353,7 +1353,7 @@ app.post('/api/user-file-metadata', async (req, res) => {
     }
 
     // Get the user document
-    const userDoc = await cacheManager.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
     if (!userDoc) {
       return res.status(404).json({ 
@@ -1421,7 +1421,7 @@ app.post('/api/user-file-kb-association', async (req, res) => {
     }
 
     // Get the user document
-    const userDoc = await cacheManager.getDocument('maia_users', userId);
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
     if (!userDoc) {
       return res.status(404).json({ 
