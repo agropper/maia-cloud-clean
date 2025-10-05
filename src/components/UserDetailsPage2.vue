@@ -171,6 +171,47 @@
         </div>
       </div>
 
+      <!-- User Files -->
+      <div class="files-section" v-if="user.files && user.files.length > 0">
+        <h4 class="section-title">📁 User Files</h4>
+        <div class="files-table">
+          <div class="file-header">
+            <div class="file-name" data-label="File Name">File Name</div>
+            <div class="file-size" data-label="Size">Size</div>
+            <div class="file-type" data-label="Type">Type</div>
+            <div class="file-kbs" data-label="Knowledge Bases">Knowledge Bases</div>
+            <div class="file-date" data-label="Uploaded">Uploaded</div>
+          </div>
+          <div 
+            v-for="file in user.files" 
+            :key="file.bucketKey" 
+            class="file-row"
+          >
+            <div class="file-name" data-label="File Name">
+              <QIcon :name="getFileIcon(file.fileType)" class="file-icon" />
+              {{ file.fileName }}
+            </div>
+            <div class="file-size" data-label="Size">{{ formatFileSize(file.fileSize) }}</div>
+            <div class="file-type" data-label="Type">{{ file.fileType }}</div>
+            <div class="file-kbs" data-label="Knowledge Bases">
+              <div v-if="file.knowledgeBases && file.knowledgeBases.length > 0" class="kb-chips">
+                <QChip
+                  v-for="kb in file.knowledgeBases"
+                  :key="kb.id"
+                  :label="kb.name"
+                  size="sm"
+                  color="primary"
+                  outline
+                  class="kb-chip"
+                />
+              </div>
+              <div v-else class="no-kbs">Not in any KB</div>
+            </div>
+            <div class="file-date" data-label="Uploaded">{{ formatRelativeTime(file.uploadedAt) }}</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Additional Info -->
       <div class="info-section">
         <h4 class="section-title">Additional Information</h4>
@@ -338,6 +379,17 @@ const formatFileSize = (bytes: number) => {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return `${Math.round(bytes / Math.pow(1024, i) * 100) / 100} ${sizes[i]}`
+}
+
+const getFileIcon = (fileType: string) => {
+  const icons = {
+    'pdf': 'picture_as_pdf',
+    'text': 'description',
+    'transcript': 'chat',
+    'markdown': 'description',
+    'rtf': 'description'
+  }
+  return icons[fileType] || 'insert_drive_file'
 }
 
 const getWorkflowStageColor = (stage: string) => {
@@ -665,6 +717,102 @@ onMounted(() => {
   min-width: 140px;
 }
 
+/* Files Section */
+.files-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.files-table {
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.file-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f5f5f5;
+  font-weight: 600;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: center;
+  font-size: 14px;
+}
+
+.file-row:last-child {
+  border-bottom: none;
+}
+
+.file-row:hover {
+  background: #f9f9f9;
+}
+
+.file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.file-icon {
+  color: #666;
+  font-size: 18px;
+}
+
+.file-size {
+  color: #666;
+  font-family: monospace;
+}
+
+.file-type {
+  color: #666;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-kbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-chip {
+  font-size: 11px;
+}
+
+.no-kbs {
+  color: #999;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.file-date {
+  color: #666;
+  font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .user-details-page2 {
@@ -701,6 +849,41 @@ onMounted(() => {
   .info-item strong {
     min-width: auto;
     margin-bottom: 4px;
+  }
+  
+  .files-table {
+    overflow-x: auto;
+  }
+  
+  .file-header,
+  .file-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .file-header > div,
+  .file-row > div {
+    padding: 4px 0;
+  }
+  
+  .file-header > div::before,
+  .file-row > div::before {
+    content: attr(data-label) ': ';
+    font-weight: 600;
+    color: #666;
+    display: inline-block;
+    min-width: 120px;
+  }
+  
+  .file-row > div[data-label="File Name"]::before {
+    display: none;
+  }
+  
+  .file-row > div[data-label="File Name"] {
+    font-weight: 600;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 8px;
   }
 }
 </style>

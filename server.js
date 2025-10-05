@@ -1339,6 +1339,159 @@ app.post('/api/upload-file', async (req, res) => {
   }
 });
 
+// Update user file metadata in user record
+app.post('/api/user-file-metadata', async (req, res) => {
+  try {
+    const { userId, fileMetadata } = req.body;
+    
+    if (!userId || !fileMetadata) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID and file metadata are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Get the user document
+    const userDoc = await cacheManager.getDocument('maia_users', userId);
+    
+    if (!userDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Initialize files array if it doesn't exist
+    if (!userDoc.files) {
+      userDoc.files = [];
+    }
+
+    // Check if file already exists (by bucketKey)
+    const existingFileIndex = userDoc.files.findIndex(f => f.bucketKey === fileMetadata.bucketKey);
+    
+    if (existingFileIndex >= 0) {
+      // Update existing file metadata
+      userDoc.files[existingFileIndex] = {
+        ...userDoc.files[existingFileIndex],
+        ...fileMetadata,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      // Add new file metadata
+      userDoc.files.push({
+        ...fileMetadata,
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // Save the updated user document
+    await cacheManager.saveDocument('maia_users', userId, userDoc);
+    
+    console.log(`✅ Updated file metadata for user ${userId}: ${fileMetadata.fileName}`);
+    
+    res.json({
+      success: true,
+      message: 'File metadata updated successfully',
+      fileCount: userDoc.files.length
+    });
+  } catch (error) {
+    console.error('❌ Error updating user file metadata:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to update file metadata: ${error.message}`,
+      error: 'UPDATE_FAILED'
+    });
+  }
+});
+
+// Update file KB associations when files are added to knowledge bases
+app.post('/api/user-file-kb-association', async (req, res) => {
+  try {
+    const { userId, fileName, bucketKey, knowledgeBaseId, knowledgeBaseName, action } = req.body;
+    
+    if (!userId || !fileName || !bucketKey || !knowledgeBaseId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID, file name, bucket key, and knowledge base ID are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Get the user document
+    const userDoc = await cacheManager.getDocument('maia_users', userId);
+    
+    if (!userDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Initialize files array if it doesn't exist
+    if (!userDoc.files) {
+      userDoc.files = [];
+    }
+
+    // Find the file
+    const fileIndex = userDoc.files.findIndex(f => f.bucketKey === bucketKey);
+    
+    if (fileIndex < 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'File not found in user record',
+        error: 'FILE_NOT_FOUND'
+      });
+    }
+
+    // Initialize knowledgeBases array if it doesn't exist
+    if (!userDoc.files[fileIndex].knowledgeBases) {
+      userDoc.files[fileIndex].knowledgeBases = [];
+    }
+
+    if (action === 'add') {
+      // Add KB association if not already present
+      const existingKB = userDoc.files[fileIndex].knowledgeBases.find(kb => kb.id === knowledgeBaseId);
+      if (!existingKB) {
+        userDoc.files[fileIndex].knowledgeBases.push({
+          id: knowledgeBaseId,
+          name: knowledgeBaseName || knowledgeBaseId,
+          addedAt: new Date().toISOString()
+        });
+      }
+    } else if (action === 'remove') {
+      // Remove KB association
+      userDoc.files[fileIndex].knowledgeBases = userDoc.files[fileIndex].knowledgeBases.filter(
+        kb => kb.id !== knowledgeBaseId
+      );
+    }
+
+    // Update the file's updatedAt timestamp
+    userDoc.files[fileIndex].updatedAt = new Date().toISOString();
+
+    // Save the updated user document
+    await cacheManager.saveDocument('maia_users', userId, userDoc);
+    
+    console.log(`✅ Updated KB association for user ${userId}, file ${fileName}, action: ${action}`);
+    
+    res.json({
+      success: true,
+      message: 'File KB association updated successfully',
+      knowledgeBaseCount: userDoc.files[fileIndex].knowledgeBases.length
+    });
+  } catch (error) {
+    console.error('❌ Error updating file KB association:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to update file KB association: ${error.message}`,
+      error: 'UPDATE_FAILED'
+    });
+  }
+});
+
 // Upload file to DigitalOcean Spaces bucket with user folder support
 app.post('/api/upload-to-bucket', async (req, res) => {
   try {

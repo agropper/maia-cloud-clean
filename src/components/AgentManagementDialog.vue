@@ -3191,7 +3191,39 @@ export default defineComponent({
           
           console.log('[KB CREATE] Knowledge base attached to agent');
           
-          // Step 4: Clean up files
+          // Step 4: Update file KB associations
+          console.log('[KB CREATE] Updating file KB associations...');
+          const currentUser = localCurrentUser.value?.userId || 'unknown';
+          const kbName = kbResult.knowledge_base?.name || kbResult.data?.name || kbName;
+          
+          for (const file of allSelectedFiles) {
+            try {
+              // Get the bucket key for the file
+              const fileName = file.key ? file.key.split('/').pop() : file.name;
+              const bucketKey = `${currentUser}/${fileName}`;
+              
+              await fetch('/api/user-file-kb-association', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: currentUser,
+                  fileName: fileName,
+                  bucketKey: bucketKey,
+                  knowledgeBaseId: knowledgeBaseId,
+                  knowledgeBaseName: kbName,
+                  action: 'add'
+                })
+              });
+              
+              console.log(`✅ Updated KB association for file: ${fileName}`);
+            } catch (kbAssocError) {
+              console.warn('Failed to update KB association for file:', file.name, kbAssocError);
+            }
+          }
+          
+          // Step 5: Clean up files
           console.log('[KB CREATE] Cleaning up files...');
           
           // Remove uploaded files from appState
