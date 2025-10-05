@@ -894,6 +894,44 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+/* Force chat messages to use 90% width */
+:deep(.q-chat-message) {
+  max-width: 90% !important;
+  width: 90% !important;
+  min-width: 90% !important;
+}
+
+:deep(.q-chat-message .q-message-text) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+:deep(.q-chat-message .q-message-text-content) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+:deep(.q-chat-message .q-message-text-content > div) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Additional overrides for Quasar internal classes */
+:deep(.q-message) {
+  max-width: 90% !important;
+  width: 90% !important;
+}
+
+:deep(.q-message__content) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+:deep(.q-message__text) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
 .badge-row {
   display: flex;
   gap: 16px;
