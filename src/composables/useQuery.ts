@@ -122,7 +122,7 @@ export const sendQuery = async (
     // Add uploaded files context
     if (appState.uploadedFiles && appState.uploadedFiles.length > 0) {
       const filesContext = appState.uploadedFiles.map(file => 
-        `File: ${file.name} (${file.type})\nContent:\n${file.type === 'pdf' && file.transcript ? file.transcript : file.content}`
+        `File: ${file.name} (${file.type})\nContent:\n${file.type === 'pdf' ? (file.transcript || file.content) : file.content}`
       ).join('\n\n')
       const filesBytes = new TextEncoder().encode(filesContext).length
       const filesTokens = estimateTokenCount(filesContext)
@@ -158,7 +158,7 @@ export const sendQuery = async (
         id: file.id,
         name: file.name,
         type: file.type,
-        content: file.type === 'pdf' && file.transcript ? file.transcript : file.content
+        content: file.type === 'pdf' ? (file.transcript || file.content) : file.content
       })),
       currentUser: currentUser // Pass the current user identity to the backend
     });
