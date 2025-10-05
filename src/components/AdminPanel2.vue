@@ -2684,7 +2684,7 @@ const handleTestUpdate = (data) => {
 
 const handleUserFileUploaded = (data) => {
   // Refresh sessions list to show updated user activity
-  loadSessions()
+  onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
   $q.notify({
@@ -2697,7 +2697,7 @@ const handleUserFileUploaded = (data) => {
 
 const handleSessionCreated = (data) => {
   // Refresh sessions list to show new session
-  loadSessions()
+  onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
   $q.notify({
@@ -2710,7 +2710,7 @@ const handleSessionCreated = (data) => {
 
 const handleSessionUpdated = (data) => {
   // Refresh sessions list to show updated session activity
-  loadSessions()
+  onSessionRequest({ pagination: sessionPagination.value })
   
   // Optional: Show a subtle notification for session updates
   // $q.notify({
@@ -2723,7 +2723,7 @@ const handleSessionUpdated = (data) => {
 
 const handleSessionEnded = (data) => {
   // Refresh sessions list to remove ended session
-  loadSessions()
+  onSessionRequest({ pagination: sessionPagination.value })
   
   // Show notification
   $q.notify({
