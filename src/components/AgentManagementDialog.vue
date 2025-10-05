@@ -2543,6 +2543,16 @@ export default defineComponent({
       });
     };
 
+    // Helper function to convert file to base64
+    const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(file)
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = error => reject(error)
+      })
+    }
+
     // Upload selected files to bucket (step 4) - UNIQUE FUNCTION IDENTIFIER
     const uploadSelectedFilesToBucket = async () => {
       if (selectedDocuments.value.length === 0) return;
@@ -2563,19 +2573,22 @@ export default defineComponent({
             let fileType = 'text/plain'
             
             if (file.type === 'pdf') {
-              // PDF files have both raw text (content) and AI-ready markdown (transcript)
+              // PDF conversion to text is not necessary for larger AIs and knowledge bases.
+              // Keep PDF as-is for AI processing
               if (file.transcript && file.transcript.length > 0) {
+                // Use transcript if available (from older uploads)
                 aiContent = file.transcript
                 fileName = file.name.replace('.pdf', '.md')
                 fileType = 'text/markdown'
-              } else if (file.content && file.content.length > 0) {
-                // Fallback to raw content if no transcript available
-                aiContent = file.content
-                fileName = file.name.replace('.pdf', '.md')
-                fileType = 'text/markdown'
               } else {
-                console.warn(`⚠️ PDF file ${fileName} has no content or transcript - skipping`)
-                continue
+                // Upload original PDF file for AI processing
+                aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null
+                fileName = file.name // Keep original .pdf extension
+                fileType = 'application/pdf'
+                if (!aiContent) {
+                  console.warn(`⚠️ PDF file ${fileName} has no original file - skipping`)
+                  continue
+                }
               }
             } else if (file.type === 'rtf') {
               // RTF files have both raw text (content) and AI-ready markdown (transcript)
@@ -2700,12 +2713,21 @@ export default defineComponent({
             
             // Processing file for upload
             
-            // For PDFs and RTFs, use the extracted markdown content
-            if (file.type === 'pdf' && file.transcript) {
-              aiContent = file.transcript
-              fileName = file.name.replace('.pdf', '.md')
-              fileType = 'text/markdown'
-              console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
+            // For PDFs, keep original format for AI processing
+            if (file.type === 'pdf') {
+              if (file.transcript) {
+                // Use transcript if available (from older uploads)
+                aiContent = file.transcript
+                fileName = file.name.replace('.pdf', '.md')
+                fileType = 'text/markdown'
+                console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
+              } else {
+                // Upload original PDF file for AI processing
+                aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null
+                fileName = file.name // Keep original .pdf extension
+                fileType = 'application/pdf'
+                console.log(`📄 Using original PDF for AI processing: ${fileName}`)
+              }
             } else if (file.type === 'rtf' && file.transcript) {
               aiContent = file.transcript
               fileName = file.name.replace('.rtf', '.md')
@@ -3026,16 +3048,19 @@ export default defineComponent({
               // Handle different file types
               if (file.type === 'pdf') {
                 if (file.transcript && file.transcript.length > 0) {
+                  // Use transcript if available (from older uploads)
                   aiContent = file.transcript;
                   fileName = file.name.replace('.pdf', '.md');
                   fileType = 'text/markdown';
-                } else if (file.content && file.content.length > 0) {
-                  aiContent = file.content;
-                  fileName = file.name.replace('.pdf', '.md');
-                  fileType = 'text/markdown';
                 } else {
-                  console.warn(`PDF file ${fileName} has no content or transcript - skipping`);
-                  continue;
+                  // Upload original PDF file for AI processing
+                  aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null;
+                  fileName = file.name; // Keep original .pdf extension
+                  fileType = 'application/pdf';
+                  if (!aiContent) {
+                    console.warn(`PDF file ${fileName} has no original file - skipping`);
+                    continue;
+                  }
                 }
               } else if (file.type === 'rtf') {
                 if (file.transcript && file.transcript.length > 0) {

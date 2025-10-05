@@ -523,7 +523,9 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
     } catch (uploadError) {
     }
     
-    return result.markdown || result.text;
+    // PDF conversion to text is not necessary for larger AIs and knowledge bases.
+    // Return original PDF content if available, otherwise fallback to text
+    return result.markdown || result.text || '';
   } catch (error) {
     console.error('Error parsing PDF:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

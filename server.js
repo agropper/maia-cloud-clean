@@ -1020,14 +1020,15 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
       return res.status(400).json({ error: 'Could not extract text from PDF' });
     }
     
-    // Convert to markdown format
-    const markdown = convertPdfToMarkdown(data);
+    // PDF conversion to text is not necessary for larger AIs and knowledge bases.
+    // Commenting out text extraction to keep PDFs as-is for AI processing
+    // const markdown = convertPdfToMarkdown(data);
     
     // console.log(`📄 PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
     
     res.json({
       success: true,
-      markdown,
+      // markdown, // Commented out - PDF conversion to text not needed for larger AIs
       pages: data.numpages,
       characters: data.text.length
     });

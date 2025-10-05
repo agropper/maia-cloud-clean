@@ -214,7 +214,7 @@ const uploadPDFFile = async (
       size: file.size,
       type: 'pdf',
       content: result.text, // Raw PDF text for display
-      transcript: result.markdown, // Converted markdown for AI use
+      transcript: result.markdown || null, // PDF conversion to text is not necessary for larger AIs and knowledge bases
       originalFile: file,
       uploadedAt: new Date()
     }
