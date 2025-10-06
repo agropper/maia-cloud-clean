@@ -902,11 +902,17 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    console.log(`🔍 [ADMIN-USERS] Fetched ${allUsers.length} users from database (forceRefresh: ${forceRefresh})`);
     
     const filteredUsers = allUsers.filter(user => {
-      // Skip users without _id
-      if (!user._id) {
+      // Handle database corruption: use userId as fallback for _id
+      if (!user._id && !user.userId) {
         return false;
+      }
+      
+      // Fix corrupted documents by restoring _id from userId
+      if (!user._id && user.userId) {
+        user._id = user.userId;
       }
       // Exclude design documents
         if (user._id.startsWith('_design/')) {
@@ -929,64 +935,20 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return !isAdmin;
     });
     
-    // Process users with async workflow stage determination
+    console.log(`🔍 [ADMIN-USERS] After filtering: ${filteredUsers.length} users (excluded admin users and invalid entries)`);
+    
+    
+    // Process users using shared function for consistency
     const processedUsers = await Promise.all(filteredUsers.map(async user => {
-        // Extract current agent information from ownedAgents if available
-        let assignedAgentId = user.assignedAgentId || null;
-        let assignedAgentName = user.assignedAgentName || null;
-        
-        // If we have ownedAgents but no assignedAgentId, use the first owned agent
-        if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
-          const firstAgent = user.ownedAgents[0];
-          assignedAgentId = firstAgent.id;
-          assignedAgentName = firstAgent.name;
-        }
-        
-        // Check if passkey is valid (not a test credential)
-        const hasValidPasskey = !!(user.credentialID && 
-          user.credentialID !== 'test-credential-id-wed271' && 
-          user.credentialPublicKey && 
-          user.counter !== undefined);
-        
-        // Get bucket status for the user
-        let bucketStatus = {
-          hasFolder: false,
-          fileCount: 0,
-          totalSize: 0
-        };
-        
-        try {
-          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (bucketResponse.ok) {
-            const bucketData = await bucketResponse.json();
-            bucketStatus = {
-              hasFolder: bucketData.hasFolder || false,
-              fileCount: bucketData.fileCount || 0,
-              totalSize: bucketData.totalSize || 0
-            };
-          }
-        } catch (bucketError) {
-          // Bucket check failed, use default values
-          console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
-        }
-        
-        return {
-          userId: user._id,
-          displayName: user.displayName || user._id,
-          createdAt: user.createdAt,
-          hasPasskey: !!user.credentialID,
-          hasValidPasskey: hasValidPasskey,
-        workflowStage: await determineWorkflowStage(user),
-          assignedAgentId: assignedAgentId,
-          assignedAgentName: assignedAgentName,
-          email: user.email || null,
-          bucketStatus: bucketStatus
-        };
-    }));
+        return await processUserData(user, false); // Don't include bucket status for users list (performance)
+      }));
+    
+    // Add bucket status for users list (cached from previous processing)
+    processedUsers.forEach(user => {
+      if (user.bucketStatus === null) {
+        user.bucketStatus = { hasFolder: false, fileCount: 0, totalSize: 0 };
+      }
+    });
     
     // Apply sorting to processed users
     const sortedUsers = processedUsers.sort((a, b) => {
@@ -1115,47 +1077,21 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       console.error(`⚠️ Failed to check bucket status for user ${userId}:`, bucketError.message);
     }
 
-    // Get user's approval requests, agents, and knowledge bases
-    const userInfo = {
-      userId: userDoc._id || userDoc.userId,
-      displayName: userDoc.displayName || userDoc._id,
-      email: userDoc.email || null,
-      createdAt: userDoc.createdAt,
-      updatedAt: userDoc.updatedAt,
-      hasPasskey: !!userDoc.credentialID,
-      hasValidPasskey: !!(userDoc.credentialID && 
-        userDoc.credentialID !== 'test-credential-id-wed271' && 
-        userDoc.credentialPublicKey && 
-        userDoc.counter !== undefined),
-      credentialID: userDoc.credentialID,
-      credentialPublicKey: userDoc.credentialPublicKey ? 'Present' : 'Missing',
-      counter: userDoc.counter,
-      transports: userDoc.transports,
-      domain: userDoc.domain,
-      type: userDoc.type,
-      workflowStage: await determineWorkflowStage(userDoc),
-      adminNotes: userDoc.adminNotes || '',
-      approvalStatus: userDoc.approvalStatus,
-      // Agent information - use assignedAgentId as source of truth
-      assignedAgentId: currentAgentId,
-      assignedAgentName: currentAgentName,
-      ownedAgents: userDoc.ownedAgents || [],
-      currentAgentSetAt: userDoc.currentAgentSetAt,
-      challenge: userDoc.challenge,
-      agentAssignedAt: agentAssignedAt,
-      // API Key information
-      hasApiKey: !!userDoc.agentApiKey,
-      agentApiKey: userDoc.agentApiKey ? 'Present' : 'Missing',
-      // Bucket status information
-      hasBucket: bucketStatus.hasFolder,
-      bucketFileCount: bucketStatus.fileCount,
-      bucketTotalSize: bucketStatus.totalSize,
-      bucketStatus: bucketStatus,
-      files: userDoc.files || [],
-      approvalRequests: [],
-      agents: [],
-      knowledgeBases: []
-    };
+    // Use shared function to process user data consistently
+    const userInfo = await processUserData(userDoc, true); // Include bucket status for user details
+    
+    // Add additional fields specific to user details view
+    userInfo.ownedAgents = userDoc.ownedAgents || [];
+    userInfo.currentAgentSetAt = userDoc.currentAgentSetAt;
+    userInfo.challenge = userDoc.challenge;
+    userInfo.hasApiKey = !!userDoc.agentApiKey;
+    userInfo.hasBucket = userInfo.bucketStatus?.hasFolder || false;
+    userInfo.bucketFileCount = userInfo.bucketStatus?.fileCount || 0;
+    userInfo.bucketTotalSize = userInfo.bucketStatus?.totalSize || 0;
+    userInfo.files = userDoc.files || [];
+    userInfo.approvalRequests = [];
+    userInfo.agents = [];
+    userInfo.knowledgeBases = [];
     
     
     
@@ -1213,8 +1149,11 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     }
     
     // Update user approval status and workflow stage
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       approvalStatus: approvalStatus,
       workflowStage: workflowStage,
       adminNotes: notes,
@@ -1281,8 +1220,11 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
     }
     
     // Update user notes
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
@@ -1401,8 +1343,11 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
         }
         
         // Update user with assigned agent information and API key
+        // Extract only the database fields, excluding calculated fields
+        const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+        
         const updatedUser = {
-          ...userDoc,
+          ...userDataForDatabase,
           assignedAgentId: newAgentId,
           assignedAgentName: agentName,
           agentApiKey: agentApiKey, // Store the API key in the user document
@@ -1459,8 +1404,11 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     }
     
     // Update user with assigned agent information
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       assignedAgentId: agentId,
       assignedAgentName: agentName,
       agentAssignedAt: new Date().toISOString(),
@@ -1584,6 +1532,91 @@ router.post('/fix-user-data/:userId', async (req, res) => {
   }
 });
 
+// Shared function to process user data consistently across all endpoints
+async function processUserData(user, includeBucketStatus = false) {
+  // Handle database corruption: restore _id from userId if missing
+  if (!user._id && user.userId) {
+    user._id = user.userId;
+  }
+  
+  // Extract current agent information from assignedAgentId (source of truth)
+  let assignedAgentId = user.assignedAgentId || null;
+  let assignedAgentName = user.assignedAgentName || null;
+  let agentAssignedAt = user.agentAssignedAt || null;
+  
+  // If we have ownedAgents but no assignedAgentId, use the first owned agent
+  if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+    const firstAgent = user.ownedAgents[0];
+    assignedAgentId = firstAgent.id;
+    assignedAgentName = firstAgent.name;
+    agentAssignedAt = firstAgent.assignedAt;
+  }
+  
+  // If we have assignedAgentId but no agentAssignedAt, try to get it from ownedAgents
+  if (assignedAgentId && !agentAssignedAt && user.ownedAgents && user.ownedAgents.length > 0) {
+    const matchingAgent = user.ownedAgents.find(agent => agent.id === assignedAgentId);
+    if (matchingAgent && matchingAgent.assignedAt) {
+      agentAssignedAt = matchingAgent.assignedAt;
+    }
+  }
+  
+  // Get bucket status if requested
+  let bucketStatus = null;
+  if (includeBucketStatus) {
+    bucketStatus = {
+      hasFolder: false,
+      fileCount: 0,
+      totalSize: 0
+    };
+    
+    try {
+      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (bucketResponse.ok) {
+        const bucketData = await bucketResponse.json();
+        bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
+      }
+    } catch (bucketError) {
+      console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
+    }
+  }
+  
+  // Return processed user data with consistent structure
+  return {
+    userId: user._id || user.userId,
+    displayName: user.displayName || user._id || user.userId,
+    email: user.email || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    hasPasskey: !!user.credentialID,
+    hasValidPasskey: !!(user.credentialID && 
+      user.credentialID !== 'test-credential-id-wed271' && 
+      user.credentialPublicKey && 
+      user.counter !== undefined),
+    credentialID: user.credentialID,
+    credentialPublicKey: user.credentialPublicKey ? 'Present' : 'Missing',
+    counter: user.counter,
+    transports: user.transports,
+    domain: user.domain,
+    type: user.type,
+    workflowStage: user.workflowStage || 'no_passkey', // Use raw database value
+    adminNotes: user.adminNotes || '',
+    approvalStatus: user.approvalStatus,
+    assignedAgentId: assignedAgentId,
+    assignedAgentName: assignedAgentName,
+    agentAssignedAt: agentAssignedAt,
+    agentApiKey: user.agentApiKey || null,
+    bucketStatus: bucketStatus
+  };
+}
+
 // Helper function to determine workflow stage
 function validateWorkflowConsistency(user) {
   const { workflowStage, approvalStatus } = user;
@@ -1595,6 +1628,7 @@ function validateWorkflowConsistency(user) {
     'request_email_sent': [undefined], // User has sent request email but not yet reviewed by admin
     'awaiting_approval': ['pending', undefined], // Awaiting approval
     'waiting_for_deployment': ['approved', undefined], // Approved but waiting for agent deployment (allow undefined for legacy)
+    'polling_for_deployment': ['approved', undefined], // Agent is being deployed (equivalent to waiting_for_deployment)
     'approved': ['approved'], // Fully approved
     'agent_assigned': ['approved', undefined], // Agent has been assigned and deployed (allow undefined for legacy)
     'rejected': ['rejected'], // Rejected
@@ -1735,7 +1769,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     
     // Validate workflow stage
-    const validStages = ['no_passkey', 'no_request_yet', 'request_email_sent', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
+    const validStages = ['no_passkey', 'no_request_yet', 'request_email_sent', 'awaiting_approval', 'waiting_for_deployment', 'polling_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
     if (!validStages.includes(workflowStage)) {
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
@@ -1812,8 +1846,12 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     
     // Set passkey reset flag and clear the passkey information
     const resetExpiryTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       credentialID: undefined,
       credentialPublicKey: undefined,
       counter: undefined,

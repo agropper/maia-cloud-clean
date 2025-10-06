@@ -145,6 +145,36 @@
             @click="viewAgent"
             class="action-btn"
           />
+          
+          <!-- Reset Passkey Button - Show for any user (will clear any existing passkey data) -->
+          <QBtn
+            v-if="user && !user.passkeyResetFlag"
+            color="warning"
+            label="Reset Passkey"
+            @click="resetUserPasskey"
+            :loading="isResettingPasskey"
+            class="action-btn"
+            icon="key_off"
+          />
+          
+          <QBtn
+            v-if="user.passkeyResetFlag"
+            color="info"
+            :label="`Reset Active (${getTimeRemaining(user.passkeyResetExpiry)})`"
+            disabled
+            class="action-btn"
+            icon="schedule"
+          />
+          
+          <!-- Fix Workflow Consistency Button - Always available for admin troubleshooting -->
+          <QBtn
+            color="warning"
+            label="Fix Workflow Consistency"
+            @click="fixWorkflowConsistency"
+            :loading="isFixingWorkflow"
+            class="action-btn"
+            icon="build"
+          />
         </div>
       </div>
 
@@ -254,6 +284,8 @@ const error = ref(null)
 const adminNotes = ref('')
 const isSavingNotes = ref(false)
 const isGeneratingApiKey = ref(false)
+const isFixingWorkflow = ref(false)
+const isResettingPasskey = ref(false)
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
@@ -348,6 +380,71 @@ const generateApiKey = async () => {
     isGeneratingApiKey.value = false
   }
 }
+
+// Reset user passkey
+const resetUserPasskey = async () => {
+  if (!user.value) return;
+  
+  // Show confirmation dialog
+  const confirmed = confirm(`Are you sure you want to reset the passkey for user "${user.value.displayName}"? This will require them to register a new passkey.`);
+  
+  if (!confirmed) return;
+  
+  isResettingPasskey.value = true;
+  try {
+    const response = await fetch(`/api/admin-management/users/${user.value.userId}/reset-passkey`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        adminSecret: 'admin' // TODO: Get this from admin session or prompt
+      })
+    });
+    
+    if (response.ok) {
+      $q.notify({
+        type: 'positive',
+        message: `Passkey reset successfully for user "${user.value.displayName}". They have 1 hour to register a new passkey.`,
+        position: 'top'
+      });
+      
+      // Reload user details to show updated status
+      await loadUserDetails();
+    } else {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to reset passkey');
+    }
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: `Failed to reset passkey: ${error.message}`,
+      position: 'top'
+    });
+  } finally {
+    isResettingPasskey.value = false;
+  }
+};
+
+// Helper function to calculate time remaining
+const getTimeRemaining = (expiryString: string) => {
+  const expiry = new Date(expiryString);
+  const now = new Date();
+  const diffMs = expiry.getTime() - now.getTime();
+  
+  if (diffMs <= 0) return 'Expired';
+  
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remainingMinutes = diffMinutes % 60;
+  
+  if (diffHours > 0) {
+    return `${diffHours}h ${remainingMinutes}m`;
+  } else {
+    return `${remainingMinutes}m`;
+  }
+};
 
 // Navigation
 const goBack = () => {
@@ -539,6 +636,58 @@ const viewAgent = () => {
     message: 'Agent details view - to be implemented',
     position: 'top'
   })
+}
+
+const fixWorkflowConsistency = async () => {
+  try {
+    isFixingWorkflow.value = true
+    
+    console.log(`🔧 [UserDetailsPage2] Fixing workflow consistency for user: ${user.value.userId}`)
+    
+    const response = await fetch(`/api/admin-management/database/fix-user-workflow/${user.value.userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    
+    if (result.success) {
+      console.log(`✅ [UserDetailsPage2] Workflow consistency fix result:`, result)
+      
+      // Show success message with details
+      const message = result.oldWorkflowStage === result.newWorkflowStage 
+        ? `User ${user.value.userId} workflow stage is already consistent (${result.newWorkflowStage})`
+        : `Fixed workflow stage for ${user.value.userId}: ${result.oldWorkflowStage} → ${result.newWorkflowStage}`
+      
+      $q.notify({
+        type: 'positive',
+        message: message,
+        position: 'top',
+        timeout: 5000
+      })
+      
+      // Refresh user details to show updated state
+      await loadUserDetails()
+      
+    } else {
+      throw new Error(result.error || 'Unknown error')
+    }
+    
+  } catch (error) {
+    console.error('❌ [UserDetailsPage2] Failed to fix workflow consistency:', error)
+    $q.notify({
+      type: 'negative',
+      message: `Failed to fix workflow consistency: ${error.message}`,
+      position: 'top'
+    })
+  } finally {
+    isFixingWorkflow.value = false
+  }
 }
 
 const saveNotes = async () => {

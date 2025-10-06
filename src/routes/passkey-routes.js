@@ -226,8 +226,13 @@ router.post("/register", async (req, res) => {
 
     if (existingUser) {
       
-      // If user already has a passkey, check for admin replacement or reset flag
-      if (existingUser.credentialID) {
+      // If user already has a valid passkey, check for admin replacement or reset flag
+      const hasValidPasskey = !!(existingUser.credentialID && 
+        existingUser.credentialID !== 'test-credential-id-wed271' && 
+        existingUser.credentialPublicKey && 
+        existingUser.counter !== undefined);
+      
+      if (hasValidPasskey) {
         // Check if user has an active passkey reset flag
         if (existingUser.passkeyResetFlag && existingUser.passkeyResetExpiry) {
           const resetExpiry = new Date(existingUser.passkeyResetExpiry);
@@ -259,9 +264,14 @@ router.post("/register", async (req, res) => {
           console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
-          // Admin override: Allow admin to reset any user's passkey
-          console.log("✅ Admin override: Allowing passkey reset for user:", userId);
-          // Continue with registration (replace existing passkey)
+          // SECURITY: Admin override removed - use proper reset endpoint instead
+          console.log("❌ SECURITY: Admin override not allowed in registration endpoint");
+          return res.status(400).json({ 
+            error: "Admin passkey reset must use proper admin endpoint. Contact admin to reset your passkey.",
+            hasExistingPasskey: true,
+            userId: userId,
+            securityNote: "Use /admin-management/users/:userId/reset-passkey endpoint"
+          });
         } else {
           console.log("❌ User already has a passkey:", userId);
           return res.status(400).json({ 
@@ -271,8 +281,8 @@ router.post("/register", async (req, res) => {
           });
         }
       } else {
-        // If user exists but doesn't have a passkey, allow registration
-        console.log("✅ User exists but no passkey, allowing registration:", userId);
+        // If user exists but doesn't have a valid passkey, allow registration
+        console.log("✅ User exists but no valid passkey, allowing registration:", userId);
       }
     }
 
@@ -409,6 +419,9 @@ router.post("/register-verify", async (req, res) => {
 
       // Save the updated user document to Cloudant
       await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
+      
+      // Invalidate user cache to ensure admin panel shows updated passkey status
+      cacheManager.invalidateCache('users', updatedUser._id);
 
       // Set session data for authenticated user (same as authenticate-verify)
       req.session.userId = updatedUser._id;

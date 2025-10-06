@@ -1838,7 +1838,8 @@ const createAgentFromList = async (user: any) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'create' }),
-      credentials: 'include'
+      credentials: 'include',
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     })
     
     if (!response.ok) {
@@ -1875,10 +1876,25 @@ const createAgentFromList = async (user: any) => {
     })
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to create agent:', error)
+    
+    // Reset the workflow stage if agent creation failed
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].workflowStage = 'approved' // Reset to previous state
+    }
+    
+    let errorMessage = error.message
+    if (error.name === 'TimeoutError') {
+      errorMessage = 'Agent creation timed out. Please try again.'
+    } else if (error.name === 'AbortError') {
+      errorMessage = 'Agent creation was cancelled or timed out.'
+    }
+    
     $q.notify({
       type: 'negative',
-      message: `Failed to create agent: ${error.message}`,
-      position: 'top'
+      message: `Failed to create agent: ${errorMessage}`,
+      position: 'top',
+      timeout: 8000
     })
   }
 }
@@ -2190,6 +2206,7 @@ const loadChatCountsForAgents = async (agents: any[]) => {
 // Data fetching functions
 const loadUsers = async (forceRefresh = false) => {
   try {
+    console.log(`🔄 [AdminPanel2] Loading users (forceRefresh: ${forceRefresh})`)
     isLoadingUsers.value = true
     
     // Add cache-busting and sorting/pagination parameters
@@ -2208,7 +2225,11 @@ const loadUsers = async (forceRefresh = false) => {
     // Add forceRefresh parameter if requested
     const forceRefreshParam = forceRefresh ? '&forceRefresh=true' : ''
     
-    const data = await throttledFetchJson(`/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`)
+    const url = `/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`
+    console.log(`📡 [AdminPanel2] Fetching users from: ${url}`)
+    
+    const data = await throttledFetchJson(url)
+    console.log(`✅ [AdminPanel2] Loaded ${(data.users || []).length} users`)
     users.value = data.users || []
     
     // Update total rows number for pagination
@@ -2222,10 +2243,17 @@ const loadUsers = async (forceRefresh = false) => {
     
   } catch (error) {
     console.error('❌ [AdminPanel2] Failed to load users:', error)
+    console.error('❌ [AdminPanel2] Error details:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      stack: error.stack
+    })
     $q.notify({
       type: 'negative',
-      message: 'Failed to load users',
-      position: 'top'
+      message: `Failed to load users: ${error.message}`,
+      position: 'top',
+      timeout: 8000
     })
   } finally {
     isLoadingUsers.value = false
@@ -2544,6 +2572,10 @@ const handlePollingUpdate = (update) => {
         handleAgentDeploymentErrorTimeout(update.data)
         break
         
+      case 'agent_cleanup':
+        handleAgentCleanup(update.data)
+        break
+        
       case 'kb_indexing_completed':
         handleKBIndexingCompleted(update.data)
         break
@@ -2631,6 +2663,22 @@ const handleAgentDeploymentErrorTimeout = (data) => {
     type: 'negative',
     message: `💥 ${data.message}`,
     timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentCleanup = (data) => {
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Refresh agents list to show updated state
+  loadAgents()
+  
+  // Show notification
+  $q.notify({
+    type: 'warning',
+    message: `🧹 ${data.message}`,
+    timeout: 8000,
     position: 'top'
   })
 }

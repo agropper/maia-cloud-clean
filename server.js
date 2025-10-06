@@ -637,6 +637,7 @@ app.use('/api/', (req, res, next) => {
   // Skip rate limiting for essential routes:
   // - admin-management routes (they have their own caching)
   // - admin events (SSE) to prevent connection issues  
+  // - admin polling (essential for real-time updates)
   // - passkey routes (essential for authentication)
   // - current-agent (needed for user initialization)
   // - group-chats (needed for admin panel functionality)
@@ -644,6 +645,7 @@ app.use('/api/', (req, res, next) => {
   // - admin notify (needed for deployment notifications)
   if (req.path.startsWith('/admin-management/') || 
       req.path === '/admin/events' ||
+      req.path === '/admin/poll/updates' ||
       req.path.startsWith('/passkey/') ||
       req.path === '/current-agent' ||
       req.path === '/group-chats' ||
@@ -4656,33 +4658,9 @@ app.get('/api/current-agent', async (req, res) => {
     } catch (error) {
       console.error(`❌ Get current agent error:`, error);
       
-      // If agent doesn't exist in DO API, clear it from the database and return null
+      // If agent doesn't exist in DO API, log warning but don't automatically cleanup
       if (error.message.includes('404') || error.message.includes('not_found')) {
-        console.log(`🔧 [CLEANUP] Agent ${agentId} not found in DO API, clearing from database for user ${currentUser}`);
-        
-        try {
-          // Clear the agent from the user's document
-          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
-          if (userDoc) {
-            const updatedUserDoc = {
-              ...userDoc,
-              assignedAgentId: null,
-              assignedAgentName: null,
-              agentAssignedAt: null,
-              workflowStage: 'approved', // Reset workflow stage since agent was removed
-              updatedAt: new Date().toISOString()
-            };
-            
-            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
-            
-            // Clear from cache
-            invalidateCache('users', currentUser);
-            
-            console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser} and reset workflow stage to 'approved'`);
-          }
-        } catch (cleanupError) {
-          console.error(`❌ [CLEANUP] Failed to clear agent from database:`, cleanupError.message);
-        }
+        console.warn(`⚠️ [AGENT WARNING] Agent ${agentId} not found in DO API for user ${currentUser} - manual cleanup required`);
         
         return res.json({ 
           agent: null, 
