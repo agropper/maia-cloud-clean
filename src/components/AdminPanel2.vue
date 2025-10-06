@@ -1271,7 +1271,7 @@ const registerAdmin = async () => {
       })
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Admin registration failed:', error)
+    console.error('❌ Admin registration failed:', error)
     errorMessage.value = 'Registration failed. Please try again.'
     $q.notify({
       type: 'negative',
@@ -1342,7 +1342,7 @@ const registerPasskey = async () => {
   })
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Passkey registration failed:', error)
+    console.error('❌ Passkey registration failed:', error)
     $q.notify({
       type: 'negative',
       message: 'Passkey registration failed. Please try again.',
@@ -1396,7 +1396,7 @@ const adminSignOut = async () => {
       })
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Admin sign out failed:', error)
+    console.error('❌ Admin sign out failed:', error)
     $q.notify({
       type: 'negative',
       message: 'Sign out failed. Please try again.',
@@ -1422,7 +1422,7 @@ const onUserRequest = async (props: any) => {
 }
 
 const onUserRowClick = (evt: any, row: any) => {
-  console.log(`👤 [AdminPanel2] Row clicked for user: ${row.userId}`)
+  console.log(`👤 Row clicked for user: ${row.userId}`)
   // Navigate to user details page
   window.location.href = `/admin2/user/${row.userId}`
 }
@@ -1700,13 +1700,13 @@ const loadSessions = async () => {
 
 // View methods - Static
 const viewUserDetails = (userId: string) => {
-  console.log(`👤 [AdminPanel2] Navigating to user details: ${userId}`)
+  console.log(`👤 Navigating to user details: ${userId}`)
   window.location.href = `/admin2/user/${userId}`
 }
 
 // Group modal functions
 const openGroupModalForAgent = (agent: any) => {
-  console.log(`💬 [AdminPanel2] Opening group modal for agent: ${agent.name}`)
+  console.log(`💬 Opening group modal for agent: ${agent.name}`)
   
   // Determine the owner for the modal
   let ownerName = 'Public User'
@@ -1725,14 +1725,14 @@ const openGroupModalForAgent = (agent: any) => {
 }
 
 const handleChatLoaded = (groupChat: any) => {
-  console.log(`💬 [AdminPanel2] Chat loaded from group modal: ${groupChat.id}`)
+  console.log(`💬 Chat loaded from group modal: ${groupChat.id}`)
   // Close the modal
   showGroupModal.value = false
   selectedAgentForChats.value = null
 }
 
 const handleGroupDeleted = () => {
-  console.log(`💬 [AdminPanel2] Group deleted, refreshing agents`)
+  console.log(`💬 Group deleted, refreshing agents`)
   // Refresh agents to update chat counts
   loadAgents()
 }
@@ -1741,7 +1741,7 @@ const handleGroupDeleted = () => {
 
 const approveUserFromList = async (user: any) => {
   try {
-    console.log(`✅ [AdminPanel2] Approving user: ${user.userId}`)
+    console.log(`✅ Approving user: ${user.userId}`)
     
     const response = await fetch(`/api/admin-management/users/${user.userId}/approve`, {
       method: 'POST',
@@ -1750,21 +1750,21 @@ const approveUserFromList = async (user: any) => {
       credentials: 'include'
     })
     
-    console.log(`🔍 [AdminPanel2] Approval response status: ${response.status}`)
+    console.log(`🔍 Approval response status: ${response.status}`)
     
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`❌ [AdminPanel2] Approval failed with status ${response.status}:`, errorText)
+      console.error(`❌ Approval failed with status ${response.status}:`, errorText)
       throw new Error(`Failed to approve user: ${response.status} - ${errorText}`)
     }
     
     const result = await response.json()
-    console.log(`✅ [AdminPanel2] Approval successful:`, result)
+    console.log(`✅ Approval successful:`, result)
     
     // Refresh the user list to get the latest data from database
-    console.log(`🔄 [AdminPanel2] Refreshing user list after approval`)
+    console.log(`🔄 Refreshing user list after approval`)
     await loadUsers(true) // Force refresh from database, not cache
-    console.log(`✅ [AdminPanel2] User list refreshed successfully`)
+    console.log(`✅ User list refreshed successfully`)
     
     $q.notify({
       type: 'positive',
@@ -1772,7 +1772,7 @@ const approveUserFromList = async (user: any) => {
       position: 'top'
     })
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to approve user:', error)
+    console.error('❌ Failed to approve user:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to approve user',
@@ -1783,7 +1783,7 @@ const approveUserFromList = async (user: any) => {
 
 const rejectUserFromList = async (user: any) => {
   try {
-    console.log(`❌ [AdminPanel2] Rejecting user: ${user.userId}`)
+    console.log(`❌ Rejecting user: ${user.userId}`)
     
     const response = await fetch(`/api/admin-management/users/${user.userId}/approve`, {
       method: 'POST',
@@ -1805,7 +1805,7 @@ const rejectUserFromList = async (user: any) => {
       position: 'top'
     })
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to reject user:', error)
+    console.error('❌ Failed to reject user:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to reject user',
@@ -1816,7 +1816,7 @@ const rejectUserFromList = async (user: any) => {
 
 const createAgentFromList = async (user: any) => {
   try {
-    console.log(`🤖 [AdminPanel2] Creating agent for user: ${user.userId}`)
+    console.log(`🤖 Creating agent for user: ${user.userId}`)
     
     // Check if user already has an agent
     if (user.assignedAgentId) {
@@ -1872,7 +1872,7 @@ const createAgentFromList = async (user: any) => {
       position: 'top'
     })
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to create agent:', error)
+    console.error('❌ Failed to create agent:', error)
     
     // Reset the workflow stage if agent creation failed
     const userIndex = users.value.findIndex(u => u.userId === user.userId)
@@ -1897,7 +1897,7 @@ const createAgentFromList = async (user: any) => {
 }
 
 const viewAgentFromList = (user: any) => {
-  console.log(`👀 [AdminPanel2] Viewing agent for user: ${user.userId}`)
+  console.log(`👀 Viewing agent for user: ${user.userId}`)
   // For now, just show a notification - could be enhanced to open agent details
   $q.notify({
     type: 'info',
@@ -1955,7 +1955,7 @@ const createBucketFolder = async (user: any) => {
     })
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to create bucket folder:', error)
+    console.error('❌ Failed to create bucket folder:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to create bucket folder',
@@ -2181,7 +2181,7 @@ const loadChatCountsForAgents = async (agents: any[]) => {
       
       // Debug logging for Public Agent
       if (agent.name?.startsWith('public-')) {
-        console.log(`🔍 [AdminPanel2] Public Agent "${agent.name}":`, {
+        console.log(`🔍 Public Agent "${agent.name}":`, {
           ownerName,
           totalGroups: allGroups.length,
           filteredGroups: filteredGroups.length,
@@ -2194,7 +2194,7 @@ const loadChatCountsForAgents = async (agents: any[]) => {
       }
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Error loading chat counts:', error)
+    console.error('❌ Error loading chat counts:', error)
     // Set all chat counts to 0 on error
     agents.forEach(agent => agent.chatCount = 0)
   }
@@ -2203,7 +2203,7 @@ const loadChatCountsForAgents = async (agents: any[]) => {
 // Data fetching functions
 const loadUsers = async (forceRefresh = false) => {
   try {
-    console.log(`🔄 [AdminPanel2] Loading users (forceRefresh: ${forceRefresh})`)
+    console.log(`🔄 Loading users (forceRefresh: ${forceRefresh})`)
     isLoadingUsers.value = true
     
     // Add cache-busting and sorting/pagination parameters
@@ -2223,10 +2223,10 @@ const loadUsers = async (forceRefresh = false) => {
     const forceRefreshParam = forceRefresh ? '&forceRefresh=true' : ''
     
     const url = `/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`
-    console.log(`📡 [AdminPanel2] Fetching users from: ${url}`)
+    console.log(`📡 Fetching users from: ${url}`)
     
     const data = await throttledFetchJson(url)
-    console.log(`✅ [AdminPanel2] Loaded ${(data.users || []).length} users`)
+    console.log(`✅ Loaded ${(data.users || []).length} users`)
     users.value = data.users || []
     
     // Update total rows number for pagination
@@ -2239,8 +2239,8 @@ const loadUsers = async (forceRefresh = false) => {
     ).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load users:', error)
-    console.error('❌ [AdminPanel2] Error details:', {
+    console.error('❌ Failed to load users:', error)
+    console.error('❌ Error details:', {
       name: error.name,
       message: error.message,
       status: error.status,
@@ -2275,7 +2275,7 @@ const loadAgents = async () => {
     ).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load agents:', error)
+    console.error('❌ Failed to load agents:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to load agents',
@@ -2299,7 +2299,7 @@ const loadKnowledgeBases = async () => {
     kbStats.value.protectedKBs = knowledgeBases.value.filter(kb => kb.isProtected).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load knowledge bases:', error)
+    console.error('❌ Failed to load knowledge bases:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to load knowledge bases',
@@ -2328,7 +2328,7 @@ const loadModels = async () => {
     availableModels.value = data.models || []
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load models:', error)
+    console.error('❌ Failed to load models:', error)
     $q.notify({
       type: 'negative',
       message: `Failed to load models: ${error.message}`,
@@ -2349,7 +2349,7 @@ const loadCurrentModel = async () => {
         currentModel.value = null
         return
       }
-    console.error('❌ [AdminPanel2] Failed to load current model:', error)
+    console.error('❌ Failed to load current model:', error)
     currentModel.value = null
   }
 }
@@ -2360,7 +2360,7 @@ const isSelectedModel = (model) => {
 
 const selectModel = async (model) => {
   try {
-    console.log(`🤖 [AdminPanel2] Selecting model: ${model.name} (${model.uuid})`)
+    console.log(`🤖 Selecting model: ${model.name} (${model.uuid})`)
     
     const response = await fetch('/api/admin-management/models/current', {
       method: 'POST',
@@ -2387,9 +2387,9 @@ const selectModel = async (model) => {
       position: 'top'
     })
     
-    console.log(`✅ [AdminPanel2] Model ${model.name} selected successfully`)
+    console.log(`✅ Model ${model.name} selected successfully`)
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to select model:', error)
+    console.error('❌ Failed to select model:', error)
     $q.notify({
       type: 'negative',
       message: `Failed to select model: ${error.message}`,
@@ -2799,30 +2799,30 @@ const checkAdminAuth = async () => {
       return;
     }
 
-    console.log('🔍 [AdminPanel2] Checking admin authentication...')
+    console.log('🔍 Checking admin authentication...')
     // Try to access an admin-protected endpoint
     const response = await fetch('/api/admin-management/health', {
       credentials: 'include'
     });
     
-    console.log('🔍 [AdminPanel2] Auth check response:', {
+    console.log('🔍 Auth check response:', {
       status: response.status,
       ok: response.ok
     })
     
     if (response.ok) {
       isAdmin.value = true;
-      console.log('✅ [AdminPanel2] Admin authentication verified');
+      console.log('✅ Admin authentication verified');
     } else if (response.status === 401) {
       isAdmin.value = false;
-      console.log('🔒 [AdminPanel2] Admin authentication required');
+      console.log('🔒 Admin authentication required');
     } else {
       isAdmin.value = false;
-      console.log('❌ [AdminPanel2] Admin authentication failed:', response.status);
+      console.log('❌ Admin authentication failed:', response.status);
     }
   } catch (error) {
     isAdmin.value = false;
-    console.error('❌ [AdminPanel2] Admin authentication check failed:', error);
+    console.error('❌ Admin authentication check failed:', error);
   }
 };
 
@@ -2851,7 +2851,7 @@ const goToMainApp = () => {
 const adminSignInWithPasskey = async () => {
   // Prevent double authentication
   if (isSigningIn.value) {
-    console.log('🔒 [AdminPanel2] Authentication already in progress, skipping');
+    console.log('🔒 Authentication already in progress, skipping');
     return;
   }
   
@@ -2859,7 +2859,7 @@ const adminSignInWithPasskey = async () => {
   errorMessage.value = ''
   
   try {
-    console.log('🔐 [AdminPanel2] Starting admin authentication...');
+    console.log('🔐 Starting admin authentication...');
     
     // Step 1: Generate authentication options for admin user
     const optionsResponse = await fetch('/api/passkey/authenticate', {
@@ -2877,12 +2877,12 @@ const adminSignInWithPasskey = async () => {
     }
     
     const options = await optionsResponse.json()
-    console.log('🔐 [AdminPanel2] Authentication options received, starting WebAuthn...');
+    console.log('🔐 Authentication options received, starting WebAuthn...');
     
     // Step 2: Authenticate using SimpleWebAuthn
     const { startAuthentication } = await import('@simplewebauthn/browser')
     const credential = await startAuthentication({ optionsJSON: options })
-    console.log('🔐 [AdminPanel2] WebAuthn authentication completed');
+    console.log('🔐 WebAuthn authentication completed');
     
     // Step 3: Verify authentication using admin-specific endpoint
     const verifyResponse = await fetch('/api/passkey/admin-authenticate-verify', {
@@ -2918,7 +2918,7 @@ const adminSignInWithPasskey = async () => {
       })
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Admin sign-in failed:', error)
+    console.error('❌ Admin sign-in failed:', error)
     errorMessage.value = 'Sign-in failed. Please try again.'
     $q.notify({
       type: 'negative',
@@ -2933,7 +2933,7 @@ const adminSignInWithPasskey = async () => {
 
 onMounted(async () => {
   // Debug route detection
-  console.log('🔍 [AdminPanel2] Route detection:', {
+  console.log('🔍 Route detection:', {
     currentPath: window.location.pathname,
     isRegistrationPage: isRegistrationPage.value,
     isSignInPage: isSignInPage.value,
@@ -2942,7 +2942,7 @@ onMounted(async () => {
   
   // Skip authentication check if on registration or sign-in page
   if (isRegistrationPage.value || isSignInPage.value) {
-    console.log('📝 [AdminPanel2] On registration/sign-in page - skipping authentication check')
+    console.log('📝 On registration/sign-in page - skipping authentication check')
     authCheckComplete.value = true; // Mark as complete for these pages
     return
   }
@@ -2954,7 +2954,7 @@ onMounted(async () => {
   authCheckComplete.value = true;
   
   // Debug after auth check
-  console.log('🔍 [AdminPanel2] After auth check:', {
+  console.log('🔍 After auth check:', {
     isAdmin: isAdmin.value,
     authCheckComplete: authCheckComplete.value,
     shouldShowAdminInterface: isAdmin.value && authCheckComplete.value,
@@ -2968,9 +2968,9 @@ onMounted(async () => {
       await loadAllData()
       await loadCurrentModel()
       
-      console.log(`✅ [AdminPanel2] Loaded ${users.value.length} users, ${agents.value.length} agents, ${knowledgeBases.value.length} knowledge bases`)
+      console.log(`✅ Loaded ${users.value.length} users, ${agents.value.length} agents, ${knowledgeBases.value.length} knowledge bases`)
     } catch (error) {
-      console.error('❌ [AdminPanel2] Error during initialization:', error)
+      console.error('❌ Error during initialization:', error)
     }
     
     // Start polling for updates after data is loaded
