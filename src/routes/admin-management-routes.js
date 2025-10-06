@@ -1073,6 +1073,41 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     // Use shared function to process user data consistently
     const userInfo = await processUserData(userDoc, true); // Include bucket status for user details
     
+    // Fetch bucket files from the bucket status API
+    let bucketFiles = [];
+    try {
+      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${userId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (bucketResponse.ok) {
+        const bucketData = await bucketResponse.json();
+        if (bucketData.success && bucketData.files) {
+          // Transform bucket files to match frontend expectations
+          bucketFiles = bucketData.files.map(file => {
+            // Extract filename from key (remove user folder prefix)
+            const fileName = file.key.replace(`${userId}/`, '');
+            // Extract file type from filename extension
+            const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+            
+            return {
+              bucketKey: file.key,
+              fileName: fileName,
+              fileSize: file.size,
+              fileType: fileExtension,
+              uploadedAt: file.lastModified,
+              lastModified: file.lastModified,
+              etag: file.etag,
+              knowledgeBases: [] // Will be populated from database later
+            };
+          });
+        }
+      }
+    } catch (bucketError) {
+      console.error(`⚠️ Failed to fetch bucket files for user ${userId}:`, bucketError.message);
+    }
+    
     // Add additional fields specific to user details view
     userInfo.ownedAgents = userDoc.ownedAgents || [];
     userInfo.currentAgentSetAt = userDoc.currentAgentSetAt;
@@ -1081,7 +1116,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     userInfo.hasBucket = userInfo.bucketStatus?.hasFolder || false;
     userInfo.bucketFileCount = userInfo.bucketStatus?.fileCount || 0;
     userInfo.bucketTotalSize = userInfo.bucketStatus?.totalSize || 0;
-    userInfo.files = userDoc.files || [];
+    userInfo.files = bucketFiles; // Use bucket files instead of database files
     userInfo.approvalRequests = [];
     userInfo.agents = [];
     userInfo.knowledgeBases = [];
