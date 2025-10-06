@@ -9,7 +9,7 @@ import { SessionMiddleware } from './src/middleware/session-middleware.js';
 import cookieParser from 'cookie-parser';
 
 // Import throttling utilities
-import RequestThrottler from './src/utils/RequestThrottler.js';
+import requestThrottler from './src/utils/RequestThrottler.js';
 
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
@@ -7427,8 +7427,8 @@ app.get('/vue-tooltip-test', (req, res) => {
 
 // Throttled refresh of Users List cache using same function as User Details
 async function refreshUsersListCacheThrottled() {
-  // Create throttler with 0.1 second delay as requested
-  const throttler = new RequestThrottler({ delay: 100 }); // 100ms = 0.1 seconds
+  // Use the imported throttler instance (0.1 second delay as requested)
+  const throttler = requestThrottler;
   
   // Get all users from database (same logic as admin-management-routes.js)
   const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
