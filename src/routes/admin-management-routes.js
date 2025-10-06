@@ -940,15 +940,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Process users using shared function for consistency
     const processedUsers = await Promise.all(filteredUsers.map(async user => {
-        return await processUserData(user, false); // Don't include bucket status for users list (performance)
+        return await processUserData(user, true); // Include bucket status for users list (DO API, not Cloudant)
       }));
-    
-    // Add bucket status for users list (cached from previous processing)
-    processedUsers.forEach(user => {
-      if (user.bucketStatus === null) {
-        user.bucketStatus = { hasFolder: false, fileCount: 0, totalSize: 0 };
-      }
-    });
     
     // Apply sorting to processed users
     const sortedUsers = processedUsers.sort((a, b) => {
