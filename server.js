@@ -4669,6 +4669,7 @@ app.get('/api/current-agent', async (req, res) => {
               assignedAgentId: null,
               assignedAgentName: null,
               agentAssignedAt: null,
+              workflowStage: 'approved', // Reset workflow stage since agent was removed
               updatedAt: new Date().toISOString()
             };
             
@@ -4677,7 +4678,7 @@ app.get('/api/current-agent', async (req, res) => {
             // Clear from cache
             invalidateCache('users', currentUser);
             
-            console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser}`);
+            console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser} and reset workflow stage to 'approved'`);
           }
         } catch (cleanupError) {
           console.error(`❌ [CLEANUP] Failed to clear agent from database:`, cleanupError.message);

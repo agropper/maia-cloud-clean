@@ -159,8 +159,8 @@ export const sendQuery = async (
         name: file.name,
         type: file.type,
         content: file.type === 'pdf' ? (file.transcript || file.content) : file.content
-      })),
-      currentUser: currentUser // Pass the current user identity to the backend
+      }))
+      // SECURITY: currentUser removed from request body - backend should get user from session
     });
     
 

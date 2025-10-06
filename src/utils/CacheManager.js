@@ -263,6 +263,11 @@ export class CacheManager {
     const cacheKey = `${databaseName}:${documentId}`;
     const cacheType = options.cacheType || this.getCacheTypeForDatabase(databaseName);
     
+    // SECURITY CHECK: Prevent currentUser from being saved to database
+    if (databaseName === 'maia_users' && document && document.currentUser) {
+      throw new Error(`🚨 SECURITY VIOLATION: Attempted to save 'currentUser' field to maia_users database. This is dangerous and forbidden. Document ID: ${documentId}`);
+    }
+    
     // Check rate limit
     if (!this.checkRateLimit()) {
       throw new Error('Rate limit exceeded - cannot make database request');

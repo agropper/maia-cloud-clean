@@ -347,29 +347,7 @@
                     
                     <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                       <q-list dense>
-                        <!-- Uploaded files from chat area -->
-                        <q-item
-                          v-for="file in uploadedFiles"
-                          :key="file.id"
-                          class="q-pa-xs"
-                        >
-                          <q-item-section avatar>
-                            <q-checkbox
-                              v-model="file.selected"
-                              color="primary"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label class="text-body2">
-                              {{ file.name }}
-                            </q-item-label>
-                            <q-item-label caption class="text-grey-6">
-                              {{ file.size }} bytes
-                            </q-item-label>
-                          </q-item-section>
-                        </q-item>
-                        
-                        <!-- Files from bucket -->
+                        <!-- Files from bucket (primary source) -->
                         <q-item
                           v-for="file in userBucketFiles"
                           :key="file.key"
@@ -916,6 +894,39 @@
       @cancelled="handleSignInCancelled"
     />
 
+    <!-- No Agent Modal -->
+    <q-dialog v-model="showNoAgentModal">
+      <q-card style="min-width: 400px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">🚫 Agent Required</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        
+        <q-card-section>
+          <div class="text-body1">
+            You must request and be supported for your private AI agent before you can create a knowledge base for your records.
+          </div>
+        </q-card-section>
+        
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            label="OK"
+            color="primary"
+            @click="handleNoAgentModalOK"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- New User Welcome Modal -->
+    <NewUserWelcomeModal
+      v-model="showNewUserWelcomeModal"
+      :currentUser="localCurrentUser"
+      @support-requested="handleSupportRequested"
+    />
+
     <!-- Ownership Transfer Modal -->
     <KBOwnershipTransferModal
       v-if="showOwnershipTransferModal && ownershipTransferData.kbId"
@@ -1276,6 +1287,7 @@ import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import KBOwnershipTransferModal from "./KBOwnershipTransferModal.vue";
 import AgentStatusIndicator from "./AgentStatusIndicator.vue";
+import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import type { UploadedFile } from "../types";
 
 export interface DigitalOceanAgent {
@@ -1323,6 +1335,7 @@ export default defineComponent({
     PasskeyAuthDialog,
     KBOwnershipTransferModal,
     AgentStatusIndicator,
+    NewUserWelcomeModal,
     QCheckbox,
     QChip,
     QTooltip,
@@ -1402,6 +1415,8 @@ export default defineComponent({
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
     const showKbLinkSuggestionDialog = ref(false);
+    const showNoAgentModal = ref(false);
+    const showNewUserWelcomeModal = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
@@ -2089,6 +2104,19 @@ export default defineComponent({
       
     };
 
+    // Handle no-agent modal OK button
+    const handleNoAgentModalOK = () => {
+      showNoAgentModal.value = false;
+      // Show the NewUserWelcomeModal
+      showNewUserWelcomeModal.value = true;
+    };
+
+    // Handle support request from NewUserWelcomeModal
+    const handleSupportRequested = () => {
+      showNewUserWelcomeModal.value = false;
+      // The support request is handled by the NewUserWelcomeModal itself
+    };
+
     // Handle ownership transfer completion
     const handleOwnershipTransferred = async (transferData: {
       kbId: string;
@@ -2205,9 +2233,34 @@ export default defineComponent({
         currentAgent.value = null;
       }
       
-      // Set assigned agent from props (if available)
+      // Set assigned agent from props (if available) - validate against DO API
       if (props.assignedAgent) {
-        assignedAgent.value = props.assignedAgent;
+        // Validate agent against DO API (source of truth) before setting
+        const currentUserId = localCurrentUser.value?.userId;
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
+          try {
+            // Check if agent actually exists in DO API
+            const response = await fetch(`${API_BASE_URL}/current-agent`);
+            const data = await response.json();
+            
+            if (data.agent && data.agent.id === props.assignedAgent.id) {
+              // Agent exists in DO API - use it
+              assignedAgent.value = data.agent;
+              console.log(`✅ [AgentManagementDialog] Validated initial agent ${props.assignedAgent.name} against DO API`);
+            } else {
+              // Agent doesn't exist in DO API - clear it
+              console.log(`🔧 [AgentManagementDialog] Initial agent ${props.assignedAgent.name} not found in DO API - clearing assignment`);
+              assignedAgent.value = null;
+            }
+          } catch (error) {
+            console.error(`❌ [AgentManagementDialog] Error validating initial agent against DO API:`, error);
+            // On error, clear the assignment to be safe
+            assignedAgent.value = null;
+          }
+        } else {
+          // For Public User or deep link users, use the agent as-is
+          assignedAgent.value = props.assignedAgent;
+        }
       } else {
         assignedAgent.value = null;
       }
@@ -2278,11 +2331,40 @@ export default defineComponent({
     });
     
     // Watch for assigned agent changes to update dialog state
-    watch(() => props.assignedAgent, (newAgent) => {
+    watch(() => props.assignedAgent, async (newAgent) => {
       if (newAgent && assignedAgent.value?.id !== newAgent.id) {
         console.log(`🤖 Assigned agent updated in dialog: ${newAgent.name}`);
-        assignedAgent.value = newAgent;
-        currentAgent.value = newAgent;
+        
+        // Validate agent against DO API (source of truth) before setting
+        const currentUserId = localCurrentUser.value?.userId;
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
+          try {
+            // Check if agent actually exists in DO API
+            const response = await fetch(`${API_BASE_URL}/current-agent`);
+            const data = await response.json();
+            
+            if (data.agent && data.agent.id === newAgent.id) {
+              // Agent exists in DO API - use it
+              assignedAgent.value = data.agent;
+              currentAgent.value = data.agent;
+              console.log(`✅ [AgentManagementDialog] Validated agent ${newAgent.name} against DO API`);
+            } else {
+              // Agent doesn't exist in DO API - clear it
+              console.log(`🔧 [AgentManagementDialog] Agent ${newAgent.name} not found in DO API - clearing assignment`);
+              assignedAgent.value = null;
+              currentAgent.value = null;
+            }
+          } catch (error) {
+            console.error(`❌ [AgentManagementDialog] Error validating agent against DO API:`, error);
+            // On error, clear the assignment to be safe
+            assignedAgent.value = null;
+            currentAgent.value = null;
+          }
+        } else {
+          // For Public User or deep link users, use the agent as-is
+          assignedAgent.value = newAgent;
+          currentAgent.value = newAgent;
+        }
       }
     });
 
@@ -2536,13 +2618,21 @@ export default defineComponent({
         // Show passkey auth dialog for existing users
         showPasskeyAuthDialog.value = true;
       } else {
-        // User is already authenticated, show KB creation dialog
-        // KB creation dialog opening
+        // Check if user has an assigned agent
+        const hasAgent = assignedAgent.value && assignedAgent.value.id;
+        console.log(`🔍 [AGENT GATING] User: ${authenticatedUser.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
         
-        // Load user's existing files from bucket folder (force refresh)
-        await checkUserBucketFiles(true);
-        
-        showCreateKbDialog.value = true;
+        if (!hasAgent) {
+          // User doesn't have an agent yet - show no-agent modal
+          console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+          showNoAgentModal.value = true;
+        } else {
+          // User has an agent, proceed with KB creation dialog
+          // Load user's existing files from bucket folder (force refresh)
+          await checkUserBucketFiles(true);
+          
+          showCreateKbDialog.value = true;
+        }
       }
     };
 
@@ -2568,6 +2658,18 @@ export default defineComponent({
     // Upload selected files to bucket (step 4) - UNIQUE FUNCTION IDENTIFIER
     const uploadSelectedFilesToBucket = async () => {
       if (selectedDocuments.value.length === 0) return;
+
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
+        return;
+      }
 
       isCreatingKb.value = true;
       try {
@@ -2934,6 +3036,18 @@ export default defineComponent({
     const createKnowledgeBaseFromBucketFiles = async () => {
       if (!newKbName.value) return;
 
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
+        return;
+      }
+
       isCreatingKb.value = true;
       try {
         // Get username from session or props
@@ -3041,6 +3155,18 @@ export default defineComponent({
           type: 'warning',
           message: 'Please select at least one file to create a knowledge base'
         });
+        return;
+      }
+
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
         return;
       }
 
@@ -4518,6 +4644,10 @@ export default defineComponent({
       showPasskeyAuthDialog,
       handleUserAuthenticated,
       handleSignInCancelled,
+      showNoAgentModal,
+      showNewUserWelcomeModal,
+      handleNoAgentModalOK,
+      handleSupportRequested,
       showOwnershipTransferModal,
       ownershipTransferData,
       showWarningModal,

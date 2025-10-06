@@ -1151,6 +1151,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       bucketFileCount: bucketStatus.fileCount,
       bucketTotalSize: bucketStatus.totalSize,
       bucketStatus: bucketStatus,
+      files: userDoc.files || [],
       approvalRequests: [],
       agents: [],
       knowledgeBases: []
@@ -1316,6 +1317,16 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
       if (!userDoc) {
         return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Check if user already has an assigned agent
+      if (userDoc.assignedAgentId) {
+        console.log(`⚠️ [NEW AGENT] User ${userId} already has assigned agent: ${userDoc.assignedAgentId}`);
+        return res.status(400).json({ 
+          error: 'User already has an assigned agent',
+          existingAgentId: userDoc.assignedAgentId,
+          existingAgentName: userDoc.assignedAgentName
+        });
       }
       
       if (!userDoc.email) {
@@ -1581,6 +1592,7 @@ function validateWorkflowConsistency(user) {
   const validCombinations = {
     'no_passkey': ['no_passkey', undefined], // No approval status needed
     'no_request_yet': [undefined], // User has passkey but hasn't requested support yet
+    'request_email_sent': [undefined], // User has sent request email but not yet reviewed by admin
     'awaiting_approval': ['pending', undefined], // Awaiting approval
     'waiting_for_deployment': ['approved', undefined], // Approved but waiting for agent deployment (allow undefined for legacy)
     'approved': ['approved'], // Fully approved
@@ -1723,7 +1735,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     
     // Validate workflow stage
-    const validStages = ['no_passkey', 'no_request_yet', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
+    const validStages = ['no_passkey', 'no_request_yet', 'request_email_sent', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
     if (!validStages.includes(workflowStage)) {
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
@@ -2236,6 +2248,260 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
   }
 });
 
+// Comprehensive workflow validation and fix endpoint
+router.post('/database/validate-workflow-consistency', requireAdminAuth, async (req, res) => {
+  try {
+    console.log(`🔄 [WORKFLOW VALIDATION] Starting comprehensive workflow consistency check...`);
+    
+    // Get all agents from DO API (source of truth)
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const availableAgents = agentsResponse.agents || [];
+    console.log(`📋 [WORKFLOW VALIDATION] Found ${availableAgents.length} agents in DO API`);
+    
+    // Get all users from database
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    console.log(`👥 [WORKFLOW VALIDATION] Found ${allUsers.length} users in database`);
+    
+    const fixes = [];
+    
+    for (const user of allUsers) {
+      // Skip Public User
+      if (user._id === 'currentUser' || user.userId === 'currentUser') continue;
+      
+      let needsFix = false;
+      let newWorkflowStage = user.workflowStage;
+      let newAssignedAgentId = user.assignedAgentId;
+      let newAssignedAgentName = user.assignedAgentName;
+      
+      // Check if user has assigned agent metadata
+      if (user.assignedAgentId && user.assignedAgentName) {
+        // Look for matching agent in DO API by first word of agent name
+        const userPrefix = user._id || user.userId;
+        const matchingAgent = availableAgents.find(agent => {
+          const agentFirstWord = agent.name.split('-')[0];
+          return agentFirstWord === userPrefix;
+        });
+        
+        if (!matchingAgent) {
+          // User has agent metadata but no matching agent in DO API
+          console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} has agent metadata but no matching agent in DO API - clearing agent metadata`);
+          
+          needsFix = true;
+          newAssignedAgentId = null;
+          newAssignedAgentName = null;
+          
+          // Determine correct workflow stage based on approval status
+          if (user.approvalStatus === 'approved') {
+            newWorkflowStage = 'approved';
+          } else if (user.approvalStatus === 'pending') {
+            newWorkflowStage = 'awaiting_approval';
+          } else if (user.approvalStatus === 'rejected') {
+            newWorkflowStage = 'rejected';
+          } else if (user.approvalStatus === 'suspended') {
+            newWorkflowStage = 'suspended';
+          } else {
+            // No approval status - check if they have email (request sent)
+            if (user.email) {
+              newWorkflowStage = 'request_email_sent';
+            } else {
+              newWorkflowStage = 'no_request_yet';
+            }
+          }
+        } else {
+          // Agent exists in DO API - validate workflow stage
+          if (user.workflowStage !== 'agent_assigned') {
+            console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} has deployed agent but workflow stage is '${user.workflowStage}' - correcting to 'agent_assigned'`);
+            needsFix = true;
+            newWorkflowStage = 'agent_assigned';
+          }
+        }
+      } else if (user.workflowStage === 'agent_assigned') {
+        // User shows as agent_assigned but has no agent metadata
+        console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} shows as 'agent_assigned' but has no agent metadata - correcting workflow stage`);
+        
+        needsFix = true;
+        if (user.approvalStatus === 'approved') {
+          newWorkflowStage = 'approved';
+        } else if (user.approvalStatus === 'pending') {
+          newWorkflowStage = 'awaiting_approval';
+        } else if (user.approvalStatus === 'rejected') {
+          newWorkflowStage = 'rejected';
+        } else if (user.approvalStatus === 'suspended') {
+          newWorkflowStage = 'suspended';
+        } else {
+          // No approval status - check if they have email (request sent)
+          if (user.email) {
+            newWorkflowStage = 'request_email_sent';
+          } else {
+            newWorkflowStage = 'no_request_yet';
+          }
+        }
+      }
+      
+      if (needsFix) {
+        const updatedDoc = {
+          ...user,
+          workflowStage: newWorkflowStage,
+          assignedAgentId: newAssignedAgentId,
+          assignedAgentName: newAssignedAgentName,
+          agentAssignedAt: newAssignedAgentId ? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
+        invalidateUserCache(user._id);
+        
+        fixes.push({
+          userId: user._id,
+          oldWorkflowStage: user.workflowStage,
+          newWorkflowStage: newWorkflowStage,
+          oldAssignedAgentId: user.assignedAgentId,
+          newAssignedAgentId: newAssignedAgentId,
+          oldAssignedAgentName: user.assignedAgentName,
+          newAssignedAgentName: newAssignedAgentName
+        });
+        
+        console.log(`✅ [WORKFLOW VALIDATION] Fixed user ${user._id}: ${user.workflowStage} → ${newWorkflowStage}`);
+      }
+    }
+    
+    console.log(`✅ [WORKFLOW VALIDATION] Completed - ${fixes.length} users fixed`);
+    
+    res.json({
+      success: true,
+      message: `Workflow consistency validation completed`,
+      fixesApplied: fixes.length,
+      fixes: fixes,
+      availableAgents: availableAgents.map(agent => ({
+        name: agent.name,
+        uuid: agent.uuid,
+        status: agent.deployment?.status
+      }))
+    });
+    
+  } catch (error) {
+    console.error('❌ [WORKFLOW VALIDATION] Error validating workflow consistency:', error);
+    res.status(500).json({ error: 'Failed to validate workflow consistency' });
+  }
+});
+
+// Quick fix endpoint for individual user workflow inconsistencies
+router.post('/database/fix-user-workflow/:userId', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get all agents from DO API (source of truth)
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const availableAgents = agentsResponse.agents || [];
+    
+    let needsFix = false;
+    let newWorkflowStage = userDoc.workflowStage;
+    let newAssignedAgentId = userDoc.assignedAgentId;
+    let newAssignedAgentName = userDoc.assignedAgentName;
+    
+    // Check if user has assigned agent metadata
+    if (userDoc.assignedAgentId && userDoc.assignedAgentName) {
+      // Look for matching agent in DO API by first word of agent name
+      const userPrefix = userId;
+      const matchingAgent = availableAgents.find(agent => {
+        const agentFirstWord = agent.name.split('-')[0];
+        return agentFirstWord === userPrefix;
+      });
+      
+      if (!matchingAgent) {
+        // User has agent metadata but no matching agent in DO API
+        needsFix = true;
+        newAssignedAgentId = null;
+        newAssignedAgentName = null;
+        
+        // Determine correct workflow stage based on approval status
+        if (userDoc.approvalStatus === 'approved') {
+          newWorkflowStage = 'approved';
+        } else if (userDoc.approvalStatus === 'pending') {
+          newWorkflowStage = 'awaiting_approval';
+        } else if (userDoc.approvalStatus === 'rejected') {
+          newWorkflowStage = 'rejected';
+        } else if (userDoc.approvalStatus === 'suspended') {
+          newWorkflowStage = 'suspended';
+        } else {
+          // No approval status - check if they have email (request sent)
+          if (userDoc.email) {
+            newWorkflowStage = 'request_email_sent';
+          } else {
+            newWorkflowStage = 'no_request_yet';
+          }
+        }
+      }
+    } else if (userDoc.workflowStage === 'agent_assigned') {
+      // User shows as agent_assigned but has no agent metadata
+      needsFix = true;
+      if (userDoc.approvalStatus === 'approved') {
+        newWorkflowStage = 'approved';
+      } else if (userDoc.approvalStatus === 'pending') {
+        newWorkflowStage = 'awaiting_approval';
+      } else if (userDoc.approvalStatus === 'rejected') {
+        newWorkflowStage = 'rejected';
+      } else if (userDoc.approvalStatus === 'suspended') {
+        newWorkflowStage = 'suspended';
+      } else {
+        // No approval status - check if they have email (request sent)
+        if (userDoc.email) {
+          newWorkflowStage = 'request_email_sent';
+        } else {
+          newWorkflowStage = 'no_request_yet';
+        }
+      }
+    }
+    
+    if (needsFix) {
+      const updatedDoc = {
+        ...userDoc,
+        workflowStage: newWorkflowStage,
+        assignedAgentId: newAssignedAgentId,
+        assignedAgentName: newAssignedAgentName,
+        agentAssignedAt: newAssignedAgentId ? new Date().toISOString() : null,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
+      invalidateUserCache(userId);
+      
+      console.log(`✅ [WORKFLOW FIX] Fixed user ${userId}: ${userDoc.workflowStage} → ${newWorkflowStage}`);
+      
+      res.json({
+        success: true,
+        message: `Workflow stage fixed for user ${userId}`,
+        userId: userId,
+        oldWorkflowStage: userDoc.workflowStage,
+        newWorkflowStage: newWorkflowStage,
+        oldAssignedAgentId: userDoc.assignedAgentId,
+        newAssignedAgentId: newAssignedAgentId,
+        oldAssignedAgentName: userDoc.assignedAgentName,
+        newAssignedAgentName: newAssignedAgentName
+      });
+    } else {
+      res.json({
+        success: true,
+        message: `User ${userId} workflow stage is already consistent`,
+        userId: userId,
+        workflowStage: userDoc.workflowStage,
+        assignedAgentId: userDoc.assignedAgentId,
+        assignedAgentName: userDoc.assignedAgentName
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ [WORKFLOW FIX] Error fixing user workflow:', error);
+    res.status(500).json({ error: 'Failed to fix user workflow' });
+  }
+});
+
 // Fix consistency issues endpoint
 router.post('/database/fix-consistency', async (req, res) => {
   try {
@@ -2365,12 +2631,14 @@ router.post('/database/fix-consistency', async (req, res) => {
             const updatedDoc = {
               ...userDoc,
               assignedAgentId: null,
-              assignedAgentName: null
+              assignedAgentName: null,
+              workflowStage: 'approved', // Reset workflow stage since agent was removed
+              updatedAt: new Date().toISOString()
             };
             
             await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
-            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId}`);
+            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId} and reset workflow stage to 'approved'`);
             results.push({
               type: issue.type,
               userId: issue.userId,

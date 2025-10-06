@@ -115,7 +115,7 @@
         <h4 class="section-title">Admin Actions</h4>
         <div class="action-buttons">
           <QBtn
-            v-if="user.workflowStage === 'awaiting_approval'"
+            v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
             color="positive"
             label="Approve User"
             @click="approveUser"
@@ -123,7 +123,7 @@
           />
           
           <QBtn
-            v-if="user.workflowStage === 'awaiting_approval'"
+            v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
             color="negative"
             label="Reject User"
             @click="rejectUser"
@@ -243,7 +243,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput } from 'quasar'
+import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput, QChip } from 'quasar'
 
 const $q = useQuasar()
 
@@ -476,6 +476,16 @@ const rejectUser = async () => {
 
 const createAgent = async () => {
   try {
+    // Check if user already has an agent
+    if (user.value.assignedAgentId) {
+      $q.notify({
+        type: 'warning',
+        message: `User ${user.value.userId} already has an assigned agent: ${user.value.assignedAgentName}`,
+        position: 'top'
+      })
+      return
+    }
+    
     const response = await fetch(`/api/admin-management/users/${user.value.userId}/assign-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -484,7 +494,22 @@ const createAgent = async () => {
     })
     
     if (!response.ok) {
-      throw new Error(`Failed to create agent: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      
+      // Handle specific error cases
+      if (response.status === 400 && errorData.error === 'User already has an assigned agent') {
+        $q.notify({
+          type: 'warning',
+          message: `User ${user.value.userId} already has an assigned agent: ${errorData.existingAgentName}`,
+          position: 'top'
+        })
+        
+        // Refresh user data to get the latest state
+        await loadUserDetails()
+        return
+      }
+      
+      throw new Error(`Failed to create agent: ${response.status} - ${errorData.error || 'Unknown error'}`)
     }
     
     const agentData = await response.json()
@@ -501,7 +526,7 @@ const createAgent = async () => {
     console.error('❌ Failed to create agent:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to create agent',
+      message: `Failed to create agent: ${error.message}`,
       position: 'top'
     })
   }

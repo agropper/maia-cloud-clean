@@ -260,11 +260,6 @@ export default defineComponent({
         appState.chatHistory = groupChat.chatHistory;
         appState.uploadedFiles = groupChat.uploadedFiles;
         
-        console.log('🔍 [PDF FAILS] appState.uploadedFiles set:', {
-          uploadedFilesCount: appState.uploadedFiles?.length || 0,
-          firstFileBase64Length: appState.uploadedFiles?.[0]?.base64?.length || 0,
-          firstFileBase64Preview: appState.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none'
-        });
         
         // Store the chat ID for future updates
         appState.currentChatId = groupChat.id;
@@ -531,7 +526,9 @@ export default defineComponent({
         content: `Sent query to ${appState.selectedAI}`,
       });
     };
-    const triggerUploadFile = uploadFile;
+const triggerUploadFile = (file: File) => {
+  return uploadFile(file, appState, writeMessage, currentUser.value);
+};
     const saveMessage = () => {};
     const saveToFile = async () => {
       try {
@@ -724,10 +721,10 @@ export default defineComponent({
       window.addEventListener('resize', updateChatAreaMargin);
       
       // Add state listener for reactive updates
-      stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
-        if (newState.currentUser !== oldState.currentUser) {
-          currentUser.value = newState.currentUser;
-        }
+    stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
+      if (newState.currentUser !== oldState.currentUser) {
+        currentUser.value = newState.currentUser;
+      }
         if (newState.currentAgent !== oldState.currentAgent) {
           currentAgent.value = newState.currentAgent;
         }

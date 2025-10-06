@@ -295,3 +295,17 @@ Based on terminal output analysis, these are the only essential messages to keep
 8. `✅ Admin management health check - system ready, user count: X` - System health
 
 **All other console.log messages should be removed** - including debug messages, request logging, PDF processing details, and temporary file paths.
+
+
+======================================================
+
+Based on the workflow config, the ordered workflow stages are:
+no_passkey - User needs to create passkey
+no_request_yet - User has passkey but hasn't requested support
+request_email_sent - User sent request email but not reviewed
+awaiting_approval - Awaiting admin approval
+approved - Approved but no agent yet
+agent_assigned - Agent created and deployed
+
+=====================================================
+

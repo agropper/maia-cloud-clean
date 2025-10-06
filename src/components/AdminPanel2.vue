@@ -434,19 +434,9 @@
               <template v-slot:body-cell-actions="props">
                 <QTd :props="props">
                   <div class="action-buttons-row">
-                    <!-- Move to Awaiting Approval Button -->
-                    <QBtn
-                      v-if="props.row.workflowStage === 'request_email_sent'"
-                      size="xs"
-                      color="info"
-                      label="Move to Review"
-                      @click.stop="moveToAwaitingApproval(props.row)"
-                      class="q-mr-xs"
-                    />
-                    
                     <!-- Approve User Button -->
                     <QBtn
-                      v-if="props.row.workflowStage === 'awaiting_approval'"
+                      v-if="props.row.workflowStage === 'request_email_sent' || props.row.workflowStage === 'awaiting_approval'"
                       size="xs"
                       color="positive"
                       label="Approve"
@@ -456,7 +446,7 @@
                     
                     <!-- Reject User Button -->
                     <QBtn
-                      v-if="props.row.workflowStage === 'awaiting_approval'"
+                      v-if="props.row.workflowStage === 'request_email_sent' || props.row.workflowStage === 'awaiting_approval'"
                       size="xs"
                       color="negative"
                       label="Reject"
@@ -1748,40 +1738,6 @@ const handleGroupDeleted = () => {
 }
 
 // User action methods - same as UserDetailsPage2
-const moveToAwaitingApproval = async (user: any) => {
-  try {
-    const response = await fetch(`/api/admin-management/users/${user.userId}/approval`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        action: 'move_to_review'
-      })
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to move user to review: ${response.statusText}`)
-    }
-    
-    // Refresh the user list to get the latest data from database
-    await loadUsers()
-    
-    $q.notify({
-      type: 'positive',
-      message: `User ${user.displayName || user.userId} moved to review`,
-      position: 'top'
-    })
-    
-  } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to move user to review:', error)
-    $q.notify({
-      type: 'negative',
-      message: 'Failed to move user to review',
-      position: 'top'
-    })
-  }
-}
 
 const approveUserFromList = async (user: any) => {
   try {
@@ -1794,12 +1750,21 @@ const approveUserFromList = async (user: any) => {
       credentials: 'include'
     })
     
+    console.log(`🔍 [AdminPanel2] Approval response status: ${response.status}`)
+    
     if (!response.ok) {
-      throw new Error(`Failed to approve user: ${response.status}`)
+      const errorText = await response.text()
+      console.error(`❌ [AdminPanel2] Approval failed with status ${response.status}:`, errorText)
+      throw new Error(`Failed to approve user: ${response.status} - ${errorText}`)
     }
     
+    const result = await response.json()
+    console.log(`✅ [AdminPanel2] Approval successful:`, result)
+    
     // Refresh the user list to get the latest data from database
-    await loadUsers()
+    console.log(`🔄 [AdminPanel2] Refreshing user list after approval`)
+    await loadUsers(true) // Force refresh from database, not cache
+    console.log(`✅ [AdminPanel2] User list refreshed successfully`)
     
     $q.notify({
       type: 'positive',
@@ -1832,7 +1797,7 @@ const rejectUserFromList = async (user: any) => {
     }
     
     // Refresh the user list to get the latest data from database
-    await loadUsers()
+    await loadUsers(true) // Force refresh from database, not cache
     
     $q.notify({
       type: 'positive',
@@ -1853,6 +1818,16 @@ const createAgentFromList = async (user: any) => {
   try {
     console.log(`🤖 [AdminPanel2] Creating agent for user: ${user.userId}`)
     
+    // Check if user already has an agent
+    if (user.assignedAgentId) {
+      $q.notify({
+        type: 'warning',
+        message: `User ${user.userId} already has an assigned agent: ${user.assignedAgentName}`,
+        position: 'top'
+      })
+      return
+    }
+    
     // Immediately update local state to show "Polling for Deployment"
     const userIndex = users.value.findIndex(u => u.userId === user.userId)
     if (userIndex !== -1) {
@@ -1867,13 +1842,28 @@ const createAgentFromList = async (user: any) => {
     })
     
     if (!response.ok) {
-      throw new Error(`Failed to create agent: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      
+      // Handle specific error cases
+      if (response.status === 400 && errorData.error === 'User already has an assigned agent') {
+        $q.notify({
+          type: 'warning',
+          message: `User ${user.userId} already has an assigned agent: ${errorData.existingAgentName}`,
+          position: 'top'
+        })
+        
+        // Refresh the user list to get the latest data
+        await loadUsers(true)
+        return
+      }
+      
+      throw new Error(`Failed to create agent: ${response.status} - ${errorData.error || 'Unknown error'}`)
     }
     
     const agentData = await response.json()
     
     // Refresh the user list to get the latest data from database
-    await loadUsers()
+    await loadUsers(true) // Force refresh from database, not cache
     
     // Refresh agents list to show the new agent
     await loadAgents()
@@ -1887,7 +1877,7 @@ const createAgentFromList = async (user: any) => {
     console.error('❌ [AdminPanel2] Failed to create agent:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to create agent',
+      message: `Failed to create agent: ${error.message}`,
       position: 'top'
     })
   }
@@ -2592,7 +2582,7 @@ const handlePollingUpdate = (update) => {
 
 const handleAgentDeploymentCompleted = (data) => {
   // Refresh the user list to get the latest data from database
-  loadUsers()
+  loadUsers(true) // Force refresh from database, not cache
   
   // Refresh agents list to show the new agent
   loadAgents()
@@ -2608,7 +2598,7 @@ const handleAgentDeploymentCompleted = (data) => {
 
 const handleAgentDeploymentFailed = (data) => {
   // Refresh the user list to get the latest data from database
-  loadUsers()
+  loadUsers(true) // Force refresh from database, not cache
   
   // Show notification
   $q.notify({
@@ -2621,7 +2611,7 @@ const handleAgentDeploymentFailed = (data) => {
 
 const handleAgentDeploymentTimeout = (data) => {
   // Refresh the user list to get the latest data from database
-  loadUsers()
+  loadUsers(true) // Force refresh from database, not cache
   
   // Show notification
   $q.notify({
@@ -2634,7 +2624,7 @@ const handleAgentDeploymentTimeout = (data) => {
 
 const handleAgentDeploymentErrorTimeout = (data) => {
   // Refresh the user list to get the latest data from database
-  loadUsers()
+  loadUsers(true) // Force refresh from database, not cache
   
   // Show notification
   $q.notify({
@@ -2660,7 +2650,7 @@ const handleKBIndexingCompleted = (data) => {
 
 const handleUserRegistered = (data) => {
   // Refresh users list to show the new user
-  loadUsers()
+  loadUsers(true) // Force refresh from database, not cache
   
   // Show notification
   $q.notify({
@@ -2696,6 +2686,7 @@ const handleUserFileUploaded = (data) => {
 }
 
 const handleSessionCreated = (data) => {
+  console.log(`[SESSIONS] Session created:`, data)
   // Refresh sessions list to show new session
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2709,6 +2700,7 @@ const handleSessionCreated = (data) => {
 }
 
 const handleSessionUpdated = (data) => {
+  console.log(`[SESSIONS] Session updated:`, data)
   // Refresh sessions list to show updated session activity
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2722,6 +2714,7 @@ const handleSessionUpdated = (data) => {
 }
 
 const handleSessionEnded = (data) => {
+  console.log(`[SESSIONS] Session ended:`, data)
   // Refresh sessions list to remove ended session
   onSessionRequest({ pagination: sessionPagination.value })
   

@@ -252,8 +252,19 @@ const uploadTranscriptFile = async (
 const uploadPDFFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     // Check file size (limit to 50MB to prevent memory issues)
@@ -294,36 +305,28 @@ const uploadPDFFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      console.log('🔍 [PDF UPLOAD] Debug current user object:', {
-        currentUser: appState.currentUser,
-        userId: appState.currentUser?.userId,
-        displayName: appState.currentUser?.displayName,
-        isAuthenticated: appState.currentUser?.isAuthenticated
-      })
-      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
-      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
-      console.log('🔍 [PDF UPLOAD] Resolved currentUser:', currentUser, 'userFolder:', userFolder)
+      const resolvedUserId = currentUser?.userId || currentUser?.displayName || 'Public User'
+      const userFolder = resolvedUserId === 'Public User' ? 'root' : `${resolvedUserId}/`
       
       // Ensure user has a bucket folder if they're authenticated (not Public User)
-      if (currentUser !== 'Public User' && appState.currentUser?.isAuthenticated) {
+      if (resolvedUserId !== 'Public User' && currentUser?.isAuthenticated) {
         try {
-          console.log('🔍 [PDF UPLOAD] Ensuring bucket folder exists for user:', currentUser)
           const bucketResponse = await fetch('/api/bucket/ensure-user-folder', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentUser })
+            body: JSON.stringify({ userId: resolvedUserId })
           })
           
           if (bucketResponse.ok) {
             const bucketData = await bucketResponse.json()
             if (!bucketData.folderExists) {
-              console.log(`✅ [PDF UPLOAD] Created bucket folder for user: ${currentUser}`)
+              console.log(`✅ Created bucket folder for user: ${resolvedUserId}`)
             }
           } else {
-            console.warn(`⚠️ [PDF UPLOAD] Failed to ensure bucket folder for user ${currentUser}: ${bucketResponse.status}`)
+            console.warn(`⚠️ Failed to ensure bucket folder for user ${resolvedUserId}: ${bucketResponse.status}`)
           }
         } catch (bucketError) {
-          console.warn(`⚠️ [PDF UPLOAD] Error ensuring bucket folder for user ${currentUser}:`, bucketError)
+          console.warn(`⚠️ Error ensuring bucket folder for user ${resolvedUserId}:`, bucketError)
         }
       }
       
@@ -348,14 +351,13 @@ const uploadPDFFile = async (
           
           if (uploadResponse.ok) {
             const uploadResult = await uploadResponse.json()
-            console.log(`✅ PDF saved to bucket: ${file.name} in folder ${userFolder}`)
             
             // Update the uploaded file with bucket info
             uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
             uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
             
             // Update user record with file metadata
-            await updateUserFileMetadata(currentUser, {
+            await updateUserFileMetadata(resolvedUserId, {
               fileName: file.name,
               bucketKey: uploadResult.fileInfo.bucketKey,
               bucketPath: uploadResult.fileInfo.userFolder,
@@ -363,6 +365,14 @@ const uploadPDFFile = async (
               fileType: 'pdf',
               uploadedAt: new Date().toISOString()
             })
+            
+            // Verify file was saved in correct location
+            if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
+              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`)
+            }
+            if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
+              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`)
+            }
           } else {
             console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
           }
@@ -652,7 +662,8 @@ const uploadTextFile = async (
 export const uploadFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
   const content = await file.text()
   const fileType = detectFileType(file.name, content)
@@ -663,7 +674,7 @@ export const uploadFile = async (
       await uploadTranscriptFile(file, appState, writeMessage)
       break
     case 'pdf':
-      await uploadPDFFile(file, appState, writeMessage)
+      await uploadPDFFile(file, appState, writeMessage, currentUser)
       break
     case 'markdown':
       await uploadMarkdownFile(file, appState, writeMessage)

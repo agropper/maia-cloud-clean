@@ -144,21 +144,14 @@
               Debug: workflowStage = "{{ user.workflowStage }}", awaiting_approval check = {{ user.workflowStage === 'awaiting_approval' }}
             </div>
             <QBtn
-              v-if="user.workflowStage === 'request_email_sent'"
-              color="primary"
-              label="Create Agent"
-              @click="createAgent"
-              :loading="creatingAgent"
-            />
-            <QBtn
-              v-if="user.workflowStage === 'awaiting_approval'"
+              v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
               color="positive"
               label="Approve User"
               @click="approveUser"
               :loading="approving"
             />
             <QBtn
-              v-if="user.workflowStage === 'awaiting_approval'"
+              v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
               color="negative"
               label="Reject User"
               @click="rejectUser"
