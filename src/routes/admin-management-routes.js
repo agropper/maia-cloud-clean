@@ -845,64 +845,16 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }
     
     
-    // Check cache first (use the same pattern as other endpoints)
-    const cachedUsers = cacheManager.getCachedUsers();
-    
-    // Add cache-busting parameter to force fresh data when needed
-    const forceRefresh = req.query.forceRefresh === 'true';
-    
     // Get sorting and pagination parameters from query
     const sortBy = req.query.sortBy || 'createdAt';
     const descending = req.query.descending === 'true';
     const page = parseInt(req.query.page) || 1;
     const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
     
-    if (cachedUsers && !forceRefresh) {
-      // Apply sorting to cached data
-      const sortedUsers = cachedUsers.sort((a, b) => {
-        let aVal = a[sortBy];
-        let bVal = b[sortBy];
-        
-        // Handle date sorting
-        if (sortBy === 'createdAt') {
-          aVal = new Date(aVal);
-          bVal = new Date(bVal);
-        }
-        
-        // Handle string sorting
-        if (typeof aVal === 'string') {
-          aVal = aVal.toLowerCase();
-        }
-        if (typeof bVal === 'string') {
-          bVal = bVal.toLowerCase();
-        }
-        
-        if (aVal < bVal) return descending ? 1 : -1;
-        if (aVal > bVal) return descending ? -1 : 1;
-        return 0;
-      });
-      
-      // Apply pagination to sorted cached data
-      let paginatedUsers = sortedUsers;
-      if (rowsPerPage > 0) {
-        const startIndex = (page - 1) * rowsPerPage;
-        const endIndex = startIndex + rowsPerPage;
-        paginatedUsers = sortedUsers.slice(startIndex, endIndex);
-      }
-      // If rowsPerPage is -1 or 0, show all records (no pagination)
-      
-      return res.json({
-        users: paginatedUsers,
-        count: paginatedUsers.length,
-        totalCount: sortedUsers.length,
-        cached: true
-      });
-    }
-    
     
     // Get all users from maia_users database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-    console.log(`🔍 [ADMIN-USERS] Fetched ${allUsers.length} users from database (forceRefresh: ${forceRefresh})`);
+    console.log(`🔍 [ADMIN-USERS] Fetched ${allUsers.length} users from database (always fresh)`);
     
     const filteredUsers = allUsers.filter(user => {
       // Handle database corruption: use userId as fallback for _id
@@ -974,8 +926,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }
     // If rowsPerPage is -1 or 0, show all records (no pagination)
     
-    // Cache the processed users data
-    await cacheManager.cacheUsers(sortedUsers);
+    // No caching - always use fresh data like User Details endpoint
     
     
     res.json({ 
