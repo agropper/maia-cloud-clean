@@ -1863,15 +1863,12 @@ const createAgentFromList = async (user: any) => {
     
     const agentData = await response.json()
     
-    // Refresh the user list to get the latest data from database
-    await loadUsers(true) // Force refresh from database, not cache
-    
-    // Refresh agents list to show the new agent
-    await loadAgents()
+    // Don't refresh here - let the deployment monitoring handle UI updates
+    // The handleAgentDeploymentCompleted will refresh both users and agents lists
     
     $q.notify({
       type: 'positive',
-      message: `Agent created successfully for ${user.userId}`,
+      message: `Agent creation started for ${user.userId}. Deployment monitoring in progress...`,
       position: 'top'
     })
   } catch (error) {
@@ -2613,6 +2610,9 @@ const handlePollingUpdate = (update) => {
 }
 
 const handleAgentDeploymentCompleted = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment completed: ${data.message}`)
+  
   // Refresh the user list to get the latest data from database
   loadUsers(true) // Force refresh from database, not cache
   
@@ -2629,6 +2629,9 @@ const handleAgentDeploymentCompleted = (data) => {
 }
 
 const handleAgentDeploymentFailed = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment failed: ${data.message}`)
+  
   // Refresh the user list to get the latest data from database
   loadUsers(true) // Force refresh from database, not cache
   
@@ -2642,6 +2645,9 @@ const handleAgentDeploymentFailed = (data) => {
 }
 
 const handleAgentDeploymentTimeout = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment timeout: ${data.message}`)
+  
   // Refresh the user list to get the latest data from database
   loadUsers(true) // Force refresh from database, not cache
   
@@ -2655,6 +2661,9 @@ const handleAgentDeploymentTimeout = (data) => {
 }
 
 const handleAgentDeploymentErrorTimeout = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment error timeout: ${data.message}`)
+  
   // Refresh the user list to get the latest data from database
   loadUsers(true) // Force refresh from database, not cache
   
