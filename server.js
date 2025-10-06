@@ -8,6 +8,9 @@ import { SessionManager } from './src/utils/session-manager.js';
 import { SessionMiddleware } from './src/middleware/session-middleware.js';
 import cookieParser from 'cookie-parser';
 
+// Import throttling utilities
+import RequestThrottler from './src/utils/RequestThrottler.js';
+
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
@@ -7422,6 +7425,88 @@ app.get('/vue-tooltip-test', (req, res) => {
   });
 });
 
+// Throttled refresh of Users List cache using same function as User Details
+async function refreshUsersListCacheThrottled() {
+  // Create throttler with 0.1 second delay as requested
+  const throttler = new RequestThrottler({ delay: 100 }); // 100ms = 0.1 seconds
+  
+  // Get all users from database (same logic as admin-management-routes.js)
+  const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+  
+  // Filter users (same logic as admin-management-routes.js)
+  const filteredUsers = allUsers.filter(user => {
+    // Handle database corruption: use userId as fallback for _id
+    if (!user._id && !user.userId) {
+      return false;
+    }
+    
+    // Fix corrupted documents by restoring _id from userId
+    if (!user._id && user.userId) {
+      user._id = user.userId;
+    }
+    
+    // Exclude design documents
+    if (user._id.startsWith('_design/')) {
+      return false;
+    }
+    // Exclude configuration documents (not real users)
+    if (user._id === 'maia_config') {
+      return false;
+    }
+    // Always include these specific users regardless of admin status
+    if (user._id === 'Public User' || user._id === 'wed271') {
+      return true;
+    }
+    // Always include deep link users
+    if (user._id.startsWith('deep_link_')) {
+      return true;
+    }
+    // For all other users, exclude admin users
+    const isAdmin = user.isAdmin;
+    return !isAdmin;
+  });
+  
+  console.log(`🔄 [STARTUP] Processing ${filteredUsers.length} users with throttling...`);
+  
+  // Process users using the same logic as processUserData function from User Details
+  const processedUsers = await Promise.all(filteredUsers.map(async user => {
+    return throttler.addRequest(async () => {
+      // Use same logic as processUserData function (simplified version)
+      return {
+        userId: user._id || user.userId,
+        displayName: user.displayName || user._id || user.userId,
+        email: user.email || null,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        hasPasskey: !!user.credentialID,
+        hasValidPasskey: !!(user.credentialID && 
+          user.credentialID !== 'test-credential-id-wed271' && 
+          user.credentialPublicKey && 
+          user.counter !== undefined),
+        credentialID: user.credentialID,
+        credentialPublicKey: user.credentialPublicKey ? 'Present' : 'Missing',
+        counter: user.counter,
+        transports: user.transports,
+        domain: user.domain,
+        type: user.type,
+        workflowStage: user.workflowStage || 'no_passkey', // Use raw database value
+        adminNotes: user.adminNotes || '',
+        approvalStatus: user.approvalStatus,
+        assignedAgentId: user.assignedAgentId || null,
+        assignedAgentName: user.assignedAgentName || null,
+        agentAssignedAt: user.agentAssignedAt || null,
+        agentApiKey: user.agentApiKey || null,
+        bucketStatus: { hasFolder: false, fileCount: 0, totalSize: 0 } // Will be fetched separately if needed
+      };
+    });
+  }));
+  
+  // Cache the processed users data
+  await cacheManager.cacheUsers(processedUsers);
+  
+  console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users with fresh data`);
+}
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, async () => {
@@ -7753,6 +7838,15 @@ async function ensureAllUserBuckets() {
       } else {
         console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
       }
+    }
+    
+    // Throttled refresh of Users List cache using same function as User Details
+    try {
+      console.log(`🔄 [STARTUP] Starting throttled refresh of Users List cache...`);
+      await refreshUsersListCacheThrottled();
+      console.log(`✅ [STARTUP] Users List cache refresh completed`);
+    } catch (error) {
+      console.error(`❌ [STARTUP] Failed to refresh Users List cache:`, error.message);
     }
     
     // Deployment monitoring will be started automatically when agents are created

@@ -1259,6 +1259,9 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
     
     await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
     
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
+    
     res.json({ 
       message: 'Notes saved successfully',
       userId: userId,
@@ -1892,6 +1895,9 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     
     // Save the updated user document
     await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     // Set a timer to clear the reset flag after 1 hour
     setTimeout(async () => {
