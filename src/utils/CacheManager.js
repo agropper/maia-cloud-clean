@@ -7,6 +7,7 @@ export class CacheManager {
   constructor() {
     this.cache = {
       users: new Map(),           // userId -> userDocument
+      users_processed: new Map(), // userId -> processedUserData (includes bucket info)
       chats: new Map(),           // 'all' -> allChatsArray
       agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
       knowledgeBases: new Map(),   // kbId -> kbDocument
@@ -17,6 +18,7 @@ export class CacheManager {
     
     this.lastUpdated = {
       users: new Map(),           // userId -> timestamp
+      users_processed: new Map(), // userId -> timestamp, 'all' -> timestamp
       chats: 0,                   // timestamp
       agentAssignments: new Map(), // userId -> timestamp
       knowledgeBases: new Map(),   // kbId -> timestamp
@@ -28,6 +30,7 @@ export class CacheManager {
     // Cache TTL (Time To Live) in milliseconds
     this.ttl = {
       users: 15 * 60 * 1000,       // 15 minutes (admin data changes infrequently)
+      users_processed: 5 * 60 * 1000, // 5 minutes (processed data with bucket info)
       chats: 2 * 60 * 1000,        // 2 minutes
       agentAssignments: 15 * 60 * 1000, // 15 minutes (admin data)
       knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
@@ -87,7 +90,19 @@ export class CacheManager {
     }
     
     if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
-      return this.cache[cacheType].get(key);
+      const result = this.cache[cacheType].get(key);
+      
+      // Debug logging for users_processed cache
+      if (cacheType === 'users_processed') {
+        console.log(`🔧 [CACHE-DEBUG] Retrieved ${cacheType} with key '${key}': ${result ? (Array.isArray(result) ? result.length + ' users' : 'single user') : 'null'}`);
+      }
+      
+      return result;
+    }
+    
+    // Debug logging for users_processed cache when not found
+    if (cacheType === 'users_processed') {
+      console.log(`🔧 [CACHE-DEBUG] Failed to retrieve ${cacheType} with key '${key}': cacheType exists=${!!this.cache[cacheType]}, isMap=${this.cache[cacheType] instanceof Map}`);
     }
     
     return null;
@@ -116,6 +131,11 @@ export class CacheManager {
       
       this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
+      
+      // Debug logging for users_processed cache
+      if (cacheType === 'users_processed') {
+        console.log(`🔧 [CACHE-DEBUG] Stored ${cacheType} with key '${key}': ${Array.isArray(data) ? data.length + ' users' : 'single user'}`);
+      }
     }
     
   }
@@ -129,13 +149,17 @@ export class CacheManager {
       this.lastUpdated.chats = 0;
     } else if (key && this.cache[cacheType]) {
       this.cache[cacheType].delete(key);
-      if (this.lastUpdated[cacheType]) {
+      if (this.lastUpdated[cacheType] && typeof this.lastUpdated[cacheType].delete === 'function') {
         this.lastUpdated[cacheType].delete(key);
+      } else if (typeof this.lastUpdated[cacheType] === 'number') {
+        this.lastUpdated[cacheType] = 0; // Reset timestamp for simple cache types
       }
     } else if (this.cache[cacheType]) {
       this.cache[cacheType].clear();
-      if (this.lastUpdated[cacheType]) {
+      if (this.lastUpdated[cacheType] && typeof this.lastUpdated[cacheType].clear === 'function') {
         this.lastUpdated[cacheType].clear();
+      } else if (typeof this.lastUpdated[cacheType] === 'number') {
+        this.lastUpdated[cacheType] = 0; // Reset timestamp for simple cache types
       }
     }
     

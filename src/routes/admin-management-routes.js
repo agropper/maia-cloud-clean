@@ -37,6 +37,9 @@ let couchDBClient = null;
 let cacheFunctions = null;
 export const setCacheFunctions = (functions) => {
   cacheFunctions = functions;
+  // Also set it globally so any imported module instance can access it
+  global.cacheFunctions = functions;
+  console.log(`🔧 [CACHE-DEBUG] setCacheFunctions called - local: ${!!cacheFunctions}, global: ${!!global.cacheFunctions}`);
 };
 
 // DigitalOcean API function (will be set by server.js)
@@ -61,14 +64,15 @@ let deploymentMonitoringInterval = null; // Track the monitoring interval
 const invalidateUserCache = (userId) => {
   if (!cacheFunctions) return;
   
-  
   // Invalidate user-specific caches
   cacheFunctions.invalidateCache('users', userId);
   cacheFunctions.invalidateCache('agents', userId);
   cacheFunctions.invalidateCache('agentAssignments', userId);
+  cacheFunctions.invalidateCache('users_processed', userId); // Invalidate processed user cache
   
   // CRITICAL: Also invalidate the "all" users cache used by Admin2 panel
   cacheFunctions.invalidateCache('users', 'all');
+  // Don't invalidate users_processed 'all' cache - updateProcessedUserCache will update it instead
   
   // Also invalidate general caches that might contain user data
   cacheFunctions.invalidateCache('chats');
@@ -95,6 +99,109 @@ const startDeploymentMonitoring = () => {
       console.error('❌ Error in deployment monitoring:', error);
     }
   }, DEPLOYMENT_CHECK_INTERVAL);
+};
+
+// Update processed user cache with complete information for Users List
+const updateProcessedUserCache = async (userId) => {
+  try {
+    // Get raw user document from database
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      console.error(`❌ [CACHE] User ${userId} not found for cache update`);
+      return;
+    }
+    
+    // Process user data with bucket information
+    const processedUser = await processUserData(userDoc, true);
+    
+    // Store processed user in cache
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    if (cacheFunc) {
+      cacheFunc.setCache('users_processed', userId, processedUser);
+      
+      // Also update the user in the 'all' cache array
+      const allUsersCache = cacheFunc.getCache('users_processed', 'all');
+      if (allUsersCache && Array.isArray(allUsersCache)) {
+        // Find and replace the user in the array
+        const userIndex = allUsersCache.findIndex(user => user.userId === userId);
+        if (userIndex !== -1) {
+          allUsersCache[userIndex] = processedUser;
+          cacheFunc.setCache('users_processed', 'all', allUsersCache);
+        }
+      }
+      
+      console.log(`✅ [CACHE] Updated processed cache for user ${userId}`);
+    }
+  } catch (error) {
+    console.error(`❌ [CACHE] Failed to update processed cache for user ${userId}:`, error.message);
+  }
+};
+
+// Update all users in processed cache (for startup)
+const updateAllProcessedUserCache = async () => {
+  try {
+    console.log('🔄 [CACHE] Updating all processed user cache...');
+    console.log(`🔧 [CACHE-DEBUG] updateAllProcessedUserCache - local cacheFunctions: ${!!cacheFunctions}, global: ${!!global.cacheFunctions}`);
+    
+    // Get all users from database
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    
+    const filteredUsers = allUsers.filter(user => {
+      if (!user._id && !user.userId) return false;
+      if (!user._id && user.userId) user._id = user.userId;
+      if (user._id.startsWith('_design/')) return false;
+      if (user._id === 'maia_config') return false;
+      if (user._id === 'Public User' || user._id === 'wed271') return true;
+      if (user._id.startsWith('deep_link_')) return true;
+      const isAdmin = user.isAdmin;
+      return !isAdmin;
+    });
+    
+    console.log(`🔄 [CACHE] Processing ${filteredUsers.length} users with throttling...`);
+    
+    const processedUsers = [];
+    
+    // Process users with throttling to avoid rate limits
+    for (let i = 0; i < filteredUsers.length; i++) {
+      const user = filteredUsers[i];
+      
+      // Process user data with bucket information
+      const processedUser = await processUserData(user, true);
+      
+      // Store individual user in cache
+      if (cacheFunctions) {
+        cacheFunctions.setCache('users_processed', user._id, processedUser);
+      }
+      
+      // Add to array for 'all' cache
+      processedUsers.push(processedUser);
+      
+      // Throttle to avoid overwhelming the system
+      if (i < filteredUsers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between users
+      }
+    }
+    
+    // Store the complete array in cache with key 'all'
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    console.log(`🔧 [CACHE-DEBUG] About to store cache - cacheFunc available: ${!!cacheFunc}, processedUsers.length: ${processedUsers.length}`);
+    
+    if (cacheFunc) {
+      cacheFunc.setCache('users_processed', 'all', processedUsers);
+      console.log(`✅ [CACHE] Stored ${processedUsers.length} users in 'all' cache`);
+      
+      // Verify it was stored correctly
+      const verifyCache = cacheFunc.getCache('users_processed', 'all');
+      console.log(`🔍 [CACHE] Verification: cache contains ${verifyCache ? verifyCache.length : 'null'} users`);
+    } else {
+      console.log(`❌ [CACHE-DEBUG] cacheFunctions is NULL - cannot store cache`);
+      console.log(`❌ [CACHE-DEBUG] local cacheFunctions: ${!!cacheFunctions}, global cacheFunctions: ${!!global.cacheFunctions}`);
+    }
+    
+    console.log(`✅ [CACHE] Updated processed cache for all ${filteredUsers.length} users`);
+  } catch (error) {
+    console.error('❌ [CACHE] Failed to update all processed user cache:', error.message);
+  }
 };
 
 // Add user to deployment tracking
@@ -159,12 +266,12 @@ const checkAgentDeployments = async () => {
           const { addUpdateToAllAdmins } = await import('../../server.js');
           
           const updateData = {
-            userId: userId,
-            agentName: tracking.agentName,
-            agentId: tracking.agentId || null,
-            duration: durationSeconds,
-            durationMinutes: durationMinutes,
-            message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
+                userId: userId,
+                agentName: tracking.agentName,
+                agentId: tracking.agentId || null,
+                duration: durationSeconds,
+                durationMinutes: durationMinutes,
+                message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
           };
           
           addUpdateToAllAdmins('agent_deployment_completed', updateData);
@@ -845,11 +952,10 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }
     
     
-    // Check cache first (use the same pattern as other endpoints)
-    const cachedUsers = cacheManager.getCachedUsers();
-    
-    // Add cache-busting parameter to force fresh data when needed
-    const forceRefresh = req.query.forceRefresh === 'true';
+    // Always use processed cache for Users List (no database access needed)
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    const processedUsersCache = cacheFunc ? cacheFunc.getCache('users_processed', 'all') : null;
+    console.log(`🔍 [ADMIN-USERS] Cache check: processedUsersCache = ${processedUsersCache ? `${processedUsersCache.length} users` : 'null'}`);
     
     // Get sorting and pagination parameters from query
     const sortBy = req.query.sortBy || 'createdAt';
@@ -857,9 +963,9 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
     
-    if (cachedUsers && !forceRefresh) {
-      // Apply sorting to cached data
-      const sortedUsers = cachedUsers.sort((a, b) => {
+    if (processedUsersCache) {
+      // Apply sorting to cached processed data
+      const sortedUsers = processedUsersCache.sort((a, b) => {
         let aVal = a[sortBy];
         let bVal = b[sortBy];
         
@@ -897,94 +1003,23 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         totalCount: sortedUsers.length,
         cached: true
       });
+    } else {
+      // Cache is empty - this should not happen in normal operation
+      console.warn('⚠️ [ADMIN-USERS] Processed users cache is empty - triggering cache refresh');
+      
+      // Trigger cache refresh and return empty result
+      updateAllProcessedUserCache().catch(error => {
+        console.error('❌ [ADMIN-USERS] Failed to refresh processed users cache:', error.message);
+      });
+      
+      return res.json({
+        users: [],
+        count: 0,
+        totalCount: 0,
+        cached: false,
+        message: 'Cache is being refreshed, please try again in a moment'
+      });
     }
-    
-    
-    // Get all users from maia_users database
-    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-    console.log(`🔍 [ADMIN-USERS] Fetched ${allUsers.length} users from database (forceRefresh: ${forceRefresh})`);
-    
-    const filteredUsers = allUsers.filter(user => {
-      // Handle database corruption: use userId as fallback for _id
-      if (!user._id && !user.userId) {
-        return false;
-      }
-      
-      // Fix corrupted documents by restoring _id from userId
-      if (!user._id && user.userId) {
-        user._id = user.userId;
-      }
-      // Exclude design documents
-        if (user._id.startsWith('_design/')) {
-          return false;
-        }
-      // Exclude configuration documents (not real users)
-      if (user._id === 'maia_config') {
-        return false;
-      }
-      // Always include these specific users regardless of admin status
-      if (user._id === 'Public User' || user._id === 'wed271') {
-        return true;
-      }
-      // Always include deep link users
-      if (user._id.startsWith('deep_link_')) {
-          return true;
-        }
-        // For all other users, exclude admin users
-        const isAdmin = user.isAdmin;
-        return !isAdmin;
-    });
-    
-    console.log(`🔍 [ADMIN-USERS] After filtering: ${filteredUsers.length} users (excluded admin users and invalid entries)`);
-    
-    
-    // Process users using shared function for consistency
-    const processedUsers = await Promise.all(filteredUsers.map(async user => {
-        return await processUserData(user, true); // Include bucket status for users list (DO API, not Cloudant)
-      }));
-    
-    // Apply sorting to processed users
-    const sortedUsers = processedUsers.sort((a, b) => {
-      let aVal = a[sortBy];
-      let bVal = b[sortBy];
-      
-      // Handle date sorting
-      if (sortBy === 'createdAt') {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-      
-      // Handle string sorting
-      if (typeof aVal === 'string') {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
-      }
-      
-      if (aVal < bVal) return descending ? 1 : -1;
-      if (aVal > bVal) return descending ? -1 : 1;
-      return 0;
-    });
-    
-    // Apply pagination
-    let paginatedUsers = sortedUsers;
-    if (rowsPerPage > 0) {
-      const startIndex = (page - 1) * rowsPerPage;
-      const endIndex = startIndex + rowsPerPage;
-      paginatedUsers = sortedUsers.slice(startIndex, endIndex);
-    }
-    // If rowsPerPage is -1 or 0, show all records (no pagination)
-    
-    // Cache the processed users data
-    await cacheManager.cacheUsers(sortedUsers);
-    
-    
-    res.json({ 
-      users: paginatedUsers,
-      count: paginatedUsers.length,
-      totalCount: sortedUsers.length, // Total count for pagination
-      cached: false,
-      timestamp: new Date().toISOString()
-    });
     
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -1138,9 +1173,9 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     const { action, notes } = req.body;
     
     // Validate action
-    if (!['approve', 'reject', 'suspend', 'reset'].includes(action)) {
+    if (!['approve', 'reject', 'suspend', 'reset', 'move_to_review'].includes(action)) {
       return res.status(400).json({ 
-        error: 'Invalid action. Must be one of: approve, reject, suspend, reset' 
+        error: 'Invalid action. Must be one of: approve, reject, suspend, reset, move_to_review' 
       });
     }
     
@@ -1172,7 +1207,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
         break;
       case 'move_to_review':
         approvalStatus = 'pending';
-        workflowStage = 'awaiting_approval';
+        workflowStage = 'request_email_sent';
         break;
     }
     
@@ -1191,15 +1226,29 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     // Validate consistency before saving
     validateWorkflowConsistency(updatedUser);
     
-    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    // Don't save immediately - we'll save after agent creation to avoid conflicts
     
-    // Invalidate user cache to ensure fresh data
-    invalidateUserCache(userId);
+    // Send admin notification for workflow stage changes (except for approval which has its own notifications)
+    if (action !== 'approve') {
+      try {
+        const { addUpdateToAllAdmins } = await import('../../server.js');
+        addUpdateToAllAdmins('workflow_stage_changed', {
+          userId: userId,
+          action: action,
+          newWorkflowStage: workflowStage,
+          newApprovalStatus: approvalStatus,
+          message: `User ${userId} workflow stage changed to ${workflowStage}`,
+          timestamp: new Date().toISOString()
+        });
+      } catch (notificationError) {
+        console.error('❌ Failed to send workflow stage change notification:', notificationError.message);
+      }
+    }
     
     // If approved, create bucket folder for the user
     if (action === 'approve') {
       try {
-        console.log(`🪣 [BUCKET] Creating bucket folder for approved user: ${userId}`);
+        console.log(`🪣 [BUCKET] Ensuring bucket folder exists for approved user: ${userId}`);
         const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1208,25 +1257,133 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
         
         if (bucketResponse.ok) {
           const bucketData = await bucketResponse.json();
-          console.log(`✅ [BUCKET] Bucket folder created successfully for user ${userId}`);
+          console.log(`✅ [BUCKET] Bucket folder ${bucketData.folderExists ? 'already exists' : 'created successfully'} for user ${userId}`);
         } else {
-          console.error(`❌ [BUCKET] Failed to create bucket folder for user ${userId}: ${bucketResponse.status}`);
+          console.error(`❌ [BUCKET] Failed to ensure bucket folder for user ${userId}: ${bucketResponse.status}`);
         }
       } catch (bucketError) {
         console.error(`❌ [BUCKET] Error creating bucket folder for user ${userId}:`, bucketError.message);
       }
     }
     
-    // If approved, admin will manually create agent via Admin Panel
+    // If approved, automatically create agent for the user
+    let agentCreationResult = null;
+    if (action === 'approve') {
+      try {
+        console.log(`🤖 [AUTO-AGENT] Automatically creating agent for approved user: ${userId}`);
+        
+        // Check if user already has an assigned agent
+        if (userDoc.assignedAgentId) {
+          console.log(`⚠️ [AUTO-AGENT] User ${userId} already has assigned agent: ${userDoc.assignedAgentId}`);
+        } else if (!userDoc.email) {
+          console.log(`⚠️ [AUTO-AGENT] User ${userId} has no email address, skipping agent creation`);
+        } else {
+          // Generate agent name based on user ID and date
+          const today = new Date();
+          const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
+          const agentName = `${userId}-agent-${dateStr}`;
+          
+          // Get the current model configuration from database
+          const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+          
+          if (!configDoc || !configDoc.current_model) {
+            console.log(`⚠️ [AUTO-AGENT] No model configured, skipping agent creation for user ${userId}`);
+          } else {
+            const selectedModel = configDoc.current_model;
+            
+            // Create agent using DigitalOcean API
+            const agentData = {
+              name: agentName,
+              model_uuid: selectedModel.uuid,
+              description: `Private AI agent for ${userDoc.email}`,
+              instruction: "You are MAIA, a medical AI assistant that can search through a patient's health records in a knowledge base and provide relevant answers to their requests. Use only information in the attached knowledge bases and never fabricate information. There is a lot of redundancy in a patient's knowledge base. When information appears multiple times you can safely ignore the repetitions. To ensure that all medications are accurately listed in the future, the assistant should adopt a systematic approach: Comprehensive Review: Thoroughly examine every chunk in the knowledge base to identify all medication entries, regardless of their status (active or stopped). Avoid Premature Filtering: Refrain from filtering medications based on their status unless explicitly instructed to do so. This ensures that all prescribed medications are included. Consolidation of Information: Use a method to consolidate medication information from all chunks, ensuring that each medication is listed only once, even if it appears multiple times. Always maintain patient privacy and provide evidence-based recommendations.",
+              project_id: "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+              region: "tor1"
+            };
+            
+            try {
+              const agentResponse = await doRequest('/v2/gen-ai/agents', {
+                method: 'POST',
+                body: JSON.stringify(agentData)
+              });
+              
+              const newAgent = agentResponse.agent || agentResponse.data?.agent || agentResponse;
+              const newAgentId = newAgent.uuid || newAgent.id;
+              
+              console.log(`✅ [AUTO-AGENT] Agent created successfully: ${newAgentId}`);
+              
+              // Create API key for the agent
+              let agentApiKey = null;
+              try {
+                const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${newAgentId}/api_keys`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    name: `${agentName}-api-key`,
+                    description: `API key for ${agentName}`
+                  })
+                });
+                
+                agentApiKey = apiKeyResponse.api_key?.key || apiKeyResponse.key || apiKeyResponse.data?.key;
+                console.log(`🔑 [AUTO-AGENT] API key created for agent ${newAgentId}`);
+              } catch (apiKeyError) {
+                console.error(`❌ [AUTO-AGENT] Failed to create API key for agent ${newAgentId}:`, apiKeyError.message);
+              }
+              
+              // Update user document with agent assignment and change workflow stage to polling
+              const finalUserUpdate = {
+                ...updatedUser,
+                assignedAgentId: newAgentId,
+                assignedAgentName: agentName,
+                agentApiKey: agentApiKey,
+                agentAssignedAt: new Date().toISOString(),
+                workflowStage: 'polling_for_deployment',
+                updatedAt: new Date().toISOString()
+              };
+              
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUserUpdate);
+              invalidateUserCache(userId);
+              
+              // Update processed user cache with fresh data including agent info
+              await updateProcessedUserCache(userId);
+              
+              // Add user to deployment tracking
+              addToDeploymentTracking(userId, newAgentId, agentName);
+              
+              agentCreationResult = {
+                agentId: newAgentId,
+                agentName: agentName,
+                apiKey: agentApiKey,
+                workflowStage: 'polling_for_deployment'
+              };
+              
+              console.log(`[*] Agent created and assigned to user ${userId}: ${newAgentId}`);
+              
+            } catch (agentError) {
+              console.error(`❌ [AUTO-AGENT] Failed to create agent for user ${userId}:`, agentError.message);
+            }
+          }
+        }
+      } catch (autoAgentError) {
+        console.error(`❌ [AUTO-AGENT] Error during automatic agent creation for user ${userId}:`, autoAgentError.message);
+      }
+    }
+    
+    // If no agent creation happened, save the user document now
+    if (!agentCreationResult) {
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+      invalidateUserCache(userId);
+      await updateProcessedUserCache(userId);
+    }
     
     res.json({ 
       message: `User ${action} successfully`,
       userId: userId,
       action: action,
       approvalStatus: approvalStatus,
-      workflowStage: workflowStage,
+      workflowStage: agentCreationResult ? agentCreationResult.workflowStage : workflowStage,
       timestamp: new Date().toISOString(),
-      nextSteps: action === 'approve' ? 'Admin should create agent manually via Admin Panel' : null
+      agentCreation: agentCreationResult,
+      nextSteps: action === 'approve' ? (agentCreationResult ? 'Agent created and deployment started' : 'Approved but agent creation skipped') : null
     });
     
   } catch (error) {
@@ -1453,6 +1610,9 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       // Invalidate user cache to ensure fresh data
       invalidateUserCache(userId);
+      
+      // Update processed user cache with fresh data
+      await updateProcessedUserCache(userId);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -1656,7 +1816,7 @@ function validateWorkflowConsistency(user) {
   const validCombinations = {
     'no_passkey': ['no_passkey', undefined], // No approval status needed
     'no_request_yet': [undefined], // User has passkey but hasn't requested support yet
-    'request_email_sent': [undefined], // User has sent request email but not yet reviewed by admin
+    'request_email_sent': [undefined, 'pending'], // User has sent request email but not yet reviewed by admin
     'awaiting_approval': ['pending', undefined], // Awaiting approval
     'waiting_for_deployment': ['approved', undefined], // Approved but waiting for agent deployment (allow undefined for legacy)
     'polling_for_deployment': ['approved', undefined], // Agent is being deployed (equivalent to waiting_for_deployment)
@@ -3322,3 +3482,4 @@ router.post('/users/:userId/generate-api-key', requireAdminAuth, async (req, res
 export { updateUserActivity, getAllUserActivities, checkAgentDeployments, addToDeploymentTracking };
 
 export default router;
+export { updateProcessedUserCache, updateAllProcessedUserCache };

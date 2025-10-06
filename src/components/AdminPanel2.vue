@@ -1486,7 +1486,6 @@ const onAgentRequest = async (props: any) => {
     agentPagination.value.descending = descending
     agentPagination.value.rowsNumber = data.count || data.agents?.length || 0
     
-    console.log(`[ADMIN] Loaded ${data.count || data.agents?.length || 0} agents`)
     
   } catch (error) {
     console.error('Failed to load agents:', error)
@@ -1534,7 +1533,6 @@ const onKBRequest = async (props: any) => {
     kbPagination.value.descending = descending
     kbPagination.value.rowsNumber = data.count || data.knowledgeBases?.length || 0
     
-    console.log(`[ADMIN] Loaded ${data.count || data.knowledgeBases?.length || 0} knowledge bases`)
     
   } catch (error) {
     console.error('Failed to load knowledge bases:', error)
@@ -1586,7 +1584,6 @@ const onSessionRequest = async (props: any) => {
     sessionStats.value.totalSessions = data.total || 0
     sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
     
-    console.log(`[ADMIN] Loaded ${data.total || data.sessions?.length || 0} sessions`)
     
   } catch (error) {
     console.error('Failed to load sessions:', error)
@@ -1634,7 +1631,6 @@ const onModelRequest = async (props: any) => {
     modelPagination.value.descending = descending
     modelPagination.value.rowsNumber = data.count || data.models?.length || 0
     
-    console.log(`[ADMIN] Loaded ${data.count || data.models?.length || 0} models`)
     
   } catch (error) {
     console.error('Failed to load models:', error)
@@ -1766,11 +1762,21 @@ const approveUserFromList = async (user: any) => {
     await loadUsers(true) // Force refresh from database, not cache
     console.log(`✅ User list refreshed successfully`)
     
+    // Show appropriate notification based on agent creation result
+    if (result.agentCreation) {
+      console.log(`[*] Agent automatically created: ${result.agentCreation.agentId}`)
+      $q.notify({
+        type: 'positive',
+        message: `User ${user.userId} approved and agent created successfully`,
+        position: 'top'
+      })
+    } else {
     $q.notify({
       type: 'positive',
       message: `User ${user.userId} approved successfully`,
       position: 'top'
     })
+    }
   } catch (error) {
     console.error('❌ Failed to approve user:', error)
     $q.notify({
@@ -2179,19 +2185,6 @@ const loadChatCountsForAgents = async (agents: any[]) => {
       
       agent.chatCount = filteredGroups.length
       
-      // Debug logging for Public Agent
-      if (agent.name?.startsWith('public-')) {
-        console.log(`🔍 Public Agent "${agent.name}":`, {
-          ownerName,
-          totalGroups: allGroups.length,
-          filteredGroups: filteredGroups.length,
-          sampleGroups: allGroups.slice(0, 3).map(g => ({
-            currentUser: g.currentUser,
-            patientOwner: g.patientOwner,
-            id: g.id
-          }))
-        })
-      }
     }
   } catch (error) {
     console.error('❌ Error loading chat counts:', error)
@@ -2203,7 +2196,6 @@ const loadChatCountsForAgents = async (agents: any[]) => {
 // Data fetching functions
 const loadUsers = async (forceRefresh = false) => {
   try {
-    console.log(`🔄 Loading users (forceRefresh: ${forceRefresh})`)
     isLoadingUsers.value = true
     
     // Add cache-busting and sorting/pagination parameters
@@ -2223,10 +2215,8 @@ const loadUsers = async (forceRefresh = false) => {
     const forceRefreshParam = forceRefresh ? '&forceRefresh=true' : ''
     
     const url = `/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`
-    console.log(`📡 Fetching users from: ${url}`)
     
     const data = await throttledFetchJson(url)
-    console.log(`✅ Loaded ${(data.users || []).length} users`)
     users.value = data.users || []
     
     // Update total rows number for pagination
@@ -2449,7 +2439,6 @@ const pollForUpdates = async () => {
       if (response.status === 410) {
         // Session expired - server restarted
         const errorData = await response.json()
-        console.log(`[POLLING] Session expired: ${errorData.message}`)
         stopPolling()
         // Clear the stale session ID so a new one will be created
         currentSessionId.value = null
@@ -2517,7 +2506,6 @@ const createAdminSession = async () => {
       
       if (existingAdminSession) {
         currentSessionId.value = existingAdminSession.sessionId
-        console.log(`[POLLING] Using existing admin session: ${currentSessionId.value}`)
         return
       }
     }
@@ -2541,7 +2529,6 @@ const createAdminSession = async () => {
     if (response.ok) {
       const data = await response.json()
       currentSessionId.value = data.sessionId
-      console.log(`[POLLING] Created new admin session: ${currentSessionId.value}`)
     } else {
       console.error('[POLLING] Failed to create admin session:', response.status)
     }
@@ -2571,6 +2558,10 @@ const handlePollingUpdate = (update) => {
         
       case 'agent_cleanup':
         handleAgentCleanup(update.data)
+        break
+        
+      case 'workflow_stage_changed':
+        handleWorkflowStageChanged(update.data)
         break
         
       case 'kb_indexing_completed':
@@ -2692,7 +2683,26 @@ const handleAgentCleanup = (data) => {
   })
 }
 
+const handleWorkflowStageChanged = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Workflow stage changed: ${data.message}`)
+  
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `🔄 ${data.message}`,
+    timeout: 5000,
+    position: 'top'
+  })
+}
+
 const handleKBIndexingCompleted = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] KB indexing completed: ${data.message}`)
+  
   // Refresh knowledge bases list
   loadKnowledgeBases()
   
@@ -2706,6 +2716,9 @@ const handleKBIndexingCompleted = (data) => {
 }
 
 const handleUserRegistered = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] User registered: ${data.message}`)
+  
   // Refresh users list to show the new user
   loadUsers(true) // Force refresh from database, not cache
   
@@ -2730,6 +2743,9 @@ const handleTestUpdate = (data) => {
 }
 
 const handleUserFileUploaded = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] User file uploaded: ${data.message}`)
+  
   // Refresh sessions list to show updated user activity
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2743,7 +2759,9 @@ const handleUserFileUploaded = (data) => {
 }
 
 const handleSessionCreated = (data) => {
-  console.log(`[SESSIONS] Session created:`, data)
+  // Log to browser console for debugging
+  console.log(`[*] Session created: ${data.message}`)
+  
   // Refresh sessions list to show new session
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2757,7 +2775,9 @@ const handleSessionCreated = (data) => {
 }
 
 const handleSessionUpdated = (data) => {
-  console.log(`[SESSIONS] Session updated:`, data)
+  // Log to browser console for debugging
+  console.log(`[*] Session updated: ${data.message}`)
+  
   // Refresh sessions list to show updated session activity
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2771,7 +2791,9 @@ const handleSessionUpdated = (data) => {
 }
 
 const handleSessionEnded = (data) => {
-  console.log(`[SESSIONS] Session ended:`, data)
+  // Log to browser console for debugging
+  console.log(`[*] Session ended: ${data.message}`)
+  
   // Refresh sessions list to remove ended session
   onSessionRequest({ pagination: sessionPagination.value })
   
@@ -2794,31 +2816,22 @@ const checkAdminAuth = async () => {
   try {
     // Development bypass: Skip admin authentication on localhost
     if (window.location.hostname === 'localhost' && window.location.port === '3001') {
-      console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001');
       isAdmin.value = true;
       return;
     }
 
-    console.log('🔍 Checking admin authentication...')
     // Try to access an admin-protected endpoint
     const response = await fetch('/api/admin-management/health', {
       credentials: 'include'
     });
     
-    console.log('🔍 Auth check response:', {
-      status: response.status,
-      ok: response.ok
-    })
     
     if (response.ok) {
       isAdmin.value = true;
-      console.log('✅ Admin authentication verified');
     } else if (response.status === 401) {
       isAdmin.value = false;
-      console.log('🔒 Admin authentication required');
     } else {
       isAdmin.value = false;
-      console.log('❌ Admin authentication failed:', response.status);
     }
   } catch (error) {
     isAdmin.value = false;
@@ -2851,7 +2864,6 @@ const goToMainApp = () => {
 const adminSignInWithPasskey = async () => {
   // Prevent double authentication
   if (isSigningIn.value) {
-    console.log('🔒 Authentication already in progress, skipping');
     return;
   }
   
@@ -2859,7 +2871,6 @@ const adminSignInWithPasskey = async () => {
   errorMessage.value = ''
   
   try {
-    console.log('🔐 Starting admin authentication...');
     
     // Step 1: Generate authentication options for admin user
     const optionsResponse = await fetch('/api/passkey/authenticate', {
@@ -2877,12 +2888,10 @@ const adminSignInWithPasskey = async () => {
     }
     
     const options = await optionsResponse.json()
-    console.log('🔐 Authentication options received, starting WebAuthn...');
     
     // Step 2: Authenticate using SimpleWebAuthn
     const { startAuthentication } = await import('@simplewebauthn/browser')
     const credential = await startAuthentication({ optionsJSON: options })
-    console.log('🔐 WebAuthn authentication completed');
     
     // Step 3: Verify authentication using admin-specific endpoint
     const verifyResponse = await fetch('/api/passkey/admin-authenticate-verify', {
@@ -2933,16 +2942,9 @@ const adminSignInWithPasskey = async () => {
 
 onMounted(async () => {
   // Debug route detection
-  console.log('🔍 Route detection:', {
-    currentPath: window.location.pathname,
-    isRegistrationPage: isRegistrationPage.value,
-    isSignInPage: isSignInPage.value,
-    isAdmin: isAdmin.value
-  })
   
   // Skip authentication check if on registration or sign-in page
   if (isRegistrationPage.value || isSignInPage.value) {
-    console.log('📝 On registration/sign-in page - skipping authentication check')
     authCheckComplete.value = true; // Mark as complete for these pages
     return
   }
@@ -2954,12 +2956,6 @@ onMounted(async () => {
   authCheckComplete.value = true;
   
   // Debug after auth check
-  console.log('🔍 After auth check:', {
-    isAdmin: isAdmin.value,
-    authCheckComplete: authCheckComplete.value,
-    shouldShowAdminInterface: isAdmin.value && authCheckComplete.value,
-    shouldShowAccessRequired: !isAdmin.value && !isRegistrationPage.value && !isSignInPage.value && authCheckComplete.value
-  })
   
   // Only load data if admin is authenticated
   if (isAdmin.value) {
@@ -2968,7 +2964,6 @@ onMounted(async () => {
       await loadAllData()
       await loadCurrentModel()
       
-      console.log(`✅ Loaded ${users.value.length} users, ${agents.value.length} agents, ${knowledgeBases.value.length} knowledge bases`)
     } catch (error) {
       console.error('❌ Error during initialization:', error)
     }

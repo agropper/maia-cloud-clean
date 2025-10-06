@@ -6716,7 +6716,7 @@ If you're unsure about medical advice, recommend consulting with a healthcare pr
 // =============================================================================
 
 // Import passkey routes
-import passkeyRoutes, { setCouchDBClient as setPasskeyCouchDBClient } from './src/routes/passkey-routes.js';
+import passkeyRoutes, { setCouchDBClient as setPasskeyCouchDBClient, setCacheFunctions as setPasskeyCacheFunctions } from './src/routes/passkey-routes.js';
 
 // Pass the CouchDB client to the passkey routes
 setPasskeyCouchDBClient(couchDBClient);
@@ -6770,7 +6770,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction, setCacheFunctions as setAdminCacheFunctions } from './src/routes/admin-management-routes.js';
 
 // Unified cache system using CacheManager
 // The cacheManager is imported from './src/utils/CacheManager.js'
@@ -6807,10 +6807,13 @@ const setCacheFunctions = (routeModule) => {
 };
 
 // Set cache functions for passkey routes
-setCacheFunctions(passkeyRoutes);
+setPasskeyCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
 
 // Set cache functions and DigitalOcean API function for admin-management routes
-setCacheFunctions(adminManagementRoutes);
+console.log(`🔧 [CACHE-DEBUG] About to call setAdminCacheFunctions with cache functions at line 6813`);
+console.log(`🔧 [CACHE-DEBUG] setAdminCacheFunctions function available: ${!!setAdminCacheFunctions}`);
+setAdminCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
+console.log(`🔧 [CACHE-DEBUG] After setAdminCacheFunctions at line 6813 - global.cacheFunctions: ${!!global.cacheFunctions}`);
 setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
@@ -7427,84 +7430,23 @@ app.get('/vue-tooltip-test', (req, res) => {
 
 // Throttled refresh of Users List cache using same function as User Details
 async function refreshUsersListCacheThrottled() {
-  // Use the imported throttler instance (0.1 second delay as requested)
-  const throttler = requestThrottler;
-  
-  // Get all users from database (same logic as admin-management-routes.js)
-  const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-  
-  // Filter users (same logic as admin-management-routes.js)
-  const filteredUsers = allUsers.filter(user => {
-    // Handle database corruption: use userId as fallback for _id
-    if (!user._id && !user.userId) {
-      return false;
+  try {
+    console.log('🔄 [STARTUP] Starting processed users cache initialization...');
+    
+    // Import the module to get access to the exported functions
+    const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+    
+    // Call the function to update all processed user cache
+    if (adminRoutesModule.updateAllProcessedUserCache) {
+      await adminRoutesModule.updateAllProcessedUserCache();
+    } else {
+      console.error('❌ [STARTUP] updateAllProcessedUserCache function not available in module');
     }
     
-    // Fix corrupted documents by restoring _id from userId
-    if (!user._id && user.userId) {
-      user._id = user.userId;
-    }
-    
-    // Exclude design documents
-    if (user._id.startsWith('_design/')) {
-      return false;
-    }
-    // Exclude configuration documents (not real users)
-    if (user._id === 'maia_config') {
-      return false;
-    }
-    // Always include these specific users regardless of admin status
-    if (user._id === 'Public User' || user._id === 'wed271') {
-      return true;
-    }
-    // Always include deep link users
-    if (user._id.startsWith('deep_link_')) {
-      return true;
-    }
-    // For all other users, exclude admin users
-    const isAdmin = user.isAdmin;
-    return !isAdmin;
-  });
-  
-  console.log(`🔄 [STARTUP] Processing ${filteredUsers.length} users with throttling...`);
-  
-  // Process users using the same logic as processUserData function from User Details
-  const processedUsers = await Promise.all(filteredUsers.map(async user => {
-    return throttler.addRequest(async () => {
-      // Use same logic as processUserData function (simplified version)
-      return {
-        userId: user._id || user.userId,
-        displayName: user.displayName || user._id || user.userId,
-        email: user.email || null,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        hasPasskey: !!user.credentialID,
-        hasValidPasskey: !!(user.credentialID && 
-          user.credentialID !== 'test-credential-id-wed271' && 
-          user.credentialPublicKey && 
-          user.counter !== undefined),
-        credentialID: user.credentialID,
-        credentialPublicKey: user.credentialPublicKey ? 'Present' : 'Missing',
-        counter: user.counter,
-        transports: user.transports,
-        domain: user.domain,
-        type: user.type,
-        workflowStage: user.workflowStage || 'no_passkey', // Use raw database value
-        adminNotes: user.adminNotes || '',
-        approvalStatus: user.approvalStatus,
-        assignedAgentId: user.assignedAgentId || null,
-        assignedAgentName: user.assignedAgentName || null,
-        agentAssignedAt: user.agentAssignedAt || null,
-        agentApiKey: user.agentApiKey || null,
-        bucketStatus: { hasFolder: false, fileCount: 0, totalSize: 0 } // Will be fetched separately if needed
-      };
-    });
-  }));
-  
-  // Cache the processed users data
-  await cacheManager.cacheUsers(processedUsers);
-  
-  console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users with fresh data`);
+    console.log('✅ [STARTUP] Processed users cache initialization completed');
+  } catch (error) {
+    console.error('❌ [STARTUP] Failed to initialize processed users cache:', error.message);
+  }
 }
 
 const PORT = process.env.PORT || 3001;
@@ -7840,13 +7782,28 @@ async function ensureAllUserBuckets() {
       }
     }
     
-    // Throttled refresh of Users List cache using same function as User Details
+    // Cache functions were already set at line 6813, just verify they're available
+    console.log(`🔧 [CACHE-DEBUG] Verifying cache functions are available`);
+    console.log(`🔧 [CACHE-DEBUG] global.cacheFunctions available: ${!!global.cacheFunctions}`);
+    
+    // CRITICAL: Initialize processed users cache during startup
+    console.log(`🔄 [STARTUP] Initializing processed users cache...`);
     try {
-      console.log(`🔄 [STARTUP] Starting throttled refresh of Users List cache...`);
-      await refreshUsersListCacheThrottled();
-      console.log(`✅ [STARTUP] Users List cache refresh completed`);
+      // Import the module to get access to the exported functions
+      console.log(`🔧 [CACHE-DEBUG] About to import admin-management-routes module`);
+      const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+      console.log(`🔧 [CACHE-DEBUG] After import - global.cacheFunctions available: ${!!global.cacheFunctions}`);
+      
+      if (adminRoutesModule.updateAllProcessedUserCache) {
+        await adminRoutesModule.updateAllProcessedUserCache();
+        console.log(`✅ [STARTUP] Processed users cache initialization completed successfully`);
+      } else {
+        throw new Error('updateAllProcessedUserCache function not available');
+      }
     } catch (error) {
-      console.error(`❌ [STARTUP] Failed to refresh Users List cache:`, error.message);
+      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize processed users cache:`, error.message);
+      console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
+      process.exit(1);
     }
     
     // Deployment monitoring will be started automatically when agents are created

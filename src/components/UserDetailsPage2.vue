@@ -157,6 +157,17 @@
             icon="key_off"
           />
           
+          <!-- Reset Workflow Button - Show for testing purposes -->
+          <QBtn
+            v-if="user && user.workflowStage !== 'request_email_sent'"
+            color="orange"
+            label="Reset to Request Stage"
+            @click="resetWorkflowStage"
+            :loading="isResettingWorkflow"
+            class="action-btn"
+            icon="refresh"
+          />
+          
           <QBtn
             v-if="user.passkeyResetFlag"
             color="info"
@@ -286,6 +297,7 @@ const isSavingNotes = ref(false)
 const isGeneratingApiKey = ref(false)
 const isFixingWorkflow = ref(false)
 const isResettingPasskey = ref(false)
+const isResettingWorkflow = ref(false)
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
@@ -424,6 +436,57 @@ const resetUserPasskey = async () => {
     });
   } finally {
     isResettingPasskey.value = false;
+  }
+};
+
+const resetWorkflowStage = async () => {
+  if (!user.value?.userId) {
+    $q.notify({
+      type: 'negative',
+      message: 'No user selected',
+      position: 'top'
+    });
+    return;
+  }
+
+  try {
+    isResettingWorkflow.value = true;
+    
+    const response = await fetch(`/api/admin-management/users/${user.value.userId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'move_to_review',
+        notes: 'Reset workflow stage for testing purposes'
+      }),
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to reset workflow: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    $q.notify({
+      type: 'positive',
+      message: `User ${user.value.userId} workflow reset to request stage`,
+      position: 'top'
+    });
+
+    // Refresh user data to show updated workflow stage
+    await loadUserDetails();
+    
+  } catch (error) {
+    console.error('❌ Failed to reset workflow stage:', error);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to reset workflow stage',
+      position: 'top'
+    });
+  } finally {
+    isResettingWorkflow.value = false;
   }
 };
 
