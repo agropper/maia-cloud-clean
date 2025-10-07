@@ -274,6 +274,8 @@ export class CacheManager {
     const documentId = document._id || document.id;
     const cacheKey = `${databaseName}:${documentId}`;
     const cacheType = options.cacheType || this.getCacheTypeForDatabase(databaseName);
+    const maxRetries = options.maxRetries || 3;
+    const retryDelay = options.retryDelay || 100; // Initial delay in ms
     
     // SECURITY CHECK: Prevent currentUser from being saved to database
     if (databaseName === 'maia_users' && document && document.currentUser) {
@@ -285,25 +287,65 @@ export class CacheManager {
       throw new Error('Rate limit exceeded - cannot make database request');
     }
     
-    try {
-      const result = await this.executeWithCircuitBreaker(
-        () => couchDBClient.saveDocument(databaseName, document),
-        `saveDocument(${cacheKey})`
-      );
-      
-      // Invalidate related caches
-      this.invalidateCache(cacheType, documentId);
-      
-      // If it's a user document, invalidate related caches
-      if (databaseName === 'maia_users') {
-        this.invalidateUserRelatedCaches(documentId);
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.executeWithCircuitBreaker(
+          () => couchDBClient.saveDocument(databaseName, document),
+          `saveDocument(${cacheKey})`
+        );
+        
+        // Success - invalidate related caches
+        this.invalidateCache(cacheType, documentId);
+        
+        // If it's a user document, invalidate related caches
+        if (databaseName === 'maia_users') {
+          this.invalidateUserRelatedCaches(documentId);
+        }
+        
+        // Log retry success if this wasn't the first attempt
+        if (attempt > 1) {
+          console.log(`✅ [CACHE] Save succeeded on attempt ${attempt} for ${cacheKey}`);
+        }
+        
+        return result;
+      } catch (error) {
+        lastError = error;
+        
+        // Check if it's a document update conflict (409)
+        const isConflict = error.message && (
+          error.message.includes('conflict') || 
+          error.message.includes('409') ||
+          error.statusCode === 409
+        );
+        
+        if (isConflict && attempt < maxRetries) {
+          // Document conflict - retry with exponential backoff
+          const delay = retryDelay * Math.pow(2, attempt - 1);
+          console.log(`⚠️ [CACHE] Document conflict for ${cacheKey}, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // Fetch the latest version of the document
+          try {
+            const latestDoc = await couchDBClient.getDocument(databaseName, documentId);
+            // Merge changes while preserving the latest _rev
+            document._rev = latestDoc._rev;
+            console.log(`🔄 [CACHE] Refreshed document revision for ${cacheKey}`);
+          } catch (fetchError) {
+            console.warn(`⚠️ [CACHE] Could not fetch latest revision for ${cacheKey}:`, fetchError.message);
+          }
+        } else {
+          // Non-conflict error or max retries reached
+          break;
+        }
       }
-      
-      return result;
-    } catch (error) {
-      console.error(`❌ [CACHE] Failed to save ${cacheKey}:`, error.message);
-      throw error;
     }
+    
+    // All retries exhausted
+    console.error(`❌ [CACHE] Failed to save ${cacheKey} after ${maxRetries} attempts:`, lastError.message);
+    throw lastError;
   }
   
   /**
