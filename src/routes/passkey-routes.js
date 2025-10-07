@@ -14,15 +14,10 @@ let couchDBClient = null;
 
 // Helper function to get the base URL for internal API calls
 const getBaseUrl = () => {
-  // Try to get from environment variables first
-  if (process.env.ADMIN_BASE_URL) {
-    return process.env.ADMIN_BASE_URL;
-  }
-  if (process.env.ORIGIN) {
-    return process.env.ORIGIN;
-  }
-  // Fallback to localhost for development
-  return 'http://localhost:3001';
+  // For internal server-to-server calls, always use localhost
+  // This prevents issues in cloud environments where external URLs don't work for internal calls
+  const port = process.env.PORT || 3001;
+  return `http://localhost:${port}`;
 };
 
 // Function to set the CouchDB client (will be called from server.js)
