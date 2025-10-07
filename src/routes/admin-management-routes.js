@@ -312,6 +312,9 @@ const checkAgentDeployments = async () => {
               // Invalidate user cache to ensure fresh data
               invalidateUserCache(userId);
               
+              // Update processed user cache with fresh data
+              await updateProcessedUserCache(userId);
+              
               console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
               break;
             } else {
@@ -1222,6 +1225,15 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
+    
+    // For move_to_review action, clear agent assignment fields
+    if (action === 'move_to_review') {
+      updatedUser.assignedAgentId = undefined;
+      updatedUser.assignedAgentName = undefined;
+      updatedUser.agentApiKey = undefined;
+      updatedUser.agentAssignedAt = undefined;
+      updatedUser.agentDeployedAt = undefined;
+    }
     
     // Validate consistency before saving
     validateWorkflowConsistency(updatedUser);
