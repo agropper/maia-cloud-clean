@@ -4555,16 +4555,36 @@ app.get('/api/current-agent', async (req, res) => {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
           
-          // Agent choice feature is not implemented yet - clear any current agent selections
+          // Allow Public User to have agent selections (only public agents)
           if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
-            userDoc.currentAgentId = null;
-            userDoc.currentAgentName = null;
-            userDoc.currentAgentEndpoint = null;
-            userDoc.currentAgentSetAt = null;
-            userDoc.updatedAt = new Date().toISOString();
-            
-            // Save the corrected document
-            await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+            // Validate that the selected agent is a public agent
+            try {
+              const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+              const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+              
+              if (agentData && !agentData.name.startsWith('public-')) {
+                // Clear invalid non-public agent selection
+                console.log(`🔧 [current-agent] Clearing invalid non-public agent selection for Public User: ${agentData.name}`);
+                userDoc.currentAgentId = null;
+                userDoc.currentAgentName = null;
+                userDoc.currentAgentEndpoint = null;
+                userDoc.currentAgentSetAt = null;
+                userDoc.updatedAt = new Date().toISOString();
+                
+                // Save the corrected document
+                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+              }
+            } catch (error) {
+              console.error(`❌ [current-agent] Error validating Public User agent selection:`, error);
+              // On error, clear the selection to be safe
+              userDoc.currentAgentId = null;
+              userDoc.currentAgentName = null;
+              userDoc.currentAgentEndpoint = null;
+              userDoc.currentAgentSetAt = null;
+              userDoc.updatedAt = new Date().toISOString();
+              
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+            }
           }
           
           // Fix corrupted Public User assigned agent - should only be public agents
@@ -5573,7 +5593,106 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
   }
 });
 
-// POST /api/current-agent endpoint removed - agents are now assigned only by admin process
+// Allow Public User to select public agents
+app.post('/api/current-agent', async (req, res) => {
+  try {
+    const { agentId } = req.body;
+    
+    // Only allow Public User to select agents
+    const authCookie = req.cookies.maia_auth;
+    let currentUser = 'Public User';
+    
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        
+        if (now < expiresAt) {
+          currentUser = authData.userId;
+        }
+      } catch (error) {
+        // Invalid cookie, stay as Public User
+      }
+    }
+    
+    // Only allow Public User to select agents
+    if (currentUser !== 'Public User') {
+      return res.status(403).json({ 
+        error: 'Agent selection is only available for Public User. Authenticated users have agents assigned by administrator.' 
+      });
+    }
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'agentId is required' });
+    }
+    
+    // Validate that this is a public agent
+    try {
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+      
+      if (!agentData) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      if (!agentData.name.startsWith('public-')) {
+        return res.status(403).json({ 
+          error: 'Only public agents can be selected by Public User' 
+        });
+      }
+      
+      // Get or create Public User document
+      let userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
+      if (!userDoc) {
+        userDoc = {
+          _id: 'Public User',
+          userId: 'Public User',
+          type: 'public',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      // Update agent selection
+      userDoc.currentAgentId = agentId;
+      userDoc.currentAgentName = agentData.name;
+      userDoc.currentAgentEndpoint = agentData.deployment?.url ? `${agentData.deployment.url}/api/v1` : null;
+      userDoc.currentAgentSetAt = new Date().toISOString();
+      userDoc.updatedAt = new Date().toISOString();
+      
+      // Save to database
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+      
+      // Update cache
+      setCache('users', 'Public User', userDoc);
+      
+      console.log(`✅ [current-agent] Public User selected agent: ${agentData.name}`);
+      
+      res.json({ 
+        success: true,
+        message: `Public agent "${agentData.name}" selected successfully`,
+        agent: {
+          id: agentId,
+          name: agentData.name,
+          endpoint: userDoc.currentAgentEndpoint
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error validating agent:', error);
+      return res.status(500).json({ 
+        error: `Failed to validate agent: ${error.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in agent selection:', error);
+    res.status(500).json({ 
+      error: `Failed to select agent: ${error.message}` 
+    });
+  }
+});
 // Users cannot select their own agents to prevent security violations
 
 // ============================================================================

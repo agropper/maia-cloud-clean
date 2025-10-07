@@ -1973,14 +1973,69 @@ export default defineComponent({
       // All old function code removed
     // All old function code removed - was causing build errors
 
-    // Handle agent selection - REMOVED: Users can no longer select their own agents
-    // Agents are now assigned only by admin process to prevent security violations
+    // Handle agent selection - Allow Public User to select public agents
     const onAgentSelected = async (agentId: string) => {
-      $q.notify({
-        type: "negative",
-        message: "Agent selection is disabled. Agents are assigned by administrator only.",
-        timeout: 5000,
-      });
+      const currentUserId = localCurrentUser.value?.userId;
+      
+      // Only allow agent selection for Public User (for public agents)
+      if (currentUserId === 'Public User') {
+        try {
+          isLoading.value = true;
+          
+          // Get agent details from DO API
+          const response = await fetch(`${API_BASE_URL}/v2/gen-ai/agents/${agentId}`);
+          if (!response.ok) {
+            throw new Error(`Failed to get agent details: ${response.status}`);
+          }
+          
+          const agentData = await response.json();
+          const agent = agentData.agent || agentData.data?.agent || agentData;
+          
+          // Verify this is a public agent
+          if (!agent.name.startsWith('public-')) {
+            $q.notify({
+              type: "negative",
+              message: "Only public agents can be selected by Public User.",
+              timeout: 5000,
+            });
+            return;
+          }
+          
+          // Set the selected agent for Public User
+          currentAgent.value = agent;
+          assignedAgent.value = agent;
+          
+          // Store the selection in the database for Public User
+          await fetch(`${API_BASE_URL}/api/current-agent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: agentId })
+          });
+          
+          $q.notify({
+            type: "positive",
+            message: `Public agent "${agent.name}" selected successfully.`,
+            timeout: 3000,
+          });
+          
+        } catch (error) {
+          console.error('Error selecting agent:', error);
+          $q.notify({
+            type: "negative",
+            message: `Failed to select agent: ${error.message}`,
+            timeout: 5000,
+          });
+        } finally {
+          isLoading.value = false;
+        }
+      } else {
+        // For authenticated users, agent selection is disabled (admin assignment only)
+        $q.notify({
+          type: "negative",
+          message: "Agent selection is disabled for authenticated users. Agents are assigned by administrator only.",
+          timeout: 5000,
+        });
+      }
     };
 
 
