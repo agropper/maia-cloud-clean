@@ -24,18 +24,22 @@ const couchDBClient = createCouchDBClient(
 );
 
 // DigitalOcean API configuration
-const DO_API_TOKEN = process.env.DO_API_TOKEN;
-const DO_API_BASE_URL = 'https://api.digitalocean.com';
+const DIGITALOCEAN_API_KEY = process.env.DIGITALOCEAN_TOKEN;
+const DIGITALOCEAN_BASE_URL = 'https://api.digitalocean.com';
 
 /**
  * Make a request to the DigitalOcean API
  */
 async function doRequest(path, options = {}) {
-  const url = `${DO_API_BASE_URL}${path}`;
+  if (!DIGITALOCEAN_API_KEY) {
+    throw new Error('DigitalOcean API key not configured. Please set DIGITALOCEAN_TOKEN in .env file');
+  }
+
+  const url = `${DIGITALOCEAN_BASE_URL}${path}`;
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${DO_API_TOKEN}`,
+      'Authorization': `Bearer ${DIGITALOCEAN_API_KEY}`,
       'Content-Type': 'application/json',
       ...options.headers
     }
