@@ -7739,8 +7739,11 @@ async function ensureAllUserBuckets() {
       // Remove deleted KBs from local database
       if (deletedKBIds.length > 0) {
         console.log(`🔄 [STARTUP] Updating database to match DO API - removing ${deletedKBIds.length} deleted knowledge bases`);
+        console.log(`🗑️ [STARTUP] KBs to be removed: ${deletedKBIds.join(', ')}`);
         for (const kbId of deletedKBIds) {
           try {
+            const kbName = existingKBsMap[kbId]?.kbName || 'Unknown';
+            console.log(`🗑️ [STARTUP] Removing KB: ${kbName} (${kbId})`);
             await couchDBClient.deleteDocument('maia_knowledge_bases', existingKBsMap[kbId]._id);
             dbUpdated = true;
           } catch (deleteError) {
