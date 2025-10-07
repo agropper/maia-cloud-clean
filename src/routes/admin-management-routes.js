@@ -134,8 +134,6 @@ const updateProcessedUserCache = async (userId) => {
 // Update all users in processed cache (for startup)
 const updateAllProcessedUserCache = async () => {
   try {
-    console.log('🔄 [CACHE] Updating all processed user cache...');
-    
     // Get all users from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
@@ -149,8 +147,6 @@ const updateAllProcessedUserCache = async () => {
       const isAdmin = user.isAdmin;
       return !isAdmin;
     });
-    
-    console.log(`🔄 [CACHE] Processing ${filteredUsers.length} users with throttling...`);
     
     const processedUsers = [];
     
@@ -179,16 +175,9 @@ const updateAllProcessedUserCache = async () => {
     const cacheFunc = cacheFunctions || global.cacheFunctions;
     if (cacheFunc) {
       cacheFunc.setCache('users_processed', 'all', processedUsers);
-      console.log(`✅ [CACHE] Stored ${processedUsers.length} users in 'all' cache`);
-      
-      // Verify it was stored correctly
-      const verifyCache = cacheFunc.getCache('users_processed', 'all');
-      console.log(`🔍 [CACHE] Verification: cache contains ${verifyCache ? verifyCache.length : 'null'} users`);
     } else {
       console.log(`❌ [CACHE] cacheFunctions is NULL - cannot store cache`);
     }
-    
-    console.log(`✅ [CACHE] Updated processed cache for all ${filteredUsers.length} users`);
   } catch (error) {
     console.error('❌ [CACHE] Failed to update all processed user cache:', error.message);
   }
