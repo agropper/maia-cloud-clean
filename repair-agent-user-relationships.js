@@ -9,22 +9,19 @@
  */
 
 import dotenv from 'dotenv';
-import CouchDBClient from './src/utils/CouchDBClient.js';
-import CacheManager from './src/utils/CacheManager.js';
+import { createCouchDBClient } from './src/utils/couchdb-client.js';
+import { cacheManager } from './src/utils/CacheManager.js';
 import fetch from 'node-fetch';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize CouchDB client
-const couchDBClient = new CouchDBClient(
+const couchDBClient = createCouchDBClient(
   process.env.CLOUDANT_URL,
   process.env.CLOUDANT_USERNAME,
   process.env.CLOUDANT_PASSWORD
 );
-
-// Initialize cache manager
-const cacheManager = new CacheManager();
 
 // DigitalOcean API configuration
 const DO_API_TOKEN = process.env.DO_API_TOKEN;
