@@ -3707,11 +3707,9 @@ const doRequest = async (endpoint, options = {}) => {
 const agentApiKeyCache = new Map();
 
 // Agent-specific API keys (created via DigitalOcean API)
-const agentApiKeys = {
-  '2960ae8d-8514-11f0-b074-4e013e2ddde4': 'fnCsOfehzcEemiTKdowBFbjAIf7jSFwz', // agent-08292025
-  '059fc237-7077-11f0-b056-36d958d30bcf': 'QDb19YdQi2adFlF76VLCg7qSk6BzS8sS', // agent-08032025
-  '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4': '6_LUNA_A-MVAxNkuaPbE3FnErmcBF7JK'  // agent-05102025
-};
+// Note: This object is used as a runtime cache. Hardcoded keys are no longer needed
+// as all API keys are now stored in the database and loaded dynamically.
+const agentApiKeys = {};
 
 // Helper function to get agent-specific API key
 const getAgentApiKey = async (agentId) => {
