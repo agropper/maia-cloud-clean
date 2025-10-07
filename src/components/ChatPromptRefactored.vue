@@ -576,7 +576,10 @@ const triggerUploadFile = (file: File) => {
         writeMessage("Failed to save transcript: " + error.message, "error");
       }
     };
-    const closeNoSave = () => {};
+    const closeNoSave = () => {
+      // Reload the page to end the session without saving
+      window.location.reload();
+    };
     const closeSession = () => {};
     const viewFile = (file: UploadedFile) => {
       appState.popupContent = file.content;
