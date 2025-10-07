@@ -92,18 +92,10 @@ export class CacheManager {
     if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
       const result = this.cache[cacheType].get(key);
       
-      // Debug logging for users_processed cache
-      if (cacheType === 'users_processed') {
-        console.log(`🔧 [CACHE-DEBUG] Retrieved ${cacheType} with key '${key}': ${result ? (Array.isArray(result) ? result.length + ' users' : 'single user') : 'null'}`);
-      }
       
       return result;
     }
     
-    // Debug logging for users_processed cache when not found
-    if (cacheType === 'users_processed') {
-      console.log(`🔧 [CACHE-DEBUG] Failed to retrieve ${cacheType} with key '${key}': cacheType exists=${!!this.cache[cacheType]}, isMap=${this.cache[cacheType] instanceof Map}`);
-    }
     
     return null;
   }
@@ -132,10 +124,6 @@ export class CacheManager {
       this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
       
-      // Debug logging for users_processed cache
-      if (cacheType === 'users_processed') {
-        console.log(`🔧 [CACHE-DEBUG] Stored ${cacheType} with key '${key}': ${Array.isArray(data) ? data.length + ' users' : 'single user'}`);
-      }
     }
     
   }

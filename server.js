@@ -6929,10 +6929,7 @@ const setCacheFunctions = (routeModule) => {
 setPasskeyCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
 
 // Set cache functions and DigitalOcean API function for admin-management routes
-console.log(`🔧 [CACHE-DEBUG] About to call setAdminCacheFunctions with cache functions at line 6813`);
-console.log(`🔧 [CACHE-DEBUG] setAdminCacheFunctions function available: ${!!setAdminCacheFunctions}`);
 setAdminCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
-console.log(`🔧 [CACHE-DEBUG] After setAdminCacheFunctions at line 6813 - global.cacheFunctions: ${!!global.cacheFunctions}`);
 setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
@@ -7718,10 +7715,13 @@ async function ensureAllUserBuckets() {
       
       // 2. Get existing protection metadata from local database
       const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+      
       const existingKBsMap = {};
       for (const doc of existingKBs) {
         if (doc.kbId || doc.id || doc._id) {
           existingKBsMap[doc.kbId || doc.id || doc._id] = doc;
+        } else {
+          console.log(`⚠️ [STARTUP] Skipping document with missing ID fields: _id=${doc._id}, kbId=${doc.kbId}, id=${doc.id}`);
         }
       }
       
@@ -7904,17 +7904,11 @@ async function ensureAllUserBuckets() {
       }
     }
     
-    // Cache functions were already set at line 6813, just verify they're available
-    console.log(`🔧 [CACHE-DEBUG] Verifying cache functions are available`);
-    console.log(`🔧 [CACHE-DEBUG] global.cacheFunctions available: ${!!global.cacheFunctions}`);
-    
     // CRITICAL: Initialize processed users cache during startup
     console.log(`🔄 [STARTUP] Initializing processed users cache...`);
     try {
       // Import the module to get access to the exported functions
-      console.log(`🔧 [CACHE-DEBUG] About to import admin-management-routes module`);
       const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
-      console.log(`🔧 [CACHE-DEBUG] After import - global.cacheFunctions available: ${!!global.cacheFunctions}`);
       
       if (adminRoutesModule.updateAllProcessedUserCache) {
         await adminRoutesModule.updateAllProcessedUserCache();

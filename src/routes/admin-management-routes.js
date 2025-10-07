@@ -34,7 +34,6 @@ export const setCacheFunctions = (functions) => {
   cacheFunctions = functions;
   // Also set it globally so any imported module instance can access it
   global.cacheFunctions = functions;
-  console.log(`🔧 [CACHE-DEBUG] setCacheFunctions called - local: ${!!cacheFunctions}, global: ${!!global.cacheFunctions}`);
 };
 
 // DigitalOcean API function (will be set by server.js)
@@ -136,7 +135,6 @@ const updateProcessedUserCache = async (userId) => {
 const updateAllProcessedUserCache = async () => {
   try {
     console.log('🔄 [CACHE] Updating all processed user cache...');
-    console.log(`🔧 [CACHE-DEBUG] updateAllProcessedUserCache - local cacheFunctions: ${!!cacheFunctions}, global: ${!!global.cacheFunctions}`);
     
     // Get all users from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -179,8 +177,6 @@ const updateAllProcessedUserCache = async () => {
     
     // Store the complete array in cache with key 'all'
     const cacheFunc = cacheFunctions || global.cacheFunctions;
-    console.log(`🔧 [CACHE-DEBUG] About to store cache - cacheFunc available: ${!!cacheFunc}, processedUsers.length: ${processedUsers.length}`);
-    
     if (cacheFunc) {
       cacheFunc.setCache('users_processed', 'all', processedUsers);
       console.log(`✅ [CACHE] Stored ${processedUsers.length} users in 'all' cache`);
@@ -189,8 +185,7 @@ const updateAllProcessedUserCache = async () => {
       const verifyCache = cacheFunc.getCache('users_processed', 'all');
       console.log(`🔍 [CACHE] Verification: cache contains ${verifyCache ? verifyCache.length : 'null'} users`);
     } else {
-      console.log(`❌ [CACHE-DEBUG] cacheFunctions is NULL - cannot store cache`);
-      console.log(`❌ [CACHE-DEBUG] local cacheFunctions: ${!!cacheFunctions}, global cacheFunctions: ${!!global.cacheFunctions}`);
+      console.log(`❌ [CACHE] cacheFunctions is NULL - cannot store cache`);
     }
     
     console.log(`✅ [CACHE] Updated processed cache for all ${filteredUsers.length} users`);
