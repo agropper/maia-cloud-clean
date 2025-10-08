@@ -324,6 +324,25 @@ const getOrCreatePublicUserSession = (req) => {
 };
 
 const trackPublicUserActivity = (req) => {
+  // Check if there's an authenticated user - if so, don't create Public User session
+  const authCookie = req.cookies?.maia_auth;
+  if (authCookie) {
+    try {
+      const authData = JSON.parse(authCookie);
+      const now = new Date();
+      const expiresAt = new Date(authData.expiresAt);
+      
+      // If there's a valid authenticated user, don't create Public User session
+      if (now < expiresAt && authData.userId && authData.userId !== 'Public User') {
+        // console.log(`[SESSION] Skipping Public User session - authenticated as ${authData.userId}`);
+        return null;
+      }
+    } catch (error) {
+      // Invalid cookie, proceed to create Public User session
+    }
+  }
+  
+  // No authenticated user - create/update Public User session
   const session = getOrCreatePublicUserSession(req);
   // Only log on initial page load, not on every polling request
   if (req.path === '/') {
@@ -687,7 +706,7 @@ app.use((req, res, next) => {
 
 // Custom route for index.html with environment variables (must come before static files)
 app.get('/', (req, res) => {
-  // Track Public User activity
+  // Track Public User activity (only if not authenticated)
   trackPublicUserActivity(req);
   
   const appTitle = process.env.APP_TITLE || 'MAIA';
@@ -2049,7 +2068,7 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
 
-  // Track Public User activity for chat requests
+  // Track Public User activity for chat requests (only if not authenticated)
   trackPublicUserActivity(req);
 
   // Determine the base URL dynamically from the request
