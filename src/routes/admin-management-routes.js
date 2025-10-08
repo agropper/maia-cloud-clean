@@ -58,17 +58,13 @@ let deploymentMonitoringInterval = null; // Track the monitoring interval
 const invalidateUserCache = (userId) => {
   if (!cacheFunctions) return;
   
-  // Invalidate user-specific caches
+  // Invalidate single user cache entry (raw database document)
   cacheFunctions.invalidateCache('users', userId);
-  cacheFunctions.invalidateCache('agents', userId);
-  cacheFunctions.invalidateCache('agentAssignments', userId);
-  cacheFunctions.invalidateCache('users_processed', userId); // Invalidate processed user cache
   
-  // CRITICAL: Also invalidate the "all" users cache used by Admin2 panel
+  // Invalidate 'all' users cache (used by Admin2 for users list)
   cacheFunctions.invalidateCache('users', 'all');
-  // Don't invalidate users_processed 'all' cache - updateProcessedUserCache will update it instead
   
-  // Also invalidate general caches that might contain user data
+  // Invalidate chats cache (may contain user-specific data)
   cacheFunctions.invalidateCache('chats');
 };
 
@@ -95,99 +91,9 @@ const startDeploymentMonitoring = () => {
   }, DEPLOYMENT_CHECK_INTERVAL);
 };
 
-// Update processed user cache with complete information for Users List
-const updateProcessedUserCache = async (userId) => {
-  try {
-    // Get raw user document from database
-    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
-    if (!userDoc) {
-      console.error(`❌ [CACHE] User ${userId} not found for cache update`);
-      return;
-    }
-    
-    // Process user data with bucket information
-    const processedUser = await processUserData(userDoc, true);
-    
-    // Store processed user in cache
-    const cacheFunc = cacheFunctions || global.cacheFunctions;
-    if (cacheFunc) {
-      cacheFunc.setCache('users_processed', userId, processedUser);
-      
-      // Also update the user in the 'all' cache array
-      const allUsersCache = cacheFunc.getCache('users_processed', 'all');
-      if (allUsersCache && Array.isArray(allUsersCache)) {
-        // Find and replace the user in the array, or add if new
-        const userIndex = allUsersCache.findIndex(user => user.userId === userId);
-        if (userIndex !== -1) {
-          // Update existing user
-          allUsersCache[userIndex] = processedUser;
-          console.log(`✅ [CACHE] Updated existing user in 'all' cache: ${userId}`);
-        } else {
-          // Add new user to the cache
-          allUsersCache.push(processedUser);
-          console.log(`✅ [CACHE] Added new user to 'all' cache: ${userId}`);
-        }
-        cacheFunc.setCache('users_processed', 'all', allUsersCache);
-      }
-      
-      console.log(`✅ [CACHE] Updated processed cache for user ${userId}`);
-    }
-  } catch (error) {
-    console.error(`❌ [CACHE] Failed to update processed cache for user ${userId}:`, error.message);
-  }
-};
-
-// Update all users in processed cache (for startup)
-const updateAllProcessedUserCache = async () => {
-  try {
-    // Get all users from database
-    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-    
-    const filteredUsers = allUsers.filter(user => {
-      if (!user._id && !user.userId) return false;
-      if (!user._id && user.userId) user._id = user.userId;
-      if (user._id.startsWith('_design/')) return false;
-      if (user._id === 'maia_config') return false;
-      if (user._id === 'Public User' || user._id === 'wed271') return true;
-      if (user._id.startsWith('deep_link_')) return true;
-      const isAdmin = user.isAdmin;
-      return !isAdmin;
-    });
-    
-    const processedUsers = [];
-    
-    // Process users with throttling to avoid rate limits
-    for (let i = 0; i < filteredUsers.length; i++) {
-      const user = filteredUsers[i];
-      
-      // Process user data with bucket information
-      const processedUser = await processUserData(user, true);
-      
-      // Store individual user in cache
-      if (cacheFunctions) {
-        cacheFunctions.setCache('users_processed', user._id, processedUser);
-      }
-      
-      // Add to array for 'all' cache
-      processedUsers.push(processedUser);
-      
-      // Throttle to avoid overwhelming the system
-      if (i < filteredUsers.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between users
-      }
-    }
-    
-    // Store the complete array in cache with key 'all'
-    const cacheFunc = cacheFunctions || global.cacheFunctions;
-    if (cacheFunc) {
-      cacheFunc.setCache('users_processed', 'all', processedUsers);
-    } else {
-      console.log(`❌ [CACHE] cacheFunctions is NULL - cannot store cache`);
-    }
-  } catch (error) {
-    console.error('❌ [CACHE] Failed to update all processed user cache:', error.message);
-  }
-};
+// REMOVED: updateProcessedUserCache and updateAllProcessedUserCache functions
+// These have been replaced with on-demand processing using processUserDataSync()
+// No separate cache for processed data - all processing happens from raw 'users' cache
 
 // Add user to deployment tracking
 const addToDeploymentTracking = (userId, agentId, agentName) => {
@@ -304,9 +210,6 @@ const checkAgentDeployments = async () => {
               
               // Invalidate user cache to ensure fresh data
               invalidateUserCache(userId);
-              
-              // Update processed user cache with fresh data
-              await updateProcessedUserCache(userId);
               
               console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
               break;
@@ -947,75 +850,83 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
     
-    
-    // Always use processed cache for Users List (no database access needed)
-    const cacheFunc = cacheFunctions || global.cacheFunctions;
-    const processedUsersCache = cacheFunc ? cacheFunc.getCache('users_processed', 'all') : null;
-    console.log(`🔍 [ADMIN-USERS] Cache check: processedUsersCache = ${processedUsersCache ? `${processedUsersCache.length} users` : 'null'}`);
-    
     // Get sorting and pagination parameters from query
     const sortBy = req.query.sortBy || 'createdAt';
     const descending = req.query.descending === 'true';
     const page = parseInt(req.query.page) || 1;
     const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
     
-    if (processedUsersCache) {
-      // Apply sorting to cached processed data
-      const sortedUsers = processedUsersCache.sort((a, b) => {
-        let aVal = a[sortBy];
-        let bVal = b[sortBy];
-        
-        // Handle date sorting
-        if (sortBy === 'createdAt') {
-          aVal = new Date(aVal);
-          bVal = new Date(bVal);
-        }
-        
-        // Handle string sorting
-        if (typeof aVal === 'string') {
-          aVal = aVal.toLowerCase();
-        }
-        if (typeof bVal === 'string') {
-          bVal = bVal.toLowerCase();
-        }
-        
-        if (aVal < bVal) return descending ? 1 : -1;
-        if (aVal > bVal) return descending ? -1 : 1;
-        return 0;
+    // Get raw users from cache or database
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    let allUsers = cacheFunc ? cacheFunc.getCache('users', 'all') : null;
+    
+    if (!allUsers || !cacheFunc.isCacheValid('users', 'all')) {
+      console.log(`🔄 [ADMIN-USERS] Fetching users from database (cache miss or invalid)`);
+      
+      // Fetch from database
+      allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+      
+      // Filter out non-user documents
+      allUsers = allUsers.filter(user => {
+        if (!user._id) return false;
+        if (user._id.startsWith('_design/')) return false;
+        if (user._id === 'maia_config') return false;
+        if (user.isAdmin) return false;
+        return true;
       });
       
-      // Apply pagination to sorted cached data
-      let paginatedUsers = sortedUsers;
-      if (rowsPerPage > 0) {
-        const startIndex = (page - 1) * rowsPerPage;
-        const endIndex = startIndex + rowsPerPage;
-        paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+      // Cache for future requests
+      if (cacheFunc) {
+        cacheFunc.setCache('users', 'all', allUsers);
       }
-      // If rowsPerPage is -1 or 0, show all records (no pagination)
       
-      return res.json({
-        users: paginatedUsers,
-        count: paginatedUsers.length,
-        totalCount: sortedUsers.length,
-        cached: true
-      });
+      console.log(`✅ [ADMIN-USERS] Cached ${allUsers.length} users from database`);
     } else {
-      // Cache is empty - this should not happen in normal operation
-      console.warn('⚠️ [ADMIN-USERS] Processed users cache is empty - triggering cache refresh');
-      
-      // Trigger cache refresh and return empty result
-      updateAllProcessedUserCache().catch(error => {
-        console.error('❌ [ADMIN-USERS] Failed to refresh processed users cache:', error.message);
-      });
-      
-      return res.json({
-        users: [],
-        count: 0,
-        totalCount: 0,
-        cached: false,
-        message: 'Cache is being refreshed, please try again in a moment'
-      });
+      console.log(`✅ [ADMIN-USERS] Using cached users: ${allUsers.length} users`);
     }
+    
+    // Process users on-demand (fast in-memory operation)
+    const processedUsers = allUsers.map(user => processUserDataSync(user));
+    
+    // Apply sorting to processed data
+    const sortedUsers = processedUsers.sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      
+      // Handle date sorting
+      if (sortBy === 'createdAt') {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+      
+      // Handle string sorting
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+      }
+      if (typeof bVal === 'string') {
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (aVal < bVal) return descending ? 1 : -1;
+      if (aVal > bVal) return descending ? -1 : 1;
+      return 0;
+    });
+    
+    // Apply pagination to sorted data
+    let paginatedUsers = sortedUsers;
+    if (rowsPerPage > 0) {
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + rowsPerPage;
+      paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+    }
+    // If rowsPerPage is -1 or 0, show all records (no pagination)
+    
+    return res.json({
+      users: paginatedUsers,
+      count: paginatedUsers.length,
+      totalCount: sortedUsers.length,
+      cached: true
+    });
     
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -1346,10 +1257,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
               };
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUserUpdate);
-    invalidateUserCache(userId);
-    
-              // Update processed user cache with fresh data including agent info
-              await updateProcessedUserCache(userId);
+              invalidateUserCache(userId);
               
               // Add user to deployment tracking
               addToDeploymentTracking(userId, newAgentId, agentName);
@@ -1377,7 +1285,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     if (!agentCreationResult) {
       await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
       invalidateUserCache(userId);
-      await updateProcessedUserCache(userId);
     }
     
     res.json({ 
@@ -1613,11 +1520,8 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       // Start tracking deployment for this user
       addToDeploymentTracking(userId, agentId, agentName);
       
-      // Invalidate user cache to ensure fresh data
-      invalidateUserCache(userId);
-      
-      // Update processed user cache with fresh data
-      await updateProcessedUserCache(userId);
+        // Invalidate user cache to ensure fresh data
+        invalidateUserCache(userId);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -1728,8 +1632,9 @@ router.post('/fix-user-data/:userId', async (req, res) => {
   }
 });
 
-// Shared function to process user data consistently across all endpoints
-async function processUserData(user, includeBucketStatus = false) {
+// Synchronous function to process user data (for in-memory transformations)
+// No async operations - fast processing from cached raw data
+function processUserDataSync(user) {
   // Handle database corruption: restore _id from userId if missing
   if (!user._id && user.userId) {
     user._id = user.userId;
@@ -1756,34 +1661,6 @@ async function processUserData(user, includeBucketStatus = false) {
     }
   }
   
-  // Get bucket status if requested
-  let bucketStatus = null;
-  if (includeBucketStatus) {
-    bucketStatus = {
-      hasFolder: false,
-      fileCount: 0,
-      totalSize: 0
-    };
-    
-    try {
-      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (bucketResponse.ok) {
-        const bucketData = await bucketResponse.json();
-        bucketStatus = {
-          hasFolder: bucketData.hasFolder || false,
-          fileCount: bucketData.fileCount || 0,
-          totalSize: bucketData.totalSize || 0
-        };
-      }
-    } catch (bucketError) {
-      console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
-    }
-  }
-  
   // Return processed user data with consistent structure
   return {
     userId: user._id || user.userId,
@@ -1802,15 +1679,59 @@ async function processUserData(user, includeBucketStatus = false) {
     transports: user.transports,
     domain: user.domain,
     type: user.type,
-    workflowStage: user.workflowStage || 'no_passkey', // Use raw database value
+    workflowStage: user.workflowStage || 'no_passkey',
     adminNotes: user.adminNotes || '',
     approvalStatus: user.approvalStatus,
     assignedAgentId: assignedAgentId,
     assignedAgentName: assignedAgentName,
     agentAssignedAt: agentAssignedAt,
-    agentApiKey: user.agentApiKey || null,
-    bucketStatus: bucketStatus
+    agentApiKey: user.agentApiKey || null
   };
+}
+
+// Async function to process user data WITH bucket status (only when needed)
+async function processUserDataWithBucket(user) {
+  // Start with sync processing
+  const processedUser = processUserDataSync(user);
+  
+  // Fetch bucket status separately (expensive operation)
+  let bucketStatus = {
+    hasFolder: false,
+    fileCount: 0,
+    totalSize: 0
+  };
+  
+  try {
+    const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (bucketResponse.ok) {
+      const bucketData = await bucketResponse.json();
+      bucketStatus = {
+        hasFolder: bucketData.hasFolder || false,
+        fileCount: bucketData.fileCount || 0,
+        totalSize: bucketData.totalSize || 0
+      };
+    }
+  } catch (bucketError) {
+    console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
+  }
+  
+  // Add bucket status to processed data
+  processedUser.bucketStatus = bucketStatus;
+  
+  return processedUser;
+}
+
+// Legacy function for backward compatibility - calls processUserDataWithBucket
+async function processUserData(user, includeBucketStatus = false) {
+  if (includeBucketStatus) {
+    return await processUserDataWithBucket(user);
+  } else {
+    return processUserDataSync(user);
+  }
 }
 
 // Helper function to determine workflow stage
@@ -3487,4 +3408,3 @@ router.post('/users/:userId/generate-api-key', requireAdminAuth, async (req, res
 export { updateUserActivity, getAllUserActivities, checkAgentDeployments, addToDeploymentTracking };
 
 export default router;
-export { updateProcessedUserCache, updateAllProcessedUserCache };

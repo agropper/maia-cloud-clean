@@ -4570,27 +4570,32 @@ app.get('/api/current-agent', async (req, res) => {
     // Use assigned agent ID if available, otherwise check for current agent selection
     if (!agentId) {
       if (currentUser !== 'Unknown User') {
-        // Check if user has a current agent selection stored in Cloudant
+        // For authenticated users: ALWAYS read fresh from database
+        // This ensures we get the latest assignedAgentId after agent creation
+        // No 429 risk - only one user at a time when Badge opens
         try {
-          // Get user document from database
-          let userDoc = getCache('users', currentUser);
-          if (!isCacheValid('users', currentUser)) {
-            userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
-            if (userDoc) {
-              setCache('users', currentUser, userDoc);
+          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
+          
+          if (userDoc) {
+            // Update cache with fresh data
+            setCache('users', currentUser, userDoc);
+            
+            if (userDoc.assignedAgentId) {
+              // Use assignedAgentId as the source of truth
+              agentId = userDoc.assignedAgentId;
+            } else {
+              // No agent assigned yet
+              return res.json({ 
+                agent: null, 
+                message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+                requiresAgentSelection: true
+              });
             }
-          }
-          
-          // No more currentAgentId - only assignedAgentId is used
-          
-          if (userDoc && userDoc.assignedAgentId) {
-            // Use assignedAgentId as the source of truth - no more currentAgentId
-            agentId = userDoc.assignedAgentId;
           } else {
-            // No current agent selection found for user
+            // User not found
             return res.json({ 
               agent: null, 
-              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+              message: 'User not found.',
               requiresAgentSelection: true
             });
           }

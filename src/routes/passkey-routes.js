@@ -455,14 +455,9 @@ router.post("/register-verify", async (req, res) => {
         console.warn(`⚠️ [BUCKET] Error ensuring bucket folder for new user ${updatedUser._id}:`, bucketError.message);
       }
 
-      // Update processed user cache for Admin2 users list
-      try {
-        const { updateProcessedUserCache } = await import('./admin-management-routes.js');
-        await updateProcessedUserCache(updatedUser._id);
-        console.log(`✅ [CACHE] [*] Updated processed cache for newly registered user: ${updatedUser._id}`);
-      } catch (cacheError) {
-        console.warn(`⚠️ [CACHE] [*] Failed to update cache for new user ${updatedUser._id}:`, cacheError.message);
-      }
+      // No need to update processed cache - it's computed on-demand now
+      // Just invalidate the raw user cache to ensure fresh data
+      console.log(`✅ [CACHE] [*] User cache will be refreshed on next access for: ${updatedUser._id}`);
 
       // Send real-time notification to admin panel about new user registration
       try {

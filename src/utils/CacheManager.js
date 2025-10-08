@@ -6,10 +6,8 @@
 export class CacheManager {
   constructor() {
     this.cache = {
-      users: new Map(),           // userId -> userDocument
-      users_processed: new Map(), // userId -> processedUserData (includes bucket info)
+      users: new Map(),           // userId -> userDocument (single source of truth)
       chats: new Map(),           // 'all' -> allChatsArray
-      agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
       knowledgeBases: new Map(),   // kbId -> kbDocument
       agents: new Map(),          // 'all' -> allAgentsArray
       models: new Map(),          // 'all' -> allModelsArray, 'current' -> currentModel
@@ -18,9 +16,7 @@ export class CacheManager {
     
     this.lastUpdated = {
       users: new Map(),           // userId -> timestamp
-      users_processed: new Map(), // userId -> timestamp, 'all' -> timestamp
       chats: 0,                   // timestamp
-      agentAssignments: new Map(), // userId -> timestamp
       knowledgeBases: new Map(),   // kbId -> timestamp
       agents: 0,                  // timestamp
       models: new Map(),          // 'all' -> timestamp, 'current' -> timestamp
@@ -29,10 +25,8 @@ export class CacheManager {
     
     // Cache TTL (Time To Live) in milliseconds
     this.ttl = {
-      users: 15 * 60 * 1000,       // 15 minutes (admin data changes infrequently)
-      users_processed: 5 * 60 * 1000, // 5 minutes (processed data with bucket info)
+      users: 15 * 60 * 1000,       // 15 minutes (single source of truth for user documents)
       chats: 2 * 60 * 1000,        // 2 minutes
-      agentAssignments: 15 * 60 * 1000, // 15 minutes (admin data)
       knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
       agents: 15 * 60 * 1000,      // 15 minutes (admin data)
       models: 60 * 60 * 1000,      // 60 minutes (DigitalOcean models change rarely)
