@@ -7602,24 +7602,29 @@ app.get('/vue-tooltip-test', (req, res) => {
   });
 });
 
-// Throttled refresh of Users List cache using same function as User Details
+// Refresh raw users cache (new single-cache design)
 async function refreshUsersListCacheThrottled() {
   try {
-    console.log('🔄 [STARTUP] Starting processed users cache initialization...');
+    console.log('🔄 [CACHE] Refreshing users cache...');
     
-    // Import the module to get access to the exported functions
-    const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+    // Fetch all users from database
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
     
-    // Call the function to update all processed user cache
-    if (adminRoutesModule.updateAllProcessedUserCache) {
-      await adminRoutesModule.updateAllProcessedUserCache();
-    } else {
-      console.error('❌ [STARTUP] updateAllProcessedUserCache function not available in module');
-    }
+    // Filter out non-user documents
+    const filteredUsers = allUsers.filter(user => {
+      if (!user._id) return false;
+      if (user._id.startsWith('_design/')) return false;
+      if (user._id === 'maia_config') return false;
+      if (user.isAdmin) return false;
+      return true;
+    });
     
-    console.log('✅ [STARTUP] Processed users cache initialization completed');
+    // Cache all users (raw documents - processing happens on-demand)
+    setCache('users', 'all', filteredUsers);
+    
+    console.log(`✅ [CACHE] Refreshed ${filteredUsers.length} users in cache`);
   } catch (error) {
-    console.error('❌ [STARTUP] Failed to initialize processed users cache:', error.message);
+    console.error('❌ [CACHE] Failed to refresh users cache:', error.message);
   }
 }
 
@@ -7962,20 +7967,27 @@ async function ensureAllUserBuckets() {
       }
     }
     
-    // CRITICAL: Initialize processed users cache during startup
-    console.log(`🔄 [STARTUP] Initializing processed users cache...`);
+    // Initialize raw users cache during startup (new single-cache design)
+    console.log(`🔄 [STARTUP] Initializing users cache...`);
     try {
-      // Import the module to get access to the exported functions
-      const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+      // Fetch all users from database and cache them
+      const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
       
-      if (adminRoutesModule.updateAllProcessedUserCache) {
-        await adminRoutesModule.updateAllProcessedUserCache();
-        console.log(`✅ [STARTUP] Processed users cache initialization completed successfully`);
-      } else {
-        throw new Error('updateAllProcessedUserCache function not available');
-      }
+      // Filter out non-user documents
+      const filteredUsers = allUsers.filter(user => {
+        if (!user._id) return false;
+        if (user._id.startsWith('_design/')) return false;
+        if (user._id === 'maia_config') return false;
+        if (user.isAdmin) return false;
+        return true;
+      });
+      
+      // Cache all users (raw documents - processing happens on-demand)
+      setCache('users', 'all', filteredUsers);
+      
+      console.log(`✅ [STARTUP] Cached ${filteredUsers.length} users (raw documents, processing on-demand)`);
     } catch (error) {
-      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize processed users cache:`, error.message);
+      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize users cache:`, error.message);
       console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
       process.exit(1);
     }
