@@ -330,11 +330,19 @@ const uploadPDFFile = async (
         }
       }
       
-      // Convert file to base64 for bucket storage
+      // Store PDF as binary (not base64) for proper text extraction and indexing
       const fileReader = new FileReader()
       fileReader.onload = async () => {
         try {
-          const base64Content = fileReader.result as string
+          const arrayBuffer = fileReader.result as ArrayBuffer
+          
+          // Convert ArrayBuffer to base64 for JSON transport (but will be decoded on server)
+          const uint8Array = new Uint8Array(arrayBuffer)
+          let binary = ''
+          for (let i = 0; i < uint8Array.byteLength; i++) {
+            binary += String.fromCharCode(uint8Array[i])
+          }
+          const base64Binary = btoa(binary)
           
           const uploadResponse = await fetch('/api/upload-to-bucket', {
             method: 'POST',
@@ -343,9 +351,10 @@ const uploadPDFFile = async (
             },
             body: JSON.stringify({
               fileName: file.name,
-              content: base64Content,
+              content: base64Binary,
               fileType: 'application/pdf',
-              userFolder: userFolder
+              userFolder: userFolder,
+              isBinary: true  // Flag to indicate binary data
             }),
           })
           
@@ -380,7 +389,7 @@ const uploadPDFFile = async (
           console.error(`❌ Error saving PDF to bucket:`, bucketError)
         }
       }
-      fileReader.readAsDataURL(file)
+      fileReader.readAsArrayBuffer(file)  // Read as binary, not base64 data URL
     } catch (error) {
       console.error(`❌ Error preparing PDF for bucket upload:`, error)
     }

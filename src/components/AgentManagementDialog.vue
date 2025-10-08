@@ -2882,21 +2882,39 @@ export default defineComponent({
             
             // Processing file for upload
             
-            // For PDFs, keep original format for AI processing
+            // NOTE: PDF-to-markdown conversion code is preserved below but disabled
+            // Modern AI models can handle PDFs directly without conversion
+            // To re-enable markdown conversion in the future, uncomment the code below
+            
+            // For PDFs, use original binary format for AI processing
             if (file.type === 'pdf') {
-              if (file.transcript) {
-                // Use transcript if available (from older uploads)
-                aiContent = file.transcript
-                fileName = file.name.replace('.pdf', '.md')
-                fileType = 'text/markdown'
-                console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
-              } else {
-                // Upload original PDF file for AI processing
-                aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null
-                fileName = file.name // Keep original .pdf extension
-                fileType = 'application/pdf'
-                console.log(`📄 Using original PDF for AI processing: ${fileName}`)
+              // FUTURE: Optional PDF-to-markdown conversion
+              // if (file.transcript && ENABLE_PDF_MARKDOWN_CONVERSION) {
+              //   aiContent = file.transcript
+              //   fileName = file.name.replace('.pdf', '.md')
+              //   fileType = 'text/markdown'
+              //   console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
+              // } else {
+              
+              // PDFs are already stored in bucket as binary - skip duplicate upload
+              // The file is already in the user's bucket folder from initial upload
+              if (!file.bucketKey) {
+                console.warn(`⚠️ PDF file ${file.name} has no bucket key - was it uploaded to bucket?`)
+                continue
               }
+              
+              fileName = file.name // Keep original .pdf extension
+              fileType = 'application/pdf'
+              console.log(`📄 Using original binary PDF from bucket: ${fileName}`)
+              
+              // PDF is already in bucket - just reference it
+              uploadedFiles.push({
+                id: file.bucketKey,
+                name: fileName,
+                content: '', // Not needed - file is already in bucket
+                bucketKey: file.bucketKey
+              })
+              continue // Skip upload step - file is already there
             } else if (file.type === 'rtf' && file.transcript) {
               aiContent = file.transcript
               fileName = file.name.replace('.rtf', '.md')
@@ -2906,10 +2924,6 @@ export default defineComponent({
               // Already in markdown format
               fileType = 'text/markdown'
               console.log(`📄 Using existing markdown: ${fileName} (${aiContent?.length || 0} chars)`)
-            } else if (file.type === 'pdf' && !file.transcript) {
-              // PDF without transcript - this shouldn't happen
-              console.warn(`⚠️ PDF file ${fileName} has no transcript - skipping`)
-              continue
             }
             
             if (!aiContent || aiContent.length === 0) {

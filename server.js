@@ -1500,7 +1500,7 @@ app.post('/api/user-file-kb-association', async (req, res) => {
 // Upload file to DigitalOcean Spaces bucket with user folder support
 app.post('/api/upload-to-bucket', async (req, res) => {
   try {
-    const { fileName, content, fileType, userFolder } = req.body;
+    const { fileName, content, fileType, userFolder, isBinary } = req.body;
     
     if (!fileName || !content) {
       return res.status(400).json({ 
@@ -1543,10 +1543,19 @@ app.post('/api/upload-to-bucket', async (req, res) => {
       }
     });
 
+    // Decode binary data if flagged as binary (e.g., PDFs)
+    let bodyContent = content;
+    if (isBinary && fileType === 'application/pdf') {
+      // Decode base64 to binary Buffer for proper PDF storage
+      // This preserves selectable text and allows proper indexing
+      bodyContent = Buffer.from(content, 'base64');
+      console.log(`📄 Storing PDF as binary (${bodyContent.length} bytes): ${fileName}`);
+    }
+
     const uploadCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: bucketKey,
-      Body: content,
+      Body: bodyContent,
       ContentType: fileType || 'text/plain',
       Metadata: {
         'original-filename': fileName,
