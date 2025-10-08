@@ -2102,9 +2102,36 @@ app.post('/api/personal-chat', async (req, res) => {
     // Combine context with user message for AI, but keep original for chat history
     const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
 
-    // Get current user from request body (frontend) or fall back to session
-    // Prioritize userId over displayName to ensure deep link users are detected correctly
-    let currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || req.session?.userId || 'Public User';
+    // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
+    let currentUser = 'Public User';
+    
+    // Check authentication cookie first
+    const authCookie = req.cookies?.maia_auth;
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        
+        // If cookie is valid and not expired, use the authenticated user
+        if (now < expiresAt && authData.userId) {
+          currentUser = authData.userId;
+          // console.log(`🔐 [personal-chat] Using authenticated user from cookie: ${currentUser}`);
+        }
+      } catch (error) {
+        // Invalid cookie, proceed with other methods
+      }
+    }
+    
+    // Fallback to request body (for deep link users who send currentUser explicitly)
+    if (currentUser === 'Public User' && req.body.currentUser) {
+      currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || currentUser;
+    }
+    
+    // Final fallback to session (legacy support)
+    if (currentUser === 'Public User' && req.session?.userId) {
+      currentUser = req.session.userId;
+    }
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
