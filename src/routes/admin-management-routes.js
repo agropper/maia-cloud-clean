@@ -287,10 +287,18 @@ const checkAgentDeployments = async () => {
                 workflowStage: 'agent_assigned',
                 assignedAgentId: tracking.agentId,
                 assignedAgentName: tracking.agentName,
+                agentApiKey: userDoc.agentApiKey, // Preserve API key from agent creation
                 agentDeployedAt: new Date().toISOString(),
                 agentAssignedAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
               };
+              
+              // Log API key preservation for debugging
+              if (userDoc.agentApiKey) {
+                console.log(`✅ [DEPLOYMENT] Preserving API key for user ${userId} during workflow transition`);
+              } else {
+                console.warn(`⚠️ [DEPLOYMENT] No API key found for user ${userId} - agent may need manual API key generation`);
+              }
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
               
@@ -1338,8 +1346,8 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
               };
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUserUpdate);
-              invalidateUserCache(userId);
-              
+    invalidateUserCache(userId);
+    
               // Update processed user cache with fresh data including agent info
               await updateProcessedUserCache(userId);
               
