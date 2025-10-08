@@ -116,12 +116,18 @@ const updateProcessedUserCache = async (userId) => {
       // Also update the user in the 'all' cache array
       const allUsersCache = cacheFunc.getCache('users_processed', 'all');
       if (allUsersCache && Array.isArray(allUsersCache)) {
-        // Find and replace the user in the array
+        // Find and replace the user in the array, or add if new
         const userIndex = allUsersCache.findIndex(user => user.userId === userId);
         if (userIndex !== -1) {
+          // Update existing user
           allUsersCache[userIndex] = processedUser;
-          cacheFunc.setCache('users_processed', 'all', allUsersCache);
+          console.log(`✅ [CACHE] Updated existing user in 'all' cache: ${userId}`);
+        } else {
+          // Add new user to the cache
+          allUsersCache.push(processedUser);
+          console.log(`✅ [CACHE] Added new user to 'all' cache: ${userId}`);
         }
+        cacheFunc.setCache('users_processed', 'all', allUsersCache);
       }
       
       console.log(`✅ [CACHE] Updated processed cache for user ${userId}`);
