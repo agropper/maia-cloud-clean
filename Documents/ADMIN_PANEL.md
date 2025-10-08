@@ -335,3 +335,41 @@ The Admin2 users list uses an in-memory cache (`processedUsersCache['all']`) tha
 **Result:**
 New user registrations now appear in the Admin2 users list immediately without requiring server restart. The cache stays synchronized with the database for all user operations (registration, approval, agent assignment).
 
+## API Key Preservation Fix (2025-10-08)
+
+**Issue Identified:**
+After successful agent deployment, the User Details page showed "Not Available" for API Key Status, even though the DigitalOcean Dashboard confirmed the agent had an API key.
+
+**Root Cause:**
+The `checkAgentDeployments()` function monitors agent deployment status and updates the user's workflow stage from `'polling_for_deployment'` to `'agent_assigned'` when deployment completes. During this update, it creates a new user document object but wasn't explicitly preserving the `agentApiKey` field, causing it to be overwritten/deleted from the database.
+
+**Timeline of the Issue:**
+1. **Agent Created** → `agentApiKey` saved to database ✅
+2. **Cache Updated** → `agentApiKey` in cache ✅
+3. **Deployment Detected** → User document read from DB (has `agentApiKey`) ✅
+4. **Workflow Updated** → New object created WITHOUT explicitly including `agentApiKey` ❌
+5. **Document Saved** → `agentApiKey` overwritten/deleted from DB ❌
+6. **Cache Refreshed** → Cache updated from DB (now missing `agentApiKey`) ❌
+
+**Fix Implementation:**
+In `admin-management-routes.js` `checkAgentDeployments()` function:
+```javascript
+const updatedUser = {
+  ...userDoc,
+  workflowStage: 'agent_assigned',
+  assignedAgentId: tracking.agentId,
+  assignedAgentName: tracking.agentName,
+  agentApiKey: userDoc.agentApiKey, // Explicitly preserve API key
+  agentDeployedAt: new Date().toISOString(),
+  agentAssignedAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+};
+```
+
+Added logging to verify API key preservation:
+- `✅ [DEPLOYMENT] Preserving API key for user X during workflow transition`
+- `⚠️ [DEPLOYMENT] No API key found for user X - agent may need manual API key generation`
+
+**Result:**
+API keys are now preserved through the entire agent creation and deployment lifecycle. The User Details page correctly displays the API key status after deployment completes.
+
