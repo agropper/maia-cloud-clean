@@ -26,6 +26,7 @@ import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
+import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import { WorkflowUtils } from "../utils/workflow-utils.js";
 import { appStateManager } from "../utils/AppStateManager.js";
 
@@ -51,6 +52,7 @@ export default defineComponent({
     PasskeyAuthDialog,
     DeepLinkUserModal,
     NoPrivateAgentModal,
+    KnowledgeBaseWelcomeModal,
     QDialog,
     QCard,
     QCardSection,
@@ -95,6 +97,7 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
     const showNoPrivateAgentModal = ref(false);
+    const showKnowledgeBaseWelcomeModal = ref(false);
     const noPrivateAgentModalRef = ref<any>(null);
 
     // Get state from centralized state manager - use refs for reactivity
@@ -341,6 +344,12 @@ export default defineComponent({
       window.location.reload();
     };
 
+    // Handle opening Private AI Manager from KB Welcome Modal
+    const handleOpenKBManager = () => {
+      showKnowledgeBaseWelcomeModal.value = false;
+      showAgentManagementDialog.value = true;
+    };
+
     // Handle request for private agent
     const handleRequestPrivateAgent = () => {
       console.log("User requested private agent");
@@ -426,6 +435,33 @@ export default defineComponent({
         noPrivateAgentModalRef.value.show();
       }
     });
+
+    // Check if Knowledge Base Welcome Modal should be shown
+    const checkForKnowledgeBaseWelcome = () => {
+      // Only show for authenticated users
+      if (!currentUser.value || currentUser.value.userId === 'Public User') {
+        return;
+      }
+
+      // Only show if workflow stage is AGENT_ASSIGNED
+      if (workflowStage.value !== 'agent_assigned') {
+        return;
+      }
+
+      // Check if user has any knowledge bases
+      // This will be determined by checking if assignedAgent has knowledge_bases
+      if (currentAgent.value?.knowledge_bases && currentAgent.value.knowledge_bases.length > 0) {
+        return; // User already has KB
+      }
+
+      // Show the modal
+      showKnowledgeBaseWelcomeModal.value = true;
+    };
+
+    // Watch for user and workflow changes to check if modal should be shown
+    watch([currentUser, workflowStage, currentAgent], () => {
+      checkForKnowledgeBaseWelcome();
+    }, { immediate: true });
 
     watch(() => appStateManager.getStateProperty('showAgentSelectionModal'), (show) => {
       showAgentSelectionModal.value = show;
@@ -778,6 +814,8 @@ const triggerUploadFile = (file: File) => {
       showDeepLinkUserModal,
       showAgentSelectionModal,
       showNoPrivateAgentModal,
+      showKnowledgeBaseWelcomeModal,
+      handleOpenKBManager,
       noPrivateAgentModalRef,
       
       // Methods
@@ -935,6 +973,12 @@ const triggerUploadFile = (file: File) => {
       ref="noPrivateAgentModalRef"
       @sign-out="handleSignOut"
       @request="handleRequestPrivateAgent"
+    />
+
+    <KnowledgeBaseWelcomeModal
+      v-model="showKnowledgeBaseWelcomeModal"
+      :current-user="currentUser"
+      @open-manager="handleOpenKBManager"
     />
 
     <!-- Agent Selection Modal -->
