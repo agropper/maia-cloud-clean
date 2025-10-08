@@ -1,41 +1,15 @@
 <template>
   <div class="admin-panel">
-    <div class="admin-header">
-      <h2>🔧 MAIA Administration Panel</h2>
-      
-      <div class="q-mt-md">
-        <!-- SSE Connection Status -->
-        <QBadge
-          :color="isSSEConnected ? 'positive' : 'negative'"
-          :label="isSSEConnected ? 'Live Updates' : 'Offline'"
-          class="sse-status-badge q-mr-md"
-        />
-        
-        <QBtn 
-          color="secondary" 
-          size="sm" 
-          label="Reset Welcome Modal (Test)"
-          @click="resetWelcomeModal"
-          class="q-mr-sm"
-        />
-        <QBtn 
-          color="info" 
-          size="sm" 
-          label="Go to Main App"
-          @click="goToMainApp"
-        />
-        <QBtn 
-          color="primary" 
-          size="sm" 
-          label="Switch to Original Admin"
-          @click="goToOriginalAdmin"
-          class="q-ml-sm"
-        />
-      </div>
+
+    <!-- Loading State -->
+    <div v-if="shouldShowLoading" class="q-pa-lg text-center">
+      <QSpinner size="40px" color="primary" />
+      <div class="q-mt-md">Checking admin authentication...</div>
     </div>
 
-    <!-- Admin Registration Section -->
-    <div v-if="!isAdmin && isRegistrationRoute" class="admin-registration q-mb-lg">
+    <!-- Admin Registration Form (shown when on registration page) -->
+    <div v-else-if="shouldShowRegistration" class="q-pa-lg">
+      <div class="admin-registration">
       <QCard>
         <QCardSection>
           <h4>🔐 Admin Registration</h4>
@@ -73,17 +47,10 @@
                 type="submit"
                 color="primary"
                 :loading="isRegistering"
-                label="Register as Admin"
-                icon="admin_panel_settings"
-              />
-            </div>
-          </QForm>
-          
-          <div class="q-mt-md">
-            <p class="text-caption">
-              <strong>Note:</strong> After successful registration, you can sign in with your passkey to access the admin panel.
-            </p>
-            <div class="q-mt-md">
+                  label="Register Admin"
+                  icon="person_add"
+                  class="q-mr-md"
+                />
               <QBtn
                 flat
                 color="secondary"
@@ -100,7 +67,7 @@
                 @click="goToMainApp"
               />
             </div>
-          </div>
+            </QForm>
         </QCardSection>
       </QCard>
       
@@ -119,14 +86,53 @@
                 icon="fingerprint"
                 @click="registerPasskey"
               />
+              </div>
+            </QCardSection>
+          </QCard>
+        </div>
+      </div>
             </div>
             
-            <div class="q-mt-md">
+    <!-- Admin Sign-In Form (shown when on sign-in page) -->
+    <div v-else-if="shouldShowSignIn" class="q-pa-lg">
+      <div class="admin-signin">
+        <QCard>
+          <QCardSection>
+            <h4>🔐 Admin Sign-In</h4>
+            <p>Sign in with your admin passkey to access the administration panel.</p>
+            
+            <!-- Error Messages -->
+            <div v-if="errorMessage" class="error-message q-mb-md">
+              <QBanner class="bg-negative text-white">
+                {{ errorMessage }}
+              </QBanner>
+            </div>
+            
+            <div class="q-mt-lg">
+              <QBtn
+                color="primary"
+                size="lg"
+                icon="fingerprint"
+                label="Sign In with Passkey"
+                @click="adminSignInWithPasskey"
+                :loading="isSigningIn"
+                class="full-width"
+              />
+            </div>
+            
+            <div class="q-mt-md text-center">
               <QBtn
                 flat
                 color="secondary"
-                label="Skip Passkey (Less Secure)"
-                @click="skipPasskeyRegistration"
+                label="Register as Admin Instead"
+                @click="goToAdminRegister"
+                class="q-mr-md"
+              />
+              <QBtn
+                flat
+                color="secondary"
+                label="Return to Main App"
+                @click="goToMainApp"
               />
             </div>
           </QCardSection>
@@ -134,8 +140,102 @@
       </div>
     </div>
 
-    <!-- Main Admin Panel Content -->
-    <div v-else-if="isAdmin" class="admin-content">
+    <!-- Admin Access Required (shown when not authenticated and not on registration or sign-in page) -->
+    <div v-else-if="shouldShowAccessRequired" class="q-pa-lg">
+      <QCard>
+        <QCardSection>
+          <QIcon name="lock" size="64px" color="grey-6" />
+          <h4 class="q-mt-md">Admin Access Required</h4>
+          <p class="text-grey-6">
+            You need admin privileges to access this panel. Please sign in with your admin passkey.
+          </p>
+            <div class="q-mt-md">
+            <QBtn
+              color="primary"
+              icon="fingerprint"
+              label="Sign In with Passkey"
+              @click="goToAdminSignIn"
+              class="q-mr-sm"
+            />
+              <QBtn
+                flat
+                color="secondary"
+              label="Register New Admin"
+              @click="goToAdminRegister"
+              class="q-mr-sm"
+            />
+            <QBtn
+              flat
+              color="secondary"
+              label="Return to Main App"
+              @click="goToMainApp"
+              />
+            </div>
+          </QCardSection>
+        </QCard>
+      </div>
+
+    <!-- Full Admin Interface (shown when authenticated) -->
+    <div v-else-if="shouldShowAdminInterface">
+      <div class="admin-header">
+        <div class="header-content">
+          <h2>🔧 MAIA Administration Panel</h2>
+          <QBtn
+            color="negative"
+            outline
+            icon="logout"
+            label="Sign Out"
+            @click="adminSignOut"
+            class="admin-signout-btn"
+          />
+    </div>
+
+      <div class="q-mt-md">
+        <!-- Polling Connection Status -->
+        <QBadge
+          :color="isPollingConnected ? 'positive' : 'negative'"
+          :label="isPollingConnected ? 'Live Updates' : 'Offline'"
+          class="polling-status-badge q-mr-md"
+        />
+        
+        <QBtn 
+          color="secondary" 
+          size="sm" 
+          label="Reset Welcome Modal (Test)"
+          @click="resetWelcomeModal"
+          class="q-mr-sm"
+        />
+        <QBtn 
+          color="info" 
+          size="sm" 
+          label="Go to Main App"
+          @click="goToMainApp"
+        />
+        <QBtn 
+          color="primary" 
+          size="sm" 
+          label="Switch to Original Admin"
+          @click="goToOriginalAdmin"
+          class="q-ml-sm"
+        />
+        <QBtn 
+          color="purple" 
+          size="sm" 
+          label="Test Polling"
+          @click="testPolling"
+          class="q-ml-sm"
+        />
+        <QBtn 
+          color="teal" 
+          size="sm" 
+          label="Track Public User"
+          @click="testPublicUserTracking"
+          class="q-ml-sm"
+        />
+      </div>
+    </div>
+
+
       <!-- Status Cards - Compact -->
       <div class="row q-gutter-sm q-mb-lg">
         <!-- Private AI Users Card -->
@@ -179,6 +279,20 @@
             </QCardSection>
           </QCard>
         </div>
+
+        <!-- Sessions Card -->
+        <div class="col-auto">
+          <QCard class="compact-status-card">
+            <QCardSection class="q-pa-sm">
+              <div class="row items-center no-wrap">
+                <QIcon name="account_circle" size="20px" color="orange" class="q-mr-xs" />
+                <div class="text-caption text-grey-8">Sessions</div>
+                <div class="text-body2 text-orange q-ml-xs">{{ sessionStats.totalSessions }}</div>
+                <div class="text-caption text-grey-6 q-ml-xs">({{ sessionStats.activeSessions }} active)</div>
+              </div>
+            </QCardSection>
+          </QCard>
+        </div>
       </div>
 
       <!-- Main Content Tabs -->
@@ -216,10 +330,55 @@
               row-key="userId"
               :loading="isLoadingUsers"
               :pagination="userPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onUserRequest"
               @row-click="onUserRowClick"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ users.length }} of {{ userPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="userPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="userPagination.page <= 1"
+                        @click="changePage(userPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ userPagination.page }} of {{ Math.ceil(userPagination.rowsNumber / userPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="userPagination.page >= Math.ceil(userPagination.rowsNumber / userPagination.rowsPerPage)"
+                        @click="changePage(userPagination.page + 1)"
+                      />
+                    </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="userPagination.rowsPerPage === -1 ? 'All' : userPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; userPagination.rowsPerPage = rowsPerPage; userPagination.page = 1; onUserRequest({ pagination: userPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-workflowStage="props">
                 <QTd :props="props">
                   <QBadge
@@ -249,6 +408,14 @@
                       {{ formatFileSize(props.value.totalSize || 0) }}
                     </span>
                   </div>
+                  <QBtn
+                    v-else-if="isPrivateAIUser(props.row)"
+                    size="xs"
+                    color="primary"
+                    label="Create"
+                    @click.stop="createBucketFolder(props.row)"
+                    class="q-mr-xs"
+                  />
                   <QBadge
                     v-else
                     color="grey"
@@ -269,7 +436,7 @@
                   <div class="action-buttons-row">
                     <!-- Approve User Button -->
                     <QBtn
-                      v-if="props.row.workflowStage === 'awaiting_approval'"
+                      v-if="props.row.workflowStage === 'request_email_sent' || props.row.workflowStage === 'awaiting_approval'"
                       size="xs"
                       color="positive"
                       label="Approve"
@@ -279,7 +446,7 @@
                     
                     <!-- Reject User Button -->
                     <QBtn
-                      v-if="props.row.workflowStage === 'awaiting_approval'"
+                      v-if="props.row.workflowStage === 'request_email_sent' || props.row.workflowStage === 'awaiting_approval'"
                       size="xs"
                       color="negative"
                       label="Reject"
@@ -294,6 +461,14 @@
                       color="primary"
                       label="Create Agent"
                       @click.stop="createAgentFromList(props.row)"
+                      class="q-mr-xs"
+                    />
+                    
+                    <!-- Polling for Deployment Status -->
+                    <QBadge
+                      v-if="props.row.workflowStage === 'polling_for_deployment'"
+                      color="purple"
+                      label="Polling for Deployment"
                       class="q-mr-xs"
                     />
                     
@@ -329,9 +504,54 @@
               row-key="id"
               :loading="isLoadingAgents"
               :pagination="agentPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onAgentRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ agents.length }} of {{ agentPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="agentPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="agentPagination.page <= 1"
+                        @click="changeAgentPage(agentPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ agentPagination.page }} of {{ Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="agentPagination.page >= Math.ceil(agentPagination.rowsNumber / agentPagination.rowsPerPage)"
+                        @click="changeAgentPage(agentPagination.page + 1)"
+                      />
+                    </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="agentPagination.rowsPerPage === -1 ? 'All' : agentPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; agentPagination.rowsPerPage = rowsPerPage; agentPagination.page = 1; onAgentRequest({ pagination: agentPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-status="props">
                 <QTd :props="props">
                   <QBadge
@@ -395,9 +615,54 @@
               row-key="id"
               :loading="isLoadingKBs"
               :pagination="kbPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onKBRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ knowledgeBases.length }} of {{ kbPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="kbPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="kbPagination.page <= 1"
+                        @click="changeKBPage(kbPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ kbPagination.page }} of {{ Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="kbPagination.page >= Math.ceil(kbPagination.rowsNumber / kbPagination.rowsPerPage)"
+                        @click="changeKBPage(kbPagination.page + 1)"
+                      />
+                    </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="kbPagination.rowsPerPage === -1 ? 'All' : kbPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; kbPagination.rowsPerPage = rowsPerPage; kbPagination.page = 1; onKBRequest({ pagination: kbPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-isProtected="props">
                 <QTd :props="props">
                   <QBadge
@@ -450,8 +715,55 @@
               :columns="modelColumns"
               row-key="uuid"
               :loading="isLoadingModels"
+              :pagination="modelPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
+              @request="onModelRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ availableModels.length }} of {{ modelPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="modelPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="modelPagination.page <= 1"
+                        @click="changeModelPage(modelPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ modelPagination.page }} of {{ Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="modelPagination.page >= Math.ceil(modelPagination.rowsNumber / modelPagination.rowsPerPage)"
+                        @click="changeModelPage(modelPagination.page + 1)"
+                      />
+                    </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="modelPagination.rowsPerPage === -1 ? 'All' : modelPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; modelPagination.rowsPerPage = rowsPerPage; modelPagination.page = 1; onModelRequest({ pagination: modelPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
               <template v-slot:body-cell-selection="props">
                 <QTd :props="props">
                   <QBtn
@@ -499,10 +811,79 @@
               row-key="sessionId"
               :loading="isLoadingSessions"
               :pagination="sessionPagination"
+              :rows-per-page-options="[-1, 5, 10, 25]"
+              binary-state-sort
               @request="onSessionRequest"
               class="admin-table"
             >
+              <template v-slot:bottom>
+                <div class="full-width row justify-between items-center">
+                  <div class="text-grey-6">
+                    Showing {{ sessions.length }} of {{ sessionPagination.rowsNumber }} records
+                  </div>
+                  <div class="row items-center q-gutter-sm">
+                    <!-- Pagination arrows (only show when not "All") -->
+                    <template v-if="sessionPagination.rowsPerPage > 0">
+                      <QBtn
+                        icon="chevron_left"
+                        size="sm"
+                        flat
+                        :disable="sessionPagination.page <= 1"
+                        @click="changeSessionPage(sessionPagination.page - 1)"
+                      />
+                      <span class="text-grey-6 q-px-sm">
+                        Page {{ sessionPagination.page }} of {{ Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage) }}
+                      </span>
+                      <QBtn
+                        icon="chevron_right"
+                        size="sm"
+                        flat
+                        :disable="sessionPagination.page >= Math.ceil(sessionPagination.rowsNumber / sessionPagination.rowsPerPage)"
+                        @click="changeSessionPage(sessionPagination.page + 1)"
+                      />
+                    </template>
+                    
+                    <span class="text-grey-6">Records per page:</span>
+                    <QSelect
+                      :model-value="sessionPagination.rowsPerPage === -1 ? 'All' : sessionPagination.rowsPerPage"
+                      :options="[
+                        { label: 'All', value: -1 },
+                        { label: '5', value: 5 },
+                        { label: '10', value: 10 },
+                        { label: '25', value: 25 }
+                      ]"
+                      @update:model-value="(value) => { const rowsPerPage = typeof value === 'object' ? value.value : value; sessionPagination.rowsPerPage = rowsPerPage; sessionPagination.page = 1; onSessionRequest({ pagination: sessionPagination }); }"
+                      dense
+                      style="min-width: 60px"
+                    />
+                  </div>
+                </div>
+              </template>
+              <template v-slot:body-cell-userType="props">
+                <QTd :props="props">
+                  <QBtn
+                    :color="getUserTypeColor(props.value)"
+                    size="sm"
+                    dense
+                    :label="props.value"
+                    class="q-px-sm"
+                  />
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-createdAt="props">
+                <QTd :props="props">
+                  <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
+                </QTd>
+              </template>
+
               <template v-slot:body-cell-lastActivity="props">
+                <QTd :props="props">
+                  <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
+                </QTd>
+              </template>
+
+              <template v-slot:body-cell-expiresAt="props">
                 <QTd :props="props">
                   <span class="text-grey-6">{{ formatRelativeTime(props.value) }}</span>
                 </QTd>
@@ -511,10 +892,10 @@
               <template v-slot:body-cell-actions="props">
                 <QTd :props="props">
                   <QBtn
-                    size="sm"
                     color="negative"
-                    label="Sign Out"
-                    @click="signOutSession(props.row.sessionId)"
+                    size="sm"
+                    icon="logout"
+                    @click="destroySession(props.row.sessionId)"
                     class="q-mr-xs"
                   />
                 </QTd>
@@ -572,51 +953,28 @@
         </QTabPanel>
       </QTabPanels>
     </div>
-
-    <!-- Non-admin message -->
-    <div v-else class="q-pa-lg text-center">
-      <QCard>
-        <QCardSection>
-          <QIcon name="lock" size="64px" color="grey-6" />
-          <h4 class="q-mt-md">Admin Access Required</h4>
-          <p class="text-grey-6">
-            You need admin privileges to access this panel. Please sign in with an admin account.
-          </p>
-          <div class="q-mt-md">
-            <QBtn
-              color="primary"
-              label="Sign In"
-              @click="goToAdminSignIn"
-              class="q-mr-sm"
-            />
-            <QBtn
-              flat
-              color="secondary"
-              label="Register as Admin"
-              @click="goToAdminRegister"
-            />
-          </div>
-        </QCardSection>
-      </QCard>
     </div>
 
     <!-- Group Management Modal for Agent Chats -->
+    <!-- TEMPORARILY COMMENTED OUT TO DEBUG -->
+    <!--
     <GroupManagementModal
       v-model="showGroupModal"
       :currentUser="selectedAgentForChats?.owner || 'Public User'"
       :onGroupDeleted="handleGroupDeleted"
       @chatLoaded="handleChatLoaded"
     />
-  </div>
+    -->
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import {
   QBtn,
   QBanner,
   QInput,
+  QSpinner,
   QForm,
   QCard,
   QCardSection,
@@ -628,7 +986,8 @@ import {
   QTd,
   QTable,
   QTabPanel,
-  QTabPanels
+  QTabPanels,
+  QSelect
 } from 'quasar'
 import { useGroupChat } from '../composables/useGroupChat'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -643,22 +1002,66 @@ const props = defineProps<{
 const $q = useQuasar()
 
 // State - Real data from caches
-const isAdmin = ref(true) // Static for testing
+const isAdmin = ref(false)
+const authCheckComplete = ref(false)
 const isRegistering = ref(false)
 const isRegisteringPasskey = ref(false)
+const isSigningIn = ref(false)
 const showPasskeyRegistration = ref(false)
 const errorMessage = ref('')
 const activeTab = ref('users')
 
-// SSE state
-const adminEventSource = ref(null)
-const isSSEConnected = ref(false)
+// Check if we're on the registration page or sign-in page
+const isRegistrationPage = ref(window.location.pathname === '/admin2/register')
+const isSignInPage = ref(window.location.pathname === '/admin2/signin')
 
-// Admin form
+// Make route detection reactive
+const updateRouteDetection = () => {
+  isRegistrationPage.value = window.location.pathname === '/admin2/register'
+  isSignInPage.value = window.location.pathname === '/admin2/signin'
+}
+
+// Single computed property for current state
+const currentState = computed(() => {
+  if (!authCheckComplete.value) {
+    return 'loading'
+  }
+  if (isRegistrationPage.value) {
+    return 'registration'
+  }
+  if (isSignInPage.value) {
+    return 'signin'
+  }
+  if (isAdmin.value) {
+    return 'admin'
+  }
+  return 'access-required'
+})
+
+// Computed properties for template rendering
+const shouldShowRegistration = computed(() => currentState.value === 'registration')
+const shouldShowSignIn = computed(() => currentState.value === 'signin')
+const shouldShowAccessRequired = computed(() => currentState.value === 'access-required')
+const shouldShowAdminInterface = computed(() => currentState.value === 'admin')
+const shouldShowLoading = computed(() => currentState.value === 'loading')
+
+// Admin registration form data
 const adminForm = ref({
   username: '',
   adminSecret: ''
 })
+
+// Polling state
+const pollingInterval = ref(null)
+const isPollingConnected = ref(false)
+const currentSessionId = ref(null)
+const lastPollTimestamp = ref(null)
+const pollingErrorCount = ref(0)
+const maxPollingErrors = 3
+const consecutiveServerErrors = ref(0)
+const maxConsecutiveServerErrors = 2
+
+
 
 // Stats - Real data from caches
 const userStats = ref({
@@ -674,6 +1077,11 @@ const agentStats = ref({
 const kbStats = ref({
   totalKBs: 0,
   protectedKBs: 0
+})
+
+const sessionStats = ref({
+  totalSessions: 0,
+  activeSessions: 0
 })
 
 // Loading states
@@ -703,8 +1111,9 @@ const userPagination = ref({
   sortBy: 'createdAt',
   descending: true,
   page: 1,
-  rowsPerPage: 10,
-  rowsNumber: 0
+  rowsPerPage: -1, // -1 means "All" - show all records
+  rowsNumber: 0,
+  rowsPerPageOptions: [-1, 5, 10, 25] // -1 = All, 5, 10, 25
 })
 
 const agentPagination = ref({
@@ -726,6 +1135,14 @@ const kbPagination = ref({
 const sessionPagination = ref({
   sortBy: 'lastActivity',
   descending: true,
+  page: 1,
+  rowsPerPage: 10,
+  rowsNumber: 0
+})
+
+const modelPagination = ref({
+  sortBy: 'name',
+  descending: false,
   page: 1,
   rowsPerPage: 10,
   rowsNumber: 0
@@ -772,10 +1189,14 @@ const kbColumns = [
 ]
 
 const sessionColumns = [
+  { name: 'sessionId', label: 'Session ID', field: 'sessionId', align: 'left', sortable: true },
+  { name: 'userType', label: 'Type', field: 'userType', align: 'center', sortable: true },
   { name: 'userId', label: 'User ID', field: 'userId', align: 'left', sortable: true },
+  { name: 'username', label: 'Username', field: 'username', align: 'left', sortable: true },
+  { name: 'createdAt', label: 'Created', field: 'createdAt', align: 'center', sortable: true },
   { name: 'lastActivity', label: 'Last Activity', field: 'lastActivity', align: 'center', sortable: true },
+  { name: 'expiresAt', label: 'Expires', field: 'expiresAt', align: 'center', sortable: true },
   { name: 'ipAddress', label: 'IP Address', field: 'ipAddress', align: 'center', sortable: true },
-  { name: 'userAgent', label: 'User Agent', field: 'userAgent', align: 'left', sortable: true },
   { name: 'actions', label: 'Actions', field: 'actions', align: 'center', sortable: false }
 ]
 
@@ -796,30 +1217,140 @@ const resetWelcomeModal = () => {
   })
 }
 
-const goToMainApp = () => {
-  window.location.href = '/'
-}
-
 const goToOriginalAdmin = () => {
   window.location.href = '/admin'
 }
 
 // Removed old admin route references - now using admin2
 
-const registerAdmin = () => {
-  $q.notify({
-    type: 'info',
-    message: 'Admin registration (AdminPanel2 - Static)',
-    position: 'top'
-  })
+const registerAdmin = async () => {
+  try {
+    isRegistering.value = true
+    errorMessage.value = ''
+    
+    const response = await fetch('/api/admin-management/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        username: adminForm.value.username,
+        adminSecret: adminForm.value.adminSecret
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok) {
+      if (result.canProceedToPasskey) {
+        // Registration successful, show passkey registration
+        showPasskeyRegistration.value = true
+        $q.notify({
+          type: 'positive',
+          message: result.message,
+          position: 'top'
+        })
+      } else {
+        // Registration completed
+        $q.notify({
+          type: 'positive',
+          message: result.message,
+          position: 'top'
+        })
+      }
+    } else {
+      errorMessage.value = result.error || 'Registration failed'
+      if (result.hint) {
+        errorMessage.value += `\n\nHint: ${result.hint}`
+      }
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Registration failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ Admin registration failed:', error)
+    errorMessage.value = 'Registration failed. Please try again.'
+    $q.notify({
+      type: 'negative',
+      message: 'Registration failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isRegistering.value = false
+  }
 }
 
-const registerPasskey = () => {
+const registerPasskey = async () => {
+  isRegisteringPasskey.value = true
+  
+  try {
+    // Step 1: Generate registration options
+    const optionsResponse = await fetch('/api/passkey/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        displayName: 'admin'
+      })
+    })
+    
+    if (!optionsResponse.ok) {
+      throw new Error('Failed to generate registration options')
+    }
+    
+    const options = await optionsResponse.json()
+    
+    // Step 2: Create credentials using SimpleWebAuthn
+    const { startRegistration } = await import('@simplewebauthn/browser')
+    const credential = await startRegistration({ optionsJSON: options })
+    
+    // Step 3: Verify registration
+    const verifyResponse = await fetch('/api/passkey/register-verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        response: credential
+      })
+    })
+    
+    const result = await verifyResponse.json()
+    
+    if (result.success) {
   $q.notify({
-    type: 'info',
-    message: 'Passkey registration (AdminPanel2 - Static)',
+        type: 'positive',
+        message: 'Admin passkey registered successfully! Redirecting to admin panel...',
     position: 'top'
   })
+      
+      // Redirect to admin panel after successful registration
+      setTimeout(() => {
+        window.location.href = '/admin2'
+      }, 2000)
+    } else {
+  $q.notify({
+        type: 'negative',
+        message: result.error || 'Passkey registration failed',
+    position: 'top'
+  })
+    }
+  } catch (error) {
+    console.error('❌ Passkey registration failed:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Passkey registration failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isRegisteringPasskey.value = false
+  }
 }
 
 const skipPasskeyRegistration = () => {
@@ -830,40 +1361,348 @@ const skipPasskeyRegistration = () => {
   })
 }
 
+const adminSignOut = async () => {
+  try {
+    // Call the admin-specific logout endpoint
+    const response = await fetch('/api/passkey/admin-logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    })
+    
+    const result = await response.json()
+    
+    if (result.success) {
+      $q.notify({
+        type: 'positive',
+        message: 'Successfully signed out of admin panel!',
+        position: 'top'
+      })
+      
+      // Clear local admin state
+      isAdmin.value = false
+      
+      // Redirect to main app after a short delay (admin can still access as Public User)
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 1500)
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Sign out failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ Admin sign out failed:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Sign out failed. Please try again.',
+      position: 'top'
+    })
+  }
+}
+
 // Refresh methods removed - will handle stale data properly
 
-// Table request handlers - Static
-const onUserRequest = () => {
-  // Static implementation
+// Table request handlers
+const onUserRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  
+  // Update pagination
+  userPagination.value.page = page
+  userPagination.value.rowsPerPage = rowsPerPage
+  userPagination.value.sortBy = sortBy
+  userPagination.value.descending = descending
+  
+  // Reload data with new sorting and pagination parameters
+  await loadUsers()
 }
 
 const onUserRowClick = (evt: any, row: any) => {
-  console.log(`👤 [AdminPanel2] Row clicked for user: ${row.userId}`)
+  console.log(`👤 Row clicked for user: ${row.userId}`)
   // Navigate to user details page
   window.location.href = `/admin2/user/${row.userId}`
 }
 
-const onAgentRequest = () => {
-  // Static implementation
+const changePage = (newPage: number) => {
+  userPagination.value.page = newPage
+  onUserRequest({ pagination: userPagination.value })
 }
 
-const onKBRequest = () => {
-  // Static implementation
+const changeAgentPage = (newPage: number) => {
+  agentPagination.value.page = newPage
+  onAgentRequest({ pagination: agentPagination.value })
 }
 
-const onSessionRequest = () => {
-  // Static implementation
+const changeKBPage = (newPage: number) => {
+  kbPagination.value.page = newPage
+  onKBRequest({ pagination: kbPagination.value })
+}
+
+const changeModelPage = (newPage: number) => {
+  modelPagination.value.page = newPage
+  onModelRequest({ pagination: modelPagination.value })
+}
+
+const changeSessionPage = (newPage: number) => {
+  sessionPagination.value.page = newPage
+  onSessionRequest({ pagination: sessionPagination.value })
+}
+
+const onAgentRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingAgents.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/agents?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    agents.value = data.agents || []
+    
+    // Update pagination info
+    agentPagination.value.page = page
+    agentPagination.value.rowsPerPage = rowsPerPage
+    agentPagination.value.sortBy = sortBy
+    agentPagination.value.descending = descending
+    agentPagination.value.rowsNumber = data.count || data.agents?.length || 0
+    
+    
+  } catch (error) {
+    console.error('Failed to load agents:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load agents',
+      position: 'top'
+    })
+  } finally {
+    isLoadingAgents.value = false
+  }
+}
+
+const onKBRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingKnowledgeBases.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/knowledge-bases?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    knowledgeBases.value = data.knowledgeBases || []
+    
+    // Update pagination info
+    kbPagination.value.page = page
+    kbPagination.value.rowsPerPage = rowsPerPage
+    kbPagination.value.sortBy = sortBy
+    kbPagination.value.descending = descending
+    kbPagination.value.rowsNumber = data.count || data.knowledgeBases?.length || 0
+    
+    
+  } catch (error) {
+    console.error('Failed to load knowledge bases:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load knowledge bases',
+      position: 'top'
+    })
+  } finally {
+    isLoadingKnowledgeBases.value = false
+  }
+}
+
+const onSessionRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingSessions.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin/sessions?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    sessions.value = data.sessions || []
+    
+    // Update pagination info
+    sessionPagination.value.page = page
+    sessionPagination.value.rowsPerPage = rowsPerPage
+    sessionPagination.value.sortBy = sortBy
+    sessionPagination.value.descending = descending
+    sessionPagination.value.rowsNumber = data.total || data.sessions?.length || 0
+    
+    // Update session stats
+    sessionStats.value.totalSessions = data.total || 0
+    sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
+    
+    
+  } catch (error) {
+    console.error('Failed to load sessions:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load sessions',
+      position: 'top'
+    })
+  } finally {
+    isLoadingSessions.value = false
+  }
+}
+
+const onModelRequest = async (props: any) => {
+  const { page, rowsPerPage, sortBy, descending } = props.pagination
+  const filter = props.filter
+  
+  try {
+    isLoadingModels.value = true
+    
+    // Build query parameters
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('rowsPerPage', rowsPerPage.toString())
+    if (sortBy) {
+      params.append('sortBy', sortBy)
+      params.append('descending', descending.toString())
+    }
+    if (filter) {
+      params.append('filter', filter)
+    }
+    
+    const response = await fetch(`/api/admin-management/models?${params}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    availableModels.value = data.models || []
+    
+    // Update pagination info
+    modelPagination.value.page = page
+    modelPagination.value.rowsPerPage = rowsPerPage
+    modelPagination.value.sortBy = sortBy
+    modelPagination.value.descending = descending
+    modelPagination.value.rowsNumber = data.count || data.models?.length || 0
+    
+    
+  } catch (error) {
+    console.error('Failed to load models:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load models',
+      position: 'top'
+    })
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+const loadSessions = async () => {
+  try {
+    isLoadingSessions.value = true
+    
+    const response = await fetch('/api/admin/sessions')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    sessions.value = data.sessions || []
+    
+    // Update session stats
+    sessionStats.value.totalSessions = data.total || 0
+    sessionStats.value.activeSessions = data.byType?.private + data.byType?.admin + data.byType?.deepLink || 0
+    
+    console.log(`[ADMIN] Loaded ${data.total} sessions`)
+    
+  } catch (error) {
+    console.error('Failed to load sessions:', error)
+    
+    // Fallback to mock data if API fails
+    const mockSessions = [
+      {
+        sessionId: 'sess_001',
+        userType: 'private',
+        userId: 'ag30',
+        username: 'ag30',
+        createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        lastActivity: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        ipAddress: '192.168.1.100',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+      }
+    ]
+    
+    sessions.value = mockSessions
+    sessionStats.value.totalSessions = mockSessions.length
+    sessionStats.value.activeSessions = mockSessions.length
+    
+    $q.notify({
+      type: 'warning',
+      message: 'Using mock session data - API unavailable',
+      position: 'top'
+    })
+  } finally {
+    isLoadingSessions.value = false
+  }
 }
 
 // View methods - Static
 const viewUserDetails = (userId: string) => {
-  console.log(`👤 [AdminPanel2] Navigating to user details: ${userId}`)
+  console.log(`👤 Navigating to user details: ${userId}`)
   window.location.href = `/admin2/user/${userId}`
 }
 
 // Group modal functions
 const openGroupModalForAgent = (agent: any) => {
-  console.log(`💬 [AdminPanel2] Opening group modal for agent: ${agent.name}`)
+  console.log(`💬 Opening group modal for agent: ${agent.name}`)
   
   // Determine the owner for the modal
   let ownerName = 'Public User'
@@ -882,22 +1721,23 @@ const openGroupModalForAgent = (agent: any) => {
 }
 
 const handleChatLoaded = (groupChat: any) => {
-  console.log(`💬 [AdminPanel2] Chat loaded from group modal: ${groupChat.id}`)
+  console.log(`💬 Chat loaded from group modal: ${groupChat.id}`)
   // Close the modal
   showGroupModal.value = false
   selectedAgentForChats.value = null
 }
 
 const handleGroupDeleted = () => {
-  console.log(`💬 [AdminPanel2] Group deleted, refreshing agents`)
+  console.log(`💬 Group deleted, refreshing agents`)
   // Refresh agents to update chat counts
   loadAgents()
 }
 
 // User action methods - same as UserDetailsPage2
+
 const approveUserFromList = async (user: any) => {
   try {
-    console.log(`✅ [AdminPanel2] Approving user: ${user.userId}`)
+    console.log(`✅ Approving user: ${user.userId}`)
     
     const response = await fetch(`/api/admin-management/users/${user.userId}/approve`, {
       method: 'POST',
@@ -906,29 +1746,39 @@ const approveUserFromList = async (user: any) => {
       credentials: 'include'
     })
     
+    console.log(`🔍 Approval response status: ${response.status}`)
+    
     if (!response.ok) {
-      throw new Error(`Failed to approve user: ${response.status}`)
+      const errorText = await response.text()
+      console.error(`❌ Approval failed with status ${response.status}:`, errorText)
+      throw new Error(`Failed to approve user: ${response.status} - ${errorText}`)
     }
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'approved'
-      users.value[userIndex].approvalStatus = 'approved'
-    }
+    const result = await response.json()
+    console.log(`✅ Approval successful:`, result)
     
-    // Update stats
-    userStats.value.awaitingApproval = users.value.filter(u => 
-      u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-    ).length
+    // Refresh the user list to get the latest data from database
+    console.log(`🔄 Refreshing user list after approval`)
+    await loadUsers(true) // Force refresh from database, not cache
+    console.log(`✅ User list refreshed successfully`)
     
+    // Show appropriate notification based on agent creation result
+    if (result.agentCreation) {
+      console.log(`[*] Agent automatically created: ${result.agentCreation.agentId}`)
+      $q.notify({
+        type: 'positive',
+        message: `User ${user.userId} approved and agent created successfully`,
+        position: 'top'
+      })
+    } else {
     $q.notify({
       type: 'positive',
       message: `User ${user.userId} approved successfully`,
       position: 'top'
     })
+    }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to approve user:', error)
+    console.error('❌ Failed to approve user:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to approve user',
@@ -939,7 +1789,7 @@ const approveUserFromList = async (user: any) => {
 
 const rejectUserFromList = async (user: any) => {
   try {
-    console.log(`❌ [AdminPanel2] Rejecting user: ${user.userId}`)
+    console.log(`❌ Rejecting user: ${user.userId}`)
     
     const response = await fetch(`/api/admin-management/users/${user.userId}/approve`, {
       method: 'POST',
@@ -952,17 +1802,8 @@ const rejectUserFromList = async (user: any) => {
       throw new Error(`Failed to reject user: ${response.status}`)
     }
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'rejected'
-      users.value[userIndex].approvalStatus = 'rejected'
-    }
-    
-    // Update stats
-    userStats.value.awaitingApproval = users.value.filter(u => 
-      u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-    ).length
+    // Refresh the user list to get the latest data from database
+    await loadUsers(true) // Force refresh from database, not cache
     
     $q.notify({
       type: 'positive',
@@ -970,7 +1811,7 @@ const rejectUserFromList = async (user: any) => {
       position: 'top'
     })
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to reject user:', error)
+    console.error('❌ Failed to reject user:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to reject user',
@@ -981,49 +1822,88 @@ const rejectUserFromList = async (user: any) => {
 
 const createAgentFromList = async (user: any) => {
   try {
-    console.log(`🤖 [AdminPanel2] Creating agent for user: ${user.userId}`)
+    console.log(`🤖 Creating agent for user: ${user.userId}`)
+    
+    // Check if user already has an agent
+    if (user.assignedAgentId) {
+      $q.notify({
+        type: 'warning',
+        message: `User ${user.userId} already has an assigned agent: ${user.assignedAgentName}`,
+        position: 'top'
+      })
+      return
+    }
+    
+    // Immediately update local state to show "Polling for Deployment"
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].workflowStage = 'polling_for_deployment'
+    }
     
     const response = await fetch(`/api/admin-management/users/${user.userId}/assign-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'create' }),
-      credentials: 'include'
+      credentials: 'include',
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     })
     
     if (!response.ok) {
-      throw new Error(`Failed to create agent: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      
+      // Handle specific error cases
+      if (response.status === 400 && errorData.error === 'User already has an assigned agent') {
+        $q.notify({
+          type: 'warning',
+          message: `User ${user.userId} already has an assigned agent: ${errorData.existingAgentName}`,
+          position: 'top'
+        })
+        
+        // Refresh the user list to get the latest data
+        await loadUsers(true)
+        return
+      }
+      
+      throw new Error(`Failed to create agent: ${response.status} - ${errorData.error || 'Unknown error'}`)
     }
     
     const agentData = await response.json()
     
-    // Update the user in the local list
-    const userIndex = users.value.findIndex(u => u.userId === user.userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].workflowStage = 'approved'
-      users.value[userIndex].assignedAgentId = agentData.agentId
-      users.value[userIndex].assignedAgentName = agentData.agentName
-    }
-    
-    // Refresh agents list to show the new agent
-    await loadAgents()
+    // Don't refresh here - let the deployment monitoring handle UI updates
+    // The handleAgentDeploymentCompleted will refresh both users and agents lists
     
     $q.notify({
       type: 'positive',
-      message: `Agent created successfully for ${user.userId}`,
+      message: `Agent creation started for ${user.userId}. Deployment monitoring in progress...`,
       position: 'top'
     })
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to create agent:', error)
+    console.error('❌ Failed to create agent:', error)
+    
+    // Reset the workflow stage if agent creation failed
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].workflowStage = 'approved' // Reset to previous state
+    }
+    
+    let errorMessage = error.message
+    if (error.name === 'TimeoutError') {
+      errorMessage = 'Agent creation timed out. Please try again.'
+    } else if (error.name === 'AbortError') {
+      errorMessage = 'Agent creation was cancelled or timed out.'
+    }
+    
     $q.notify({
       type: 'negative',
-      message: 'Failed to create agent',
-      position: 'top'
+      message: `Failed to create agent: ${errorMessage}`,
+      position: 'top',
+      timeout: 8000
     })
   }
 }
 
 const viewAgentFromList = (user: any) => {
-  console.log(`👀 [AdminPanel2] Viewing agent for user: ${user.userId}`)
+  console.log(`👀 Viewing agent for user: ${user.userId}`)
   // For now, just show a notification - could be enhanced to open agent details
   $q.notify({
     type: 'info',
@@ -1042,11 +1922,61 @@ const signOutSession = (sessionId: string) => {
 }
 
 // Utility methods
+const isPrivateAIUser = (user: any) => {
+  // Check if user is a private AI user (not Public User or deep_link user)
+  return user.userId !== 'Public User' && !user.userId?.startsWith('deep_link_')
+}
+
+const createBucketFolder = async (user: any) => {
+  try {
+    
+    const response = await fetch('/api/bucket/ensure-user-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.userId }),
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create bucket folder: ${response.statusText}`)
+    }
+    
+    // Update local state immediately to show bucket was created
+    const userIndex = users.value.findIndex(u => u.userId === user.userId)
+    if (userIndex !== -1) {
+      users.value[userIndex].bucketStatus = {
+        hasFolder: true,
+        fileCount: 0,
+        totalSize: 0
+      }
+    }
+    
+    // Also refresh the user list to get the latest data from backend (force refresh to bypass cache)
+    await loadUsers(true)
+    
+    $q.notify({
+      type: 'positive',
+      message: `Bucket folder created successfully for ${user.displayName || user.userId}`,
+      position: 'top'
+    })
+    
+  } catch (error) {
+    console.error('❌ Failed to create bucket folder:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to create bucket folder',
+      position: 'top'
+    })
+  }
+}
+
 const getWorkflowStageColor = (stage: string) => {
   const colors = {
     'no_passkey': 'orange',
     'no_request_yet': 'grey',
+    'request_email_sent': 'blue',
     'awaiting_approval': 'warning',
+    'polling_for_deployment': 'purple',
     'waiting_for_deployment': 'info',
     'approved': 'positive',
     'rejected': 'negative',
@@ -1074,6 +2004,126 @@ const formatRelativeTime = (dateString: string) => {
   
   // For older dates, show the actual date
   return date.toLocaleDateString()
+}
+
+// Session management functions
+const getUserTypeColor = (userType: string) => {
+  const colors = {
+    'public': 'grey',
+    'deep_link': 'blue',
+    'private': 'green',
+    'admin': 'red'
+  }
+  return colors[userType] || 'grey'
+}
+
+const destroySession = async (sessionId: string) => {
+  try {
+    const response = await fetch(`/api/admin/sessions/${sessionId}`, {
+      method: 'DELETE'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Destroyed session: ${sessionId}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: data.message || `Session destroyed`,
+      position: 'top'
+    })
+    
+    // Refresh sessions list
+    await loadSessions()
+  } catch (error) {
+    console.error('Failed to destroy session:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to destroy session',
+      position: 'top'
+    })
+  }
+}
+
+
+const testPolling = async () => {
+  try {
+    if (!currentSessionId.value) {
+      $q.notify({
+        type: 'warning',
+        message: 'No active session for polling test',
+        position: 'top'
+      })
+      return
+    }
+    
+    const response = await fetch('/api/admin/poll/test-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: currentSessionId.value,
+        updateType: 'test_update',
+        updateData: {
+          message: `Test polling update at ${new Date().toLocaleTimeString()}`,
+          testId: Date.now()
+        }
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Test update added: ${data.message}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: 'Test update sent - should appear in next poll',
+      position: 'top'
+    })
+  } catch (error) {
+    console.error('Failed to test polling:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to test polling',
+      position: 'top'
+    })
+  }
+}
+
+const testPublicUserTracking = async () => {
+  try {
+    const response = await fetch('/api/admin/test-public-user-tracking', {
+      method: 'POST'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log(`[ADMIN] Public User tracked: ${data.message}`)
+    
+    $q.notify({
+      type: 'positive',
+      message: `Public User activity tracked - Session: ${data.session.sessionId}`,
+      position: 'top'
+    })
+    
+    // Refresh sessions list to show the Public User session
+    await loadSessions()
+  } catch (error) {
+    console.error('Failed to track Public User:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to track Public User',
+      position: 'top'
+    })
+  }
 }
 
 // Utility function for file size formatting
@@ -1135,47 +2185,62 @@ const loadChatCountsForAgents = async (agents: any[]) => {
       
       agent.chatCount = filteredGroups.length
       
-      // Debug logging for Public Agent
-      if (agent.name?.startsWith('public-')) {
-        console.log(`🔍 [AdminPanel2] Public Agent "${agent.name}":`, {
-          ownerName,
-          totalGroups: allGroups.length,
-          filteredGroups: filteredGroups.length,
-          sampleGroups: allGroups.slice(0, 3).map(g => ({
-            currentUser: g.currentUser,
-            patientOwner: g.patientOwner,
-            id: g.id
-          }))
-        })
-      }
     }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Error loading chat counts:', error)
+    console.error('❌ Error loading chat counts:', error)
     // Set all chat counts to 0 on error
     agents.forEach(agent => agent.chatCount = 0)
   }
 }
 
 // Data fetching functions
-const loadUsers = async () => {
+const loadUsers = async (forceRefresh = false) => {
   try {
     isLoadingUsers.value = true
     
-    const data = await throttledFetchJson('/api/admin-management/users')
+    // Add cache-busting and sorting/pagination parameters
+    const cacheBuster = `?t=${Date.now()}`
+    const sortParams = `&sortBy=${userPagination.value.sortBy}&descending=${userPagination.value.descending}`
+    
+    // Add pagination params - send -1 for "All" to backend
+    let paginationParams = ''
+    if (userPagination.value.rowsPerPage === -1) {
+      // Send -1 to backend to indicate "All" records
+      paginationParams = `&page=1&rowsPerPage=-1`
+    } else {
+      paginationParams = `&page=${userPagination.value.page}&rowsPerPage=${userPagination.value.rowsPerPage}`
+    }
+    
+    // Add forceRefresh parameter if requested
+    const forceRefreshParam = forceRefresh ? '&forceRefresh=true' : ''
+    
+    const url = `/api/admin-management/users${cacheBuster}${sortParams}${paginationParams}${forceRefreshParam}`
+    
+    const data = await throttledFetchJson(url)
     users.value = data.users || []
     
+    // Update total rows number for pagination
+    userPagination.value.rowsNumber = data.totalCount || 0
+    
     // Update stats
-    userStats.value.totalUsers = users.value.length
+    userStats.value.totalUsers = data.totalCount || 0
     userStats.value.awaitingApproval = users.value.filter(user => 
-      user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet'
+      user.workflowStage === 'awaiting_approval' || user.workflowStage === 'no_request_yet' || user.workflowStage === 'request_email_sent'
     ).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load users:', error)
+    console.error('❌ Failed to load users:', error)
+    console.error('❌ Error details:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      stack: error.stack
+    })
     $q.notify({
       type: 'negative',
-      message: 'Failed to load users',
-      position: 'top'
+      message: `Failed to load users: ${error.message}`,
+      position: 'top',
+      timeout: 8000
     })
   } finally {
     isLoadingUsers.value = false
@@ -1200,7 +2265,7 @@ const loadAgents = async () => {
     ).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load agents:', error)
+    console.error('❌ Failed to load agents:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to load agents',
@@ -1208,7 +2273,7 @@ const loadAgents = async () => {
     })
   } finally {
     isLoadingAgents.value = false
-}
+  }
 }
 
 const loadKnowledgeBases = async () => {
@@ -1224,7 +2289,7 @@ const loadKnowledgeBases = async () => {
     kbStats.value.protectedKBs = knowledgeBases.value.filter(kb => kb.isProtected).length
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load knowledge bases:', error)
+    console.error('❌ Failed to load knowledge bases:', error)
     $q.notify({
       type: 'negative',
       message: 'Failed to load knowledge bases',
@@ -1241,6 +2306,7 @@ const loadAllData = async () => {
   await loadAgents()
   await loadKnowledgeBases()
   await loadModels()
+  await loadSessions()
 }
 
 // Models tab methods
@@ -1252,7 +2318,7 @@ const loadModels = async () => {
     availableModels.value = data.models || []
     
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to load models:', error)
+    console.error('❌ Failed to load models:', error)
     $q.notify({
       type: 'negative',
       message: `Failed to load models: ${error.message}`,
@@ -1270,10 +2336,10 @@ const loadCurrentModel = async () => {
     currentModel.value = data.model
   } catch (error) {
     if (error.status === 404) {
-      currentModel.value = null
-      return
-    }
-    console.error('❌ [AdminPanel2] Failed to load current model:', error)
+        currentModel.value = null
+        return
+      }
+    console.error('❌ Failed to load current model:', error)
     currentModel.value = null
   }
 }
@@ -1284,7 +2350,7 @@ const isSelectedModel = (model) => {
 
 const selectModel = async (model) => {
   try {
-    console.log(`🤖 [AdminPanel2] Selecting model: ${model.name} (${model.uuid})`)
+    console.log(`🤖 Selecting model: ${model.name} (${model.uuid})`)
     
     const response = await fetch('/api/admin-management/models/current', {
       method: 'POST',
@@ -1311,9 +2377,9 @@ const selectModel = async (model) => {
       position: 'top'
     })
     
-    console.log(`✅ [AdminPanel2] Model ${model.name} selected successfully`)
+    console.log(`✅ Model ${model.name} selected successfully`)
   } catch (error) {
-    console.error('❌ [AdminPanel2] Failed to select model:', error)
+    console.error('❌ Failed to select model:', error)
     $q.notify({
       type: 'negative',
       message: `Failed to select model: ${error.message}`,
@@ -1322,73 +2388,224 @@ const selectModel = async (model) => {
   }
 }
 
-// SSE Connection Management
-const connectAdminEvents = () => {
-  if (adminEventSource.value) {
-    adminEventSource.value.close()
+// Polling Connection Management
+const startPolling = async () => {
+  // Get or create admin session
+  if (!currentSessionId.value) {
+    await createAdminSession()
   }
   
-  adminEventSource.value = new EventSource('/api/admin/events')
-  
-  adminEventSource.value.onopen = () => {
-    isSSEConnected.value = true
+  if (!currentSessionId.value) {
+    console.error('[POLLING] No admin session available for polling')
+    return
   }
   
-  adminEventSource.value.onmessage = (event) => {
-    handleSSEMessage(event)
+  // Clear any existing polling
+  stopPolling()
+  
+  // Start immediate poll
+  await pollForUpdates()
+  
+  // Set up polling interval (5 seconds for admin)
+  pollingInterval.value = setInterval(async () => {
+    // Silent polling - no console spam
+    await pollForUpdates()
+  }, 5000)
+  isPollingConnected.value = true
+}
+
+const stopPolling = () => {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value)
+    pollingInterval.value = null
+  }
+  isPollingConnected.value = false
+}
+
+const pollForUpdates = async () => {
+  if (!currentSessionId.value) {
+    return
   }
   
-  adminEventSource.value.onerror = (error) => {
-    isSSEConnected.value = false
+  try {
+    const url = new URL('/api/admin/poll/updates', window.location.origin)
+    url.searchParams.set('sessionId', currentSessionId.value)
+    if (lastPollTimestamp.value) {
+      url.searchParams.set('lastPoll', lastPollTimestamp.value)
+    }
     
-    // Attempt to reconnect after 5 seconds
+    const response = await fetch(url)
+    if (!response.ok) {
+      if (response.status === 410) {
+        // Session expired - server restarted
+        const errorData = await response.json()
+        stopPolling()
+        // Clear the stale session ID so a new one will be created
+        currentSessionId.value = null
+        // Restart polling with a new session
+        setTimeout(() => startPolling(), 1000)
+        return
+      }
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    // Update last poll timestamp
+    lastPollTimestamp.value = new Date().toISOString()
+    
+    // Reset error count on successful poll
+    pollingErrorCount.value = 0
+    consecutiveServerErrors.value = 0
+    
+    // Process updates
+    if (data.updates && data.updates.length > 0) {
+      data.updates.forEach(update => {
+        handlePollingUpdate(update)
+      })
+    }
+    
+  } catch (error) {
+    console.error('[POLLING] Polling error:', error)
+    pollingErrorCount.value++
+    consecutiveServerErrors.value++
+    
+    // Check if we should close the tab due to server being down
+    if (consecutiveServerErrors.value >= maxConsecutiveServerErrors) {
+      console.error('[POLLING] Server appears to be down - stopping polling')
+      stopPolling()
+      // Try to close tab, but don't rely on it due to browser restrictions
+      try {
+        window.close()
+      } catch (closeError) {
+        console.log('[POLLING] Cannot close tab due to browser restrictions')
+      }
+      return
+    }
+    
+    if (pollingErrorCount.value >= maxPollingErrors) {
+      console.error('[POLLING] Max errors reached, stopping polling')
+      stopPolling()
+      
+      // Attempt to reconnect after 10 seconds
     setTimeout(() => {
-      connectAdminEvents()
-    }, 5000)
+        console.log('[POLLING] Attempting to reconnect...')
+        startPolling()
+      }, 10000)
+    }
   }
 }
 
-const handleSSEMessage = (event) => {
+const createAdminSession = async () => {
   try {
-    const notification = JSON.parse(event.data)
+    // First, try to find an existing admin session
+    const sessionsResponse = await fetch('/api/admin/sessions')
+    if (sessionsResponse.ok) {
+      const sessionsData = await sessionsResponse.json()
+      const existingAdminSession = sessionsData.sessions.find(s => s.userType === 'admin')
+      
+      if (existingAdminSession) {
+        currentSessionId.value = existingAdminSession.sessionId
+        return
+      }
+    }
     
-    switch (notification.type) {
-      case 'connected':
+    // No existing admin session found, create a new one
+    const response = await fetch('/api/admin/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userType: 'admin',
+        userData: {
+          userId: 'admin',
+          username: 'admin',
+          userEmail: 'admin@localhost'
+        }
+      })
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      currentSessionId.value = data.sessionId
+    } else {
+      console.error('[POLLING] Failed to create admin session:', response.status)
+    }
+  } catch (error) {
+    console.error('[POLLING] Failed to create admin session:', error)
+  }
+}
+
+const handlePollingUpdate = (update) => {
+  try {
+    switch (update.type) {
+      case 'agent_deployment_completed':
+        handleAgentDeploymentCompleted(update.data)
         break
         
-      case 'agent_deployment_completed':
-        handleAgentDeploymentCompleted(notification.data)
+      case 'agent_deployment_failed':
+        handleAgentDeploymentFailed(update.data)
+        break
+        
+      case 'agent_deployment_timeout':
+        handleAgentDeploymentTimeout(update.data)
+        break
+        
+      case 'agent_deployment_error_timeout':
+        handleAgentDeploymentErrorTimeout(update.data)
+        break
+        
+      case 'agent_cleanup':
+        handleAgentCleanup(update.data)
+        break
+        
+      case 'workflow_stage_changed':
+        handleWorkflowStageChanged(update.data)
         break
         
       case 'kb_indexing_completed':
-        handleKBIndexingCompleted(notification.data)
+        handleKBIndexingCompleted(update.data)
         break
         
-      case 'heartbeat':
-        // Silent heartbeat
+      case 'user_registered':
+        handleUserRegistered(update.data)
+        break
+        
+      case 'test_update':
+        handleTestUpdate(update.data)
+        break
+        
+      case 'user_file_uploaded':
+        handleUserFileUploaded(update.data)
+        break
+        
+      case 'session_created':
+        handleSessionCreated(update.data)
+        break
+        
+      case 'session_updated':
+        handleSessionUpdated(update.data)
+        break
+        
+      case 'session_ended':
+        handleSessionEnded(update.data)
         break
         
       default:
         break
     }
   } catch (error) {
-    console.error('❌ [SSE] [*] Error parsing notification:', error)
+    console.error('❌ [POLLING] Error processing update:', error)
   }
 }
 
 const handleAgentDeploymentCompleted = (data) => {
-  // Update user in local state
-  const userIndex = users.value.findIndex(u => u.userId === data.userId)
-  if (userIndex !== -1) {
-    users.value[userIndex].workflowStage = 'agent_assigned'
-    users.value[userIndex].assignedAgentName = data.agentName
-    users.value[userIndex].assignedAgentId = data.agentId
-  }
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment completed: ${data.message}`)
   
-  // Update stats
-  userStats.value.awaitingApproval = users.value.filter(u => 
-    u.workflowStage === 'awaiting_approval' || u.workflowStage === 'no_request_yet'
-  ).length
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
   
   // Refresh agents list to show the new agent
   loadAgents()
@@ -1402,7 +2619,90 @@ const handleAgentDeploymentCompleted = (data) => {
   })
 }
 
+const handleAgentDeploymentFailed = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment failed: ${data.message}`)
+  
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `❌ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentDeploymentTimeout = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment timeout: ${data.message}`)
+  
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `⏰ ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentDeploymentErrorTimeout = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Agent deployment error timeout: ${data.message}`)
+  
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'negative',
+    message: `💥 ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleAgentCleanup = (data) => {
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Refresh agents list to show updated state
+  loadAgents()
+  
+  // Show notification
+  $q.notify({
+    type: 'warning',
+    message: `🧹 ${data.message}`,
+    timeout: 8000,
+    position: 'top'
+  })
+}
+
+const handleWorkflowStageChanged = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Workflow stage changed: ${data.message}`)
+  
+  // Refresh the user list to get the latest data from database
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `🔄 ${data.message}`,
+    timeout: 5000,
+    position: 'top'
+  })
+}
+
 const handleKBIndexingCompleted = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] KB indexing completed: ${data.message}`)
+  
   // Refresh knowledge bases list
   loadKnowledgeBases()
   
@@ -1415,26 +2715,262 @@ const handleKBIndexingCompleted = (data) => {
   })
 }
 
+const handleUserRegistered = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] User registered: ${data.message}`)
+  
+  // Refresh users list to show the new user
+  loadUsers(true) // Force refresh from database, not cache
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `👤 ${data.message}`,
+    timeout: 10000,
+    position: 'top'
+  })
+}
+
+const handleTestUpdate = (data) => {
+  console.log('[POLLING] Test update received:', data)
+  
+  $q.notify({
+    type: 'info',
+    message: `Test update: ${data.message}`,
+    position: 'top',
+    timeout: 3000
+  })
+}
+
+const handleUserFileUploaded = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] User file uploaded: ${data.message}`)
+  
+  // Refresh sessions list to show updated user activity
+  onSessionRequest({ pagination: sessionPagination.value })
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `📁 ${data.message}`,
+    timeout: 5000,
+    position: 'top'
+  })
+}
+
+const handleSessionCreated = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Session created: ${data.message}`)
+  
+  // Refresh sessions list to show new session
+  onSessionRequest({ pagination: sessionPagination.value })
+  
+  // Show notification
+  $q.notify({
+    type: 'positive',
+    message: `👤 New session: ${data.message}`,
+    timeout: 3000,
+    position: 'top'
+  })
+}
+
+const handleSessionUpdated = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Session updated: ${data.message}`)
+  
+  // Refresh sessions list to show updated session activity
+  onSessionRequest({ pagination: sessionPagination.value })
+  
+  // Optional: Show a subtle notification for session updates
+  // $q.notify({
+  //   type: 'info',
+  //   message: `🔄 Session updated: ${data.message}`,
+  //   timeout: 2000,
+  //   position: 'top'
+  // })
+}
+
+const handleSessionEnded = (data) => {
+  // Log to browser console for debugging
+  console.log(`[*] Session ended: ${data.message}`)
+  
+  // Refresh sessions list to remove ended session
+  onSessionRequest({ pagination: sessionPagination.value })
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `👋 Session ended: ${data.message}`,
+    timeout: 3000,
+    position: 'top'
+  })
+}
+
 const disconnectAdminEvents = () => {
-  if (adminEventSource.value) {
-    adminEventSource.value.close()
-    adminEventSource.value = null
-    isSSEConnected.value = false
-  }
+  stopPolling()
 }
 
 // Lifecycle
-onMounted(async () => {
-  // Load data sequentially with throttling to prevent 429 errors
+// Admin authentication check
+const checkAdminAuth = async () => {
   try {
-    await loadAllData()
-    await loadCurrentModel()
+    // Development bypass: Skip admin authentication on localhost
+    if (window.location.hostname === 'localhost' && window.location.port === '3001') {
+      isAdmin.value = true;
+      return;
+    }
+
+    // Try to access an admin-protected endpoint
+    const response = await fetch('/api/admin-management/health', {
+      credentials: 'include'
+    });
+    
+    
+    if (response.ok) {
+      isAdmin.value = true;
+    } else if (response.status === 401) {
+      isAdmin.value = false;
+    } else {
+      isAdmin.value = false;
+    }
   } catch (error) {
-    console.error('❌ [AdminPanel2] Error during initialization:', error)
+    isAdmin.value = false;
+    console.error('❌ Admin authentication check failed:', error);
+  }
+};
+
+// Navigation functions
+const goToAdminSignIn = () => {
+  // Redirect to dedicated admin sign-in page
+  window.location.href = '/admin2/signin';
+  // Update route detection after navigation
+  setTimeout(() => {
+    updateRouteDetection();
+  }, 100);
+};
+
+const goToAdminRegister = () => {
+  window.location.href = '/admin2/register';
+  // Update route detection after navigation
+  setTimeout(() => {
+    updateRouteDetection();
+  }, 100);
+};
+
+const goToMainApp = () => {
+  window.location.href = '/';
+};
+
+const adminSignInWithPasskey = async () => {
+  // Prevent double authentication
+  if (isSigningIn.value) {
+    return;
   }
   
-  // Connect to admin events after data is loaded
-  connectAdminEvents()
+  isSigningIn.value = true
+  errorMessage.value = ''
+  
+  try {
+    
+    // Step 1: Generate authentication options for admin user
+    const optionsResponse = await fetch('/api/passkey/authenticate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin'
+      })
+    })
+    
+    if (!optionsResponse.ok) {
+      throw new Error('Failed to generate authentication options')
+    }
+    
+    const options = await optionsResponse.json()
+    
+    // Step 2: Authenticate using SimpleWebAuthn
+    const { startAuthentication } = await import('@simplewebauthn/browser')
+    const credential = await startAuthentication({ optionsJSON: options })
+    
+    // Step 3: Verify authentication using admin-specific endpoint
+    const verifyResponse = await fetch('/api/passkey/admin-authenticate-verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: 'admin',
+        response: credential
+      })
+    })
+    
+    const result = await verifyResponse.json()
+    
+    if (result.success) {
+      $q.notify({
+        type: 'positive',
+        message: 'Successfully signed in as admin!',
+        position: 'top'
+      })
+      
+      // Redirect to admin panel after successful sign-in
+      setTimeout(() => {
+        window.location.href = '/admin2'
+      }, 1500)
+    } else {
+      errorMessage.value = result.error || 'Sign-in failed'
+      $q.notify({
+        type: 'negative',
+        message: result.error || 'Sign-in failed',
+        position: 'top'
+      })
+    }
+  } catch (error) {
+    console.error('❌ Admin sign-in failed:', error)
+    errorMessage.value = 'Sign-in failed. Please try again.'
+    $q.notify({
+      type: 'negative',
+      message: 'Sign-in failed. Please try again.',
+      position: 'top'
+    })
+  } finally {
+    isSigningIn.value = false
+  }
+}
+
+
+onMounted(async () => {
+  // Debug route detection
+  
+  // Skip authentication check if on registration or sign-in page
+  if (isRegistrationPage.value || isSignInPage.value) {
+    authCheckComplete.value = true; // Mark as complete for these pages
+    return
+  }
+  
+  // Check admin authentication first
+  await checkAdminAuth();
+  
+  // Mark auth check as complete
+  authCheckComplete.value = true;
+  
+  // Debug after auth check
+  
+  // Only load data if admin is authenticated
+  if (isAdmin.value) {
+    try {
+      // Force fresh data load on page refresh
+      await loadAllData()
+      await loadCurrentModel()
+      
+    } catch (error) {
+      console.error('❌ Error during initialization:', error)
+    }
+    
+    // Start polling for updates after data is loaded
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
@@ -1450,17 +2986,39 @@ onUnmounted(() => {
 }
 
 .admin-header {
-  text-align: center;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 2px solid #e0e0e0;
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
 .admin-header h2 {
-  margin: 0 0 10px 0;
+  margin: 0;
   color: #1976d2;
   font-size: 2.5rem;
   font-weight: 600;
+}
+
+.admin-signout-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .admin-header h2 {
+    font-size: 2rem;
+  }
 }
 
 .compact-status-card {

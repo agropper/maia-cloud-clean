@@ -3,15 +3,10 @@ import { cacheManager } from '../utils/CacheManager.js';
 
 // Helper function to get the base URL for internal API calls
 const getBaseUrl = () => {
-  // Try to get from environment variables first
-  if (process.env.ADMIN_BASE_URL) {
-    return process.env.ADMIN_BASE_URL;
-  }
-  if (process.env.ORIGIN) {
-    return process.env.ORIGIN;
-  }
-  // Fallback to localhost for development
-  return 'http://localhost:3001';
+  // For internal server-to-server calls, always use localhost
+  // This prevents issues in cloud environments where external URLs don't work for internal calls
+  const port = process.env.PORT || 3001;
+  return `http://localhost:${port}`;
 };
 
 // DigitalOcean API request function (will use the one from server.js)
@@ -37,6 +32,8 @@ let couchDBClient = null;
 let cacheFunctions = null;
 export const setCacheFunctions = (functions) => {
   cacheFunctions = functions;
+  // Also set it globally so any imported module instance can access it
+  global.cacheFunctions = functions;
 };
 
 // DigitalOcean API function (will be set by server.js)
@@ -53,22 +50,23 @@ const MIN_UPDATE_INTERVAL = 30 * 1000; // 30 seconds minimum between database up
 
 // User-level deployment tracking for agents
 const userDeploymentTracker = new Map(); // userId -> { agentId, agentName, status, lastCheck, retryCount, maxRetries }
-const DEPLOYMENT_CHECK_INTERVAL = 5 * 1000; // Check every 5 seconds
-const MAX_DEPLOYMENT_RETRIES = 30; // Max 15 minutes of checking
+const DEPLOYMENT_CHECK_INTERVAL = 15 * 1000; // Check every 15 seconds
+const MAX_DEPLOYMENT_RETRIES = 40; // Max 10 minutes of checking (40 * 15s = 600s = 10min)
 let deploymentMonitoringInterval = null; // Track the monitoring interval
 
 // User-level cache invalidation function
 const invalidateUserCache = (userId) => {
   if (!cacheFunctions) return;
   
-  
   // Invalidate user-specific caches
   cacheFunctions.invalidateCache('users', userId);
   cacheFunctions.invalidateCache('agents', userId);
   cacheFunctions.invalidateCache('agentAssignments', userId);
+  cacheFunctions.invalidateCache('users_processed', userId); // Invalidate processed user cache
   
   // CRITICAL: Also invalidate the "all" users cache used by Admin2 panel
   cacheFunctions.invalidateCache('users', 'all');
+  // Don't invalidate users_processed 'all' cache - updateProcessedUserCache will update it instead
   
   // Also invalidate general caches that might contain user data
   cacheFunctions.invalidateCache('chats');
@@ -95,6 +93,94 @@ const startDeploymentMonitoring = () => {
       console.error('❌ Error in deployment monitoring:', error);
     }
   }, DEPLOYMENT_CHECK_INTERVAL);
+};
+
+// Update processed user cache with complete information for Users List
+const updateProcessedUserCache = async (userId) => {
+  try {
+    // Get raw user document from database
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      console.error(`❌ [CACHE] User ${userId} not found for cache update`);
+      return;
+    }
+    
+    // Process user data with bucket information
+    const processedUser = await processUserData(userDoc, true);
+    
+    // Store processed user in cache
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    if (cacheFunc) {
+      cacheFunc.setCache('users_processed', userId, processedUser);
+      
+      // Also update the user in the 'all' cache array
+      const allUsersCache = cacheFunc.getCache('users_processed', 'all');
+      if (allUsersCache && Array.isArray(allUsersCache)) {
+        // Find and replace the user in the array
+        const userIndex = allUsersCache.findIndex(user => user.userId === userId);
+        if (userIndex !== -1) {
+          allUsersCache[userIndex] = processedUser;
+          cacheFunc.setCache('users_processed', 'all', allUsersCache);
+        }
+      }
+      
+      console.log(`✅ [CACHE] Updated processed cache for user ${userId}`);
+    }
+  } catch (error) {
+    console.error(`❌ [CACHE] Failed to update processed cache for user ${userId}:`, error.message);
+  }
+};
+
+// Update all users in processed cache (for startup)
+const updateAllProcessedUserCache = async () => {
+  try {
+    // Get all users from database
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    
+    const filteredUsers = allUsers.filter(user => {
+      if (!user._id && !user.userId) return false;
+      if (!user._id && user.userId) user._id = user.userId;
+      if (user._id.startsWith('_design/')) return false;
+      if (user._id === 'maia_config') return false;
+      if (user._id === 'Public User' || user._id === 'wed271') return true;
+      if (user._id.startsWith('deep_link_')) return true;
+      const isAdmin = user.isAdmin;
+      return !isAdmin;
+    });
+    
+    const processedUsers = [];
+    
+    // Process users with throttling to avoid rate limits
+    for (let i = 0; i < filteredUsers.length; i++) {
+      const user = filteredUsers[i];
+      
+      // Process user data with bucket information
+      const processedUser = await processUserData(user, true);
+      
+      // Store individual user in cache
+      if (cacheFunctions) {
+        cacheFunctions.setCache('users_processed', user._id, processedUser);
+      }
+      
+      // Add to array for 'all' cache
+      processedUsers.push(processedUser);
+      
+      // Throttle to avoid overwhelming the system
+      if (i < filteredUsers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay between users
+      }
+    }
+    
+    // Store the complete array in cache with key 'all'
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    if (cacheFunc) {
+      cacheFunc.setCache('users_processed', 'all', processedUsers);
+    } else {
+      console.log(`❌ [CACHE] cacheFunctions is NULL - cannot store cache`);
+    }
+  } catch (error) {
+    console.error('❌ [CACHE] Failed to update all processed user cache:', error.message);
+  }
 };
 
 // Add user to deployment tracking
@@ -153,30 +239,25 @@ const checkAgentDeployments = async () => {
         // Agent is deployed - update user workflow stage to 'agent_assigned'
         console.log(`✅ Agent ${tracking.agentName} deployed for user ${userId} - updating workflow stage`);
         
-        // Send real-time notification to admin via SSE
+        // Send real-time notification to admin via polling system
         try {
-          const notificationResponse = await fetch(`${getBaseUrl()}/api/admin/notify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'agent_deployment_completed',
-              data: {
+          // Import polling functions
+          const { addUpdateToAllAdmins } = await import('../../server.js');
+          
+          const updateData = {
                 userId: userId,
                 agentName: tracking.agentName,
                 agentId: tracking.agentId || null,
                 duration: durationSeconds,
                 durationMinutes: durationMinutes,
                 message: `Agent ${tracking.agentName} deployed successfully for user ${userId} in ${durationSeconds} seconds`
-              }
-            })
-          });
+          };
           
-          if (notificationResponse.ok) {
-            console.log(`📡 [SSE] [*] Sent agent deployment notification to admin`);
-            console.log(`[*] Agent ${tracking.agentName} deployed for user ${userId}`);
-          }
-        } catch (sseError) {
-          console.error(`❌ [SSE] [*] Error sending agent deployment notification:`, sseError.message);
+          addUpdateToAllAdmins('agent_deployment_completed', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment notification to admin sessions`);
+          console.log(`[*] Agent ${tracking.agentName} deployed for user ${userId}`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment notification:`, pollingError.message);
         }
         
         // Get user document (cache-aware) with retry logic for conflicts
@@ -209,6 +290,9 @@ const checkAgentDeployments = async () => {
               
               // Invalidate user cache to ensure fresh data
               invalidateUserCache(userId);
+              
+              // Update processed user cache with fresh data
+              await updateProcessedUserCache(userId);
               
               console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
               break;
@@ -249,6 +333,25 @@ const checkAgentDeployments = async () => {
         
       } else if (deploymentStatus === 'STATUS_FAILED' || deploymentStatus === 'STATUS_ERROR' || deploymentStatus === 'status_failed' || deploymentStatus === 'status_error') {
         console.error(`❌ Agent ${tracking.agentName} deployment failed for user ${userId} - status: ${deploymentStatus}`);
+        
+        // Send failure notification to admin via polling system
+        try {
+          const { addUpdateToAllAdmins } = await import('../../server.js');
+          
+          const updateData = {
+            userId: userId,
+            agentName: tracking.agentName,
+            agentId: tracking.agentId || null,
+            status: deploymentStatus,
+            message: `Agent ${tracking.agentName} deployment failed for user ${userId} - status: ${deploymentStatus}`
+          };
+          
+          addUpdateToAllAdmins('agent_deployment_failed', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment failure notification to admin sessions`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment failure notification:`, pollingError.message);
+        }
+        
         usersToRemove.push(userId);
         
       } else {
@@ -258,6 +361,26 @@ const checkAgentDeployments = async () => {
         
         if (tracking.retryCount >= tracking.maxRetries) {
           console.warn(`⚠️ Max retries reached for user ${userId}, agent ${tracking.agentName} - removing from tracking`);
+          
+          // Send timeout failure notification to admin via polling system
+          try {
+            const { addUpdateToAllAdmins } = await import('../../server.js');
+            
+            const updateData = {
+              userId: userId,
+              agentName: tracking.agentName,
+              agentId: tracking.agentId || null,
+              retryCount: tracking.retryCount,
+              maxRetries: tracking.maxRetries,
+              message: `Agent ${tracking.agentName} deployment timed out for user ${userId} after ${tracking.retryCount} attempts`
+            };
+            
+            addUpdateToAllAdmins('agent_deployment_timeout', updateData);
+            console.log(`📡 [POLLING] [*] Added agent deployment timeout notification to admin sessions`);
+          } catch (pollingError) {
+            console.error(`❌ [POLLING] [*] Error adding agent deployment timeout notification:`, pollingError.message);
+          }
+          
           usersToRemove.push(userId);
         }
       }
@@ -271,6 +394,27 @@ const checkAgentDeployments = async () => {
       
       if (tracking.retryCount >= tracking.maxRetries) {
         console.warn(`⚠️ Max retries reached for user ${userId} due to errors - removing from tracking`);
+        
+        // Send error timeout failure notification to admin via polling system
+        try {
+          const { addUpdateToAllAdmins } = await import('../../server.js');
+          
+          const updateData = {
+            userId: userId,
+            agentName: tracking.agentName,
+            agentId: tracking.agentId || null,
+            retryCount: tracking.retryCount,
+            maxRetries: tracking.maxRetries,
+            error: error.message,
+            message: `Agent ${tracking.agentName} deployment failed with errors for user ${userId} after ${tracking.retryCount} attempts: ${error.message}`
+          };
+          
+          addUpdateToAllAdmins('agent_deployment_error_timeout', updateData);
+          console.log(`📡 [POLLING] [*] Added agent deployment error timeout notification to admin sessions`);
+        } catch (pollingError) {
+          console.error(`❌ [POLLING] [*] Error adding agent deployment error timeout notification:`, pollingError.message);
+        }
+        
         usersToRemove.push(userId);
       }
     }
@@ -519,26 +663,76 @@ export const setCouchDBClient = (client) => {
   loadUserActivityFromDatabase();
 };
 
-// Admin authentication middleware
-const requireAdminAuth = async (req, res, next) => {
+// Admin-specific authentication middleware (separate from regular user auth)
+export const requireAdminAuth = async (req, res, next) => {
   try {
-    // TEMPORARY: Bypass authentication for testing
-    req.adminUser = { _id: 'admin', isAdmin: true };
-    return next();
-    
-    const session = req.session;
-    if (!session || !session.userId) {
-      return res.status(401).json({ error: 'Authentication required' });
+    // Development bypass: Skip admin authentication on localhost:3001
+    const isLocalhost = req.hostname === 'localhost' && req.get('host')?.includes('3001');
+    if (isLocalhost) {
+      // Only log the bypass message once per session to avoid spam
+      if (!global.devBypassLogged) {
+        console.log('🔓 [DEV] Admin authentication bypassed for localhost:3001 (development mode)');
+        global.devBypassLogged = true;
+      }
+      // Set mock admin user for development
+      req.adminUser = { _id: 'admin', isAdmin: true, displayName: 'Admin (Dev)' };
+      req.adminAuthData = { userId: 'admin', authenticatedAt: new Date().toISOString() };
+      next();
+      return;
     }
 
-    // Check if user is admin
+    // Check admin-specific cookie instead of regular session
+    const adminCookie = req.cookies.maia_admin_auth;
+    
+    if (!adminCookie) {
+      return res.status(401).json({ 
+        error: 'Admin authentication required',
+        requiresAdminAuth: true
+      });
+    }
+
+    let adminAuthData;
     try {
-      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', session.userId);
+      adminAuthData = JSON.parse(adminCookie);
+    } catch (parseError) {
+      return res.status(401).json({ 
+        error: 'Invalid admin authentication cookie',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Validate admin cookie data
+    if (!adminAuthData.userId || !adminAuthData.authenticatedAt || !adminAuthData.expiresAt) {
+      return res.status(401).json({ 
+        error: 'Invalid admin authentication data',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Check if admin cookie is still valid (not expired)
+    const now = new Date();
+    const expiresAt = new Date(adminAuthData.expiresAt);
+    if (now >= expiresAt) {
+      res.clearCookie('maia_admin_auth');
+      return res.status(401).json({ 
+        error: 'Admin authentication expired',
+        requiresAdminAuth: true
+      });
+    }
+
+    // Verify admin user exists and is actually an admin
+    try {
+      const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', adminAuthData.userId);
       if (!userDoc || !userDoc.isAdmin) {
-        return res.status(403).json({ error: 'Admin privileges required' });
+        res.clearCookie('maia_admin_auth');
+        return res.status(403).json({ 
+          error: 'Admin privileges required',
+          requiresAdminAuth: true
+        });
       }
 
       req.adminUser = userDoc;
+      req.adminAuthData = adminAuthData;
       next();
     } catch (dbError) {
       console.error('❌ Database error during admin auth:', dbError);
@@ -649,14 +843,28 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
   try {
     const { username, adminSecret } = req.body;
     
+    // Check if environment variables are set
+    if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_SECRET) {
+      return res.status(500).json({ 
+        error: 'Admin configuration not set. Please set ADMIN_USERNAME and ADMIN_SECRET environment variables.',
+        hint: 'Set ADMIN_USERNAME=admin and ADMIN_SECRET=admin123 for development'
+      });
+    }
+    
     // Check if this is the reserved admin username
     if (username !== process.env.ADMIN_USERNAME) {
-      return res.status(400).json({ error: 'Invalid admin username' });
+      return res.status(400).json({ 
+        error: 'Invalid admin username',
+        hint: `Expected: ${process.env.ADMIN_USERNAME}`
+      });
     }
     
     // Verify admin secret
     if (adminSecret !== process.env.ADMIN_SECRET) {
-      return res.status(400).json({ error: 'Invalid admin secret' });
+      return res.status(400).json({ 
+        error: 'Invalid admin secret',
+        hint: 'Check your ADMIN_SECRET environment variable'
+      });
     }
     
         // Check if admin user already exists
@@ -726,125 +934,74 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }
     
     
-    // Check cache first (use the same pattern as other endpoints)
-    const cachedUsers = cacheManager.getCachedUsers();
+    // Always use processed cache for Users List (no database access needed)
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    const processedUsersCache = cacheFunc ? cacheFunc.getCache('users_processed', 'all') : null;
+    console.log(`🔍 [ADMIN-USERS] Cache check: processedUsersCache = ${processedUsersCache ? `${processedUsersCache.length} users` : 'null'}`);
     
-    if (cachedUsers) {
+    // Get sorting and pagination parameters from query
+    const sortBy = req.query.sortBy || 'createdAt';
+    const descending = req.query.descending === 'true';
+    const page = parseInt(req.query.page) || 1;
+    const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
+    
+    if (processedUsersCache) {
+      // Apply sorting to cached processed data
+      const sortedUsers = processedUsersCache.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        
+        // Handle date sorting
+        if (sortBy === 'createdAt') {
+          aVal = new Date(aVal);
+          bVal = new Date(bVal);
+        }
+        
+        // Handle string sorting
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+        }
+        if (typeof bVal === 'string') {
+          bVal = bVal.toLowerCase();
+        }
+        
+        if (aVal < bVal) return descending ? 1 : -1;
+        if (aVal > bVal) return descending ? -1 : 1;
+        return 0;
+      });
+      
+      // Apply pagination to sorted cached data
+      let paginatedUsers = sortedUsers;
+      if (rowsPerPage > 0) {
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        paginatedUsers = sortedUsers.slice(startIndex, endIndex);
+      }
+      // If rowsPerPage is -1 or 0, show all records (no pagination)
+      
       return res.json({
-        users: cachedUsers,
-        count: cachedUsers.length,
+        users: paginatedUsers,
+        count: paginatedUsers.length,
+        totalCount: sortedUsers.length,
         cached: true
       });
-    }
-    
-    
-    // Get all users from maia_users database
-    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-    
-    const filteredUsers = allUsers.filter(user => {
-      // Exclude design documents
-        if (user._id.startsWith('_design/')) {
-          return false;
-        }
-      // Exclude configuration documents (not real users)
-      if (user._id === 'maia_config') {
-        return false;
-      }
-      // Always include these specific users regardless of admin status
-      if (user._id === 'Public User' || user._id === 'wed271') {
-        return true;
-      }
-      // Always include deep link users
-      if (user._id.startsWith('deep-')) {
-          return true;
-        }
-        // For all other users, exclude admin users
-        const isAdmin = user.isAdmin;
-        return !isAdmin;
-    });
-    
-    // Process users with async workflow stage determination
-    const processedUsers = await Promise.all(filteredUsers.map(async user => {
-        // Extract current agent information from ownedAgents if available
-        let assignedAgentId = user.assignedAgentId || null;
-        let assignedAgentName = user.assignedAgentName || null;
-        
-        // If we have ownedAgents but no assignedAgentId, use the first owned agent
-        if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
-          const firstAgent = user.ownedAgents[0];
-          assignedAgentId = firstAgent.id;
-          assignedAgentName = firstAgent.name;
-        }
-        
-        // Check if passkey is valid (not a test credential)
-        const hasValidPasskey = !!(user.credentialID && 
-          user.credentialID !== 'test-credential-id-wed271' && 
-          user.credentialPublicKey && 
-          user.counter !== undefined);
-        
-        // Get bucket status for the user
-        let bucketStatus = {
-          hasFolder: false,
-          fileCount: 0,
-          totalSize: 0
-        };
-        
-        try {
-          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (bucketResponse.ok) {
-            const bucketData = await bucketResponse.json();
-            bucketStatus = {
-              hasFolder: bucketData.hasFolder || false,
-              fileCount: bucketData.fileCount || 0,
-              totalSize: bucketData.totalSize || 0
-            };
-          }
-        } catch (bucketError) {
-          // Bucket check failed, use default values
-          console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
-        }
-        
-        return {
-          userId: user._id,
-          displayName: user.displayName || user._id,
-          createdAt: user.createdAt,
-          hasPasskey: !!user.credentialID,
-          hasValidPasskey: hasValidPasskey,
-        workflowStage: await determineWorkflowStage(user),
-          assignedAgentId: assignedAgentId,
-          assignedAgentName: assignedAgentName,
-          email: user.email || null,
-          bucketStatus: bucketStatus
-        };
-    }));
-    
-    const users = processedUsers
-      .sort((a, b) => {
-        // Sort "awaiting_approval" to the top
-        if (a.workflowStage === 'awaiting_approval' && b.workflowStage !== 'awaiting_approval') {
-          return -1;
-        }
-        if (b.workflowStage === 'awaiting_approval' && a.workflowStage !== 'awaiting_approval') {
-          return 1;
-        }
-        // Then sort by creation date (newest first)
-        return new Date(b.createdAt) - new Date(a.createdAt);
+    } else {
+      // Cache is empty - this should not happen in normal operation
+      console.warn('⚠️ [ADMIN-USERS] Processed users cache is empty - triggering cache refresh');
+      
+      // Trigger cache refresh and return empty result
+      updateAllProcessedUserCache().catch(error => {
+        console.error('❌ [ADMIN-USERS] Failed to refresh processed users cache:', error.message);
       });
-    
-    // Cache the processed users data
-    await cacheManager.cacheUsers(users);
-    
-    
-    res.json({ 
-      users,
-      count: users.length,
-      cached: false,
-      timestamp: new Date().toISOString()
-    });
+      
+      return res.json({
+        users: [],
+        count: 0,
+        totalCount: 0,
+        cached: false,
+        message: 'Cache is being refreshed, please try again in a moment'
+      });
+    }
     
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -930,46 +1087,56 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       console.error(`⚠️ Failed to check bucket status for user ${userId}:`, bucketError.message);
     }
 
-    // Get user's approval requests, agents, and knowledge bases
-    const userInfo = {
-      userId: userDoc._id || userDoc.userId,
-      displayName: userDoc.displayName || userDoc._id,
-      email: userDoc.email || null,
-      createdAt: userDoc.createdAt,
-      updatedAt: userDoc.updatedAt,
-      hasPasskey: !!userDoc.credentialID,
-      hasValidPasskey: !!(userDoc.credentialID && 
-        userDoc.credentialID !== 'test-credential-id-wed271' && 
-        userDoc.credentialPublicKey && 
-        userDoc.counter !== undefined),
-      credentialID: userDoc.credentialID,
-      credentialPublicKey: userDoc.credentialPublicKey ? 'Present' : 'Missing',
-      counter: userDoc.counter,
-      transports: userDoc.transports,
-      domain: userDoc.domain,
-      type: userDoc.type,
-      workflowStage: await determineWorkflowStage(userDoc),
-      adminNotes: userDoc.adminNotes || '',
-      approvalStatus: userDoc.approvalStatus,
-      // Agent information - use assignedAgentId as source of truth
-      assignedAgentId: currentAgentId,
-      assignedAgentName: currentAgentName,
-      ownedAgents: userDoc.ownedAgents || [],
-      currentAgentSetAt: userDoc.currentAgentSetAt,
-      challenge: userDoc.challenge,
-      agentAssignedAt: agentAssignedAt,
-      // API Key information
-      hasApiKey: !!userDoc.agentApiKey,
-      agentApiKey: userDoc.agentApiKey ? 'Present' : 'Missing',
-      // Bucket status information
-      hasBucket: bucketStatus.hasFolder,
-      bucketFileCount: bucketStatus.fileCount,
-      bucketTotalSize: bucketStatus.totalSize,
-      bucketStatus: bucketStatus,
-      approvalRequests: [],
-      agents: [],
-      knowledgeBases: []
-    };
+    // Use shared function to process user data consistently
+    const userInfo = await processUserData(userDoc, true); // Include bucket status for user details
+    
+    // Fetch bucket files from the bucket status API
+    let bucketFiles = [];
+    try {
+      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${userId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (bucketResponse.ok) {
+        const bucketData = await bucketResponse.json();
+        if (bucketData.success && bucketData.files) {
+          // Transform bucket files to match frontend expectations
+          bucketFiles = bucketData.files.map(file => {
+            // Extract filename from key (remove user folder prefix)
+            const fileName = file.key.replace(`${userId}/`, '');
+            // Extract file type from filename extension
+            const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+            
+            return {
+              bucketKey: file.key,
+              fileName: fileName,
+              fileSize: file.size,
+              fileType: fileExtension,
+              uploadedAt: file.lastModified,
+              lastModified: file.lastModified,
+              etag: file.etag,
+              knowledgeBases: [] // Will be populated from database later
+            };
+          });
+        }
+      }
+    } catch (bucketError) {
+      console.error(`⚠️ Failed to fetch bucket files for user ${userId}:`, bucketError.message);
+    }
+    
+    // Add additional fields specific to user details view
+    userInfo.ownedAgents = userDoc.ownedAgents || [];
+    userInfo.currentAgentSetAt = userDoc.currentAgentSetAt;
+    userInfo.challenge = userDoc.challenge;
+    userInfo.hasApiKey = !!userDoc.agentApiKey;
+    userInfo.hasBucket = userInfo.bucketStatus?.hasFolder || false;
+    userInfo.bucketFileCount = userInfo.bucketStatus?.fileCount || 0;
+    userInfo.bucketTotalSize = userInfo.bucketStatus?.totalSize || 0;
+    userInfo.files = bucketFiles; // Use bucket files instead of database files
+    userInfo.approvalRequests = [];
+    userInfo.agents = [];
+    userInfo.knowledgeBases = [];
     
     
     
@@ -988,9 +1155,9 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     const { action, notes } = req.body;
     
     // Validate action
-    if (!['approve', 'reject', 'suspend', 'reset'].includes(action)) {
+    if (!['approve', 'reject', 'suspend', 'reset', 'move_to_review'].includes(action)) {
       return res.status(400).json({ 
-        error: 'Invalid action. Must be one of: approve, reject, suspend, reset' 
+        error: 'Invalid action. Must be one of: approve, reject, suspend, reset, move_to_review' 
       });
     }
     
@@ -1020,35 +1187,194 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
         approvalStatus = 'pending';
         workflowStage = 'awaiting_approval';
         break;
+      case 'move_to_review':
+        approvalStatus = 'pending';
+        workflowStage = 'request_email_sent';
+        break;
     }
     
     // Update user approval status and workflow stage
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       approvalStatus: approvalStatus,
       workflowStage: workflowStage,
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
     
+    // For move_to_review action, clear agent assignment fields
+    if (action === 'move_to_review') {
+      updatedUser.assignedAgentId = undefined;
+      updatedUser.assignedAgentName = undefined;
+      updatedUser.agentApiKey = undefined;
+      updatedUser.agentAssignedAt = undefined;
+      updatedUser.agentDeployedAt = undefined;
+    }
+    
     // Validate consistency before saving
     validateWorkflowConsistency(updatedUser);
     
-    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    // Don't save immediately - we'll save after agent creation to avoid conflicts
     
-    // Invalidate user cache to ensure fresh data
-    invalidateUserCache(userId);
+    // Send admin notification for workflow stage changes (except for approval which has its own notifications)
+    if (action !== 'approve') {
+      try {
+        const { addUpdateToAllAdmins } = await import('../../server.js');
+        addUpdateToAllAdmins('workflow_stage_changed', {
+          userId: userId,
+          action: action,
+          newWorkflowStage: workflowStage,
+          newApprovalStatus: approvalStatus,
+          message: `User ${userId} workflow stage changed to ${workflowStage}`,
+          timestamp: new Date().toISOString()
+        });
+      } catch (notificationError) {
+        console.error('❌ Failed to send workflow stage change notification:', notificationError.message);
+      }
+    }
     
-    // If approved, admin will manually create agent via Admin Panel
+    // If approved, create bucket folder for the user
+    if (action === 'approve') {
+      try {
+        console.log(`🪣 [BUCKET] Ensuring bucket folder exists for approved user: ${userId}`);
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          console.log(`✅ [BUCKET] Bucket folder ${bucketData.folderExists ? 'already exists' : 'created successfully'} for user ${userId}`);
+        } else {
+          console.error(`❌ [BUCKET] Failed to ensure bucket folder for user ${userId}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.error(`❌ [BUCKET] Error creating bucket folder for user ${userId}:`, bucketError.message);
+      }
+    }
+    
+    // If approved, automatically create agent for the user
+    let agentCreationResult = null;
+    if (action === 'approve') {
+      try {
+        console.log(`🤖 [AUTO-AGENT] Automatically creating agent for approved user: ${userId}`);
+        
+        // Check if user already has an assigned agent
+        if (userDoc.assignedAgentId) {
+          console.log(`⚠️ [AUTO-AGENT] User ${userId} already has assigned agent: ${userDoc.assignedAgentId}`);
+        } else if (!userDoc.email) {
+          console.log(`⚠️ [AUTO-AGENT] User ${userId} has no email address, skipping agent creation`);
+        } else {
+          // Generate agent name based on user ID and date
+          const today = new Date();
+          const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
+          const agentName = `${userId}-agent-${dateStr}`;
+          
+          // Get the current model configuration from database
+          const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+          
+          if (!configDoc || !configDoc.current_model) {
+            console.log(`⚠️ [AUTO-AGENT] No model configured, skipping agent creation for user ${userId}`);
+          } else {
+            const selectedModel = configDoc.current_model;
+            
+            // Create agent using DigitalOcean API
+            const agentData = {
+              name: agentName,
+              model_uuid: selectedModel.uuid,
+              description: `Private AI agent for ${userDoc.email}`,
+              instruction: "You are MAIA, a medical AI assistant that can search through a patient's health records in a knowledge base and provide relevant answers to their requests. Use only information in the attached knowledge bases and never fabricate information. There is a lot of redundancy in a patient's knowledge base. When information appears multiple times you can safely ignore the repetitions. To ensure that all medications are accurately listed in the future, the assistant should adopt a systematic approach: Comprehensive Review: Thoroughly examine every chunk in the knowledge base to identify all medication entries, regardless of their status (active or stopped). Avoid Premature Filtering: Refrain from filtering medications based on their status unless explicitly instructed to do so. This ensures that all prescribed medications are included. Consolidation of Information: Use a method to consolidate medication information from all chunks, ensuring that each medication is listed only once, even if it appears multiple times. Always maintain patient privacy and provide evidence-based recommendations.",
+              project_id: "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+              region: "tor1"
+            };
+            
+            try {
+              const agentResponse = await doRequest('/v2/gen-ai/agents', {
+                method: 'POST',
+                body: JSON.stringify(agentData)
+              });
+              
+              const newAgent = agentResponse.agent || agentResponse.data?.agent || agentResponse;
+              const newAgentId = newAgent.uuid || newAgent.id;
+              
+              console.log(`✅ [AUTO-AGENT] Agent created successfully: ${newAgentId}`);
+              
+              // Create API key for the agent
+              let agentApiKey = null;
+              try {
+                const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${newAgentId}/api_keys`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    name: `${agentName}-api-key`,
+                    description: `API key for ${agentName}`
+                  })
+                });
+                
+                agentApiKey = apiKeyResponse.api_key?.key || apiKeyResponse.key || apiKeyResponse.data?.key;
+                console.log(`🔑 [AUTO-AGENT] API key created for agent ${newAgentId}`);
+              } catch (apiKeyError) {
+                console.error(`❌ [AUTO-AGENT] Failed to create API key for agent ${newAgentId}:`, apiKeyError.message);
+              }
+              
+              // Update user document with agent assignment and change workflow stage to polling
+              const finalUserUpdate = {
+                ...updatedUser,
+                assignedAgentId: newAgentId,
+                assignedAgentName: agentName,
+                agentApiKey: agentApiKey,
+                agentAssignedAt: new Date().toISOString(),
+                workflowStage: 'polling_for_deployment',
+                updatedAt: new Date().toISOString()
+              };
+              
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUserUpdate);
+              invalidateUserCache(userId);
+              
+              // Update processed user cache with fresh data including agent info
+              await updateProcessedUserCache(userId);
+              
+              // Add user to deployment tracking
+              addToDeploymentTracking(userId, newAgentId, agentName);
+              
+              agentCreationResult = {
+                agentId: newAgentId,
+                agentName: agentName,
+                apiKey: agentApiKey,
+                workflowStage: 'polling_for_deployment'
+              };
+              
+              console.log(`[*] Agent created and assigned to user ${userId}: ${newAgentId}`);
+              
+            } catch (agentError) {
+              console.error(`❌ [AUTO-AGENT] Failed to create agent for user ${userId}:`, agentError.message);
+            }
+          }
+        }
+      } catch (autoAgentError) {
+        console.error(`❌ [AUTO-AGENT] Error during automatic agent creation for user ${userId}:`, autoAgentError.message);
+      }
+    }
+    
+    // If no agent creation happened, save the user document now
+    if (!agentCreationResult) {
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+      invalidateUserCache(userId);
+      await updateProcessedUserCache(userId);
+    }
     
     res.json({ 
       message: `User ${action} successfully`,
       userId: userId,
       action: action,
       approvalStatus: approvalStatus,
-      workflowStage: workflowStage,
+      workflowStage: agentCreationResult ? agentCreationResult.workflowStage : workflowStage,
       timestamp: new Date().toISOString(),
-      nextSteps: action === 'approve' ? 'Admin should create agent manually via Admin Panel' : null
+      agentCreation: agentCreationResult,
+      nextSteps: action === 'approve' ? (agentCreationResult ? 'Agent created and deployment started' : 'Approved but agent creation skipped') : null
     });
     
   } catch (error) {
@@ -1070,13 +1396,19 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
     }
     
     // Update user notes
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       adminNotes: notes,
       updatedAt: new Date().toISOString()
     };
     
     await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     res.json({ 
       message: 'Notes saved successfully',
@@ -1106,6 +1438,16 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
       if (!userDoc) {
         return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Check if user already has an assigned agent
+      if (userDoc.assignedAgentId) {
+        console.log(`⚠️ [NEW AGENT] User ${userId} already has assigned agent: ${userDoc.assignedAgentId}`);
+        return res.status(400).json({ 
+          error: 'User already has an assigned agent',
+          existingAgentId: userDoc.assignedAgentId,
+          existingAgentName: userDoc.assignedAgentName
+        });
       }
       
       if (!userDoc.email) {
@@ -1180,12 +1522,16 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
         }
         
         // Update user with assigned agent information and API key
+        // Extract only the database fields, excluding calculated fields
+        const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+        
         const updatedUser = {
-          ...userDoc,
+          ...userDataForDatabase,
           assignedAgentId: newAgentId,
           assignedAgentName: agentName,
           agentApiKey: agentApiKey, // Store the API key in the user document
           agentAssignedAt: new Date().toISOString(),
+          workflowStage: 'polling_for_deployment', // Set workflow stage to show deployment polling
           updatedAt: new Date().toISOString()
         };
         
@@ -1237,8 +1583,11 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
     }
     
     // Update user with assigned agent information
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       assignedAgentId: agentId,
       assignedAgentName: agentName,
       agentAssignedAt: new Date().toISOString(),
@@ -1252,6 +1601,9 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       
       // Invalidate user cache to ensure fresh data
       invalidateUserCache(userId);
+      
+      // Update processed user cache with fresh data
+      await updateProcessedUserCache(userId);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -1362,6 +1714,91 @@ router.post('/fix-user-data/:userId', async (req, res) => {
   }
 });
 
+// Shared function to process user data consistently across all endpoints
+async function processUserData(user, includeBucketStatus = false) {
+  // Handle database corruption: restore _id from userId if missing
+  if (!user._id && user.userId) {
+    user._id = user.userId;
+  }
+  
+  // Extract current agent information from assignedAgentId (source of truth)
+  let assignedAgentId = user.assignedAgentId || null;
+  let assignedAgentName = user.assignedAgentName || null;
+  let agentAssignedAt = user.agentAssignedAt || null;
+  
+  // If we have ownedAgents but no assignedAgentId, use the first owned agent
+  if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
+    const firstAgent = user.ownedAgents[0];
+    assignedAgentId = firstAgent.id;
+    assignedAgentName = firstAgent.name;
+    agentAssignedAt = firstAgent.assignedAt;
+  }
+  
+  // If we have assignedAgentId but no agentAssignedAt, try to get it from ownedAgents
+  if (assignedAgentId && !agentAssignedAt && user.ownedAgents && user.ownedAgents.length > 0) {
+    const matchingAgent = user.ownedAgents.find(agent => agent.id === assignedAgentId);
+    if (matchingAgent && matchingAgent.assignedAt) {
+      agentAssignedAt = matchingAgent.assignedAt;
+    }
+  }
+  
+  // Get bucket status if requested
+  let bucketStatus = null;
+  if (includeBucketStatus) {
+    bucketStatus = {
+      hasFolder: false,
+      fileCount: 0,
+      totalSize: 0
+    };
+    
+    try {
+      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (bucketResponse.ok) {
+        const bucketData = await bucketResponse.json();
+        bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
+      }
+    } catch (bucketError) {
+      console.error(`⚠️ Failed to check bucket status for user ${user._id}:`, bucketError.message);
+    }
+  }
+  
+  // Return processed user data with consistent structure
+  return {
+    userId: user._id || user.userId,
+    displayName: user.displayName || user._id || user.userId,
+    email: user.email || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    hasPasskey: !!user.credentialID,
+    hasValidPasskey: !!(user.credentialID && 
+      user.credentialID !== 'test-credential-id-wed271' && 
+      user.credentialPublicKey && 
+      user.counter !== undefined),
+    credentialID: user.credentialID,
+    credentialPublicKey: user.credentialPublicKey ? 'Present' : 'Missing',
+    counter: user.counter,
+    transports: user.transports,
+    domain: user.domain,
+    type: user.type,
+    workflowStage: user.workflowStage || 'no_passkey', // Use raw database value
+    adminNotes: user.adminNotes || '',
+    approvalStatus: user.approvalStatus,
+    assignedAgentId: assignedAgentId,
+    assignedAgentName: assignedAgentName,
+    agentAssignedAt: agentAssignedAt,
+    agentApiKey: user.agentApiKey || null,
+    bucketStatus: bucketStatus
+  };
+}
+
 // Helper function to determine workflow stage
 function validateWorkflowConsistency(user) {
   const { workflowStage, approvalStatus } = user;
@@ -1370,8 +1807,10 @@ function validateWorkflowConsistency(user) {
   const validCombinations = {
     'no_passkey': ['no_passkey', undefined], // No approval status needed
     'no_request_yet': [undefined], // User has passkey but hasn't requested support yet
+    'request_email_sent': [undefined, 'pending'], // User has sent request email but not yet reviewed by admin
     'awaiting_approval': ['pending', undefined], // Awaiting approval
     'waiting_for_deployment': ['approved', undefined], // Approved but waiting for agent deployment (allow undefined for legacy)
+    'polling_for_deployment': ['approved', undefined], // Agent is being deployed (equivalent to waiting_for_deployment)
     'approved': ['approved'], // Fully approved
     'agent_assigned': ['approved', undefined], // Agent has been assigned and deployed (allow undefined for legacy)
     'rejected': ['rejected'], // Rejected
@@ -1512,7 +1951,7 @@ router.post('/users/:userId/workflow-stage', requireAdminAuth, async (req, res) 
     
     
     // Validate workflow stage
-    const validStages = ['no_passkey', 'no_request_yet', 'awaiting_approval', 'waiting_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
+    const validStages = ['no_passkey', 'no_request_yet', 'request_email_sent', 'awaiting_approval', 'waiting_for_deployment', 'polling_for_deployment', 'approved', 'rejected', 'suspended', 'agent_assigned'];
     if (!validStages.includes(workflowStage)) {
       return res.status(400).json({ 
         error: `Invalid workflow stage. Must be one of: ${validStages.join(', ')}` 
@@ -1589,8 +2028,12 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     
     // Set passkey reset flag and clear the passkey information
     const resetExpiryTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    
+    // Extract only the database fields, excluding calculated fields
+    const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+    
     const updatedUser = {
-      ...userDoc,
+      ...userDataForDatabase,
       credentialID: undefined,
       credentialPublicKey: undefined,
       counter: undefined,
@@ -1603,6 +2046,9 @@ router.post('/users/:userId/reset-passkey', requireAdminAuth, async (req, res) =
     
     // Save the updated user document
     await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    // Invalidate user cache to ensure fresh data
+    invalidateUserCache(userId);
     
     // Set a timer to clear the reset flag after 1 hour
     setTimeout(async () => {
@@ -2025,6 +2471,260 @@ router.get('/database/user-agent-status', requireAdminAuth, async (req, res) => 
   }
 });
 
+// Comprehensive workflow validation and fix endpoint
+router.post('/database/validate-workflow-consistency', requireAdminAuth, async (req, res) => {
+  try {
+    console.log(`🔄 [WORKFLOW VALIDATION] Starting comprehensive workflow consistency check...`);
+    
+    // Get all agents from DO API (source of truth)
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const availableAgents = agentsResponse.agents || [];
+    console.log(`📋 [WORKFLOW VALIDATION] Found ${availableAgents.length} agents in DO API`);
+    
+    // Get all users from database
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    console.log(`👥 [WORKFLOW VALIDATION] Found ${allUsers.length} users in database`);
+    
+    const fixes = [];
+    
+    for (const user of allUsers) {
+      // Skip Public User
+      if (user._id === 'currentUser' || user.userId === 'currentUser') continue;
+      
+      let needsFix = false;
+      let newWorkflowStage = user.workflowStage;
+      let newAssignedAgentId = user.assignedAgentId;
+      let newAssignedAgentName = user.assignedAgentName;
+      
+      // Check if user has assigned agent metadata
+      if (user.assignedAgentId && user.assignedAgentName) {
+        // Look for matching agent in DO API by first word of agent name
+        const userPrefix = user._id || user.userId;
+        const matchingAgent = availableAgents.find(agent => {
+          const agentFirstWord = agent.name.split('-')[0];
+          return agentFirstWord === userPrefix;
+        });
+        
+        if (!matchingAgent) {
+          // User has agent metadata but no matching agent in DO API
+          console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} has agent metadata but no matching agent in DO API - clearing agent metadata`);
+          
+          needsFix = true;
+          newAssignedAgentId = null;
+          newAssignedAgentName = null;
+          
+          // Determine correct workflow stage based on approval status
+          if (user.approvalStatus === 'approved') {
+            newWorkflowStage = 'approved';
+          } else if (user.approvalStatus === 'pending') {
+            newWorkflowStage = 'awaiting_approval';
+          } else if (user.approvalStatus === 'rejected') {
+            newWorkflowStage = 'rejected';
+          } else if (user.approvalStatus === 'suspended') {
+            newWorkflowStage = 'suspended';
+          } else {
+            // No approval status - check if they have email (request sent)
+            if (user.email) {
+              newWorkflowStage = 'request_email_sent';
+            } else {
+              newWorkflowStage = 'no_request_yet';
+            }
+          }
+        } else {
+          // Agent exists in DO API - validate workflow stage
+          if (user.workflowStage !== 'agent_assigned') {
+            console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} has deployed agent but workflow stage is '${user.workflowStage}' - correcting to 'agent_assigned'`);
+            needsFix = true;
+            newWorkflowStage = 'agent_assigned';
+          }
+        }
+      } else if (user.workflowStage === 'agent_assigned') {
+        // User shows as agent_assigned but has no agent metadata
+        console.log(`🔧 [WORKFLOW VALIDATION] User ${user._id} shows as 'agent_assigned' but has no agent metadata - correcting workflow stage`);
+        
+        needsFix = true;
+        if (user.approvalStatus === 'approved') {
+          newWorkflowStage = 'approved';
+        } else if (user.approvalStatus === 'pending') {
+          newWorkflowStage = 'awaiting_approval';
+        } else if (user.approvalStatus === 'rejected') {
+          newWorkflowStage = 'rejected';
+        } else if (user.approvalStatus === 'suspended') {
+          newWorkflowStage = 'suspended';
+        } else {
+          // No approval status - check if they have email (request sent)
+          if (user.email) {
+            newWorkflowStage = 'request_email_sent';
+          } else {
+            newWorkflowStage = 'no_request_yet';
+          }
+        }
+      }
+      
+      if (needsFix) {
+        const updatedDoc = {
+          ...user,
+          workflowStage: newWorkflowStage,
+          assignedAgentId: newAssignedAgentId,
+          assignedAgentName: newAssignedAgentName,
+          agentAssignedAt: newAssignedAgentId ? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
+        invalidateUserCache(user._id);
+        
+        fixes.push({
+          userId: user._id,
+          oldWorkflowStage: user.workflowStage,
+          newWorkflowStage: newWorkflowStage,
+          oldAssignedAgentId: user.assignedAgentId,
+          newAssignedAgentId: newAssignedAgentId,
+          oldAssignedAgentName: user.assignedAgentName,
+          newAssignedAgentName: newAssignedAgentName
+        });
+        
+        console.log(`✅ [WORKFLOW VALIDATION] Fixed user ${user._id}: ${user.workflowStage} → ${newWorkflowStage}`);
+      }
+    }
+    
+    console.log(`✅ [WORKFLOW VALIDATION] Completed - ${fixes.length} users fixed`);
+    
+    res.json({
+      success: true,
+      message: `Workflow consistency validation completed`,
+      fixesApplied: fixes.length,
+      fixes: fixes,
+      availableAgents: availableAgents.map(agent => ({
+        name: agent.name,
+        uuid: agent.uuid,
+        status: agent.deployment?.status
+      }))
+    });
+    
+  } catch (error) {
+    console.error('❌ [WORKFLOW VALIDATION] Error validating workflow consistency:', error);
+    res.status(500).json({ error: 'Failed to validate workflow consistency' });
+  }
+});
+
+// Quick fix endpoint for individual user workflow inconsistencies
+router.post('/database/fix-user-workflow/:userId', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get all agents from DO API (source of truth)
+    const agentsResponse = await doRequest('/v2/gen-ai/agents');
+    const availableAgents = agentsResponse.agents || [];
+    
+    let needsFix = false;
+    let newWorkflowStage = userDoc.workflowStage;
+    let newAssignedAgentId = userDoc.assignedAgentId;
+    let newAssignedAgentName = userDoc.assignedAgentName;
+    
+    // Check if user has assigned agent metadata
+    if (userDoc.assignedAgentId && userDoc.assignedAgentName) {
+      // Look for matching agent in DO API by first word of agent name
+      const userPrefix = userId;
+      const matchingAgent = availableAgents.find(agent => {
+        const agentFirstWord = agent.name.split('-')[0];
+        return agentFirstWord === userPrefix;
+      });
+      
+      if (!matchingAgent) {
+        // User has agent metadata but no matching agent in DO API
+        needsFix = true;
+        newAssignedAgentId = null;
+        newAssignedAgentName = null;
+        
+        // Determine correct workflow stage based on approval status
+        if (userDoc.approvalStatus === 'approved') {
+          newWorkflowStage = 'approved';
+        } else if (userDoc.approvalStatus === 'pending') {
+          newWorkflowStage = 'awaiting_approval';
+        } else if (userDoc.approvalStatus === 'rejected') {
+          newWorkflowStage = 'rejected';
+        } else if (userDoc.approvalStatus === 'suspended') {
+          newWorkflowStage = 'suspended';
+        } else {
+          // No approval status - check if they have email (request sent)
+          if (userDoc.email) {
+            newWorkflowStage = 'request_email_sent';
+          } else {
+            newWorkflowStage = 'no_request_yet';
+          }
+        }
+      }
+    } else if (userDoc.workflowStage === 'agent_assigned') {
+      // User shows as agent_assigned but has no agent metadata
+      needsFix = true;
+      if (userDoc.approvalStatus === 'approved') {
+        newWorkflowStage = 'approved';
+      } else if (userDoc.approvalStatus === 'pending') {
+        newWorkflowStage = 'awaiting_approval';
+      } else if (userDoc.approvalStatus === 'rejected') {
+        newWorkflowStage = 'rejected';
+      } else if (userDoc.approvalStatus === 'suspended') {
+        newWorkflowStage = 'suspended';
+      } else {
+        // No approval status - check if they have email (request sent)
+        if (userDoc.email) {
+          newWorkflowStage = 'request_email_sent';
+        } else {
+          newWorkflowStage = 'no_request_yet';
+        }
+      }
+    }
+    
+    if (needsFix) {
+      const updatedDoc = {
+        ...userDoc,
+        workflowStage: newWorkflowStage,
+        assignedAgentId: newAssignedAgentId,
+        assignedAgentName: newAssignedAgentName,
+        agentAssignedAt: newAssignedAgentId ? new Date().toISOString() : null,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
+      invalidateUserCache(userId);
+      
+      console.log(`✅ [WORKFLOW FIX] Fixed user ${userId}: ${userDoc.workflowStage} → ${newWorkflowStage}`);
+      
+      res.json({
+        success: true,
+        message: `Workflow stage fixed for user ${userId}`,
+        userId: userId,
+        oldWorkflowStage: userDoc.workflowStage,
+        newWorkflowStage: newWorkflowStage,
+        oldAssignedAgentId: userDoc.assignedAgentId,
+        newAssignedAgentId: newAssignedAgentId,
+        oldAssignedAgentName: userDoc.assignedAgentName,
+        newAssignedAgentName: newAssignedAgentName
+      });
+    } else {
+      res.json({
+        success: true,
+        message: `User ${userId} workflow stage is already consistent`,
+        userId: userId,
+        workflowStage: userDoc.workflowStage,
+        assignedAgentId: userDoc.assignedAgentId,
+        assignedAgentName: userDoc.assignedAgentName
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ [WORKFLOW FIX] Error fixing user workflow:', error);
+    res.status(500).json({ error: 'Failed to fix user workflow' });
+  }
+});
+
 // Fix consistency issues endpoint
 router.post('/database/fix-consistency', async (req, res) => {
   try {
@@ -2154,12 +2854,14 @@ router.post('/database/fix-consistency', async (req, res) => {
             const updatedDoc = {
               ...userDoc,
               assignedAgentId: null,
-              assignedAgentName: null
+              assignedAgentName: null,
+              workflowStage: 'approved', // Reset workflow stage since agent was removed
+              updatedAt: new Date().toISOString()
             };
             
             await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedDoc);
             
-            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId}`);
+            console.log(`✅ [CONSISTENCY FIX] Removed orphaned agent from user ${issue.userId} and reset workflow stage to 'approved'`);
             results.push({
               type: issue.type,
               userId: issue.userId,
@@ -2273,14 +2975,59 @@ router.post('/update-activity', async (req, res) => {
 // Get all agents - PROTECTED (cached)
 router.get('/agents', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'createdAt', descending = 'true', filter } = req.query;
     
     // Check cache first
     const cachedAgents = cacheManager.getCachedAgents();
     
     if (cachedAgents) {
+      let processedAgents = [...cachedAgents];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedAgents = processedAgents.filter(agent => 
+          agent.name?.toLowerCase().includes(filterLower) ||
+          agent.status?.toLowerCase().includes(filterLower) ||
+          agent.model?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Apply sorting
+      if (sortBy) {
+        processedAgents.sort((a, b) => {
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle date strings
+          if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+            aVal = new Date(aVal || 0);
+            bVal = new Date(bVal || 0);
+          }
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      }
+      
+      // Apply pagination
+      const totalCount = processedAgents.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedAgents = rowsPerPage === -1 ? processedAgents : processedAgents.slice(startIndex, endIndex);
+      
       return res.json({
-        agents: cachedAgents,
-        count: cachedAgents.length,
+        agents: paginatedAgents,
+        count: totalCount,
         cached: true
       });
     }
@@ -2342,14 +3089,60 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
 // Get all knowledge bases - PROTECTED (cached)
 router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'createdAt', descending = 'true', filter } = req.query;
     
     // Check cache first
     const cachedKBs = cacheManager.getCachedKnowledgeBases();
     
     if (cachedKBs) {
+      let processedKBs = [...cachedKBs];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedKBs = processedKBs.filter(kb => 
+          kb.name?.toLowerCase().includes(filterLower) ||
+          kb.description?.toLowerCase().includes(filterLower) ||
+          kb.owner?.toLowerCase().includes(filterLower) ||
+          kb.status?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Apply sorting
+      if (sortBy) {
+        processedKBs.sort((a, b) => {
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle date strings
+          if (sortBy === 'createdAt') {
+            aVal = new Date(aVal || 0);
+            bVal = new Date(bVal || 0);
+          }
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      }
+      
+      // Apply pagination
+      const totalCount = processedKBs.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedKBs = rowsPerPage === -1 ? processedKBs : processedKBs.slice(startIndex, endIndex);
+      
       return res.json({
-        knowledgeBases: cachedKBs,
-        count: cachedKBs.length,
+        knowledgeBases: paginatedKBs,
+        count: totalCount,
         cached: true
       });
     }
@@ -2370,7 +3163,7 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
       owner: doc.owner || 'Unknown',
       createdAt: doc.createdAt || doc.timestamp,
       status: doc.status || 'unknown'
-    })).filter(kb => !kb.id.startsWith('_design/'));
+    })).filter(kb => kb.id && !kb.id.startsWith('_design/'));
     
     // Found knowledge bases
     
@@ -2403,14 +3196,84 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
 // Models configuration endpoints
 router.get('/models', requireAdminAuth, async (req, res) => {
   try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'name', descending = 'false', filter } = req.query;
     
     // Check cache first
     const cachedModels = cacheManager.getCachedModels();
     
     if (cachedModels) {
+      let processedModels = [...cachedModels];
+      
+      // Apply filtering if provided
+      if (filter) {
+        const filterLower = filter.toLowerCase();
+        processedModels = processedModels.filter(model => 
+          model.name?.toLowerCase().includes(filterLower) ||
+          model.description?.toLowerCase().includes(filterLower) ||
+          model.provider?.toLowerCase().includes(filterLower)
+        );
+      }
+      
+      // Get current selected model for prioritization
+      let currentSelectedModel = null;
+      try {
+        const configDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'maia_config');
+        if (configDoc && configDoc.current_model) {
+          currentSelectedModel = configDoc.current_model;
+        }
+      } catch (error) {
+        console.warn('Could not get current model for sorting:', error.message);
+      }
+      
+      // Apply sorting with selected model priority
+      if (sortBy) {
+        processedModels.sort((a, b) => {
+          // First priority: selected model always comes first
+          const aIsSelected = currentSelectedModel && a.uuid === currentSelectedModel.uuid;
+          const bIsSelected = currentSelectedModel && b.uuid === currentSelectedModel.uuid;
+          
+          if (aIsSelected && !bIsSelected) return -1;
+          if (!aIsSelected && bIsSelected) return 1;
+          
+          // If both or neither are selected, use normal sorting
+          let aVal = a[sortBy];
+          let bVal = b[sortBy];
+          
+          // Handle strings
+          if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = (bVal || '').toLowerCase();
+          }
+          
+          if (descending === 'true') {
+            return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+          } else {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+          }
+        });
+      } else {
+        // Even without sortBy, prioritize selected model
+        if (currentSelectedModel) {
+          processedModels.sort((a, b) => {
+            const aIsSelected = a.uuid === currentSelectedModel.uuid;
+            const bIsSelected = b.uuid === currentSelectedModel.uuid;
+            
+            if (aIsSelected && !bIsSelected) return -1;
+            if (!aIsSelected && bIsSelected) return 1;
+            return 0; // Keep original order for non-selected models
+          });
+        }
+      }
+      
+      // Apply pagination
+      const totalCount = processedModels.length;
+      const startIndex = (page - 1) * rowsPerPage;
+      const endIndex = startIndex + parseInt(rowsPerPage);
+      const paginatedModels = rowsPerPage === -1 ? processedModels : processedModels.slice(startIndex, endIndex);
+      
       return res.json({
-        models: cachedModels,
-        count: cachedModels.length,
+        models: paginatedModels,
+        count: totalCount,
         cached: true
       });
     }
@@ -2610,3 +3473,4 @@ router.post('/users/:userId/generate-api-key', requireAdminAuth, async (req, res
 export { updateUserActivity, getAllUserActivities, checkAgentDeployments, addToDeploymentTracking };
 
 export default router;
+export { updateProcessedUserCache, updateAllProcessedUserCache };

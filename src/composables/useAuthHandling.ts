@@ -135,6 +135,35 @@ const showJWT = async (
   }
 }
 
+// Helper function to update user record with file metadata
+const updateUserFileMetadata = async (userId: string, fileMetadata: {
+  fileName: string
+  bucketKey: string
+  bucketPath: string
+  fileSize: number
+  fileType: string
+  uploadedAt: string
+}) => {
+  try {
+    const response = await fetch('/api/user-file-metadata', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        fileMetadata
+      }),
+    })
+    
+    if (!response.ok) {
+      console.error(`❌ Failed to update user file metadata for ${userId}`)
+    }
+  } catch (error) {
+    console.error(`❌ Error updating user file metadata:`, error)
+  }
+}
+
 const uploadTranscriptFile = async (
   file: File,
   appState: AppState,
@@ -164,6 +193,48 @@ const uploadTranscriptFile = async (
     }
     appState.uploadedFiles.push(uploadedFile)
     
+    // Save file to user's bucket folder immediately upon import
+    try {
+      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
+      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      
+      const uploadResponse = await fetch('/api/upload-to-bucket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          content: uploadedFile.content,
+          fileType: 'text/markdown',
+          userFolder: userFolder
+        }),
+      })
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json()
+        console.log(`✅ Transcript saved to bucket: ${file.name} in folder ${userFolder}`)
+        
+        // Update the uploaded file with bucket info
+        uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+        uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+        
+        // Update user record with file metadata
+        await updateUserFileMetadata(currentUser, {
+          fileName: file.name,
+          bucketKey: uploadResult.fileInfo.bucketKey,
+          bucketPath: uploadResult.fileInfo.userFolder,
+          fileSize: file.size,
+          fileType: 'transcript',
+          uploadedAt: new Date().toISOString()
+        })
+      } else {
+        console.error(`❌ Failed to save transcript to bucket: ${file.name}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error saving transcript to bucket:`, error)
+    }
+    
     // Don't add to chat history - just make available as context
     writeMessage(`Transcript loaded successfully with ${chatHistory.length} messages`, 'success')
   } catch (error) {
@@ -181,8 +252,19 @@ const uploadTranscriptFile = async (
 const uploadPDFFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     // Check file size (limit to 50MB to prevent memory issues)
@@ -214,12 +296,103 @@ const uploadPDFFile = async (
       size: file.size,
       type: 'pdf',
       content: result.text, // Raw PDF text for display
-      transcript: result.markdown, // Converted markdown for AI use
+      transcript: result.markdown || null, // PDF conversion to text is not necessary for larger AIs and knowledge bases
       originalFile: file,
       uploadedAt: new Date()
     }
     
     appState.uploadedFiles.push(uploadedFile)
+    
+    // Save file to user's bucket folder immediately upon import
+    try {
+      const resolvedUserId = currentUser?.userId || currentUser?.displayName || 'Public User'
+      const userFolder = resolvedUserId === 'Public User' ? 'root' : `${resolvedUserId}/`
+      
+      // Ensure user has a bucket folder if they're authenticated (not Public User)
+      if (resolvedUserId !== 'Public User' && currentUser?.isAuthenticated) {
+        try {
+          const bucketResponse = await fetch('/api/bucket/ensure-user-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: resolvedUserId })
+          })
+          
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json()
+            if (!bucketData.folderExists) {
+              console.log(`✅ Created bucket folder for user: ${resolvedUserId}`)
+            }
+          } else {
+            console.warn(`⚠️ Failed to ensure bucket folder for user ${resolvedUserId}: ${bucketResponse.status}`)
+          }
+        } catch (bucketError) {
+          console.warn(`⚠️ Error ensuring bucket folder for user ${resolvedUserId}:`, bucketError)
+        }
+      }
+      
+      // Store PDF as binary (not base64) for proper text extraction and indexing
+      const fileReader = new FileReader()
+      fileReader.onload = async () => {
+        try {
+          const arrayBuffer = fileReader.result as ArrayBuffer
+          
+          // Convert ArrayBuffer to base64 for JSON transport (but will be decoded on server)
+          const uint8Array = new Uint8Array(arrayBuffer)
+          let binary = ''
+          for (let i = 0; i < uint8Array.byteLength; i++) {
+            binary += String.fromCharCode(uint8Array[i])
+          }
+          const base64Binary = btoa(binary)
+          
+          const uploadResponse = await fetch('/api/upload-to-bucket', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              content: base64Binary,
+              fileType: 'application/pdf',
+              userFolder: userFolder,
+              isBinary: true  // Flag to indicate binary data
+            }),
+          })
+          
+          if (uploadResponse.ok) {
+            const uploadResult = await uploadResponse.json()
+            
+            // Update the uploaded file with bucket info
+            uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+            uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+            
+            // Update user record with file metadata
+            await updateUserFileMetadata(resolvedUserId, {
+              fileName: file.name,
+              bucketKey: uploadResult.fileInfo.bucketKey,
+              bucketPath: uploadResult.fileInfo.userFolder,
+              fileSize: file.size,
+              fileType: 'pdf',
+              uploadedAt: new Date().toISOString()
+            })
+            
+            // Verify file was saved in correct location
+            if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
+              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`)
+            }
+            if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
+              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`)
+            }
+          } else {
+            console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
+          }
+        } catch (bucketError) {
+          console.error(`❌ Error saving PDF to bucket:`, bucketError)
+        }
+      }
+      fileReader.readAsArrayBuffer(file)  // Read as binary, not base64 data URL
+    } catch (error) {
+      console.error(`❌ Error preparing PDF for bucket upload:`, error)
+    }
     
     // Don't add to chat history - just make available as context
     writeMessage(`PDF file processed successfully (${result.pages} pages, ${result.characters} characters)`, 'success')
@@ -254,6 +427,49 @@ const uploadMarkdownFile = async (
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
+    
+    // Save file to user's bucket folder immediately upon import
+    try {
+      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
+      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      
+      const uploadResponse = await fetch('/api/upload-to-bucket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          content: uploadedFile.content,
+          fileType: 'text/markdown',
+          userFolder: userFolder
+        }),
+      })
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json()
+        console.log(`✅ Markdown file saved to bucket: ${file.name} in folder ${userFolder}`)
+        
+        // Update the uploaded file with bucket info
+        uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+        uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+        
+        // Update user record with file metadata
+        await updateUserFileMetadata(currentUser, {
+          fileName: file.name,
+          bucketKey: uploadResult.fileInfo.bucketKey,
+          bucketPath: uploadResult.fileInfo.userFolder,
+          fileSize: file.size,
+          fileType: 'markdown',
+          uploadedAt: new Date().toISOString()
+        })
+      } else {
+        console.error(`❌ Failed to save markdown file to bucket: ${file.name}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error saving markdown file to bucket:`, error)
+    }
+    
     // Don't add to chat history - just make available as context
     writeMessage('Markdown file loaded successfully', 'success')
   } catch (error) {
@@ -320,6 +536,49 @@ const uploadRTFFile = async (
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
+    
+    // Save file to user's bucket folder immediately upon import
+    try {
+      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
+      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      
+      const uploadResponse = await fetch('/api/upload-to-bucket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: uploadedFile.name, // Use the .md filename
+          content: uploadedFile.content,
+          fileType: 'text/markdown',
+          userFolder: userFolder
+        }),
+      })
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json()
+        console.log(`✅ RTF saved to bucket: ${uploadedFile.name} in folder ${userFolder}`)
+        
+        // Update the uploaded file with bucket info
+        uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+        uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+        
+        // Update user record with file metadata
+        await updateUserFileMetadata(currentUser, {
+          fileName: uploadedFile.name,
+          bucketKey: uploadResult.fileInfo.bucketKey,
+          bucketPath: uploadResult.fileInfo.userFolder,
+          fileSize: file.size,
+          fileType: 'rtf',
+          uploadedAt: new Date().toISOString()
+        })
+      } else {
+        console.error(`❌ Failed to save RTF to bucket: ${uploadedFile.name}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error saving RTF to bucket:`, error)
+    }
+    
     writeMessage('RTF file processed and converted to Markdown successfully', 'success')
   } catch (error) {
     let errorMessage = 'Unknown error'
@@ -352,6 +611,49 @@ const uploadTextFile = async (
       uploadedAt: new Date()
     }
     appState.uploadedFiles.push(uploadedFile)
+    
+    // Save file to user's bucket folder immediately upon import
+    try {
+      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
+      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      
+      const uploadResponse = await fetch('/api/upload-to-bucket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          content: uploadedFile.content,
+          fileType: 'text/plain',
+          userFolder: userFolder
+        }),
+      })
+      
+      if (uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json()
+        console.log(`✅ Text file saved to bucket: ${file.name} in folder ${userFolder}`)
+        
+        // Update the uploaded file with bucket info
+        uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+        uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+        
+        // Update user record with file metadata
+        await updateUserFileMetadata(currentUser, {
+          fileName: file.name,
+          bucketKey: uploadResult.fileInfo.bucketKey,
+          bucketPath: uploadResult.fileInfo.userFolder,
+          fileSize: file.size,
+          fileType: 'text',
+          uploadedAt: new Date().toISOString()
+        })
+      } else {
+        console.error(`❌ Failed to save text file to bucket: ${file.name}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error saving text file to bucket:`, error)
+    }
+    
     // Don't add to chat history - just make available as context
     writeMessage('Text file loaded successfully', 'success')
   } catch (error) {
@@ -369,7 +671,8 @@ const uploadTextFile = async (
 export const uploadFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
   const content = await file.text()
   const fileType = detectFileType(file.name, content)
@@ -380,7 +683,7 @@ export const uploadFile = async (
       await uploadTranscriptFile(file, appState, writeMessage)
       break
     case 'pdf':
-      await uploadPDFFile(file, appState, writeMessage)
+      await uploadPDFFile(file, appState, writeMessage, currentUser)
       break
     case 'markdown':
       await uploadMarkdownFile(file, appState, writeMessage)

@@ -5,6 +5,7 @@ import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
 import { useTranscript } from "../composables/useTranscript";
+import html2pdf from 'html2pdf.js';
 import ChatArea from "./ChatArea.vue";
 import BottomToolbar from "./BottomToolbar.vue";
 import {
@@ -161,7 +162,23 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      // This is now handled by the centralized state manager
+      // Refresh agent data from DO API and update centralized state
+      console.log('🔄 Refreshing agent data from DO API...');
+      try {
+        const response = await fetch(`${API_BASE_URL}/current-agent`);
+        const data = await response.json();
+
+        if (data.agent) {
+          appStateManager.setAgent(data.agent);
+          if (data.agent.knowledgeBase) {
+            appStateManager.setState({ currentKnowledgeBase: data.agent.knowledgeBase });
+          }
+        } else {
+          appStateManager.clearAgent();
+        }
+      } catch (error) {
+        console.error("❌ Error refreshing agent data:", error);
+      }
     };
 
     const showPopup = () => {
@@ -243,11 +260,6 @@ export default defineComponent({
         appState.chatHistory = groupChat.chatHistory;
         appState.uploadedFiles = groupChat.uploadedFiles;
         
-        console.log('🔍 [PDF FAILS] appState.uploadedFiles set:', {
-          uploadedFilesCount: appState.uploadedFiles?.length || 0,
-          firstFileBase64Length: appState.uploadedFiles?.[0]?.base64?.length || 0,
-          firstFileBase64Preview: appState.uploadedFiles?.[0]?.base64?.substring(0, 50) || 'none'
-        });
         
         // Store the chat ID for future updates
         appState.currentChatId = groupChat.id;
@@ -514,10 +526,60 @@ export default defineComponent({
         content: `Sent query to ${appState.selectedAI}`,
       });
     };
-    const triggerUploadFile = uploadFile;
+const triggerUploadFile = (file: File) => {
+  return uploadFile(file, appState, writeMessage, currentUser.value);
+};
     const saveMessage = () => {};
-    const saveToFile = () => {};
-    const closeNoSave = () => {};
+    const saveToFile = async () => {
+      try {
+        // Ensure userName is set from currentUser for transcript generation
+        const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
+        appState.userName = userName;
+        
+        // Find the chat area element to capture
+        const chatAreaElement = document.querySelector('.chat-area') || 
+                               document.querySelector('.q-scrollarea') ||
+                               document.querySelector('.chat-container');
+        
+        if (!chatAreaElement) {
+          throw new Error('Chat area element not found');
+        }
+        
+        // Configure html2pdf options for selectable text and good quality
+        const opt = {
+          margin: 0.5, // Small margin
+          filename: 'transcript.pdf',
+          image: { 
+            type: 'jpeg', 
+            quality: 0.98 
+          },
+          html2canvas: { 
+            scale: 2, // High quality
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff'
+          },
+          jsPDF: { 
+            unit: 'in', 
+            format: 'a4', 
+            orientation: 'portrait' 
+          }
+        };
+        
+        // Generate PDF with selectable text
+        await html2pdf().from(chatAreaElement).set(opt).save();
+        
+        logSystemEvent("Chat area saved as PDF with selectable text", {}, appState);
+        
+      } catch (error) {
+        console.error('Error in saveToFile:', error);
+        writeMessage("Failed to save transcript: " + error.message, "error");
+      }
+    };
+    const closeNoSave = () => {
+      // Reload the page to end the session without saving
+      window.location.reload();
+    };
     const closeSession = () => {};
     const viewFile = (file: UploadedFile) => {
       appState.popupContent = file.content;
@@ -662,10 +724,10 @@ export default defineComponent({
       window.addEventListener('resize', updateChatAreaMargin);
       
       // Add state listener for reactive updates
-      stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
-        if (newState.currentUser !== oldState.currentUser) {
-          currentUser.value = newState.currentUser;
-        }
+    stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
+      if (newState.currentUser !== oldState.currentUser) {
+        currentUser.value = newState.currentUser;
+      }
         if (newState.currentAgent !== oldState.currentAgent) {
           currentAgent.value = newState.currentAgent;
         }
@@ -800,6 +862,17 @@ export default defineComponent({
       @clear-warning="agentWarning = ''"
       @view-file="viewFile"
       @group-saved="handleGroupSaved"
+      @edit-message="editMessage"
+      @save-message="saveMessage"
+      @view-system-message="
+        (content: string) => {
+          appState.popupContent = content;
+          showPopup();
+        }
+      "
+      @save-to-file="saveToFile"
+      @trigger-save-to-couchdb="triggerSaveToCouchDB"
+      @close-no-save="closeNoSave"
     />
 
     <!-- Bottom Toolbar -->

@@ -144,14 +144,14 @@
               Debug: workflowStage = "{{ user.workflowStage }}", awaiting_approval check = {{ user.workflowStage === 'awaiting_approval' }}
             </div>
             <QBtn
-              v-if="user.workflowStage === 'awaiting_approval'"
+              v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
               color="positive"
               label="Approve User"
               @click="approveUser"
               :loading="approving"
             />
             <QBtn
-              v-if="user.workflowStage === 'awaiting_approval'"
+              v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
               color="negative"
               label="Reject User"
               @click="rejectUser"
@@ -169,6 +169,13 @@
               color="info"
               label="View Agent Status"
               @click="viewAgentStatus"
+            />
+            <QBtn
+              v-if="!user.hasBucket && isPrivateAIUser(user)"
+              color="primary"
+              label="Create Bucket Folder"
+              @click="createBucketFolder"
+              :loading="creatingBucket"
             />
           </div>
         </QCardSection>
@@ -200,6 +207,7 @@ const error = ref(null)
 const approving = ref(false)
 const rejecting = ref(false)
 const creatingAgent = ref(false)
+const creatingBucket = ref(false)
 
 // Get userId from URL pathname
 const userId = computed(() => {
@@ -362,6 +370,52 @@ const createAgent = async () => {
 const viewAgentStatus = () => {
   // Navigate to agent management or show agent status
   console.log('View agent status for:', user.value.assignedAgentId)
+}
+
+const isPrivateAIUser = (user: any) => {
+  // Check if user is a private AI user (not Public User or deep_link user)
+  return user.userId !== 'Public User' && !user.userId?.startsWith('deep_link_')
+}
+
+const createBucketFolder = async () => {
+  try {
+    creatingBucket.value = true
+    console.log(`🪣 [BUCKET] Creating bucket folder for user: ${user.value.userId}`)
+    
+    const response = await fetch('/api/bucket/ensure-user-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.value.userId }),
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create bucket folder: ${response.statusText}`)
+    }
+    
+    // Update local state to show bucket was created
+    if (user.value) {
+      user.value.hasBucket = true
+      user.value.bucketFileCount = 0
+      user.value.bucketTotalSize = 0
+    }
+    
+    $q.notify({
+      type: 'positive',
+      message: `Bucket folder created successfully for ${user.value.displayName || user.value.userId}`,
+      position: 'top'
+    })
+    
+  } catch (error) {
+    console.error('❌ [UserDetailsPage] Failed to create bucket folder:', error)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to create bucket folder',
+      position: 'top'
+    })
+  } finally {
+    creatingBucket.value = false
+  }
 }
 
 // Utility functions

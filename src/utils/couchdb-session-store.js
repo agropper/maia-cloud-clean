@@ -13,7 +13,7 @@ class CouchDBSessionStore extends Store {
     this.couchDBClient = options.couchDBClient || createCouchDBClient();
     this.dbName = options.dbName || 'maia_sessions';
     this.ttl = options.ttl || 24 * 60 * 60 * 1000; // 24 hours default
-    this.inactivityTimeout = options.inactivityTimeout || 10 * 60 * 1000; // 10 minutes
+    this.inactivityTimeout = options.inactivityTimeout || 24 * 60 * 60 * 1000; // 24 hours to match cookie timeout
     this.warningDuration = options.warningDuration || 30 * 1000; // 30 seconds
     
     // Essential: Database configuration

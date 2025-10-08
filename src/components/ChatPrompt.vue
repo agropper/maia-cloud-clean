@@ -5,6 +5,7 @@ import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
 import { useTranscript } from "../composables/useTranscript";
+import html2pdf from 'html2pdf.js';
 import ChatArea from "./ChatArea.vue";
 import BottomToolbar from "./BottomToolbar.vue";
 import {
@@ -364,13 +365,9 @@ export default defineComponent({
 
     // Method to refresh agent data (called from AgentManagementDialog)
     const refreshAgentData = async () => {
-      // Only fetch if we don't already have an agent to prevent overriding
-      // the agent that was just selected
-      if (!currentAgent.value) {
-        await fetchCurrentAgent();
-      } else {
-        // Agent already exists, skipping fetch
-      }
+      // Always refresh agent data from DO API to get latest KB attachments
+      console.log('🔄 Refreshing agent data from DO API...');
+      await fetchCurrentAgent();
     };
 
     const showPopup = () => {
@@ -718,16 +715,51 @@ export default defineComponent({
       });
     };
 
-    const saveToFile = () => {
-      const transcriptContent = generateTranscript(appState, true);
-      const blob = new Blob([transcriptContent], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "transcript.md";
-      a.click();
-      URL.revokeObjectURL(url);
-      logSystemEvent("Transcript saved to file", {}, appState);
+    const saveToFile = async () => {
+      try {
+        // Ensure userName is set from currentUser for transcript generation
+        const userName = currentUser.value?.displayName || currentUser.value?.userId || 'Public User';
+        appState.userName = userName;
+        
+        // Find the chat area element to capture
+        const chatAreaElement = document.querySelector('.chat-area') || 
+                               document.querySelector('.q-scrollarea') ||
+                               document.querySelector('.chat-container');
+        
+        if (!chatAreaElement) {
+          throw new Error('Chat area element not found');
+        }
+        
+        // Configure html2pdf options for selectable text and good quality
+        const opt = {
+          margin: 0.5, // Small margin
+          filename: 'transcript.pdf',
+          image: { 
+            type: 'jpeg', 
+            quality: 0.98 
+          },
+          html2canvas: { 
+            scale: 2, // High quality
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff'
+          },
+          jsPDF: { 
+            unit: 'in', 
+            format: 'a4', 
+            orientation: 'portrait' 
+          }
+        };
+        
+        // Generate PDF with selectable text
+        await html2pdf().from(chatAreaElement).set(opt).save();
+        
+        logSystemEvent("Chat area saved as PDF with selectable text", {}, appState);
+        
+      } catch (error) {
+        console.error('Error in saveToFile:', error);
+        writeMessage("Failed to save transcript: " + error.message, "error");
+      }
     };
 
     const closeNoSave = () => {
@@ -922,7 +954,7 @@ export default defineComponent({
       }
     "
     @view-file="viewFile"
-    @save-to-file="saveToFile"
+      @save-to-file="saveToFile"
     @trigger-save-to-couchdb="triggerSaveToCouchDB"
     @close-no-save="closeNoSave"
     @clear-warning="agentWarning = ''"

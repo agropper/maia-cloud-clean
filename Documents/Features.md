@@ -4,6 +4,9 @@ Unique Features of MAIA:
 • Patient controls privacy
 • Multiple health records sources and formats
 • Build trust with synthetic records before using with real ones
+• Uses large PDF exports from Epic.
+• Extensive admininstrator console for user support
+
 
 Features
 • Private AI gatekeeper to health records

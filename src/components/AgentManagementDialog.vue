@@ -58,6 +58,18 @@
                   <strong>{{ currentWorkflowMessage }}</strong>
                 </div>
               </div>
+              
+              <!-- Request Support Button for no_request_yet stage -->
+              <div v-if="currentWorkflowState === 'no_request_yet'" class="q-mt-md">
+                <q-btn
+                  color="primary"
+                  label="Request Support"
+                  @click="showAdminApprovalDialog = true"
+                  icon="support_agent"
+                  class="q-px-lg"
+                  size="sm"
+                />
+              </div>
             </div>
             
             <!-- File Management Options for Authenticated Users -->
@@ -335,29 +347,7 @@
                     
                     <div v-if="(uploadedFiles && uploadedFiles.length > 0) || (userBucketFiles && userBucketFiles.length > 0)" class="q-pa-sm bg-blue-1 rounded-borders">
                       <q-list dense>
-                        <!-- Uploaded files from chat area -->
-                        <q-item
-                          v-for="file in uploadedFiles"
-                          :key="file.id"
-                          class="q-pa-xs"
-                        >
-                          <q-item-section avatar>
-                            <q-checkbox
-                              v-model="file.selected"
-                              color="primary"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label class="text-body2">
-                              {{ file.name }}
-                            </q-item-label>
-                            <q-item-label caption class="text-grey-6">
-                              {{ file.size }} bytes
-                            </q-item-label>
-                          </q-item-section>
-                        </q-item>
-                        
-                        <!-- Files from bucket -->
+                        <!-- Files from bucket (primary source) -->
                         <q-item
                           v-for="file in userBucketFiles"
                           :key="file.key"
@@ -904,6 +894,39 @@
       @cancelled="handleSignInCancelled"
     />
 
+    <!-- No Agent Modal -->
+    <q-dialog v-model="showNoAgentModal">
+      <q-card style="min-width: 400px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">🚫 Agent Required</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        
+        <q-card-section>
+          <div class="text-body1">
+            You must request and be supported for your private AI agent before you can create a knowledge base for your records.
+          </div>
+        </q-card-section>
+        
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            label="OK"
+            color="primary"
+            @click="handleNoAgentModalOK"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- New User Welcome Modal -->
+    <NewUserWelcomeModal
+      v-model="showNewUserWelcomeModal"
+      :currentUser="localCurrentUser"
+      @support-requested="handleSupportRequested"
+    />
+
     <!-- Ownership Transfer Modal -->
     <KBOwnershipTransferModal
       v-if="showOwnershipTransferModal && ownershipTransferData.kbId"
@@ -1264,6 +1287,7 @@ import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import KBOwnershipTransferModal from "./KBOwnershipTransferModal.vue";
 import AgentStatusIndicator from "./AgentStatusIndicator.vue";
+import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import type { UploadedFile } from "../types";
 
 export interface DigitalOceanAgent {
@@ -1311,6 +1335,7 @@ export default defineComponent({
     PasskeyAuthDialog,
     KBOwnershipTransferModal,
     AgentStatusIndicator,
+    NewUserWelcomeModal,
     QCheckbox,
     QChip,
     QTooltip,
@@ -1390,6 +1415,8 @@ export default defineComponent({
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
     const showKbLinkSuggestionDialog = ref(false);
+    const showNoAgentModal = ref(false);
+    const showNewUserWelcomeModal = ref(false);
     const selectedKnowledgeBase = ref<DigitalOceanKnowledgeBase | null>(null);
     const newKbName = ref("");
     const newKbDescription = ref("");
@@ -1946,14 +1973,69 @@ export default defineComponent({
       // All old function code removed
     // All old function code removed - was causing build errors
 
-    // Handle agent selection - REMOVED: Users can no longer select their own agents
-    // Agents are now assigned only by admin process to prevent security violations
+    // Handle agent selection - Allow Public User to select public agents
     const onAgentSelected = async (agentId: string) => {
-      $q.notify({
-        type: "negative",
-        message: "Agent selection is disabled. Agents are assigned by administrator only.",
-        timeout: 5000,
-      });
+      const currentUserId = localCurrentUser.value?.userId;
+      
+      // Only allow agent selection for Public User (for public agents)
+      if (currentUserId === 'Public User') {
+        try {
+          isLoading.value = true;
+          
+          // Get agent details from DO API
+          const response = await fetch(`${API_BASE_URL}/v2/gen-ai/agents/${agentId}`);
+          if (!response.ok) {
+            throw new Error(`Failed to get agent details: ${response.status}`);
+          }
+          
+          const agentData = await response.json();
+          const agent = agentData.agent || agentData.data?.agent || agentData;
+          
+          // Verify this is a public agent
+          if (!agent.name.startsWith('public-')) {
+            $q.notify({
+              type: "negative",
+              message: "Only public agents can be selected by Public User.",
+              timeout: 5000,
+            });
+            return;
+          }
+          
+          // Set the selected agent for Public User
+          currentAgent.value = agent;
+          assignedAgent.value = agent;
+          
+          // Store the selection in the database for Public User
+          await fetch(`${API_BASE_URL}/api/current-agent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: agentId })
+          });
+          
+          $q.notify({
+            type: "positive",
+            message: `Public agent "${agent.name}" selected successfully.`,
+            timeout: 3000,
+          });
+          
+        } catch (error) {
+          console.error('Error selecting agent:', error);
+          $q.notify({
+            type: "negative",
+            message: `Failed to select agent: ${error.message}`,
+            timeout: 5000,
+          });
+        } finally {
+          isLoading.value = false;
+        }
+      } else {
+        // For authenticated users, agent selection is disabled (admin assignment only)
+        $q.notify({
+          type: "negative",
+          message: "Agent selection is disabled for authenticated users. Agents are assigned by administrator only.",
+          timeout: 5000,
+        });
+      }
     };
 
 
@@ -2077,6 +2159,19 @@ export default defineComponent({
       
     };
 
+    // Handle no-agent modal OK button
+    const handleNoAgentModalOK = () => {
+      showNoAgentModal.value = false;
+      // Show the NewUserWelcomeModal
+      showNewUserWelcomeModal.value = true;
+    };
+
+    // Handle support request from NewUserWelcomeModal
+    const handleSupportRequested = () => {
+      showNewUserWelcomeModal.value = false;
+      // The support request is handled by the NewUserWelcomeModal itself
+    };
+
     // Handle ownership transfer completion
     const handleOwnershipTransferred = async (transferData: {
       kbId: string;
@@ -2193,9 +2288,34 @@ export default defineComponent({
         currentAgent.value = null;
       }
       
-      // Set assigned agent from props (if available)
+      // Set assigned agent from props (if available) - validate against DO API
       if (props.assignedAgent) {
-        assignedAgent.value = props.assignedAgent;
+        // Validate agent against DO API (source of truth) before setting
+        const currentUserId = localCurrentUser.value?.userId;
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
+          try {
+            // Check if agent actually exists in DO API
+            const response = await fetch(`${API_BASE_URL}/current-agent`);
+            const data = await response.json();
+            
+            if (data.agent && data.agent.id === props.assignedAgent.id) {
+              // Agent exists in DO API - use it
+              assignedAgent.value = data.agent;
+              console.log(`✅ [AgentManagementDialog] Validated initial agent ${props.assignedAgent.name} against DO API`);
+            } else {
+              // Agent doesn't exist in DO API - clear it
+              console.log(`🔧 [AgentManagementDialog] Initial agent ${props.assignedAgent.name} not found in DO API - clearing assignment`);
+              assignedAgent.value = null;
+            }
+          } catch (error) {
+            console.error(`❌ [AgentManagementDialog] Error validating initial agent against DO API:`, error);
+            // On error, clear the assignment to be safe
+            assignedAgent.value = null;
+          }
+        } else {
+          // For Public User or deep link users, use the agent as-is
+          assignedAgent.value = props.assignedAgent;
+        }
       } else {
         assignedAgent.value = null;
       }
@@ -2247,11 +2367,11 @@ export default defineComponent({
         const currentUserId = localCurrentUser.value?.userId;
         const agentName = newAgent.name;
         
-        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId.startsWith('deep_link_')) {
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
           // Authenticated users should only see agents that match their user ID pattern
           const expectedPrefix = `${currentUserId}-agent-`;
           
-          if (!agentName.startsWith(expectedPrefix)) {
+          if (!agentName?.startsWith(expectedPrefix)) {
             console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
             console.log(`🚨 SECURITY FIX: Clearing agent assignment for user ${currentUserId}`);
             currentAgent.value = null;
@@ -2266,11 +2386,40 @@ export default defineComponent({
     });
     
     // Watch for assigned agent changes to update dialog state
-    watch(() => props.assignedAgent, (newAgent) => {
+    watch(() => props.assignedAgent, async (newAgent) => {
       if (newAgent && assignedAgent.value?.id !== newAgent.id) {
         console.log(`🤖 Assigned agent updated in dialog: ${newAgent.name}`);
-        assignedAgent.value = newAgent;
-        currentAgent.value = newAgent;
+        
+        // Validate agent against DO API (source of truth) before setting
+        const currentUserId = localCurrentUser.value?.userId;
+        if (currentUserId && currentUserId !== 'Public User' && currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
+          try {
+            // Check if agent actually exists in DO API
+            const response = await fetch(`${API_BASE_URL}/current-agent`);
+            const data = await response.json();
+            
+            if (data.agent && data.agent.id === newAgent.id) {
+              // Agent exists in DO API - use it
+              assignedAgent.value = data.agent;
+              currentAgent.value = data.agent;
+              console.log(`✅ [AgentManagementDialog] Validated agent ${newAgent.name} against DO API`);
+            } else {
+              // Agent doesn't exist in DO API - clear it
+              console.log(`🔧 [AgentManagementDialog] Agent ${newAgent.name} not found in DO API - clearing assignment`);
+              assignedAgent.value = null;
+              currentAgent.value = null;
+            }
+          } catch (error) {
+            console.error(`❌ [AgentManagementDialog] Error validating agent against DO API:`, error);
+            // On error, clear the assignment to be safe
+            assignedAgent.value = null;
+            currentAgent.value = null;
+          }
+        } else {
+          // For Public User or deep link users, use the agent as-is
+          assignedAgent.value = newAgent;
+          currentAgent.value = newAgent;
+        }
       }
     });
 
@@ -2524,13 +2673,21 @@ export default defineComponent({
         // Show passkey auth dialog for existing users
         showPasskeyAuthDialog.value = true;
       } else {
-        // User is already authenticated, show KB creation dialog
-        // KB creation dialog opening
+        // Check if user has an assigned agent
+        const hasAgent = assignedAgent.value && assignedAgent.value.id;
+        console.log(`🔍 [AGENT GATING] User: ${authenticatedUser.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
         
-        // Load user's existing files from bucket folder (force refresh)
-        await checkUserBucketFiles(true);
-        
-        showCreateKbDialog.value = true;
+        if (!hasAgent) {
+          // User doesn't have an agent yet - show no-agent modal
+          console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+          showNoAgentModal.value = true;
+        } else {
+          // User has an agent, proceed with KB creation dialog
+          // Load user's existing files from bucket folder (force refresh)
+          await checkUserBucketFiles(true);
+          
+          showCreateKbDialog.value = true;
+        }
       }
     };
 
@@ -2543,9 +2700,31 @@ export default defineComponent({
       });
     };
 
+    // Helper function to convert file to base64
+    const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(file)
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = error => reject(error)
+      })
+    }
+
     // Upload selected files to bucket (step 4) - UNIQUE FUNCTION IDENTIFIER
     const uploadSelectedFilesToBucket = async () => {
       if (selectedDocuments.value.length === 0) return;
+
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
+        return;
+      }
 
       isCreatingKb.value = true;
       try {
@@ -2563,19 +2742,22 @@ export default defineComponent({
             let fileType = 'text/plain'
             
             if (file.type === 'pdf') {
-              // PDF files have both raw text (content) and AI-ready markdown (transcript)
+              // PDF conversion to text is not necessary for larger AIs and knowledge bases.
+              // Keep PDF as-is for AI processing
               if (file.transcript && file.transcript.length > 0) {
+                // Use transcript if available (from older uploads)
                 aiContent = file.transcript
                 fileName = file.name.replace('.pdf', '.md')
                 fileType = 'text/markdown'
-              } else if (file.content && file.content.length > 0) {
-                // Fallback to raw content if no transcript available
-                aiContent = file.content
-                fileName = file.name.replace('.pdf', '.md')
-                fileType = 'text/markdown'
               } else {
-                console.warn(`⚠️ PDF file ${fileName} has no content or transcript - skipping`)
-                continue
+                // Upload original PDF file for AI processing
+                aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null
+                fileName = file.name // Keep original .pdf extension
+                fileType = 'application/pdf'
+                if (!aiContent) {
+                  console.warn(`⚠️ PDF file ${fileName} has no original file - skipping`)
+                  continue
+                }
               }
             } else if (file.type === 'rtf') {
               // RTF files have both raw text (content) and AI-ready markdown (transcript)
@@ -2700,12 +2882,39 @@ export default defineComponent({
             
             // Processing file for upload
             
-            // For PDFs and RTFs, use the extracted markdown content
-            if (file.type === 'pdf' && file.transcript) {
-              aiContent = file.transcript
-              fileName = file.name.replace('.pdf', '.md')
-              fileType = 'text/markdown'
-              console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
+            // NOTE: PDF-to-markdown conversion code is preserved below but disabled
+            // Modern AI models can handle PDFs directly without conversion
+            // To re-enable markdown conversion in the future, uncomment the code below
+            
+            // For PDFs, use original binary format for AI processing
+            if (file.type === 'pdf') {
+              // FUTURE: Optional PDF-to-markdown conversion
+              // if (file.transcript && ENABLE_PDF_MARKDOWN_CONVERSION) {
+              //   aiContent = file.transcript
+              //   fileName = file.name.replace('.pdf', '.md')
+              //   fileType = 'text/markdown'
+              //   console.log(`📄 Using extracted markdown for PDF: ${fileName} (${aiContent?.length || 0} chars)`)
+              // } else {
+              
+              // PDFs are already stored in bucket as binary - skip duplicate upload
+              // The file is already in the user's bucket folder from initial upload
+              if (!file.bucketKey) {
+                console.warn(`⚠️ PDF file ${file.name} has no bucket key - was it uploaded to bucket?`)
+                continue
+              }
+              
+              fileName = file.name // Keep original .pdf extension
+              fileType = 'application/pdf'
+              console.log(`📄 Using original binary PDF from bucket: ${fileName}`)
+              
+              // PDF is already in bucket - just reference it
+              uploadedFiles.push({
+                id: file.bucketKey,
+                name: fileName,
+                content: '', // Not needed - file is already in bucket
+                bucketKey: file.bucketKey
+              })
+              continue // Skip upload step - file is already there
             } else if (file.type === 'rtf' && file.transcript) {
               aiContent = file.transcript
               fileName = file.name.replace('.rtf', '.md')
@@ -2715,10 +2924,6 @@ export default defineComponent({
               // Already in markdown format
               fileType = 'text/markdown'
               console.log(`📄 Using existing markdown: ${fileName} (${aiContent?.length || 0} chars)`)
-            } else if (file.type === 'pdf' && !file.transcript) {
-              // PDF without transcript - this shouldn't happen
-              console.warn(`⚠️ PDF file ${fileName} has no transcript - skipping`)
-              continue
             }
             
             if (!aiContent || aiContent.length === 0) {
@@ -2900,6 +3105,18 @@ export default defineComponent({
     const createKnowledgeBaseFromBucketFiles = async () => {
       if (!newKbName.value) return;
 
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
+        return;
+      }
+
       isCreatingKb.value = true;
       try {
         // Get username from session or props
@@ -3010,6 +3227,18 @@ export default defineComponent({
         return;
       }
 
+      // AGENT GATING: Check if user has an assigned agent
+      const authenticatedUser = localCurrentUser.value || props.currentUser;
+      const hasAgent = assignedAgent.value && assignedAgent.value.id;
+      console.log(`🔍 [AGENT GATING] User: ${authenticatedUser?.userId}, assignedAgent:`, assignedAgent.value, `hasAgent: ${hasAgent}`);
+      
+      if (!hasAgent) {
+        // User doesn't have an agent yet - show no-agent modal
+        console.log(`🚫 [AGENT GATING] No agent found, showing no-agent modal`);
+        showNoAgentModal.value = true;
+        return;
+      }
+
       isCreatingKb.value = true;
       currentKbStatus.value = 'Creating KB';
 
@@ -3026,16 +3255,19 @@ export default defineComponent({
               // Handle different file types
               if (file.type === 'pdf') {
                 if (file.transcript && file.transcript.length > 0) {
+                  // Use transcript if available (from older uploads)
                   aiContent = file.transcript;
                   fileName = file.name.replace('.pdf', '.md');
                   fileType = 'text/markdown';
-                } else if (file.content && file.content.length > 0) {
-                  aiContent = file.content;
-                  fileName = file.name.replace('.pdf', '.md');
-                  fileType = 'text/markdown';
                 } else {
-                  console.warn(`PDF file ${fileName} has no content or transcript - skipping`);
-                  continue;
+                  // Upload original PDF file for AI processing
+                  aiContent = file.originalFile ? await fileToBase64(file.originalFile) : null;
+                  fileName = file.name; // Keep original .pdf extension
+                  fileType = 'application/pdf';
+                  if (!aiContent) {
+                    console.warn(`PDF file ${fileName} has no original file - skipping`);
+                    continue;
+                  }
                 }
               } else if (file.type === 'rtf') {
                 if (file.transcript && file.transcript.length > 0) {
@@ -3166,7 +3398,39 @@ export default defineComponent({
           
           console.log('[KB CREATE] Knowledge base attached to agent');
           
-          // Step 4: Clean up files
+          // Step 4: Update file KB associations
+          console.log('[KB CREATE] Updating file KB associations...');
+          const currentUser = localCurrentUser.value?.userId || 'unknown';
+          const kbName = kbResult.knowledge_base?.name || kbResult.data?.name || kbName;
+          
+          for (const file of allSelectedFiles) {
+            try {
+              // Get the bucket key for the file
+              const fileName = file.key ? file.key.split('/').pop() : file.name;
+              const bucketKey = `${currentUser}/${fileName}`;
+              
+              await fetch('/api/user-file-kb-association', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: currentUser,
+                  fileName: fileName,
+                  bucketKey: bucketKey,
+                  knowledgeBaseId: knowledgeBaseId,
+                  knowledgeBaseName: kbName,
+                  action: 'add'
+                })
+              });
+              
+              console.log(`✅ Updated KB association for file: ${fileName}`);
+            } catch (kbAssocError) {
+              console.warn('Failed to update KB association for file:', file.name, kbAssocError);
+            }
+          }
+          
+          // Step 5: Clean up files
           console.log('[KB CREATE] Cleaning up files...');
           
           // Remove uploaded files from appState
@@ -3209,6 +3473,9 @@ export default defineComponent({
           
           // Emit event to parent to refresh agent data from DigitalOcean API (source of truth)
           emit("refresh-agent-data");
+          
+          // Close the Agent Management Dialog so user sees updated Agent Badge
+          emit("update:modelValue", false);
         }
         
       } catch (error) {
@@ -3750,6 +4017,9 @@ export default defineComponent({
             type: "positive",
             message: "Knowledge base attached to agent successfully!",
           });
+          
+          // Close the Agent Management Dialog so user sees updated Agent Badge
+          emit("update:modelValue", false);
         } else {
           console.error(`❌ Failed to attach KB to agent: ${response.status}`);
           $q.notify({
@@ -4443,6 +4713,10 @@ export default defineComponent({
       showPasskeyAuthDialog,
       handleUserAuthenticated,
       handleSignInCancelled,
+      showNoAgentModal,
+      showNewUserWelcomeModal,
+      handleNoAgentModalOK,
+      handleSupportRequested,
       showOwnershipTransferModal,
       ownershipTransferData,
       showWarningModal,

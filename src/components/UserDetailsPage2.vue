@@ -115,7 +115,7 @@
         <h4 class="section-title">Admin Actions</h4>
         <div class="action-buttons">
           <QBtn
-            v-if="user.workflowStage === 'awaiting_approval'"
+            v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
             color="positive"
             label="Approve User"
             @click="approveUser"
@@ -123,7 +123,7 @@
           />
           
           <QBtn
-            v-if="user.workflowStage === 'awaiting_approval'"
+            v-if="user.workflowStage === 'request_email_sent' || user.workflowStage === 'awaiting_approval'"
             color="negative"
             label="Reject User"
             @click="rejectUser"
@@ -144,6 +144,47 @@
             label="View Agent"
             @click="viewAgent"
             class="action-btn"
+          />
+          
+          <!-- Reset Passkey Button - Show for any user (will clear any existing passkey data) -->
+          <QBtn
+            v-if="user && !user.passkeyResetFlag"
+            color="warning"
+            label="Reset Passkey"
+            @click="resetUserPasskey"
+            :loading="isResettingPasskey"
+            class="action-btn"
+            icon="key_off"
+          />
+          
+          <!-- Reset Workflow Button - Show for testing purposes -->
+          <QBtn
+            v-if="user && user.workflowStage !== 'request_email_sent'"
+            color="orange"
+            label="Reset to Request Stage"
+            @click="resetWorkflowStage"
+            :loading="isResettingWorkflow"
+            class="action-btn"
+            icon="refresh"
+          />
+          
+          <QBtn
+            v-if="user.passkeyResetFlag"
+            color="info"
+            :label="`Reset Active (${getTimeRemaining(user.passkeyResetExpiry)})`"
+            disabled
+            class="action-btn"
+            icon="schedule"
+          />
+          
+          <!-- Fix Workflow Consistency Button - Always available for admin troubleshooting -->
+          <QBtn
+            color="warning"
+            label="Fix Workflow Consistency"
+            @click="fixWorkflowConsistency"
+            :loading="isFixingWorkflow"
+            class="action-btn"
+            icon="build"
           />
         </div>
       </div>
@@ -168,6 +209,47 @@
             :loading="isSavingNotes"
             size="sm"
           />
+        </div>
+      </div>
+
+      <!-- User Files -->
+      <div class="files-section" v-if="user.files && user.files.length > 0">
+        <h4 class="section-title">📁 User Files</h4>
+        <div class="files-table">
+          <div class="file-header">
+            <div class="file-name" data-label="File Name">File Name</div>
+            <div class="file-size" data-label="Size">Size</div>
+            <div class="file-type" data-label="Type">Type</div>
+            <div class="file-kbs" data-label="Knowledge Bases">Knowledge Bases</div>
+            <div class="file-date" data-label="Uploaded">Uploaded</div>
+          </div>
+          <div 
+            v-for="file in user.files" 
+            :key="file.bucketKey" 
+            class="file-row"
+          >
+            <div class="file-name" data-label="File Name">
+              <QIcon :name="getFileIcon(file.fileType)" class="file-icon" />
+              {{ file.fileName }}
+            </div>
+            <div class="file-size" data-label="Size">{{ formatFileSize(file.fileSize) }}</div>
+            <div class="file-type" data-label="Type">{{ file.fileType }}</div>
+            <div class="file-kbs" data-label="Knowledge Bases">
+              <div v-if="file.knowledgeBases && file.knowledgeBases.length > 0" class="kb-chips">
+                <QChip
+                  v-for="kb in file.knowledgeBases"
+                  :key="kb.id"
+                  :label="kb.name"
+                  size="sm"
+                  color="primary"
+                  outline
+                  class="kb-chip"
+                />
+              </div>
+              <div v-else class="no-kbs">Not in any KB</div>
+            </div>
+            <div class="file-date" data-label="Uploaded">{{ formatRelativeTime(file.uploadedAt) }}</div>
+          </div>
         </div>
       </div>
 
@@ -202,7 +284,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput } from 'quasar'
+import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput, QChip } from 'quasar'
 
 const $q = useQuasar()
 
@@ -213,6 +295,9 @@ const error = ref(null)
 const adminNotes = ref('')
 const isSavingNotes = ref(false)
 const isGeneratingApiKey = ref(false)
+const isFixingWorkflow = ref(false)
+const isResettingPasskey = ref(false)
+const isResettingWorkflow = ref(false)
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
@@ -308,6 +393,122 @@ const generateApiKey = async () => {
   }
 }
 
+// Reset user passkey
+const resetUserPasskey = async () => {
+  if (!user.value) return;
+  
+  // Show confirmation dialog
+  const confirmed = confirm(`Are you sure you want to reset the passkey for user "${user.value.displayName}"? This will require them to register a new passkey.`);
+  
+  if (!confirmed) return;
+  
+  isResettingPasskey.value = true;
+  try {
+    const response = await fetch(`/api/admin-management/users/${user.value.userId}/reset-passkey`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        adminSecret: 'admin' // TODO: Get this from admin session or prompt
+      })
+    });
+    
+    if (response.ok) {
+      $q.notify({
+        type: 'positive',
+        message: `Passkey reset successfully for user "${user.value.displayName}". They have 1 hour to register a new passkey.`,
+        position: 'top'
+      });
+      
+      // Reload user details to show updated status
+      await loadUserDetails();
+    } else {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to reset passkey');
+    }
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: `Failed to reset passkey: ${error.message}`,
+      position: 'top'
+    });
+  } finally {
+    isResettingPasskey.value = false;
+  }
+};
+
+const resetWorkflowStage = async () => {
+  if (!user.value?.userId) {
+    $q.notify({
+      type: 'negative',
+      message: 'No user selected',
+      position: 'top'
+    });
+    return;
+  }
+
+  try {
+    isResettingWorkflow.value = true;
+    
+    const response = await fetch(`/api/admin-management/users/${user.value.userId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'move_to_review',
+        notes: 'Reset workflow stage for testing purposes'
+      }),
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to reset workflow: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    $q.notify({
+      type: 'positive',
+      message: `User ${user.value.userId} workflow reset to request stage`,
+      position: 'top'
+    });
+
+    // Refresh user data to show updated workflow stage
+    await loadUserDetails();
+    
+  } catch (error) {
+    console.error('❌ Failed to reset workflow stage:', error);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to reset workflow stage',
+      position: 'top'
+    });
+  } finally {
+    isResettingWorkflow.value = false;
+  }
+};
+
+// Helper function to calculate time remaining
+const getTimeRemaining = (expiryString: string) => {
+  const expiry = new Date(expiryString);
+  const now = new Date();
+  const diffMs = expiry.getTime() - now.getTime();
+  
+  if (diffMs <= 0) return 'Expired';
+  
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remainingMinutes = diffMinutes % 60;
+  
+  if (diffHours > 0) {
+    return `${diffHours}h ${remainingMinutes}m`;
+  } else {
+    return `${remainingMinutes}m`;
+  }
+};
+
 // Navigation
 const goBack = () => {
   window.location.href = '/admin2'
@@ -338,6 +539,17 @@ const formatFileSize = (bytes: number) => {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return `${Math.round(bytes / Math.pow(1024, i) * 100) / 100} ${sizes[i]}`
+}
+
+const getFileIcon = (fileType: string) => {
+  const icons = {
+    'pdf': 'picture_as_pdf',
+    'text': 'description',
+    'transcript': 'chat',
+    'markdown': 'description',
+    'rtf': 'description'
+  }
+  return icons[fileType] || 'insert_drive_file'
 }
 
 const getWorkflowStageColor = (stage: string) => {
@@ -424,6 +636,16 @@ const rejectUser = async () => {
 
 const createAgent = async () => {
   try {
+    // Check if user already has an agent
+    if (user.value.assignedAgentId) {
+      $q.notify({
+        type: 'warning',
+        message: `User ${user.value.userId} already has an assigned agent: ${user.value.assignedAgentName}`,
+        position: 'top'
+      })
+      return
+    }
+    
     const response = await fetch(`/api/admin-management/users/${user.value.userId}/assign-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -432,7 +654,22 @@ const createAgent = async () => {
     })
     
     if (!response.ok) {
-      throw new Error(`Failed to create agent: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      
+      // Handle specific error cases
+      if (response.status === 400 && errorData.error === 'User already has an assigned agent') {
+        $q.notify({
+          type: 'warning',
+          message: `User ${user.value.userId} already has an assigned agent: ${errorData.existingAgentName}`,
+          position: 'top'
+        })
+        
+        // Refresh user data to get the latest state
+        await loadUserDetails()
+        return
+      }
+      
+      throw new Error(`Failed to create agent: ${response.status} - ${errorData.error || 'Unknown error'}`)
     }
     
     const agentData = await response.json()
@@ -449,7 +686,7 @@ const createAgent = async () => {
     console.error('❌ Failed to create agent:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to create agent',
+      message: `Failed to create agent: ${error.message}`,
       position: 'top'
     })
   }
@@ -462,6 +699,58 @@ const viewAgent = () => {
     message: 'Agent details view - to be implemented',
     position: 'top'
   })
+}
+
+const fixWorkflowConsistency = async () => {
+  try {
+    isFixingWorkflow.value = true
+    
+    console.log(`🔧 [UserDetailsPage2] Fixing workflow consistency for user: ${user.value.userId}`)
+    
+    const response = await fetch(`/api/admin-management/database/fix-user-workflow/${user.value.userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    
+    if (result.success) {
+      console.log(`✅ [UserDetailsPage2] Workflow consistency fix result:`, result)
+      
+      // Show success message with details
+      const message = result.oldWorkflowStage === result.newWorkflowStage 
+        ? `User ${user.value.userId} workflow stage is already consistent (${result.newWorkflowStage})`
+        : `Fixed workflow stage for ${user.value.userId}: ${result.oldWorkflowStage} → ${result.newWorkflowStage}`
+      
+      $q.notify({
+        type: 'positive',
+        message: message,
+        position: 'top',
+        timeout: 5000
+      })
+      
+      // Refresh user details to show updated state
+      await loadUserDetails()
+      
+    } else {
+      throw new Error(result.error || 'Unknown error')
+    }
+    
+  } catch (error) {
+    console.error('❌ [UserDetailsPage2] Failed to fix workflow consistency:', error)
+    $q.notify({
+      type: 'negative',
+      message: `Failed to fix workflow consistency: ${error.message}`,
+      position: 'top'
+    })
+  } finally {
+    isFixingWorkflow.value = false
+  }
 }
 
 const saveNotes = async () => {
@@ -665,6 +954,102 @@ onMounted(() => {
   min-width: 140px;
 }
 
+/* Files Section */
+.files-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.files-table {
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.file-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f5f5f5;
+  font-weight: 600;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr 1fr;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: center;
+  font-size: 14px;
+}
+
+.file-row:last-child {
+  border-bottom: none;
+}
+
+.file-row:hover {
+  background: #f9f9f9;
+}
+
+.file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.file-icon {
+  color: #666;
+  font-size: 18px;
+}
+
+.file-size {
+  color: #666;
+  font-family: monospace;
+}
+
+.file-type {
+  color: #666;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.file-kbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-chip {
+  font-size: 11px;
+}
+
+.no-kbs {
+  color: #999;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.file-date {
+  color: #666;
+  font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .user-details-page2 {
@@ -701,6 +1086,41 @@ onMounted(() => {
   .info-item strong {
     min-width: auto;
     margin-bottom: 4px;
+  }
+  
+  .files-table {
+    overflow-x: auto;
+  }
+  
+  .file-header,
+  .file-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .file-header > div,
+  .file-row > div {
+    padding: 4px 0;
+  }
+  
+  .file-header > div::before,
+  .file-row > div::before {
+    content: attr(data-label) ': ';
+    font-weight: 600;
+    color: #666;
+    display: inline-block;
+    min-width: 120px;
+  }
+  
+  .file-row > div[data-label="File Name"]::before {
+    display: none;
+  }
+  
+  .file-row > div[data-label="File Name"] {
+    font-weight: 600;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 8px;
   }
 }
 </style>

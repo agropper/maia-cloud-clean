@@ -7,6 +7,7 @@ export class CacheManager {
   constructor() {
     this.cache = {
       users: new Map(),           // userId -> userDocument
+      users_processed: new Map(), // userId -> processedUserData (includes bucket info)
       chats: new Map(),           // 'all' -> allChatsArray
       agentAssignments: new Map(), // userId -> { assignedAgentId, assignedAgentName }
       knowledgeBases: new Map(),   // kbId -> kbDocument
@@ -17,6 +18,7 @@ export class CacheManager {
     
     this.lastUpdated = {
       users: new Map(),           // userId -> timestamp
+      users_processed: new Map(), // userId -> timestamp, 'all' -> timestamp
       chats: 0,                   // timestamp
       agentAssignments: new Map(), // userId -> timestamp
       knowledgeBases: new Map(),   // kbId -> timestamp
@@ -28,6 +30,7 @@ export class CacheManager {
     // Cache TTL (Time To Live) in milliseconds
     this.ttl = {
       users: 15 * 60 * 1000,       // 15 minutes (admin data changes infrequently)
+      users_processed: 5 * 60 * 1000, // 5 minutes (processed data with bucket info)
       chats: 2 * 60 * 1000,        // 2 minutes
       agentAssignments: 15 * 60 * 1000, // 15 minutes (admin data)
       knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
@@ -87,8 +90,12 @@ export class CacheManager {
     }
     
     if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
-      return this.cache[cacheType].get(key);
+      const result = this.cache[cacheType].get(key);
+      
+      
+      return result;
     }
+    
     
     return null;
   }
@@ -116,6 +123,7 @@ export class CacheManager {
       
       this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
+      
     }
     
   }
@@ -129,13 +137,17 @@ export class CacheManager {
       this.lastUpdated.chats = 0;
     } else if (key && this.cache[cacheType]) {
       this.cache[cacheType].delete(key);
-      if (this.lastUpdated[cacheType]) {
+      if (this.lastUpdated[cacheType] && typeof this.lastUpdated[cacheType].delete === 'function') {
         this.lastUpdated[cacheType].delete(key);
+      } else if (typeof this.lastUpdated[cacheType] === 'number') {
+        this.lastUpdated[cacheType] = 0; // Reset timestamp for simple cache types
       }
     } else if (this.cache[cacheType]) {
       this.cache[cacheType].clear();
-      if (this.lastUpdated[cacheType]) {
+      if (this.lastUpdated[cacheType] && typeof this.lastUpdated[cacheType].clear === 'function') {
         this.lastUpdated[cacheType].clear();
+      } else if (typeof this.lastUpdated[cacheType] === 'number') {
+        this.lastUpdated[cacheType] = 0; // Reset timestamp for simple cache types
       }
     }
     
@@ -262,31 +274,78 @@ export class CacheManager {
     const documentId = document._id || document.id;
     const cacheKey = `${databaseName}:${documentId}`;
     const cacheType = options.cacheType || this.getCacheTypeForDatabase(databaseName);
+    const maxRetries = options.maxRetries || 3;
+    const retryDelay = options.retryDelay || 100; // Initial delay in ms
+    
+    // SECURITY CHECK: Prevent currentUser from being saved to database
+    if (databaseName === 'maia_users' && document && document.currentUser) {
+      throw new Error(`🚨 SECURITY VIOLATION: Attempted to save 'currentUser' field to maia_users database. This is dangerous and forbidden. Document ID: ${documentId}`);
+    }
     
     // Check rate limit
     if (!this.checkRateLimit()) {
       throw new Error('Rate limit exceeded - cannot make database request');
     }
     
-    try {
-      const result = await this.executeWithCircuitBreaker(
-        () => couchDBClient.saveDocument(databaseName, document),
-        `saveDocument(${cacheKey})`
-      );
-      
-      // Invalidate related caches
-      this.invalidateCache(cacheType, documentId);
-      
-      // If it's a user document, invalidate related caches
-      if (databaseName === 'maia_users') {
-        this.invalidateUserRelatedCaches(documentId);
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.executeWithCircuitBreaker(
+          () => couchDBClient.saveDocument(databaseName, document),
+          `saveDocument(${cacheKey})`
+        );
+        
+        // Success - invalidate related caches
+        this.invalidateCache(cacheType, documentId);
+        
+        // If it's a user document, invalidate related caches
+        if (databaseName === 'maia_users') {
+          this.invalidateUserRelatedCaches(documentId);
+        }
+        
+        // Log retry success if this wasn't the first attempt
+        if (attempt > 1) {
+          console.log(`✅ [CACHE] Save succeeded on attempt ${attempt} for ${cacheKey}`);
+        }
+        
+        return result;
+      } catch (error) {
+        lastError = error;
+        
+        // Check if it's a document update conflict (409)
+        const isConflict = error.message && (
+          error.message.includes('conflict') || 
+          error.message.includes('409') ||
+          error.statusCode === 409
+        );
+        
+        if (isConflict && attempt < maxRetries) {
+          // Document conflict - retry with exponential backoff
+          const delay = retryDelay * Math.pow(2, attempt - 1);
+          console.log(`⚠️ [CACHE] Document conflict for ${cacheKey}, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // Fetch the latest version of the document
+          try {
+            const latestDoc = await couchDBClient.getDocument(databaseName, documentId);
+            // Merge changes while preserving the latest _rev
+            document._rev = latestDoc._rev;
+            console.log(`🔄 [CACHE] Refreshed document revision for ${cacheKey}`);
+          } catch (fetchError) {
+            console.warn(`⚠️ [CACHE] Could not fetch latest revision for ${cacheKey}:`, fetchError.message);
+          }
+        } else {
+          // Non-conflict error or max retries reached
+          break;
+        }
       }
-      
-      return result;
-    } catch (error) {
-      console.error(`❌ [CACHE] Failed to save ${cacheKey}:`, error.message);
-      throw error;
     }
+    
+    // All retries exhausted
+    console.error(`❌ [CACHE] Failed to save ${cacheKey} after ${maxRetries} attempts:`, lastError.message);
+    throw lastError;
   }
   
   /**

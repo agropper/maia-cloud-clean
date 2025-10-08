@@ -8,6 +8,9 @@ import { SessionManager } from './src/utils/session-manager.js';
 import { SessionMiddleware } from './src/middleware/session-middleware.js';
 import cookieParser from 'cookie-parser';
 
+// Import throttling utilities
+import requestThrottler from './src/utils/RequestThrottler.js';
+
 // Global error handling to prevent server crashes
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
@@ -45,6 +48,311 @@ const app = express();
 import { createCouchDBClient } from './src/utils/couchdb-client.js';
 
 const couchDBClient = createCouchDBClient();
+
+// Global session tracking
+const activeSessions = [];
+const serverStartTime = Date.now(); // Track when this server instance started
+process.env.SERVER_START_TIME = serverStartTime.toString(); // Set for session validation
+
+// Session management functions
+const generateSessionId = () => {
+  return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+const createSession = (userType, userData, req) => {
+  const session = {
+    sessionId: generateSessionId(),
+    userType: userType,           // 'public', 'deep_link', 'private', 'admin'
+    userId: userData.userId,
+    username: userData.username,
+    userEmail: userData.userEmail,
+    shareId: userData.shareId,    // For deep link users
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
+    lastPoll: null,               // When client last polled for updates
+    expiresAt: new Date(Date.now() + getSessionTimeout(userType)).toISOString(),
+    ipAddress: req.ip || req.connection.remoteAddress,
+    userAgent: req.headers['user-agent'],
+    pendingUpdates: []            // Queue of updates to send to this session
+  };
+  
+  activeSessions.push(session);
+  console.log(`[PAGE LOAD] ${userType} session created - ${userData.userId || userData.username}`);
+  
+  // Log to database
+  logSessionEvent('created', session);
+  
+  // Send session creation update to admin panels
+  try {
+    const updateData = {
+      sessionId: session.sessionId,
+      userType: userType,
+      userId: userData.userId || userData.username,
+      message: `${userType} session created for ${userData.userId || userData.username}`
+    };
+    addUpdateToAllAdmins('session_created', updateData);
+  } catch (error) {
+    console.error('Error sending session created update:', error.message);
+  }
+  
+  return session;
+};
+
+const removeSession = (sessionId) => {
+  const sessionIndex = activeSessions.findIndex(s => s.sessionId === sessionId);
+  if (sessionIndex !== -1) {
+    const session = activeSessions[sessionIndex];
+    activeSessions.splice(sessionIndex, 1);
+    
+    console.log(`[PAGE LOAD] ${session.userType} session destroyed - ${session.userId || session.username}`);
+    
+    // Log to database
+    logSessionEvent('destroyed', session);
+    
+    // Send session ended update to admin panels
+    try {
+      const updateData = {
+        sessionId: sessionId,
+        userType: session.userType,
+        userId: session.userId || session.username,
+        message: `${session.userType} session ended for ${session.userId || session.username}`
+      };
+      addUpdateToAllAdmins('session_ended', updateData);
+    } catch (error) {
+      console.error('Error sending session ended update:', error.message);
+    }
+  }
+};
+
+const updateSessionActivity = (sessionId, activityType = 'api_request') => {
+  const sessionIndex = activeSessions.findIndex(s => s.sessionId === sessionId);
+  if (sessionIndex !== -1) {
+    const session = activeSessions[sessionIndex];
+    const previousActivity = session.lastActivity;
+    session.lastActivity = new Date().toISOString();
+    
+    // Only send session_updated notifications for significant activities
+    // (not for every API request to avoid spam)
+    if (activityType === 'user_action' || activityType === 'file_upload') {
+      try {
+        const updateData = {
+          sessionId: sessionId,
+          userType: session.userType,
+          userId: session.userId || session.username,
+          activityType: activityType,
+          message: `${session.userType} session activity: ${activityType} for ${session.userId || session.username}`
+        };
+        addUpdateToAllAdmins('session_updated', updateData);
+      } catch (error) {
+        console.error('Error sending session updated update:', error.message);
+      }
+    }
+  }
+};
+
+const getSessionTimeout = (userType) => {
+  const timeouts = {
+    'public': 0,           // No session tracking
+    'deep_link': 30 * 60 * 1000,      // 30 minutes
+    'private': 24 * 60 * 60 * 1000,   // 24 hours
+    'admin': 24 * 60 * 60 * 1000      // 24 hours
+  };
+  return timeouts[userType] || 24 * 60 * 60 * 1000;
+};
+
+const logSessionEvent = async (event, session, reason = null) => {
+  try {
+    // Ensure the session logs database exists (only create if it doesn't exist)
+    try {
+      await couchDBClient.createDatabase('maia_session_logs');
+    } catch (dbError) {
+      // Database already exists, ignore error
+      // No need to log this as it's expected behavior
+    }
+    
+    const logDoc = {
+      _id: `session_log_${session.sessionId}_${Date.now()}`,
+      type: 'session_log',
+      event: event,
+      sessionId: session.sessionId,
+      userType: session.userType,
+      userId: session.userId,
+      username: session.username,
+      userEmail: session.userEmail,
+      shareId: session.shareId,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      timestamp: new Date().toISOString(),
+      reason: reason
+    };
+    
+    await couchDBClient.saveDocument('maia_session_logs', logDoc);
+    console.log(`[SESSION LOG] ${event} - ${session.userType} user ${session.userId || session.username}`);
+  } catch (error) {
+    console.error(`[SESSION LOG] Failed to log ${event} event:`, error.message);
+  }
+};
+
+// Update management functions
+const addUpdateToSession = (sessionId, updateType, updateData) => {
+  const session = activeSessions.find(s => s.sessionId === sessionId);
+  if (session) {
+    const update = {
+      type: updateType,
+      data: updateData,
+      timestamp: new Date().toISOString(),
+      id: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
+    
+    session.pendingUpdates.push(update);
+    
+    // Keep only last 50 updates to prevent memory bloat
+    if (session.pendingUpdates.length > 50) {
+      session.pendingUpdates = session.pendingUpdates.slice(-50);
+    }
+    
+    console.log(`[POLLING] Added ${updateType} update to session ${sessionId}`);
+    return update;
+  }
+  return null;
+};
+
+const addUpdateToUser = (userId, updateType, updateData) => {
+  const session = activeSessions.find(s => s.userId === userId);
+  if (session) {
+    return addUpdateToSession(session.sessionId, updateType, updateData);
+  }
+  return null;
+};
+
+const addUpdateToAllAdmins = (updateType, updateData) => {
+  const adminSessions = activeSessions.filter(s => s.userType === 'admin');
+  const updates = [];
+  
+  adminSessions.forEach(session => {
+    const update = addUpdateToSession(session.sessionId, updateType, updateData);
+    if (update) {
+      updates.push({ sessionId: session.sessionId, update });
+    }
+  });
+  
+  console.log(`[POLLING] Added ${updateType} update to ${updates.length} admin sessions`);
+  return updates;
+};
+
+const getPendingUpdates = (sessionId, lastPollTimestamp) => {
+  const session = activeSessions.find(s => s.sessionId === sessionId);
+  if (!session) {
+    return { updates: [], hasMore: false, nextPollIn: 5000 };
+  }
+  
+  // Update lastPoll timestamp
+  session.lastPoll = new Date().toISOString();
+  session.lastActivity = new Date().toISOString();
+  
+  // Filter updates newer than lastPollTimestamp
+  let pendingUpdates = session.pendingUpdates;
+  if (lastPollTimestamp) {
+    const lastPoll = new Date(lastPollTimestamp);
+    pendingUpdates = session.pendingUpdates.filter(update => 
+      new Date(update.timestamp) > lastPoll
+    );
+  }
+  
+  // Clear delivered updates (keep only last 10 for debugging)
+  session.pendingUpdates = session.pendingUpdates.slice(-10);
+  
+  // Determine next poll interval based on user type
+  const nextPollIn = session.userType === 'admin' ? 5000 : 10000; // 5s for admin, 10s for users
+  
+  return {
+    updates: pendingUpdates,
+    hasMore: false,
+    nextPollIn: nextPollIn,
+    sessionId: sessionId,
+    userType: session.userType
+  };
+};
+
+// Public User session management
+let publicUserSession = null;
+
+const getOrCreatePublicUserSession = (req) => {
+  if (!publicUserSession) {
+    publicUserSession = {
+      sessionId: 'public_user_session',
+      userType: 'public',
+      userId: 'Public User',
+      username: 'Public User',
+      userEmail: null,
+      shareId: null,
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      lastPoll: null,
+      expiresAt: null, // Public sessions don't expire
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      pendingUpdates: []
+    };
+    
+    activeSessions.push(publicUserSession);
+    console.log(`[PAGE LOAD] Public User session created - unified tracking`);
+    
+    // Log to database
+    logSessionEvent('created', publicUserSession);
+    
+    // Send session creation update to admin panels
+    try {
+      const updateData = {
+        sessionId: publicUserSession.sessionId,
+        userType: 'public',
+        userId: 'Public User',
+        message: `public session created for Public User`
+      };
+      addUpdateToAllAdmins('session_created', updateData);
+    } catch (error) {
+      console.error('Error sending Public User session created update:', error.message);
+    }
+  } else {
+    // Update last activity for existing session
+    publicUserSession.lastActivity = new Date().toISOString();
+    publicUserSession.ipAddress = req.ip || req.connection.remoteAddress;
+    publicUserSession.userAgent = req.headers['user-agent'];
+  }
+  
+  return publicUserSession;
+};
+
+const trackPublicUserActivity = (req) => {
+  // Check if there's an authenticated user - if so, don't create Public User session
+  const authCookie = req.cookies?.maia_auth;
+  if (authCookie) {
+    try {
+      const authData = JSON.parse(authCookie);
+      const now = new Date();
+      const expiresAt = new Date(authData.expiresAt);
+      
+      // If there's a valid authenticated user, don't create Public User session
+      if (now < expiresAt && authData.userId && authData.userId !== 'Public User') {
+        // console.log(`[SESSION] Skipping Public User session - authenticated as ${authData.userId}`);
+        return null;
+      }
+    } catch (error) {
+      // Invalid cookie, proceed to create Public User session
+    }
+  }
+  
+  // No authenticated user - create/update Public User session
+  const session = getOrCreatePublicUserSession(req);
+  // Only log on initial page load, not on every polling request
+  if (req.path === '/') {
+    console.log(`[PAGE LOAD] Public User polling started`);
+  }
+  return session;
+};
+
+// Export session management functions for use in route files
+export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity };
 
 const initializeDatabase = async () => {
   try {
@@ -351,6 +659,7 @@ app.use('/api/', (req, res, next) => {
   // Skip rate limiting for essential routes:
   // - admin-management routes (they have their own caching)
   // - admin events (SSE) to prevent connection issues  
+  // - admin polling (essential for real-time updates)
   // - passkey routes (essential for authentication)
   // - current-agent (needed for user initialization)
   // - group-chats (needed for admin panel functionality)
@@ -358,6 +667,7 @@ app.use('/api/', (req, res, next) => {
   // - admin notify (needed for deployment notifications)
   if (req.path.startsWith('/admin-management/') || 
       req.path === '/admin/events' ||
+      req.path === '/admin/poll/updates' ||
       req.path.startsWith('/passkey/') ||
       req.path === '/current-agent' ||
       req.path === '/group-chats' ||
@@ -396,6 +706,9 @@ app.use((req, res, next) => {
 
 // Custom route for index.html with environment variables (must come before static files)
 app.get('/', (req, res) => {
+  // Track Public User activity (only if not authenticated)
+  trackPublicUserActivity(req);
+  
   const appTitle = process.env.APP_TITLE || 'MAIA';
   const environment = process.env.NODE_ENV || 'development';
   const cloudantUrl = process.env.CLOUDANT_DASHBOARD || '#';
@@ -731,14 +1044,16 @@ app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
       return res.status(400).json({ error: 'Could not extract text from PDF' });
     }
     
-    // Convert to markdown format
-    const markdown = convertPdfToMarkdown(data);
+    // PDF conversion to text is not necessary for larger AIs and knowledge bases.
+    // Commenting out text extraction to keep PDFs as-is for AI processing
+    // const markdown = convertPdfToMarkdown(data);
     
     // console.log(`📄 PDF parsed: ${data.numpages} pages, ${data.text.length} characters`);
     
     res.json({
       success: true,
-      markdown,
+      text: data.text, // Keep the extracted text for AI context
+      // markdown, // Commented out - PDF conversion to text not needed for larger AIs
       pages: data.numpages,
       characters: data.text.length
     });
@@ -1048,10 +1363,163 @@ app.post('/api/upload-file', async (req, res) => {
   }
 });
 
+// Update user file metadata in user record
+app.post('/api/user-file-metadata', async (req, res) => {
+  try {
+    const { userId, fileMetadata } = req.body;
+    
+    if (!userId || !fileMetadata) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID and file metadata are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Get the user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    
+    if (!userDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Initialize files array if it doesn't exist
+    if (!userDoc.files) {
+      userDoc.files = [];
+    }
+
+    // Check if file already exists (by bucketKey)
+    const existingFileIndex = userDoc.files.findIndex(f => f.bucketKey === fileMetadata.bucketKey);
+    
+    if (existingFileIndex >= 0) {
+      // Update existing file metadata
+      userDoc.files[existingFileIndex] = {
+        ...userDoc.files[existingFileIndex],
+        ...fileMetadata,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      // Add new file metadata
+      userDoc.files.push({
+        ...fileMetadata,
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // Save the updated user document
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+    
+    console.log(`✅ Updated file metadata for user ${userId}: ${fileMetadata.fileName}`);
+    
+    res.json({
+      success: true,
+      message: 'File metadata updated successfully',
+      fileCount: userDoc.files.length
+    });
+  } catch (error) {
+    console.error('❌ Error updating user file metadata:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to update file metadata: ${error.message}`,
+      error: 'UPDATE_FAILED'
+    });
+  }
+});
+
+// Update file KB associations when files are added to knowledge bases
+app.post('/api/user-file-kb-association', async (req, res) => {
+  try {
+    const { userId, fileName, bucketKey, knowledgeBaseId, knowledgeBaseName, action } = req.body;
+    
+    if (!userId || !fileName || !bucketKey || !knowledgeBaseId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID, file name, bucket key, and knowledge base ID are required',
+        error: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Get the user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    
+    if (!userDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found',
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Initialize files array if it doesn't exist
+    if (!userDoc.files) {
+      userDoc.files = [];
+    }
+
+    // Find the file
+    const fileIndex = userDoc.files.findIndex(f => f.bucketKey === bucketKey);
+    
+    if (fileIndex < 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'File not found in user record',
+        error: 'FILE_NOT_FOUND'
+      });
+    }
+
+    // Initialize knowledgeBases array if it doesn't exist
+    if (!userDoc.files[fileIndex].knowledgeBases) {
+      userDoc.files[fileIndex].knowledgeBases = [];
+    }
+
+    if (action === 'add') {
+      // Add KB association if not already present
+      const existingKB = userDoc.files[fileIndex].knowledgeBases.find(kb => kb.id === knowledgeBaseId);
+      if (!existingKB) {
+        userDoc.files[fileIndex].knowledgeBases.push({
+          id: knowledgeBaseId,
+          name: knowledgeBaseName || knowledgeBaseId,
+          addedAt: new Date().toISOString()
+        });
+      }
+    } else if (action === 'remove') {
+      // Remove KB association
+      userDoc.files[fileIndex].knowledgeBases = userDoc.files[fileIndex].knowledgeBases.filter(
+        kb => kb.id !== knowledgeBaseId
+      );
+    }
+
+    // Update the file's updatedAt timestamp
+    userDoc.files[fileIndex].updatedAt = new Date().toISOString();
+
+    // Save the updated user document
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+    
+    console.log(`✅ Updated KB association for user ${userId}, file ${fileName}, action: ${action}`);
+    
+    res.json({
+      success: true,
+      message: 'File KB association updated successfully',
+      knowledgeBaseCount: userDoc.files[fileIndex].knowledgeBases.length
+    });
+  } catch (error) {
+    console.error('❌ Error updating file KB association:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to update file KB association: ${error.message}`,
+      error: 'UPDATE_FAILED'
+    });
+  }
+});
+
 // Upload file to DigitalOcean Spaces bucket with user folder support
 app.post('/api/upload-to-bucket', async (req, res) => {
   try {
-    const { fileName, content, fileType, userFolder } = req.body;
+    const { fileName, content, fileType, userFolder, isBinary } = req.body;
     
     if (!fileName || !content) {
       return res.status(400).json({ 
@@ -1094,10 +1562,19 @@ app.post('/api/upload-to-bucket', async (req, res) => {
       }
     });
 
+    // Decode binary data if flagged as binary (e.g., PDFs)
+    let bodyContent = content;
+    if (isBinary && fileType === 'application/pdf') {
+      // Decode base64 to binary Buffer for proper PDF storage
+      // This preserves selectable text and allows proper indexing
+      bodyContent = Buffer.from(content, 'base64');
+      console.log(`📄 Storing PDF as binary (${bodyContent.length} bytes): ${fileName}`);
+    }
+
     const uploadCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: bucketKey,
-      Body: content,
+      Body: bodyContent,
       ContentType: fileType || 'text/plain',
       Metadata: {
         'original-filename': fileName,
@@ -1108,6 +1585,30 @@ app.post('/api/upload-to-bucket', async (req, res) => {
 
     await s3Client.send(uploadCommand);
 //     console.log(`✅ Successfully uploaded file to bucket: ${bucketKey}`);
+    
+    // Send admin notification if file was uploaded to a user folder
+    if (userFolder && userFolder !== 'root') {
+      try {
+        const userId = userFolder.replace('/', ''); // Remove trailing slash
+        const updateData = {
+          userId: userId,
+          fileName: fileName,
+          bucketKey: bucketKey,
+          fileSize: content.length,
+          message: `User ${userId} uploaded file ${fileName} to their bucket`
+        };
+        
+        addUpdateToAllAdmins('user_file_uploaded', updateData);
+        console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
+        
+        // Update session activity for the user who uploaded the file
+        if (req.sessionID) {
+          updateSessionActivity(req.sessionID, 'file_upload');
+        }
+      } catch (notificationError) {
+        console.error(`❌ Error sending file upload notification:`, notificationError.message);
+      }
+    }
     
     res.json({
       success: true,
@@ -1241,6 +1742,7 @@ app.get('/api/admin/events', (req, res) => {
     adminEventClients.delete(clientId);
   });
 });
+
 
 // Helper function to send admin notifications
 function sendAdminNotification(type, data) {
@@ -1566,6 +2068,9 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 app.post('/api/personal-chat', async (req, res) => {
   const startTime = Date.now();
 
+  // Track Public User activity for chat requests (only if not authenticated)
+  trackPublicUserActivity(req);
+
   // Determine the base URL dynamically from the request
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
@@ -1597,9 +2102,36 @@ app.post('/api/personal-chat', async (req, res) => {
     // Combine context with user message for AI, but keep original for chat history
     const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
 
-    // Get current user from request body (frontend) or fall back to session
-    // Prioritize userId over displayName to ensure deep link users are detected correctly
-    let currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || req.session?.userId || 'Public User';
+    // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
+    let currentUser = 'Public User';
+    
+    // Check authentication cookie first
+    const authCookie = req.cookies?.maia_auth;
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        
+        // If cookie is valid and not expired, use the authenticated user
+        if (now < expiresAt && authData.userId) {
+          currentUser = authData.userId;
+          // console.log(`🔐 [personal-chat] Using authenticated user from cookie: ${currentUser}`);
+        }
+      } catch (error) {
+        // Invalid cookie, proceed with other methods
+      }
+    }
+    
+    // Fallback to request body (for deep link users who send currentUser explicitly)
+    if (currentUser === 'Public User' && req.body.currentUser) {
+      currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || currentUser;
+    }
+    
+    // Final fallback to session (legacy support)
+    if (currentUser === 'Public User' && req.session?.userId) {
+      currentUser = req.session.userId;
+    }
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
@@ -2534,13 +3066,16 @@ app.post('/api/save-group-chat', async (req, res) => {
     // console.log(`💾 Attempting to save group chat with ${chatHistory.length} messages`);
 
     // Files are already processed by frontend (base64 conversion done there)
-    // Just ensure they're properly formatted for storage
-    const processedUploadedFiles = (uploadedFiles || []).map(file => {
-      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
-      }
-      return file;
-    });
+    // For database storage, exclude large content to prevent document size limits
+    const processedUploadedFiles = (uploadedFiles || []).map(file => ({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: file.uploadedAt,
+      // Exclude large content fields to prevent Cloudant document size limits
+      // content and originalFile contain large data that shouldn't be stored in chat documents
+    }));
 
     // Generate a secure, random share ID
     const generateShareId = () => {
@@ -2879,13 +3414,16 @@ app.put('/api/group-chats/:chatId', async (req, res) => {
     }
 
     // Files are already processed by frontend (base64 conversion done there)
-    // Just ensure they're properly formatted for storage
-    const processedUploadedFiles = (uploadedFiles || []).map(file => {
-      if (file.type === 'pdf' && file.originalFile && file.originalFile.base64) {
-        // console.log(`📄 PDF with base64 data: ${file.name} (${Math.round(file.originalFile.base64.length / 1024)}KB base64)`);
-      }
-      return file;
-    });
+    // For database storage, exclude large content to prevent document size limits
+    const processedUploadedFiles = (uploadedFiles || []).map(file => ({
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: file.uploadedAt,
+      // Exclude large content fields to prevent Cloudant document size limits
+      // content and originalFile contain large data that shouldn't be stored in chat documents
+    }));
 
     // Update the chat document
     // For existing chats, preserve the original currentUser (owner) and patientOwner, only update content
@@ -3224,11 +3762,9 @@ const doRequest = async (endpoint, options = {}) => {
 const agentApiKeyCache = new Map();
 
 // Agent-specific API keys (created via DigitalOcean API)
-const agentApiKeys = {
-  '2960ae8d-8514-11f0-b074-4e013e2ddde4': 'fnCsOfehzcEemiTKdowBFbjAIf7jSFwz', // agent-08292025
-  '059fc237-7077-11f0-b056-36d958d30bcf': 'QDb19YdQi2adFlF76VLCg7qSk6BzS8sS', // agent-08032025
-  '16c9edf6-2dee-11f0-bf8f-4e013e2ddde4': '6_LUNA_A-MVAxNkuaPbE3FnErmcBF7JK'  // agent-05102025
-};
+// Note: This object is used as a runtime cache. Hardcoded keys are no longer needed
+// as all API keys are now stored in the database and loaded dynamically.
+const agentApiKeys = {};
 
 // Helper function to get agent-specific API key
 const getAgentApiKey = async (agentId) => {
@@ -4072,16 +4608,36 @@ app.get('/api/current-agent', async (req, res) => {
           // Always get fresh data from database for Public User to ensure validation
           const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
           
-          // Agent choice feature is not implemented yet - clear any current agent selections
+          // Allow Public User to have agent selections (only public agents)
           if (userDoc && (userDoc.currentAgentId || userDoc.currentAgentName)) {
-            userDoc.currentAgentId = null;
-            userDoc.currentAgentName = null;
-            userDoc.currentAgentEndpoint = null;
-            userDoc.currentAgentSetAt = null;
-            userDoc.updatedAt = new Date().toISOString();
-            
-            // Save the corrected document
-            await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+            // Validate that the selected agent is a public agent
+            try {
+              const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.currentAgentId}`);
+              const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+              
+              if (agentData && !agentData.name.startsWith('public-')) {
+                // Clear invalid non-public agent selection
+                console.log(`🔧 [current-agent] Clearing invalid non-public agent selection for Public User: ${agentData.name}`);
+                userDoc.currentAgentId = null;
+                userDoc.currentAgentName = null;
+                userDoc.currentAgentEndpoint = null;
+                userDoc.currentAgentSetAt = null;
+                userDoc.updatedAt = new Date().toISOString();
+                
+                // Save the corrected document
+                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+              }
+            } catch (error) {
+              console.error(`❌ [current-agent] Error validating Public User agent selection:`, error);
+              // On error, clear the selection to be safe
+              userDoc.currentAgentId = null;
+              userDoc.currentAgentName = null;
+              userDoc.currentAgentEndpoint = null;
+              userDoc.currentAgentSetAt = null;
+              userDoc.updatedAt = new Date().toISOString();
+              
+              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+            }
           }
           
           // Fix corrupted Public User assigned agent - should only be public agents
@@ -4178,32 +4734,9 @@ app.get('/api/current-agent', async (req, res) => {
     } catch (error) {
       console.error(`❌ Get current agent error:`, error);
       
-      // If agent doesn't exist in DO API, clear it from the database and return null
+      // If agent doesn't exist in DO API, log warning but don't automatically cleanup
       if (error.message.includes('404') || error.message.includes('not_found')) {
-        console.log(`🔧 [CLEANUP] Agent ${agentId} not found in DO API, clearing from database for user ${currentUser}`);
-        
-        try {
-          // Clear the agent from the user's document
-          const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
-          if (userDoc) {
-            const updatedUserDoc = {
-              ...userDoc,
-              assignedAgentId: null,
-              assignedAgentName: null,
-              agentAssignedAt: null,
-              updatedAt: new Date().toISOString()
-            };
-            
-            await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUserDoc);
-            
-            // Clear from cache
-            invalidateCache('users', currentUser);
-            
-            console.log(`✅ [CLEANUP] Cleared non-existent agent from database for user ${currentUser}`);
-          }
-        } catch (cleanupError) {
-          console.error(`❌ [CLEANUP] Failed to clear agent from database:`, cleanupError.message);
-        }
+        console.warn(`⚠️ [AGENT WARNING] Agent ${agentId} not found in DO API for user ${currentUser} - manual cleanup required`);
         
         return res.json({ 
           agent: null, 
@@ -5113,7 +5646,106 @@ app.post('/api/admin/clear-public-user-agent', async (req, res) => {
   }
 });
 
-// POST /api/current-agent endpoint removed - agents are now assigned only by admin process
+// Allow Public User to select public agents
+app.post('/api/current-agent', async (req, res) => {
+  try {
+    const { agentId } = req.body;
+    
+    // Only allow Public User to select agents
+    const authCookie = req.cookies.maia_auth;
+    let currentUser = 'Public User';
+    
+    if (authCookie) {
+      try {
+        const authData = JSON.parse(authCookie);
+        const now = new Date();
+        const expiresAt = new Date(authData.expiresAt);
+        
+        if (now < expiresAt) {
+          currentUser = authData.userId;
+        }
+      } catch (error) {
+        // Invalid cookie, stay as Public User
+      }
+    }
+    
+    // Only allow Public User to select agents
+    if (currentUser !== 'Public User') {
+      return res.status(403).json({ 
+        error: 'Agent selection is only available for Public User. Authenticated users have agents assigned by administrator.' 
+      });
+    }
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'agentId is required' });
+    }
+    
+    // Validate that this is a public agent
+    try {
+      const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+      const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+      
+      if (!agentData) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      if (!agentData.name.startsWith('public-')) {
+        return res.status(403).json({ 
+          error: 'Only public agents can be selected by Public User' 
+        });
+      }
+      
+      // Get or create Public User document
+      let userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
+      if (!userDoc) {
+        userDoc = {
+          _id: 'Public User',
+          userId: 'Public User',
+          type: 'public',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      // Update agent selection
+      userDoc.currentAgentId = agentId;
+      userDoc.currentAgentName = agentData.name;
+      userDoc.currentAgentEndpoint = agentData.deployment?.url ? `${agentData.deployment.url}/api/v1` : null;
+      userDoc.currentAgentSetAt = new Date().toISOString();
+      userDoc.updatedAt = new Date().toISOString();
+      
+      // Save to database
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+      
+      // Update cache
+      setCache('users', 'Public User', userDoc);
+      
+      console.log(`✅ [current-agent] Public User selected agent: ${agentData.name}`);
+      
+      res.json({ 
+        success: true,
+        message: `Public agent "${agentData.name}" selected successfully`,
+        agent: {
+          id: agentId,
+          name: agentData.name,
+          endpoint: userDoc.currentAgentEndpoint
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error validating agent:', error);
+      return res.status(500).json({ 
+        error: `Failed to validate agent: ${error.message}` 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in agent selection:', error);
+    res.status(500).json({ 
+      error: `Failed to select agent: ${error.message}` 
+    });
+  }
+});
 // Users cannot select their own agents to prevent security violations
 
 // ============================================================================
@@ -6011,30 +6643,22 @@ async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http:
             console.log(`📊 [ADMIN NOTIFICATION] [*] Final tokens: ${job.tokens || 'N/A'}`);
             console.log(`📊 [ADMIN NOTIFICATION] [*] Job UUID: ${job.uuid}`);
             
-            // Send SSE notification to admin clients
+            // Send polling notification to admin clients
             try {
-              const notificationResponse = await fetch(`${baseUrl}/api/admin/notify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  type: 'kb_indexing_completed',
-                  data: {
-                    kbId: kbId,
-                    kbName: kbName,
-                    duration: totalTime,
-                    durationMinutes: durationMinutes,
-                    tokens: job.tokens || null,
-                    jobUuid: job.uuid,
-                    message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
-                  }
-                })
-              });
+              const updateData = {
+                kbId: kbId,
+                kbName: kbName,
+                duration: totalTime,
+                durationMinutes: durationMinutes,
+                tokens: job.tokens || null,
+                jobUuid: job.uuid,
+                message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
+              };
               
-              if (notificationResponse.ok) {
-                console.log(`📡 [SSE] [*] Sent KB indexing completion notification to admin`);
-              }
-            } catch (sseError) {
-              console.error(`❌ [SSE] [*] Error sending KB indexing notification:`, sseError.message);
+              addUpdateToAllAdmins('kb_indexing_completed', updateData);
+              console.log(`📡 [POLLING] [*] Added KB indexing completion notification to admin sessions`);
+            } catch (pollingError) {
+              console.error(`❌ [POLLING] [*] Error adding KB indexing notification:`, pollingError.message);
             }
             
             clearInterval(monitorInterval);
@@ -6264,7 +6888,7 @@ If you're unsure about medical advice, recommend consulting with a healthcare pr
 // =============================================================================
 
 // Import passkey routes
-import passkeyRoutes, { setCouchDBClient as setPasskeyCouchDBClient } from './src/routes/passkey-routes.js';
+import passkeyRoutes, { setCouchDBClient as setPasskeyCouchDBClient, setCacheFunctions as setPasskeyCacheFunctions } from './src/routes/passkey-routes.js';
 
 // Pass the CouchDB client to the passkey routes
 setPasskeyCouchDBClient(couchDBClient);
@@ -6318,7 +6942,7 @@ import kbProtectionRoutes, { setCouchDBClient } from './src/routes/kb-protection
 
 // Import admin routes
 import adminRoutes, { setCouchDBClient as setAdminCouchDBClient } from './src/routes/admin-routes.js';
-import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction } from './src/routes/admin-management-routes.js';
+import adminManagementRoutes, { setCouchDBClient as setAdminManagementCouchDBClient, setSessionManager, updateUserActivity, checkAgentDeployments, addToDeploymentTracking, setDoRequestFunction, setCacheFunctions as setAdminCacheFunctions } from './src/routes/admin-management-routes.js';
 
 // Unified cache system using CacheManager
 // The cacheManager is imported from './src/utils/CacheManager.js'
@@ -6355,10 +6979,10 @@ const setCacheFunctions = (routeModule) => {
 };
 
 // Set cache functions for passkey routes
-setCacheFunctions(passkeyRoutes);
+setPasskeyCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
 
 // Set cache functions and DigitalOcean API function for admin-management routes
-setCacheFunctions(adminManagementRoutes);
+setAdminCacheFunctions({ isCacheValid, setCache, getCache, invalidateCache });
 setDoRequestFunction(doRequest);
 
 setAdminCouchDBClient(couchDBClient);
@@ -6375,7 +6999,6 @@ app.use('/api/kb-protection', kbProtectionRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Mount admin-management routes
-
 app.use('/api/admin-management', adminManagementRoutes);
 
 // =============================================================================
@@ -6974,6 +7597,27 @@ app.get('/vue-tooltip-test', (req, res) => {
   });
 });
 
+// Throttled refresh of Users List cache using same function as User Details
+async function refreshUsersListCacheThrottled() {
+  try {
+    console.log('🔄 [STARTUP] Starting processed users cache initialization...');
+    
+    // Import the module to get access to the exported functions
+    const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+    
+    // Call the function to update all processed user cache
+    if (adminRoutesModule.updateAllProcessedUserCache) {
+      await adminRoutesModule.updateAllProcessedUserCache();
+    } else {
+      console.error('❌ [STARTUP] updateAllProcessedUserCache function not available in module');
+    }
+    
+    console.log('✅ [STARTUP] Processed users cache initialization completed');
+  } catch (error) {
+    console.error('❌ [STARTUP] Failed to initialize processed users cache:', error.message);
+  }
+}
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, async () => {
@@ -6986,7 +7630,6 @@ app.listen(PORT, async () => {
   
   // Helper function to ensure bucket folders for all users
 async function ensureAllUserBuckets() {
-    console.log('📁 [STARTUP] Ensuring bucket folders for all users...');
     
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -7040,9 +7683,10 @@ async function ensureAllUserBuckets() {
         totalSize: 0
       };
       
+      // Check bucket status during startup (server is now fully ready)
       try {
-        const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
-        const bucketResponse = await fetch(`${baseUrl}/api/bucket/user-status/${user._id}`, {
+        const bucketUrl = `http://localhost:${PORT}/api/bucket/user-status/${user._id}`;
+        const bucketResponse = await fetch(bucketUrl, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -7056,8 +7700,7 @@ async function ensureAllUserBuckets() {
           };
         }
       } catch (bucketError) {
-        // Bucket check failed, use default values
-        console.log(`⚠️ [STARTUP] Failed to check bucket status for user ${user._id}:`, bucketError.message);
+        // Use default values if bucket check fails
       }
       
       // Determine workflow stage using the same logic as admin-management-routes.js
@@ -7107,7 +7750,6 @@ async function ensureAllUserBuckets() {
     
     // Pre-cache agents for Admin2
     try {
-      console.log('🤖 [STARTUP] Pre-caching agents for Admin2...');
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
       await cacheManager.cacheAgents(agents);
@@ -7116,32 +7758,122 @@ async function ensureAllUserBuckets() {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
-    // Pre-cache knowledge bases for Admin2 - read from existing database
+    // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
     try {
-      console.log('📚 [STARTUP] Loading knowledge bases from database...');
+      console.log('🔄 [STARTUP] Syncing knowledge bases with DigitalOcean API source of truth...');
       
-      // Get all knowledge bases from maia_knowledge_bases database
-      const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+      // 1. Get knowledge bases from DigitalOcean API (source of truth)
+      const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+      const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
-      // Transform to expected format for Admin2
-      const transformedKBs = allKBs.map(doc => ({
-        id: doc.kbId || doc._id,
-        name: doc.kbName || doc.name,
-        description: doc.description || 'No description',
-        isProtected: !!doc.isProtected,
-        owner: doc.owner || null,
-        createdAt: doc.createdAt || doc.timestamp
-      })).filter(kb => !kb.id.startsWith('_design/'));
+      // 2. Get existing protection metadata from local database
+      const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+      
+      const existingKBsMap = {};
+      for (const doc of existingKBs) {
+        if (doc.kbId || doc.id || doc._id) {
+          existingKBsMap[doc.kbId || doc.id || doc._id] = doc;
+        } else {
+          console.log(`⚠️ [STARTUP] Skipping document with missing ID fields: _id=${doc._id}, kbId=${doc.kbId}, id=${doc.id}`);
+        }
+      }
+      
+      // 3. Check for inconsistencies and update database
+      const doKBIds = new Set(doKBs.map(kb => kb.uuid));
+      const existingKBIds = new Set(Object.keys(existingKBsMap));
+      
+      // Find KBs that exist in local DB but not in DO (deleted from DO)
+      const deletedKBIds = [...existingKBIds].filter(id => !doKBIds.has(id));
+      // Find KBs that exist in DO but not in local DB (new KBs created via DO dashboard)
+      const newKBIds = [...doKBIds].filter(id => !existingKBIds.has(id));
+      
+      let dbUpdated = false;
+      
+      // Remove deleted KBs from local database
+      if (deletedKBIds.length > 0) {
+        console.log(`🔄 [STARTUP] Updating database to match DO API - removing ${deletedKBIds.length} deleted knowledge bases`);
+        console.log(`🗑️ [STARTUP] KBs to be removed: ${deletedKBIds.join(', ')}`);
+        for (const kbId of deletedKBIds) {
+          try {
+            const kbName = existingKBsMap[kbId]?.kbName || 'Unknown';
+            console.log(`🗑️ [STARTUP] Removing KB: ${kbName} (${kbId})`);
+            await couchDBClient.deleteDocument('maia_knowledge_bases', existingKBsMap[kbId]._id);
+            dbUpdated = true;
+          } catch (deleteError) {
+            console.warn(`⚠️ [STARTUP] Failed to remove deleted KB ${kbId}:`, deleteError.message);
+          }
+        }
+      }
+      
+      // Add new KBs to local database (with default protection settings)
+      if (newKBIds.length > 0) {
+        console.log(`🔄 [STARTUP] Updating database to match DO API - adding ${newKBIds.length} new knowledge bases`);
+        for (const kbId of newKBIds) {
+          const doKB = doKBs.find(kb => kb.uuid === kbId);
+          if (doKB) {
+            try {
+              const protectionDoc = {
+                _id: `kb_${kbId}`,
+                kbId: kbId,
+                kbName: doKB.name,
+                owner: null, // Will be set when user attaches KB to their agent
+                isProtected: false, // Default to public
+                createdAt: doKB.created_at || new Date().toISOString()
+              };
+              await couchDBClient.saveDocument('maia_knowledge_bases', protectionDoc);
+              existingKBsMap[kbId] = protectionDoc;
+              dbUpdated = true;
+            } catch (saveError) {
+              console.warn(`⚠️ [STARTUP] Failed to add new KB ${kbId}:`, saveError.message);
+            }
+          }
+        }
+      }
+      
+      if (dbUpdated) {
+        console.log('✅ [STARTUP] Database updated to match DigitalOcean API');
+      }
+      
+      // 4. Merge DO KBs with protection info for caching
+      const transformedKBs = doKBs.map(kb => {
+        const protection = existingKBsMap[kb.uuid] || {};
+        return {
+          id: kb.uuid,
+          name: kb.name,
+          description: kb.description || 'No description',
+          isProtected: !!protection.isProtected,
+          owner: protection.owner || null,
+          createdAt: kb.created_at || kb.createdAt
+        };
+      });
       
       await cacheManager.cacheKnowledgeBases(transformedKBs);
-      console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from database and cached for Admin2`);
+      console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from DigitalOcean API and cached for Admin2`);
+      
     } catch (error) {
-      console.warn('⚠️ [STARTUP] Failed to load knowledge bases from database:', error.message);
+      console.warn('⚠️ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
+      
+      // Fallback to local database if DO API fails
+      try {
+        const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
+        const transformedKBs = allKBs.map(doc => ({
+          id: doc.kbId || doc._id,
+          name: doc.kbName || doc.name,
+          description: doc.description || 'No description',
+          isProtected: !!doc.isProtected,
+          owner: doc.owner || null,
+          createdAt: doc.createdAt || doc.timestamp
+        })).filter(kb => !kb.id.startsWith('_design/'));
+        
+        await cacheManager.cacheKnowledgeBases(transformedKBs);
+        console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from database (fallback) and cached for Admin2`);
+      } catch (fallbackError) {
+        console.warn('⚠️ [STARTUP] Failed to load knowledge bases from database (fallback):', fallbackError.message);
+      }
     }
     
     // Pre-cache models for Admin2
     try {
-      console.log('🤖 [STARTUP] Pre-caching models for Admin2...');
       const modelsResponse = await doRequest('/v2/gen-ai/models');
       const models = modelsResponse.models || modelsResponse.data?.models || [];
       await cacheManager.cacheModels(models);
@@ -7160,7 +7892,7 @@ async function ensureAllUserBuckets() {
     
     try {
       await Promise.all(bucketChecks);
-      console.log(`✅ [STARTUP] Completed bucket checks for ${bucketChecks.length} users`);
+      // Bucket checks completed - no logging needed
     } catch (error) {
       console.error('❌ [STARTUP] Error ensuring user buckets:', error);
     }
@@ -7176,46 +7908,9 @@ async function ensureAllUserBuckets() {
         return;
       }
 
-      // First check current status
-      const baseUrl = process.env.ORIGIN || 'http://localhost:3001';
-      const statusResponse = await fetch(`${baseUrl}/api/bucket/user-status/${userId}`);
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
-        
-        // If user has no folder, create one
-        if (!statusData.hasFolder) {
-          console.log(`📁 [STARTUP] Creating bucket folder for ${userId} (no folder found)`);
-          const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId })
-          });
-          
-          if (createResponse.ok) {
-            const createData = await createResponse.json();
-            // Bucket created successfully
-            console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
-          }
-        } else {
-          // User already has folder, just update cache
-          // Bucket status updated
-        }
-        return;
-      }
-      
-      // If status check failed, try to create folder anyway
-      console.log(`📁 [STARTUP] Status check failed for ${userId}, attempting to create folder`);
-      const createResponse = await fetch(`${baseUrl}/api/bucket/ensure-user-folder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      
-      if (createResponse.ok) {
-        const createData = await createResponse.json();
-        // Bucket created successfully
-        console.log(`✅ [STARTUP] Created bucket folder for ${userId}`);
-      }
+      // Skip HTTP requests during startup to avoid ECONNREFUSED errors
+      // Bucket status checks will happen on-demand when users access the admin panel
+        // Skip bucket status check during startup - no logging needed
     } catch (error) {
       console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
     }
@@ -7248,9 +7943,37 @@ async function ensureAllUserBuckets() {
     }
     
     // Ensure bucket folders for all users
-    console.log('🔄 [STARTUP] Ensuring bucket folders for all users...');
     await ensureAllUserBuckets();
-    console.log('✅ [STARTUP] Bucket folder checks completed');
+    
+    // Check session logs database
+    try {
+      const sessionLogs = await cacheManager.getAllDocuments(couchDBClient, 'maia_session_logs');
+      console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
+    } catch (error) {
+      if (error.message.includes('Database does not exist')) {
+        console.log(`📊 [STARTUP] Session logs database will be created on first use`);
+      } else {
+        console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
+      }
+    }
+    
+    // CRITICAL: Initialize processed users cache during startup
+    console.log(`🔄 [STARTUP] Initializing processed users cache...`);
+    try {
+      // Import the module to get access to the exported functions
+      const adminRoutesModule = await import('./src/routes/admin-management-routes.js');
+      
+      if (adminRoutesModule.updateAllProcessedUserCache) {
+        await adminRoutesModule.updateAllProcessedUserCache();
+        console.log(`✅ [STARTUP] Processed users cache initialization completed successfully`);
+      } else {
+        throw new Error('updateAllProcessedUserCache function not available');
+      }
+    } catch (error) {
+      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize processed users cache:`, error.message);
+      console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
+      process.exit(1);
+    }
     
     // Deployment monitoring will be started automatically when agents are created
     // No need to start it on server startup since it only runs when there are active deployments

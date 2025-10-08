@@ -112,41 +112,51 @@ export function useTranscript() {
       appState
     )
 
+    const sessionContent = generateSessionInfo(appState);
+    const uploadedFilesContent = generateUploadedFiles(appState.uploadedFiles);
+    const conversationContent = generateConversation(appState.chatHistory);
+    const epochsContent = generateEpochs(appState.timelineChunks);
+    const auditContent = generateAuditSection();
+    const signatureContent = generateSignature(appState.userName);
+
     const sections: TranscriptSection[] = [
       {
         type: 'session',
-        content: generateSessionInfo(appState)
+        content: sessionContent
       },
       {
         type: 'uploadedFiles',
-        content: generateUploadedFiles(appState.uploadedFiles)
+        content: uploadedFilesContent
       },
       {
         type: 'conversation',
-        content: generateConversation(appState.chatHistory)
+        content: conversationContent
       },
       {
         type: 'context',
-        content: generateEpochs(appState.timelineChunks)
+        content: epochsContent
       },
       {
         type: 'audit',
-        content: generateAuditSection()
+        content: auditContent
       },
       {
         type: 'signature',
-        content: generateSignature(appState.userName)
+        content: signatureContent
       }
     ]
 
     if (includeSystem) {
+      const timelineContent = generateTimeline(appState.timeline, appState.timelineChunks);
       sections.push({
         type: 'timeline',
-        content: generateTimeline(appState.timeline, appState.timelineChunks)
+        content: timelineContent
       })
     }
 
-    return sections.map((section) => section.content).join('\n\n') + '\n'
+    const finalTranscript = sections.map((section) => section.content).join('\n\n') + '\n';
+    
+    return finalTranscript;
   }
 
   return {

@@ -1,6 +1,8 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import { cacheManager } from '../utils/CacheManager.js';
+import { activeSessions, createSession, removeSession, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity } from '../../server.js';
+import { requireAdminAuth } from './admin-management-routes.js';
 
 const router = express.Router();
 
@@ -295,7 +297,7 @@ router.post('/request-approval', async (req, res) => {
               const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
               if (userDoc) {
                 userDoc.email = email.trim();
-                userDoc.workflowStage = 'awaiting_approval'; // Update workflow stage
+                userDoc.workflowStage = 'request_email_sent'; // Update workflow stage to show email was sent
                 await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
               }
             }
@@ -428,5 +430,224 @@ router.post('/contact-support', async (req, res) => {
     });
   }
 });
+
+// Session management API endpoints
+router.get('/sessions', requireAdminAuth, (req, res) => {
+  try {
+    const { page = 1, rowsPerPage = 10, sortBy = 'lastActivity', descending = 'true', filter } = req.query;
+    
+    let processedSessions = [...activeSessions];
+    
+    // Apply filtering if provided
+    if (filter) {
+      const filterLower = filter.toLowerCase();
+      processedSessions = processedSessions.filter(session => 
+        session.userId?.toLowerCase().includes(filterLower) ||
+        session.username?.toLowerCase().includes(filterLower) ||
+        session.userType?.toLowerCase().includes(filterLower) ||
+        session.ipAddress?.toLowerCase().includes(filterLower)
+      );
+    }
+    
+    // Apply sorting
+    if (sortBy) {
+      processedSessions.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        
+        // Handle date strings
+        if (sortBy === 'lastActivity' || sortBy === 'createdAt') {
+          aVal = new Date(aVal || 0);
+          bVal = new Date(bVal || 0);
+        }
+        
+        // Handle strings
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = (bVal || '').toLowerCase();
+        }
+        
+        if (descending === 'true') {
+          return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+        } else {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        }
+      });
+    }
+    
+    // Apply pagination
+    const totalCount = processedSessions.length;
+    const startIndex = (page - 1) * rowsPerPage;
+    const endIndex = startIndex + parseInt(rowsPerPage);
+    const paginatedSessions = rowsPerPage === -1 ? processedSessions : processedSessions.slice(startIndex, endIndex);
+    
+    res.json({
+      sessions: paginatedSessions,
+      total: totalCount,
+      byType: {
+        private: activeSessions.filter(s => s.userType === 'private').length,
+        admin: activeSessions.filter(s => s.userType === 'admin').length,
+        deepLink: activeSessions.filter(s => s.userType === 'deep_link').length,
+        public: activeSessions.filter(s => s.userType === 'public').length
+      }
+    });
+  } catch (error) {
+    console.error('Failed to get sessions:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+// Create a new session
+router.post('/sessions', requireAdminAuth, (req, res) => {
+  try {
+    const { userType, userData } = req.body;
+    
+    if (!userType || !userData) {
+      return res.status(400).json({ error: 'userType and userData are required' });
+    }
+    
+    const session = createSession(userType, userData, req);
+    
+    res.json({
+      success: true,
+      sessionId: session.sessionId,
+      userType: session.userType,
+      userId: session.userId,
+      username: session.username,
+      createdAt: session.createdAt
+    });
+  } catch (error) {
+    console.error('Failed to create session:', error);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+router.delete('/sessions/:sessionId', requireAdminAuth, (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = activeSessions.find(s => s.sessionId === sessionId);
+    
+    if (session) {
+      removeSession(sessionId);
+      res.json({ success: true, message: 'Session destroyed' });
+    } else {
+      res.status(404).json({ error: 'Session not found' });
+    }
+  } catch (error) {
+    console.error('Failed to destroy session:', error);
+    res.status(500).json({ error: 'Failed to destroy session' });
+  }
+});
+
+router.get('/session-logs', requireAdminAuth, async (req, res) => {
+  try {
+    // TODO: Implement session logs retrieval from maia_session_logs database
+    res.json({ 
+      logs: [], 
+      total: 0,
+      message: 'Session logs endpoint ready - database integration pending'
+    });
+  } catch (error) {
+    console.error('Failed to get session logs:', error);
+    res.status(500).json({ error: 'Failed to get session logs' });
+  }
+});
+
+
+// Polling endpoint for real-time updates
+let staleSessionRejectionCount = 0;
+
+router.get('/poll/updates', requireAdminAuth, (req, res) => {
+  try {
+    const { sessionId, lastPoll } = req.query;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId parameter required' });
+    }
+    
+    // Extract session creation time from sessionId (format: sess_TIMESTAMP_random)
+    const sessionTimestamp = parseInt(sessionId.split('_')[1]);
+    const serverStartTime = parseInt(process.env.SERVER_START_TIME || '0');
+    
+    // If session was created before server restart, reject it
+    if (sessionTimestamp < serverStartTime) {
+      staleSessionRejectionCount++;
+      // Only log every 10th rejection to reduce noise
+      if (staleSessionRejectionCount % 10 === 1) {
+      }
+      return res.status(410).json({ 
+        error: 'Session expired - server restarted', 
+        code: 'SESSION_EXPIRED',
+        message: 'Please refresh the page to reconnect'
+      });
+    }
+    
+    const result = getPendingUpdates(sessionId, lastPoll);
+    
+    // Show polling activity with dots (only after first poll)
+    if (!global.firstPollShown) {
+      global.firstPollShown = true;
+    }
+    
+    // Show dots for ongoing polling activity
+    if (result.updates.length > 0) {
+      process.stdout.write('.');
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to get pending updates:', error);
+    res.status(500).json({ error: 'Failed to get pending updates' });
+  }
+});
+
+// Test endpoint to add sample updates
+router.post('/poll/test-update', requireAdminAuth, (req, res) => {
+  try {
+    const { sessionId, updateType = 'test_update', updateData = {} } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId required' });
+    }
+    
+    const update = addUpdateToSession(sessionId, updateType, {
+      message: 'This is a test update',
+      timestamp: new Date().toISOString(),
+      ...updateData
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Test update added',
+      update: update
+    });
+  } catch (error) {
+    console.error('Failed to add test update:', error);
+    res.status(500).json({ error: 'Failed to add test update' });
+  }
+});
+
+// Test endpoint to track Public User activity
+router.post('/test-public-user-tracking', requireAdminAuth, (req, res) => {
+  try {
+    const session = trackPublicUserActivity(req);
+    
+    res.json({ 
+      success: true, 
+      message: 'Public User activity tracked',
+      session: {
+        sessionId: session.sessionId,
+        userType: session.userType,
+        userId: session.userId,
+        lastActivity: session.lastActivity
+      }
+    });
+  } catch (error) {
+    console.error('Failed to track Public User activity:', error);
+    res.status(500).json({ error: 'Failed to track Public User activity' });
+  }
+});
+
+// activeSessions is imported from server.js - no need to declare it again
 
 export default router;

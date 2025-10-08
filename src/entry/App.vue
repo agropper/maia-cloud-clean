@@ -33,7 +33,7 @@ const isTooltipTest = computed(() => {
 
 // Check if we're on the admin2 route (migrated from /admin)
 const isAdmin2Route = computed(() => {
-  return window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register'
+  return window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register' || window.location.pathname === '/admin2/signin'
 })
 
 // Check if we're on the admin2 user details route

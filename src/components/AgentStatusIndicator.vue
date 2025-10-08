@@ -157,16 +157,16 @@ export default defineComponent({
       // Skip validation during sign-in transitions to prevent race conditions
       if (currentUserId === 'Public User') {
         // Public User can only see agents that start with 'public-'
-        if (!agentName.startsWith('public-')) {
+        if (!agentName?.startsWith('public-')) {
           console.error(`🚨 SECURITY VIOLATION: Public User assigned agent ${agentName} does not start with 'public-'`);
           throw new Error(`Security violation: Public User can only access public agents. Agent: ${agentName}`);
         }
-      } else if (currentUserId !== 'Unknown User' && !currentUserId.startsWith('deep_link_')) {
+      } else if (currentUserId !== 'Unknown User' && !currentUserId?.startsWith('deep_link_')) {
         // Authenticated users can only see agents that match their user ID pattern
         const expectedPrefix = `${currentUserId}-agent-`;
         
         // Only validate if the agent name doesn't start with 'public-' (indicating it's not a stale Public User agent)
-        if (!agentName.startsWith('public-') && !agentName.startsWith(expectedPrefix)) {
+        if (!agentName?.startsWith('public-') && !agentName?.startsWith(expectedPrefix)) {
           console.error(`🚨 SECURITY VIOLATION: User ${currentUserId} assigned agent ${agentName} does not match expected pattern ${expectedPrefix}`);
           throw new Error(`Security violation: Agent assignment does not match user. Expected pattern: ${expectedPrefix}`);
         }

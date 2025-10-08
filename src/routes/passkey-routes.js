@@ -12,6 +12,14 @@ import { cacheManager } from '../utils/CacheManager.js';
 const router = express.Router();
 let couchDBClient = null;
 
+// Helper function to get the base URL for internal API calls
+const getBaseUrl = () => {
+  // For internal server-to-server calls, always use localhost
+  // This prevents issues in cloud environments where external URLs don't work for internal calls
+  const port = process.env.PORT || 3001;
+  return `http://localhost:${port}`;
+};
+
 // Function to set the CouchDB client (will be called from server.js)
 export const setCouchDBClient = (client) => {
   // console.log("🔍 Setting CouchDB client for passkey routes:", !!client);
@@ -213,8 +221,13 @@ router.post("/register", async (req, res) => {
 
     if (existingUser) {
       
-      // If user already has a passkey, check for admin replacement or reset flag
-      if (existingUser.credentialID) {
+      // If user already has a valid passkey, check for admin replacement or reset flag
+      const hasValidPasskey = !!(existingUser.credentialID && 
+        existingUser.credentialID !== 'test-credential-id-wed271' && 
+        existingUser.credentialPublicKey && 
+        existingUser.counter !== undefined);
+      
+      if (hasValidPasskey) {
         // Check if user has an active passkey reset flag
         if (existingUser.passkeyResetFlag && existingUser.passkeyResetExpiry) {
           const resetExpiry = new Date(existingUser.passkeyResetExpiry);
@@ -246,9 +259,14 @@ router.post("/register", async (req, res) => {
           console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
-          // Admin override: Allow admin to reset any user's passkey
-          console.log("✅ Admin override: Allowing passkey reset for user:", userId);
-          // Continue with registration (replace existing passkey)
+          // SECURITY: Admin override removed - use proper reset endpoint instead
+          console.log("❌ SECURITY: Admin override not allowed in registration endpoint");
+          return res.status(400).json({ 
+            error: "Admin passkey reset must use proper admin endpoint. Contact admin to reset your passkey.",
+            hasExistingPasskey: true,
+            userId: userId,
+            securityNote: "Use /admin-management/users/:userId/reset-passkey endpoint"
+          });
         } else {
           console.log("❌ User already has a passkey:", userId);
           return res.status(400).json({ 
@@ -258,8 +276,8 @@ router.post("/register", async (req, res) => {
           });
         }
       } else {
-        // If user exists but doesn't have a passkey, allow registration
-        console.log("✅ User exists but no passkey, allowing registration:", userId);
+        // If user exists but doesn't have a valid passkey, allow registration
+        console.log("✅ User exists but no valid passkey, allowing registration:", userId);
       }
     }
 
@@ -396,15 +414,63 @@ router.post("/register-verify", async (req, res) => {
 
       // Save the updated user document to Cloudant
       await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
+      
+      // Invalidate user cache to ensure admin panel shows updated passkey status
+      cacheManager.invalidateCache('users', updatedUser._id);
 
       // Set session data for authenticated user (same as authenticate-verify)
       req.session.userId = updatedUser._id;
       req.session.username = updatedUser._id;
       req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
-      req.session.expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+      req.session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+
+      // Add session to activeSessions array for admin panel tracking
+      const { createSession } = await import('../../server.js');
+      createSession('private', {
+        userId: updatedUser._id,
+        username: updatedUser._id,
+        userEmail: updatedUser.email || null
+      }, req);
 
       console.log("✅ Passkey registration successful for user:", userId);
+
+      // Ensure user has a bucket folder
+      try {
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: updatedUser._id })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          if (!bucketData.folderExists) {
+            console.log(`✅ [BUCKET] Created bucket folder for new user: ${updatedUser._id}`);
+          }
+        } else {
+          console.warn(`⚠️ [BUCKET] Failed to ensure bucket folder for new user ${updatedUser._id}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.warn(`⚠️ [BUCKET] Error ensuring bucket folder for new user ${updatedUser._id}:`, bucketError.message);
+      }
+
+      // Send real-time notification to admin panel about new user registration
+      try {
+        const { addUpdateToAllAdmins } = await import('../../server.js');
+        
+        const updateData = {
+          userId: updatedUser._id,
+          displayName: updatedUser.displayName || updatedUser._id,
+          workflowStage: updatedUser.workflowStage || 'no_request_yet',
+          message: `New user ${updatedUser.displayName || updatedUser._id} registered with passkey`
+        };
+        
+        addUpdateToAllAdmins('user_registered', updateData);
+        console.log(`📡 [POLLING] [*] Added user registration notification to admin sessions`);
+      } catch (pollingError) {
+        console.error(`❌ [POLLING] [*] Error adding user registration notification:`, pollingError.message);
+      }
 
       res.json({
         success: true,
@@ -552,18 +618,46 @@ router.post("/authenticate-verify", async (req, res) => {
       req.session.displayName = updatedUser.displayName || updatedUser._id;
       req.session.authenticatedAt = new Date().toISOString();
 
+      // Add session to activeSessions array for admin panel tracking
+      const { createSession } = await import('../../server.js');
+      createSession('private', {
+        userId: updatedUser._id,
+        username: updatedUser._id,
+        userEmail: updatedUser.email || null
+      }, req);
+
       console.log(`✅ Session created for user: ${updatedUser._id}`);
+      
+      // Ensure user has a bucket folder
+      try {
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: updatedUser._id })
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          if (!bucketData.folderExists) {
+            console.log(`✅ [BUCKET] Created bucket folder for authenticated user: ${updatedUser._id}`);
+          }
+        } else {
+          console.warn(`⚠️ [BUCKET] Failed to ensure bucket folder for user ${updatedUser._id}: ${bucketResponse.status}`);
+        }
+      } catch (bucketError) {
+        console.warn(`⚠️ [BUCKET] Error ensuring bucket folder for user ${updatedUser._id}:`, bucketError.message);
+      }
       
       // Set authentication cookie with user info and timestamp
       const authData = {
         userId: updatedUser._id,
         displayName: updatedUser.displayName || updatedUser._id,
         authenticatedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       };
       
       res.cookie('maia_auth', JSON.stringify(authData), {
-        maxAge: 10 * 60 * 1000, // 10 minutes
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
@@ -699,7 +793,7 @@ router.get("/auth-status", async (req, res) => {
       try {
         const authData = JSON.parse(authCookie);
         
-        // Check if cookie is still valid (less than 10 minutes old)
+        // Check if cookie is still valid (less than 24 hours old)
         const now = new Date();
         const expiresAt = new Date(authData.expiresAt);
         const timeToExpiry = Math.round((expiresAt - now) / 1000 / 60); // minutes
@@ -718,6 +812,17 @@ router.get("/auth-status", async (req, res) => {
     // Note: Removed session fallback - we now use cookie-based auth only
     
     if (userId) {
+      // Check if this is an admin user - they should not be authenticated as regular users on main app
+      if (userId === 'admin') {
+        // Admin users should access main app as Public User, not as authenticated admin
+        res.json({ 
+          authenticated: false, 
+          message: "Admin users access main app as Public User",
+          userType: "admin_as_public"
+        });
+        return;
+      }
+      
       // Check if this is a deep link user - they should not be authenticated on main app
       if (userId.startsWith('deep_link_')) {
         // Store deepLinkId before destroying session
@@ -747,8 +852,26 @@ router.get("/auth-status", async (req, res) => {
         userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
       }
       if (userDoc) {
-        // Echo current user to backend console
-        console.log(`✅ Session: ${userDoc._id}`);
+        // Echo current user to backend console (only log once per startup)
+        if (!global.loggedUsers || !global.loggedUsers.has(userDoc._id)) {
+          if (!global.loggedUsers) global.loggedUsers = new Set();
+          global.loggedUsers.add(userDoc._id);
+          console.log(`✅ Session: ${userDoc._id}`);
+        }
+        
+        // Check if user already has an active session, if not create one
+        const { activeSessions, createSession } = await import('../../server.js');
+        const existingSession = activeSessions.find(s => s.userId === userDoc._id && s.userType === 'private');
+        
+        if (!existingSession) {
+          // Create session for user who has valid cookie but no active session entry
+          createSession('private', {
+            userId: userDoc._id,
+            username: userDoc._id,
+            userEmail: userDoc.email || null
+          }, req);
+          console.log(`[SESSION RESTORE] Created session for existing user: ${userDoc._id}`);
+        }
         
         res.json({
           authenticated: true,
@@ -832,6 +955,113 @@ router.post("/logout", async (req, res) => {
   } catch (error) {
     console.error("❌ Error during logout:", error);
     res.status(500).json({ error: "Failed to logout" });
+  }
+});
+
+// Admin-specific authentication endpoint (separate from regular user auth)
+router.post("/admin-authenticate-verify", async (req, res) => {
+  // Determine the base URL dynamically from the request
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+  const baseUrl = `${protocol}://${host}`;
+
+  try {
+    const { userId, response } = req.body;
+
+    if (!userId || !response) {
+      return res
+        .status(400)
+        .json({ error: "User ID and response are required" });
+    }
+
+    // Verify this is an admin user
+    const userDoc = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!userDoc.isAdmin) {
+      return res.status(403).json({ error: "Admin privileges required" });
+    }
+
+    // Verify the authentication response
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge: userDoc.challenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      credential: {
+        publicKey: isoBase64URL.toBuffer(userDoc.credentialPublicKey),
+        id: userDoc.credentialID,
+        counter: userDoc.counter || 0,
+      },
+    });
+
+    if (verification.verified) {
+      // Update counter
+      const updatedUser = {
+        ...userDoc,
+        counter: verification.authenticationInfo.newCounter,
+        challenge: undefined, // Remove challenge
+        updatedAt: new Date().toISOString(),
+      };
+
+      await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
+
+      console.log(`✅ Admin session created for user: ${updatedUser._id}`);
+      
+      // Set admin-specific authentication cookie (NOT regular session)
+      const adminAuthData = {
+        userId: updatedUser._id,
+        displayName: updatedUser.displayName || updatedUser._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      
+      res.cookie('maia_admin_auth', JSON.stringify(adminAuthData), {
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        path: '/' // Admin cookie available for all routes (admin routes will check it)
+      });
+
+      res.json({
+        success: true,
+        message: "Admin authentication successful",
+        user: {
+          userId: updatedUser._id,
+          displayName: updatedUser.displayName || updatedUser._id,
+          isAdmin: true,
+        },
+      });
+    } else {
+      console.error("❌ Admin authentication verification failed for user:", userId);
+      res.status(400).json({ error: "Authentication verification failed" });
+    }
+  } catch (error) {
+    console.error("❌ Admin authentication error:", error);
+    res.status(500).json({ error: "Failed to verify admin authentication" });
+  }
+});
+
+// Admin-specific logout endpoint
+router.post("/admin-logout", async (req, res) => {
+  try {
+    console.log(`🚨 ADMIN LOGOUT ENDPOINT HIT at ${new Date().toISOString()}`);
+    
+    // Clear only the admin cookie (not regular user session)
+    res.clearCookie('maia_admin_auth');
+    console.log(`🍪 [ADMIN LOGOUT] Cleared admin auth cookie`);
+    
+    res.json({ 
+      success: true, 
+      message: "Admin logged out successfully",
+      consoleMessage: `🔍 Admin Logout: Admin auth cookie cleared | Admin panel access revoked`
+    });
+  } catch (error) {
+    console.error("❌ Error during admin logout:", error);
+    res.status(500).json({ error: "Failed to logout admin" });
   }
 });
 
