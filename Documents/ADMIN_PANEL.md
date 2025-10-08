@@ -309,3 +309,29 @@ agent_assigned - Agent created and deployed
 
 =====================================================
 
+## Cache Synchronization Fix (2025-10-08)
+
+**Issue Identified:**
+New user registrations were not appearing in the Admin2 users list even after page reload, despite being visible in the User Details page.
+
+**Root Cause:**
+The Admin2 users list uses an in-memory cache (`processedUsersCache['all']`) that was only populated at server startup. When new users registered via passkey, they were saved to the database but the cache was not updated. This created a discrepancy:
+- **Users List** (`/api/admin-management/users`): Read from stale in-memory cache
+- **User Details** (`/api/admin-management/users/:userId`): Read directly from database (always fresh)
+
+**Fix Implementation:**
+1. **Updated `updateProcessedUserCache()`** in `admin-management-routes.js`:
+   - Fixed bug where new users weren't added to the `'all'` cache array
+   - Previously only updated existing users (when `userIndex !== -1`)
+   - Now adds new users with `allUsersCache.push(processedUser)` when not found
+   - Added debug logging: "Added new user to 'all' cache" vs "Updated existing user in 'all' cache"
+
+2. **Updated passkey registration** in `passkey-routes.js`:
+   - After successful registration, calls `updateProcessedUserCache(userId)`
+   - Ensures new user is immediately added to Admin2 cache
+   - Cache update happens before real-time notification for consistency
+   - Wrapped in try/catch to prevent registration failure if cache update fails
+
+**Result:**
+New user registrations now appear in the Admin2 users list immediately without requiring server restart. The cache stays synchronized with the database for all user operations (registration, approval, agent assignment).
+
