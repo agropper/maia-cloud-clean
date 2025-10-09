@@ -8047,12 +8047,34 @@ async function ensureAllUserBuckets() {
       
       // Filter out non-user documents
       const filteredUsers = allUsers.filter(user => {
-        if (!user._id) return false;
-        if (user._id.startsWith('_design/')) return false;
-        if (user._id === 'maia_config') return false;
-        if (user._id === 'Public User' || user._id === 'wed271') return true; // Always include these
-        if (user._id.startsWith('deep_link_')) return true; // Include deep link users
-        if (user.isAdmin) return false;
+        // Debug each user
+        const userId = user._id || user.userId;
+        
+        if (!user._id) {
+          console.log(`  ❌ Excluding (no _id): ${userId}`);
+          return false;
+        }
+        if (user._id.startsWith('_design/')) {
+          console.log(`  ❌ Excluding (design doc): ${user._id}`);
+          return false;
+        }
+        if (user._id === 'maia_config') {
+          console.log(`  ❌ Excluding (config): ${user._id}`);
+          return false;
+        }
+        if (user._id === 'Public User' || user._id === 'wed271') {
+          console.log(`  ✅ Including (special user): ${user._id}`);
+          return true;
+        }
+        if (user._id.startsWith('deep_link_')) {
+          console.log(`  ✅ Including (deep link): ${user._id}`);
+          return true;
+        }
+        if (user.isAdmin) {
+          console.log(`  ❌ Excluding (admin): ${user._id}`);
+          return false;
+        }
+        console.log(`  ✅ Including (regular user): ${user._id}`);
         return true;
       });
       console.log(`📊 [STARTUP] Filtered to ${filteredUsers.length} user documents`);
