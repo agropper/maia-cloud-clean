@@ -1601,6 +1601,9 @@ app.post('/api/upload-to-bucket', async (req, res) => {
         addUpdateToAllAdmins('user_file_uploaded', updateData);
         console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
         
+        // Update cache with fresh bucket status after upload
+        await updateUserBucketCache(userId);
+        
         // Update session activity for the user who uploaded the file
         if (req.sessionID) {
           updateSessionActivity(req.sessionID, 'file_upload');
@@ -1895,6 +1898,56 @@ app.post('/api/bucket/ensure-user-folder', async (req, res) => {
   }
 });
 
+// Helper function to update user's bucket status in cache after file operations
+async function updateUserBucketCache(userId) {
+  try {
+    // Fetch fresh user document from database
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      console.warn(`⚠️ [CACHE] User ${userId} not found for bucket cache update`);
+      return;
+    }
+
+    // Fetch fresh bucket status from DigitalOcean API
+    const bucketData = await getBucketStatusForUser(userId);
+    
+    const bucketStatus = {
+      hasFolder: bucketData.hasFolder || false,
+      fileCount: bucketData.fileCount || 0,
+      totalSize: bucketData.totalSize || 0
+    };
+
+    // Create updated user object with fresh bucket status
+    const userWithBucket = {
+      ...userDoc,
+      bucketStatus: bucketStatus
+    };
+
+    // Update individual user cache
+    setCache('users', userId, userWithBucket);
+
+    // Update this user in the 'all' cache array (targeted update)
+    const allUsersCache = getCache('users', 'all');
+    if (allUsersCache && Array.isArray(allUsersCache)) {
+      const userIndex = allUsersCache.findIndex(u => (u._id || u.userId) === userId);
+      if (userIndex !== -1) {
+        allUsersCache[userIndex] = userWithBucket;
+        setCache('users', 'all', allUsersCache);
+        console.log(`✅ [CACHE] Updated bucket status for ${userId} in 'all' cache (${bucketStatus.fileCount} files)`);
+      } else {
+        // User not in 'all' cache (shouldn't happen, but handle it)
+        allUsersCache.push(userWithBucket);
+        setCache('users', 'all', allUsersCache);
+        console.log(`✅ [CACHE] Added ${userId} to 'all' cache with bucket status (${bucketStatus.fileCount} files)`);
+      }
+    }
+
+    console.log(`✅ [CACHE] Updated bucket cache for user ${userId}: ${bucketStatus.fileCount} files, ${bucketStatus.totalSize} bytes`);
+  } catch (error) {
+    console.error(`❌ [CACHE] Failed to update bucket cache for user ${userId}:`, error.message);
+  }
+}
+
 // Helper function to get bucket status (reusable for startup and API)
 async function getBucketStatusForUser(userId) {
   try {
@@ -2051,6 +2104,10 @@ app.delete('/api/delete-bucket-file', async (req, res) => {
 
     await s3Client.send(deleteCommand);
 //     console.log(`✅ Successfully deleted file from bucket: ${key}`);
+    
+    // Update cache with fresh bucket status after deletion
+    const userId = key.split('/')[0]; // Extract user ID from key (e.g., "wed108/file.pdf" -> "wed108")
+    await updateUserBucketCache(userId);
     
     res.json({
       success: true,
