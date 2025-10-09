@@ -438,34 +438,23 @@ export default defineComponent({
 
     // Check if Knowledge Base Welcome Modal should be shown
     const checkForKnowledgeBaseWelcome = () => {
-      console.log('[*] [GET-KB] Checking if KB Welcome Modal should show...');
-      console.log(`[*] [GET-KB]   currentUser: ${currentUser.value?.userId || 'null'}`);
-      console.log(`[*] [GET-KB]   workflowStage: ${workflowStage.value || 'null'}`);
-      console.log(`[*] [GET-KB]   currentAgent: ${currentAgent.value?.name || 'null'}`);
-      console.log(`[*] [GET-KB]   currentKnowledgeBase (attached): ${currentKnowledgeBase.value?.name || 'null'}`);
-      console.log(`[*] [GET-KB]   agent available KBs: ${currentAgent.value?.knowledge_bases?.length || 0}`);
-      
       // Only show for authenticated users
       if (!currentUser.value || currentUser.value.userId === 'Public User') {
-        console.log('[*] [GET-KB]   ❌ Not authenticated or Public User');
         return;
       }
 
       // Only show if workflow stage is AGENT_ASSIGNED
       if (workflowStage.value !== 'agent_assigned') {
-        console.log(`[*] [GET-KB]   ❌ Workflow stage is '${workflowStage.value}', need 'agent_assigned'`);
         return;
       }
 
       // Check if user has a KB ATTACHED to their agent (from Agent Badge)
       // A KB that exists but isn't attached should still show the modal
       if (currentKnowledgeBase.value) {
-        console.log(`[*] [GET-KB]   ❌ User already has attached KB: ${currentKnowledgeBase.value.name}`);
         return; // User already has KB attached
       }
 
       // Show the modal (even if available KBs exist but aren't attached)
-      console.log('[*] [GET-KB]   ✅ All conditions met - showing KB Welcome Modal');
       showKnowledgeBaseWelcomeModal.value = true;
     };
 

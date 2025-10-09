@@ -223,13 +223,10 @@ export class AppStateManager {
     // Database workflowStage field is the authoritative source
     // Backend maintains this through the entire workflow lifecycle
     if (user && user.workflowStage) {
-      console.log(`[*] [GET-KB] Using database workflowStage: ${user.workflowStage} for user ${user.userId}`);
       return user.workflowStage;
     }
     
     // Fallback for legacy users without workflowStage field
-    console.log(`[*] [GET-KB] No workflowStage in user object, calculating from fields for user ${user?.userId}`);
-    
     if (!user || !user.hasPasskey) {
       return 'no_passkey';
     }

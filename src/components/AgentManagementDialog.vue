@@ -688,6 +688,18 @@
                       <q-item-section side>
                         <q-checkbox v-model="selectedBucketFiles" :val="file.key" />
                       </q-item-section>
+                      <q-item-section side>
+                        <q-btn
+                          icon="delete"
+                          color="negative"
+                          flat
+                          dense
+                          round
+                          size="sm"
+                          @click.stop="confirmDeleteFile(file)"
+                          title="Delete file from bucket"
+                        />
+                      </q-item-section>
                     </q-item>
                   </div>
                 </div>
@@ -874,6 +886,41 @@
             label="Switch"
             @click="confirmSwitchKnowledgeBase"
             :loading="isUpdating"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Delete File Confirmation Dialog -->
+    <q-dialog v-model="showDeleteFileDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 600px">
+        <q-card-section class="row items-center q-pb-none">
+          <q-icon name="warning" color="warning" size="md" class="q-mr-sm" />
+          <div class="text-h6">Delete File from Storage</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <div class="text-body1 q-mb-md">
+            You are about to delete: <strong>{{ fileToDelete?.key?.split('/').pop() }}</strong>
+          </div>
+          <div class="q-pa-md" style="background-color: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800;">
+            <div class="text-body2" style="line-height: 1.6;">
+              Deleting a file in your personal storage folder removes it from direct access for reference but does not change your knowledge base. 
+              Please keep a separate record of your health records along with any chats you have saved to your computer. 
+              Do not rely on a supported MAIA for long-term archiving of your records. 
+              If you should lose control of your supported MAIA, you can always restore your private AI and re-create your knowledge base.
+            </div>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="negative"
+            label="Delete"
+            icon="delete"
+            @click="handleDeleteFile"
+            :loading="isDeleting"
           />
         </q-card-actions>
       </q-card>
@@ -1425,6 +1472,8 @@ export default defineComponent({
     const showChooseFilesDialog = ref(false);
     const showCreateKbDialog = ref(false);
     const showSwitchKbDialog = ref(false);
+    const showDeleteFileDialog = ref(false);
+    const fileToDelete = ref(null);
     const showKbLinkSuggestionDialog = ref(false);
     const showNoAgentModal = ref(false);
     const showNewUserWelcomeModal = ref(false);
@@ -2709,6 +2758,46 @@ export default defineComponent({
         type: "info",
         message: "File upload functionality coming soon",
       });
+    };
+
+    // Confirm file deletion with warning modal
+    const confirmDeleteFile = (file: any) => {
+      fileToDelete.value = file;
+      showDeleteFileDialog.value = true;
+    };
+
+    // Handle file deletion
+    const handleDeleteFile = async () => {
+      if (!fileToDelete.value) return;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/delete-bucket-file`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: fileToDelete.value.key })
+        });
+
+        if (response.ok) {
+          $q.notify({
+            type: 'positive',
+            message: `File deleted: ${fileToDelete.value.key.split('/').pop()}`,
+          });
+
+          // Refresh bucket files
+          await checkUserBucketFiles(true);
+        } else {
+          throw new Error('Delete request failed');
+        }
+      } catch (error: any) {
+        console.error('❌ Failed to delete file:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to delete file: ${error.message}`,
+        });
+      } finally {
+        showDeleteFileDialog.value = false;
+        fileToDelete.value = null;
+      }
     };
 
     // Helper function to convert file to base64
@@ -4679,8 +4768,10 @@ export default defineComponent({
       showChooseFilesDialog,
       showCreateKbDialog,
       showSwitchKbDialog,
+      showDeleteFileDialog,
       showKbLinkSuggestionDialog,
       selectedKnowledgeBase,
+      fileToDelete,
       newKbName,
       newKbDescription,
       isCreatingKb,
@@ -4700,6 +4791,8 @@ export default defineComponent({
       handleChooseFiles,
       handleCreateKnowledgeBase,
       handleFileUpload,
+      confirmDeleteFile,
+      handleDeleteFile,
       handleChooseFilesSubmit,
       handleCreateKbSubmit,
       uploadSelectedFilesToBucket,
