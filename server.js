@@ -1586,10 +1586,13 @@ app.post('/api/upload-to-bucket', async (req, res) => {
     await s3Client.send(uploadCommand);
 //     console.log(`✅ Successfully uploaded file to bucket: ${bucketKey}`);
     
-    // Send admin notification if file was uploaded to a user folder
+    // Update cache with fresh bucket status IMMEDIATELY after successful upload
     if (userFolder && userFolder !== 'root') {
+      const userId = userFolder.replace('/', ''); // Remove trailing slash
+      await updateUserBucketCache(userId);
+      
+      // Send admin notification
       try {
-        const userId = userFolder.replace('/', ''); // Remove trailing slash
         const updateData = {
           userId: userId,
           fileName: fileName,
@@ -1600,9 +1603,6 @@ app.post('/api/upload-to-bucket', async (req, res) => {
         
         addUpdateToAllAdmins('user_file_uploaded', updateData);
         console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
-        
-        // Update cache with fresh bucket status after upload
-        await updateUserBucketCache(userId);
         
         // Update session activity for the user who uploaded the file
         if (req.sessionID) {
