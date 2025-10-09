@@ -868,11 +868,18 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       
       // Filter out non-user documents
       allUsers = allUsers.filter(user => {
-        if (!user._id) return false;
-        if (user._id.startsWith('_design/')) return false;
-        if (user._id === 'maia_config') return false;
-        if (user._id === 'Public User' || user._id === 'wed271') return true; // Always include these
-        if (user._id.startsWith('deep_link_')) return true; // Include deep link users
+        // Handle database corruption: restore _id from userId if missing
+        if (!user._id && user.userId) {
+          user._id = user.userId;
+        }
+        
+        const userId = user._id || user.userId;
+        
+        if (!userId) return false;
+        if (userId.startsWith('_design/')) return false;
+        if (userId === 'maia_config') return false;
+        if (userId === 'Public User' || userId === 'wed271') return true;
+        if (userId.startsWith('deep_link_')) return true;
         if (user.isAdmin) return false;
         return true;
       });
