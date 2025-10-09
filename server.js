@@ -352,7 +352,7 @@ const trackPublicUserActivity = (req) => {
 };
 
 // Export session management functions for use in route files
-export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity };
+export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity, getBucketStatusForUser };
 
 const initializeDatabase = async () => {
   try {
@@ -1895,13 +1895,9 @@ app.post('/api/bucket/ensure-user-folder', async (req, res) => {
   }
 });
 
-// Get user-specific bucket status
-app.get('/api/bucket/user-status/:userId', async (req, res) => {
+// Helper function to get bucket status (reusable for startup and API)
+async function getBucketStatusForUser(userId) {
   try {
-    const { userId } = req.params;
-    
-//     console.log(`📊 Getting bucket status for user: ${userId}`);
-    
     const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
     
     // Extract bucket name from the full URL environment variable
@@ -1910,12 +1906,13 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     
     // Check if bucket is configured
     if (!bucketUrl) {
-      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
-      return res.status(400).json({ 
-        success: false, 
-        message: 'DigitalOcean bucket not configured',
-        error: 'BUCKET_NOT_CONFIGURED'
-      });
+      return {
+        success: false,
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0,
+        files: []
+      };
     }
     
     const s3Client = new S3Client({
@@ -1950,9 +1947,7 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     const fileCount = actualFiles.length;
     const totalSize = actualFiles.reduce((sum, file) => sum + (file.Size || 0), 0);
     
-//     console.log(`📊 User ${userId} bucket status: ${fileCount} files, ${totalSize} bytes`);
-    
-    res.json({
+    return {
       success: true,
       userId: userId,
       folderPath: userFolder,
@@ -1966,12 +1961,11 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
         etag: file.ETag
       })),
       createdAt: hasFolder ? files[0]?.LastModified : null
-    });
+    };
     
   } catch (error) {
     if (error.Code === 'NoSuchBucket') {
-      console.warn(`⚠️ Bucket ${bucketName} does not exist, returning empty status for user ${userId}`);
-      res.json({
+      return {
         success: true,
         userId: userId,
         folderPath: `${userId}/`,
@@ -1980,15 +1974,33 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
         totalSize: 0,
         files: [],
         createdAt: null
-      });
+      };
     } else {
-      console.error('❌ Error getting user bucket status:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: `Failed to get user bucket status: ${error.message}`,
-        error: 'STATUS_CHECK_FAILED'
-      });
+      console.error(`❌ Error getting bucket status for ${userId}:`, error.message);
+      return {
+        success: false,
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0,
+        files: []
+      };
     }
+  }
+}
+
+// Get user-specific bucket status
+app.get('/api/bucket/user-status/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const bucketStatus = await getBucketStatusForUser(userId);
+    res.json(bucketStatus);
+  } catch (error) {
+    console.error('❌ Error getting user bucket status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to get user bucket status: ${error.message}`,
+      error: 'STATUS_CHECK_FAILED'
+    });
   }
 });
 
@@ -4577,30 +4589,14 @@ app.get('/api/current-agent', async (req, res) => {
           const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
           
           if (userDoc) {
-            // Fetch bucket status for this user
-            let bucketStatus = {
-              hasFolder: false,
-              fileCount: 0,
-              totalSize: 0
-            };
+            // Call bucket status function directly (not via HTTP)
+            const bucketData = await getBucketStatusForUser(currentUser);
             
-            try {
-              const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${currentUser}`, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-              });
-              
-              if (bucketResponse.ok) {
-                const bucketData = await bucketResponse.json();
-                bucketStatus = {
-                  hasFolder: bucketData.hasFolder || false,
-                  fileCount: bucketData.fileCount || 0,
-                  totalSize: bucketData.totalSize || 0
-                };
-              }
-            } catch (bucketError) {
-              // Silent fail - use default empty bucket status
-            }
+            const bucketStatus = {
+              hasFolder: bucketData.hasFolder || false,
+              fileCount: bucketData.fileCount || 0,
+              totalSize: bucketData.totalSize || 0
+            };
             
             // Update cache with fresh data including bucket status
             const userWithBucket = {
@@ -7662,29 +7658,14 @@ async function refreshUsersListCacheThrottled() {
     for (let i = 0; i < filteredUsers.length; i++) {
       const user = filteredUsers[i];
       
-      let bucketStatus = {
-        hasFolder: false,
-        fileCount: 0,
-        totalSize: 0
-      };
+      // Call bucket status function directly (not via HTTP)
+      const bucketData = await getBucketStatusForUser(user._id);
       
-      try {
-        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (bucketResponse.ok) {
-          const bucketData = await bucketResponse.json();
-          bucketStatus = {
-            hasFolder: bucketData.hasFolder || false,
-            fileCount: bucketData.fileCount || 0,
-            totalSize: bucketData.totalSize || 0
-          };
-        }
-      } catch (bucketError) {
-        // Silent fail
-      }
+      const bucketStatus = {
+        hasFolder: bucketData.hasFolder || false,
+        fileCount: bucketData.fileCount || 0,
+        totalSize: bucketData.totalSize || 0
+      };
       
       usersWithBucket.push({
         ...user,
@@ -8095,30 +8076,14 @@ async function ensureAllUserBuckets() {
       for (let i = 0; i < filteredUsers.length; i++) {
         const user = filteredUsers[i];
         
-        // Fetch bucket status for this user
-        let bucketStatus = {
-          hasFolder: false,
-          fileCount: 0,
-          totalSize: 0
-        };
+        // Call bucket status function directly (not via HTTP)
+        const bucketData = await getBucketStatusForUser(user._id);
         
-        try {
-          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (bucketResponse.ok) {
-            const bucketData = await bucketResponse.json();
-            bucketStatus = {
-              hasFolder: bucketData.hasFolder || false,
-              fileCount: bucketData.fileCount || 0,
-              totalSize: bucketData.totalSize || 0
-            };
-          }
-        } catch (bucketError) {
-          // Silent fail - use default empty bucket status
-        }
+        const bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
         
         // Store user with bucket status
         const userWithBucket = {

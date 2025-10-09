@@ -886,32 +886,21 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       
       // Fetch bucket status for each user (throttled) - same as startup
       const usersWithBucket = [];
+      
+      // Import bucket status function from server
+      const { getBucketStatusForUser } = await import('../../server.js');
+      
       for (let i = 0; i < allUsers.length; i++) {
         const user = allUsers[i];
         
-        let bucketStatus = {
-          hasFolder: false,
-          fileCount: 0,
-          totalSize: 0
-        };
+        // Call bucket status function directly (not via HTTP)
+        const bucketData = await getBucketStatusForUser(user._id);
         
-        try {
-          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (bucketResponse.ok) {
-            const bucketData = await bucketResponse.json();
-            bucketStatus = {
-              hasFolder: bucketData.hasFolder || false,
-              fileCount: bucketData.fileCount || 0,
-              totalSize: bucketData.totalSize || 0
-            };
-          }
-        } catch (bucketError) {
-          // Silent fail
-        }
+        const bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
         
         usersWithBucket.push({
           ...user,
@@ -1043,68 +1032,40 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       }
     }
     
-    // Get bucket status for the user
-    let bucketStatus = {
-      hasFolder: false,
-      fileCount: 0,
-      totalSize: 0
-    };
+    // Get bucket status for the user - call directly (not via HTTP)
+    const { getBucketStatusForUser } = await import('../../server.js');
+    const bucketData = await getBucketStatusForUser(userId);
     
-    try {
-      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${userId}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (bucketResponse.ok) {
-        const bucketData = await bucketResponse.json();
-        bucketStatus = {
-          hasFolder: bucketData.hasFolder || false,
-          fileCount: bucketData.fileCount || 0,
-          totalSize: bucketData.totalSize || 0
-        };
-      }
-    } catch (bucketError) {
-      // Bucket check failed, use default values
-      console.error(`⚠️ Failed to check bucket status for user ${userId}:`, bucketError.message);
-    }
+    const bucketStatus = {
+      hasFolder: bucketData.hasFolder || false,
+      fileCount: bucketData.fileCount || 0,
+      totalSize: bucketData.totalSize || 0
+    };
 
     // Use shared function to process user data consistently
     const userInfo = await processUserData(userDoc, true); // Include bucket status for user details
     
-    // Fetch bucket files from the bucket status API
+    // Bucket files are already in bucketData from the direct call above
     let bucketFiles = [];
-    try {
-      const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${userId}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+    if (bucketData.success && bucketData.files) {
+      // Transform bucket files to match frontend expectations
+      bucketFiles = bucketData.files.map(file => {
+        // Extract filename from key (remove user folder prefix)
+        const fileName = file.key.replace(`${userId}/`, '');
+        // Extract file type from filename extension
+        const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+        
+        return {
+          bucketKey: file.key,
+          fileName: fileName,
+          fileSize: file.size,
+          fileType: fileExtension,
+          uploadedAt: file.lastModified,
+          lastModified: file.lastModified,
+          etag: file.etag,
+          knowledgeBases: [] // Will be populated from database later
+        };
       });
-      
-      if (bucketResponse.ok) {
-        const bucketData = await bucketResponse.json();
-        if (bucketData.success && bucketData.files) {
-          // Transform bucket files to match frontend expectations
-          bucketFiles = bucketData.files.map(file => {
-            // Extract filename from key (remove user folder prefix)
-            const fileName = file.key.replace(`${userId}/`, '');
-            // Extract file type from filename extension
-            const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-            
-            return {
-              bucketKey: file.key,
-              fileName: fileName,
-              fileSize: file.size,
-              fileType: fileExtension,
-              uploadedAt: file.lastModified,
-              lastModified: file.lastModified,
-              etag: file.etag,
-              knowledgeBases: [] // Will be populated from database later
-            };
-          });
-        }
-      }
-    } catch (bucketError) {
-      console.error(`⚠️ Failed to fetch bucket files for user ${userId}:`, bucketError.message);
     }
     
     // Add additional fields specific to user details view
