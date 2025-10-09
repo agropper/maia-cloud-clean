@@ -7644,6 +7644,8 @@ async function refreshUsersListCacheThrottled() {
       if (!user._id) return false;
       if (user._id.startsWith('_design/')) return false;
       if (user._id === 'maia_config') return false;
+      if (user._id === 'Public User' || user._id === 'wed271') return true; // Always include these
+      if (user._id.startsWith('deep_link_')) return true; // Include deep link users
       if (user.isAdmin) return false;
       return true;
     });
@@ -8041,15 +8043,19 @@ async function ensureAllUserBuckets() {
     try {
       // Fetch all users from database
       const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+      console.log(`📊 [STARTUP] Fetched ${allUsers.length} total documents from maia_users`);
       
       // Filter out non-user documents
       const filteredUsers = allUsers.filter(user => {
         if (!user._id) return false;
         if (user._id.startsWith('_design/')) return false;
         if (user._id === 'maia_config') return false;
+        if (user._id === 'Public User' || user._id === 'wed271') return true; // Always include these
+        if (user._id.startsWith('deep_link_')) return true; // Include deep link users
         if (user.isAdmin) return false;
         return true;
       });
+      console.log(`📊 [STARTUP] Filtered to ${filteredUsers.length} user documents`);
       
       // Fetch bucket status for each user (throttled to avoid rate limits)
       const usersWithBucket = [];
