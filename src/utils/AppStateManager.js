@@ -217,8 +217,19 @@ export class AppStateManager {
 
   /**
    * Determine workflow stage
+   * Database workflowStage field is the source of truth
    */
   determineWorkflowStage(user) {
+    // Database workflowStage field is the authoritative source
+    // Backend maintains this through the entire workflow lifecycle
+    if (user && user.workflowStage) {
+      console.log(`[*] [GET-KB] Using database workflowStage: ${user.workflowStage} for user ${user.userId}`);
+      return user.workflowStage;
+    }
+    
+    // Fallback for legacy users without workflowStage field
+    console.log(`[*] [GET-KB] No workflowStage in user object, calculating from fields for user ${user?.userId}`);
+    
     if (!user || !user.hasPasskey) {
       return 'no_passkey';
     }
@@ -228,18 +239,7 @@ export class AppStateManager {
     }
     
     if (user.approvalStatus === 'approved') {
-      if (!this.state.currentAgent) {
-        return 'approved';
-      }
-      if (this.state.currentAgent.status !== 'running') {
-        return 'waiting_for_deployment';
-      }
-      if (this.state.currentAgent.status === 'running' && (!this.state.currentAgent.knowledgeBases || this.state.currentAgent.knowledgeBases.length === 0)) {
-        return 'has_bucket';
-      }
-      if (this.state.currentAgent.status === 'running' && this.state.currentAgent.knowledgeBases && this.state.currentAgent.knowledgeBases.length > 0) {
-        return 'has_kb';
-      }
+      return 'approved';
     }
     
     if (user.approvalStatus === 'rejected') {
@@ -250,7 +250,7 @@ export class AppStateManager {
       return 'suspended';
     }
     
-    return 'unknown';
+    return 'no_passkey';
   }
 
   /**

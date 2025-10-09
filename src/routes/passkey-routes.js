@@ -882,6 +882,8 @@ router.get("/auth-status", async (req, res) => {
           user: {
             userId: userDoc._id, // Use _id instead of userId
             displayName: userDoc.displayName || userDoc._id,
+            workflowStage: userDoc.workflowStage || 'no_request_yet', // Database is source of truth
+            hasPasskey: !!userDoc.credentialID,
           },
         });
       } else {
