@@ -415,8 +415,21 @@ router.post("/register-verify", async (req, res) => {
       // Save the updated user document to Cloudant
       await cacheManager.saveDocument(couchDBClient, "maia_users", updatedUser);
       
-      // Invalidate user cache to ensure admin panel shows updated passkey status
-      cacheManager.invalidateCache('users', updatedUser._id);
+      // Add new user to cache Map (single source of truth)
+      const { getBucketStatusForUser } = await import('../../server.js');
+      const bucketData = await getBucketStatusForUser(updatedUser._id);
+      
+      const userWithBucket = {
+        ...updatedUser,
+        bucketStatus: {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        }
+      };
+      
+      cacheManager.setCached('users', updatedUser._id, userWithBucket);
+      console.log(`✅ [CACHE] Added new user ${updatedUser._id} to cache`);
 
       // Set session data for authenticated user (same as authenticate-verify)
       req.session.userId = updatedUser._id;

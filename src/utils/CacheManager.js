@@ -24,8 +24,9 @@ export class CacheManager {
     };
     
     // Cache TTL (Time To Live) in milliseconds
+    // NOTE: Users cache has NO TTL - it's explicitly managed (invalidate on change)
     this.ttl = {
-      users: 15 * 60 * 1000,       // 15 minutes (single source of truth for user documents)
+      users: Infinity,             // NO TTL - explicitly invalidated on changes only
       chats: 2 * 60 * 1000,        // 2 minutes
       knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
       agents: 15 * 60 * 1000,      // 15 minutes (admin data)

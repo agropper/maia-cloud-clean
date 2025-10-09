@@ -318,9 +318,22 @@
         <!-- Private AI Users Tab -->
         <QTabPanel name="users">
           <div class="q-pa-md">
-            <div class="q-mb-md">
-              <h4 class="q-ma-none">Private AI Users</h4>
-              <p class="text-grey-6 q-ma-none">Manage user approvals and workflow status</p>
+            <div class="q-mb-md row items-center justify-between">
+              <div>
+                <h4 class="q-ma-none">Private AI Users</h4>
+                <p class="text-grey-6 q-ma-none">Manage user approvals and workflow status</p>
+              </div>
+              <QBtn
+                color="primary"
+                icon="refresh"
+                label="Refresh Cache"
+                @click="refreshAllCaches"
+                :loading="isRefreshingCache"
+                outline
+                class="q-ml-md"
+              >
+                <QTooltip>Clear all caches and reload fresh data from database and DigitalOcean API</QTooltip>
+              </QBtn>
             </div>
 
             <!-- Users Table -->
@@ -1089,6 +1102,7 @@ const isLoadingUsers = ref(false)
 const isLoadingAgents = ref(false)
 const isLoadingKBs = ref(false)
 const isLoadingSessions = ref(false)
+const isRefreshingCache = ref(false)
 
 // Group modal state
 const showGroupModal = ref(false)
@@ -2190,6 +2204,54 @@ const loadChatCountsForAgents = async (agents: any[]) => {
     console.error('❌ Error loading chat counts:', error)
     // Set all chat counts to 0 on error
     agents.forEach(agent => agent.chatCount = 0)
+  }
+}
+
+// Cache refresh function
+const refreshAllCaches = async () => {
+  try {
+    isRefreshingCache.value = true
+    
+    // Call backend endpoint to clear and rebuild all caches
+    const response = await fetch('/api/admin-management/refresh-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to refresh cache')
+    }
+    
+    const result = await response.json()
+    
+    // Show success notification
+    $q.notify({
+      type: 'positive',
+      message: `✅ Cache refreshed successfully!`,
+      caption: `Rebuilt ${result.rebuiltCount} users from database and DigitalOcean API`,
+      timeout: 3000
+    })
+    
+    // Reload all data
+    await Promise.all([
+      loadUsers(true),
+      loadAgents(),
+      loadKnowledgeBases(),
+      loadSessions()
+    ])
+    
+    console.log('✅ [ADMIN] All caches refreshed and data reloaded')
+  } catch (error) {
+    console.error('❌ [ADMIN] Failed to refresh cache:', error)
+    $q.notify({
+      type: 'negative',
+      message: '❌ Failed to refresh cache',
+      caption: error.message,
+      timeout: 3000
+    })
+  } finally {
+    isRefreshingCache.value = false
   }
 }
 

@@ -857,12 +857,24 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const rowsPerPage = parseInt(req.query.rowsPerPage) || 10;
     
-    // Get raw users from cache or database
+    // Build user list from individual cache entries (single source of truth)
     const cacheFunc = cacheFunctions || global.cacheFunctions;
-    let allUsers = cacheFunc ? cacheFunc.getCache('users', 'all') : null;
     
-    if (!allUsers || !cacheFunc.isCacheValid('users', 'all')) {
-      console.log(`🔄 [ADMIN-USERS] Fetching users from database (cache miss or invalid)`);
+    // Get all individual user entries from cache Map
+    const cachedUsers = cacheFunc ? Array.from(cacheManager.cache.users.values()) : [];
+    
+    // Filter out non-user entries (if any administrative keys exist)
+    let allUsers = cachedUsers.filter(user => {
+      const userId = user._id || user.userId;
+      if (!userId) return false;
+      if (userId.startsWith('_design/')) return false;
+      if (userId === 'maia_config') return false;
+      return true; // All cached users are valid
+    });
+    
+    // If cache is empty (server just started or cache was cleared), rebuild from database
+    if (allUsers.length === 0) {
+      console.log(`🔄 [ADMIN-USERS] Cache empty - fetching users from database`);
       
       // Fetch from database
       allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -886,8 +898,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       });
       
       // Fetch bucket status for each user (throttled) - same as startup
-      const usersWithBucket = [];
-      
       // Import bucket status function from server
       const { getBucketStatusForUser } = await import('../../server.js');
       
@@ -903,10 +913,17 @@ router.get('/users', requireAdminAuth, async (req, res) => {
           totalSize: bucketData.totalSize || 0
         };
         
-        usersWithBucket.push({
+        const userWithBucket = {
           ...user,
           bucketStatus: bucketStatus
-        });
+        };
+        
+        // Cache INDIVIDUAL user entry (not 'all' array!)
+        if (cacheFunc) {
+          cacheFunc.setCache('users', user._id, userWithBucket);
+        }
+        
+        allUsers[i] = userWithBucket;
         
         // Throttle between users
         if (i < allUsers.length - 1) {
@@ -914,15 +931,9 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         }
       }
       
-      // Cache for future requests
-      if (cacheFunc) {
-        cacheFunc.setCache('users', 'all', usersWithBucket);
-      }
-      
-      console.log(`✅ [ADMIN-USERS] Cached ${usersWithBucket.length} users with bucket status`);
-      allUsers = usersWithBucket;
+      console.log(`✅ [ADMIN-USERS] Cached ${allUsers.length} individual user entries`);
     } else {
-      console.log(`✅ [ADMIN-USERS] Using cached users: ${allUsers.length} users`);
+      console.log(`✅ [ADMIN-USERS] Built list from ${allUsers.length} cached users`);
     }
     
     // Process users on-demand (fast in-memory operation)
@@ -3436,6 +3447,84 @@ router.post('/users/:userId/generate-api-key', requireAdminAuth, async (req, res
 });
 
 // Export functions for use in main server
+// Admin endpoint to invalidate all caches and rebuild from fresh data
+router.post('/refresh-cache', requireAdminAuth, async (req, res) => {
+  try {
+    console.log(`🔄 [ADMIN] Cache refresh requested by admin`);
+    
+    // Clear all user cache entries
+    if (cacheManager && cacheManager.cache.users) {
+      cacheManager.cache.users.clear();
+      console.log(`✅ [ADMIN] Cleared all user cache entries`);
+    }
+    
+    // Clear other admin caches to force refresh from DigitalOcean
+    if (cacheManager) {
+      cacheManager.invalidateCache('agents');
+      cacheManager.invalidateCache('knowledgeBases');
+      cacheManager.invalidateCache('models', 'all');
+      console.log(`✅ [ADMIN] Cleared agents, KBs, and models caches`);
+    }
+    
+    // Rebuild user cache from database with fresh bucket status
+    const { getBucketStatusForUser } = await import('../../server.js');
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    
+    const filteredUsers = allUsers.filter(user => {
+      if (!user._id && user.userId) user._id = user.userId;
+      const userId = user._id || user.userId;
+      if (!userId) return false;
+      if (userId.startsWith('_design/')) return false;
+      if (userId === 'maia_config') return false;
+      if (userId === 'Public User' || userId === 'wed271') return true;
+      if (userId.startsWith('deep_link_')) return true;
+      if (user.isAdmin) return false;
+      return true;
+    });
+    
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    let rebuiltCount = 0;
+    
+    for (let i = 0; i < filteredUsers.length; i++) {
+      const user = filteredUsers[i];
+      const bucketData = await getBucketStatusForUser(user._id);
+      
+      const userWithBucket = {
+        ...user,
+        bucketStatus: {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        }
+      };
+      
+      if (cacheFunc) {
+        cacheFunc.setCache('users', user._id, userWithBucket);
+        rebuiltCount++;
+      }
+      
+      // Throttle between users
+      if (i < filteredUsers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    console.log(`✅ [ADMIN] Rebuilt cache with ${rebuiltCount} users from database and DigitalOcean API`);
+    
+    res.json({
+      success: true,
+      message: `Cache refreshed successfully - rebuilt ${rebuiltCount} users from fresh data`,
+      rebuiltCount
+    });
+  } catch (error) {
+    console.error(`❌ [ADMIN] Failed to refresh cache:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export { updateUserActivity, getAllUserActivities, checkAgentDeployments, addToDeploymentTracking };
 
 export default router;

@@ -1923,24 +1923,8 @@ async function updateUserBucketCache(userId) {
       bucketStatus: bucketStatus
     };
 
-    // Update individual user cache
+    // Update individual user cache entry (single source of truth - no 'all' array!)
     setCache('users', userId, userWithBucket);
-
-    // Update this user in the 'all' cache array (targeted update)
-    const allUsersCache = getCache('users', 'all');
-    if (allUsersCache && Array.isArray(allUsersCache)) {
-      const userIndex = allUsersCache.findIndex(u => (u._id || u.userId) === userId);
-      if (userIndex !== -1) {
-        allUsersCache[userIndex] = userWithBucket;
-        setCache('users', 'all', allUsersCache);
-        console.log(`✅ [CACHE] Updated bucket status for ${userId} in 'all' cache (${bucketStatus.fileCount} files)`);
-      } else {
-        // User not in 'all' cache (shouldn't happen, but handle it)
-        allUsersCache.push(userWithBucket);
-        setCache('users', 'all', allUsersCache);
-        console.log(`✅ [CACHE] Added ${userId} to 'all' cache with bucket status (${bucketStatus.fileCount} files)`);
-      }
-    }
 
     console.log(`✅ [CACHE] Updated bucket cache for user ${userId}: ${bucketStatus.fileCount} files, ${bucketStatus.totalSize} bytes`);
   } catch (error) {
@@ -8111,8 +8095,7 @@ async function ensureAllUserBuckets() {
         return true;
       });
       
-      // Fetch bucket status for each user (throttled to avoid rate limits)
-      const usersWithBucket = [];
+      // Fetch bucket status for each user and cache individually (throttled to avoid rate limits)
       for (let i = 0; i < filteredUsers.length; i++) {
         const user = filteredUsers[i];
         
@@ -8130,7 +8113,9 @@ async function ensureAllUserBuckets() {
           ...user,
           bucketStatus: bucketStatus
         };
-        usersWithBucket.push(userWithBucket);
+        
+        // Cache INDIVIDUAL user entry (not 'all' array - single source of truth!)
+        setCache('users', user._id, userWithBucket);
         
         // Throttle: 100ms delay between users to avoid overwhelming the system
         if (i < filteredUsers.length - 1) {
@@ -8138,10 +8123,7 @@ async function ensureAllUserBuckets() {
         }
       }
       
-      // Cache all users with bucket status
-      setCache('users', 'all', usersWithBucket);
-      
-      console.log(`✅ [STARTUP] Cached ${usersWithBucket.length} users with bucket status`);
+      console.log(`✅ [STARTUP] Cached ${filteredUsers.length} individual user entries`);
     } catch (error) {
       console.error(`❌ [STARTUP] CRITICAL: Failed to initialize users cache:`, error.message);
       console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
