@@ -8046,30 +8046,13 @@ async function ensureAllUserBuckets() {
           console.log(`  ❌ Excluding (no userId): ${JSON.stringify(user)}`);
           return false;
         }
-        if (userId.startsWith('_design/')) {
-          console.log(`  ❌ Excluding (design doc): ${userId}`);
-          return false;
-        }
-        if (userId === 'maia_config') {
-          console.log(`  ❌ Excluding (config): ${userId}`);
-          return false;
-        }
-        if (userId === 'Public User' || userId === 'wed271') {
-          console.log(`  ✅ Including (special user): ${userId}`);
-          return true;
-        }
-        if (userId.startsWith('deep_link_')) {
-          console.log(`  ✅ Including (deep link): ${userId}`);
-          return true;
-        }
-        if (user.isAdmin) {
-          console.log(`  ❌ Excluding (admin): ${userId}`);
-          return false;
-        }
-        console.log(`  ✅ Including (regular user): ${userId}`);
+        if (userId.startsWith('_design/')) return false;
+        if (userId === 'maia_config') return false;
+        if (userId === 'Public User' || userId === 'wed271') return true;
+        if (userId.startsWith('deep_link_')) return true;
+        if (user.isAdmin) return false;
         return true;
       });
-      console.log(`📊 [STARTUP] Filtered to ${filteredUsers.length} user documents`);
       
       // Fetch bucket status for each user (throttled to avoid rate limits)
       const usersWithBucket = [];

@@ -925,14 +925,7 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     }
     
     // Process users on-demand (fast in-memory operation)
-    const processedUsers = allUsers.map(user => {
-      const processed = processUserDataSync(user);
-      // Debug: Check if bucket status is being passed through
-      if (user.bucketStatus) {
-        console.log(`  📦 User ${user._id || user.userId} has cached bucket: ${user.bucketStatus.fileCount} files`);
-      }
-      return processed;
-    });
+    const processedUsers = allUsers.map(user => processUserDataSync(user));
     
     // Apply sorting to processed data
     const sortedUsers = processedUsers.sort((a, b) => {
