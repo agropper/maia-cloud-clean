@@ -442,7 +442,8 @@ export default defineComponent({
       console.log(`[*] [GET-KB]   currentUser: ${currentUser.value?.userId || 'null'}`);
       console.log(`[*] [GET-KB]   workflowStage: ${workflowStage.value || 'null'}`);
       console.log(`[*] [GET-KB]   currentAgent: ${currentAgent.value?.name || 'null'}`);
-      console.log(`[*] [GET-KB]   agent KBs: ${currentAgent.value?.knowledge_bases?.length || 0}`);
+      console.log(`[*] [GET-KB]   currentKnowledgeBase (attached): ${currentKnowledgeBase.value?.name || 'null'}`);
+      console.log(`[*] [GET-KB]   agent available KBs: ${currentAgent.value?.knowledge_bases?.length || 0}`);
       
       // Only show for authenticated users
       if (!currentUser.value || currentUser.value.userId === 'Public User') {
@@ -456,20 +457,21 @@ export default defineComponent({
         return;
       }
 
-      // Check if user has any knowledge bases
-      // This will be determined by checking if assignedAgent has knowledge_bases
-      if (currentAgent.value?.knowledge_bases && currentAgent.value.knowledge_bases.length > 0) {
-        console.log(`[*] [GET-KB]   ❌ User already has ${currentAgent.value.knowledge_bases.length} KB(s)`);
-        return; // User already has KB
+      // Check if user has a KB ATTACHED to their agent (from Agent Badge)
+      // A KB that exists but isn't attached should still show the modal
+      if (currentKnowledgeBase.value) {
+        console.log(`[*] [GET-KB]   ❌ User already has attached KB: ${currentKnowledgeBase.value.name}`);
+        return; // User already has KB attached
       }
 
-      // Show the modal
+      // Show the modal (even if available KBs exist but aren't attached)
       console.log('[*] [GET-KB]   ✅ All conditions met - showing KB Welcome Modal');
       showKnowledgeBaseWelcomeModal.value = true;
     };
 
-    // Watch for user and workflow changes to check if modal should be shown
-    watch([currentUser, workflowStage, currentAgent], () => {
+    // Watch for user, workflow, and KB changes to check if modal should be shown
+    // Include currentKnowledgeBase so modal disappears after KB attachment
+    watch([currentUser, workflowStage, currentAgent, currentKnowledgeBase], () => {
       checkForKnowledgeBaseWelcome();
     }, { immediate: true });
 

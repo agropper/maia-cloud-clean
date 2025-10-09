@@ -21,8 +21,12 @@
             <li>• To link to original documents for authenticity checks</li>
           </ul>
 
+          <p class="welcome-paragraph upload-instruction">
+            <strong>📎 First Step:</strong> Upload your health documents using the paper clip icon at the bottom of the chat.
+          </p>
+          
           <p class="welcome-paragraph">
-            You will be asked to upload documents using the paper clip and select the ones to included into your knowledge base.
+            After uploading files, open the Private AI Manager to select which documents to include in your knowledge base.
           </p>
         </div>
       </q-card-section>
@@ -113,6 +117,13 @@ const handleOpenManager = () => {
   margin-top: 1rem;
   font-size: 1rem;
   color: #333;
+}
+
+.upload-instruction {
+  background-color: #e3f2fd;
+  padding: 0.75rem;
+  border-radius: 4px;
+  border-left: 4px solid #2196f3;
 }
 
 .feature-list {

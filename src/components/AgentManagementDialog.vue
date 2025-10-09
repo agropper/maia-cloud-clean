@@ -581,10 +581,21 @@
         </q-card-section>
         <q-card-section>
           <div v-if="!hasUploadedDocuments && userBucketFiles.length === 0" class="text-center q-pa-md">
-            <q-icon name="attach_file" size="48px" color="grey-4" />
-            <div class="text-h6 q-mt-md">No Files Available</div>
-            <div class="text-caption q-mb-md">
-              Upload documents using the paper clip button or add files to your bucket folder
+            <q-icon name="attach_file" size="64px" color="primary" class="q-mb-md" />
+            <div class="text-h5 q-mb-md">📎 Upload Files First</div>
+            <div class="text-body1 q-mb-md" style="max-width: 400px; margin: 0 auto;">
+              You need to upload at least one document before creating a knowledge base.
+            </div>
+            <div class="q-pa-md" style="background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3; max-width: 450px; margin: 0 auto;">
+              <div class="text-subtitle2 q-mb-xs">
+                <strong>How to upload:</strong>
+              </div>
+              <ol class="text-body2" style="text-align: left; padding-left: 1.5rem; margin: 0;">
+                <li class="q-mb-xs">Close this dialog</li>
+                <li class="q-mb-xs">Click the paper clip icon (📎) at the bottom of the chat</li>
+                <li class="q-mb-xs">Select your health documents</li>
+                <li>Return here to create your knowledge base</li>
+              </ol>
             </div>
           </div>
 
