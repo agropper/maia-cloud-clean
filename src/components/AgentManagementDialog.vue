@@ -332,9 +332,9 @@
             <q-card v-if="!isDeepLinkUser" flat bordered class="q-mb-md">
               <q-card-section>
                 <div class="row items-center q-mb-sm">
-                  <q-icon name="library_books" color="secondary" />
+                  <q-icon name="folder" color="secondary" />
                   <span class="text-subtitle2 q-ml-sm"
-                    >Available Knowledge Bases</span
+                    >Available Files in Your Folder</span
                   >
                 </div>
 
@@ -366,6 +366,18 @@
                             <q-item-label caption class="text-grey-6">
                               {{ file.size }} bytes
                             </q-item-label>
+                          </q-item-section>
+                          <q-item-section side>
+                            <q-btn
+                              icon="delete"
+                              color="negative"
+                              flat
+                              dense
+                              round
+                              size="sm"
+                              @click.stop="confirmDeleteFile(file)"
+                              title="Delete file from bucket"
+                            />
                           </q-item-section>
                         </q-item>
                       </q-list>
@@ -414,6 +426,10 @@
 
                 <!-- Knowledge Base List - Only show if user has assigned agent -->
                 <div v-if="availableKnowledgeBases.length > 0 && assignedAgent" class="q-mb-md">
+                  <div class="text-subtitle2 q-mb-sm row items-center">
+                    <q-icon name="library_books" color="secondary" size="sm" class="q-mr-xs" />
+                    Available Knowledge Bases
+                  </div>
                   <div
                     v-for="kb in availableKnowledgeBases"
                     :key="kb.uuid"
