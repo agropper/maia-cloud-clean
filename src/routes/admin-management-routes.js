@@ -172,14 +172,15 @@ const checkAgentDeployments = async () => {
           console.error(`❌ [POLLING] [*] Error adding agent deployment notification:`, pollingError.message);
         }
         
-        // Get user document (cache-aware) with retry logic for conflicts
+        // Get user document (FORCE FRESH READ - bypass cache to get latest API key)
         let userDoc;
         let retryCount = 0;
         const maxRetries = 3;
         
         while (retryCount < maxRetries) {
           try {
-            userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+            // Bypass cache to ensure we get the latest document with API key
+            userDoc = await couchDBClient.getDocument('maia_users', userId);
             
             if (userDoc) {
               // Check if user is already in agent_assigned stage to avoid duplicate updates
