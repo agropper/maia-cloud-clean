@@ -875,12 +875,53 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         return true;
       });
       
-      // Cache for future requests
-      if (cacheFunc) {
-        cacheFunc.setCache('users', 'all', allUsers);
+      // Fetch bucket status for each user (throttled) - same as startup
+      const usersWithBucket = [];
+      for (let i = 0; i < allUsers.length; i++) {
+        const user = allUsers[i];
+        
+        let bucketStatus = {
+          hasFolder: false,
+          fileCount: 0,
+          totalSize: 0
+        };
+        
+        try {
+          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json();
+            bucketStatus = {
+              hasFolder: bucketData.hasFolder || false,
+              fileCount: bucketData.fileCount || 0,
+              totalSize: bucketData.totalSize || 0
+            };
+          }
+        } catch (bucketError) {
+          // Silent fail
+        }
+        
+        usersWithBucket.push({
+          ...user,
+          bucketStatus: bucketStatus
+        });
+        
+        // Throttle between users
+        if (i < allUsers.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
       
-      console.log(`✅ [ADMIN-USERS] Cached ${allUsers.length} users from database`);
+      // Cache for future requests
+      if (cacheFunc) {
+        cacheFunc.setCache('users', 'all', usersWithBucket);
+      }
+      
+      console.log(`✅ [ADMIN-USERS] Cached ${usersWithBucket.length} users with bucket status`);
+      allUsers = usersWithBucket;
     } else {
       console.log(`✅ [ADMIN-USERS] Using cached users: ${allUsers.length} users`);
     }
@@ -1063,7 +1104,25 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     userInfo.agents = [];
     userInfo.knowledgeBases = [];
     
-    
+    // Update individual user cache with fresh bucket data
+    const userWithBucket = {
+      ...userDoc,
+      bucketStatus: bucketStatus
+    };
+    const cacheFunc = cacheFunctions || global.cacheFunctions;
+    if (cacheFunc) {
+      cacheFunc.setCache('users', userId, userWithBucket);
+      
+      // Also update this user in the 'all' cache if it exists
+      const allUsersCache = cacheFunc.getCache('users', 'all');
+      if (allUsersCache && Array.isArray(allUsersCache)) {
+        const userIndex = allUsersCache.findIndex(u => (u._id || u.userId) === userId);
+        if (userIndex !== -1) {
+          allUsersCache[userIndex] = userWithBucket;
+          cacheFunc.setCache('users', 'all', allUsersCache);
+        }
+      }
+    }
     
     res.json(userInfo);
     
@@ -1685,7 +1744,8 @@ function processUserDataSync(user) {
     assignedAgentId: assignedAgentId,
     assignedAgentName: assignedAgentName,
     agentAssignedAt: agentAssignedAt,
-    agentApiKey: user.agentApiKey || null
+    agentApiKey: user.agentApiKey || null,
+    bucketStatus: user.bucketStatus || null  // Include bucket status from cached user
   };
 }
 

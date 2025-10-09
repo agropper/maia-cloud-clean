@@ -4577,8 +4577,37 @@ app.get('/api/current-agent', async (req, res) => {
           const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
           
           if (userDoc) {
-            // Update cache with fresh data
-            setCache('users', currentUser, userDoc);
+            // Fetch bucket status for this user
+            let bucketStatus = {
+              hasFolder: false,
+              fileCount: 0,
+              totalSize: 0
+            };
+            
+            try {
+              const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${currentUser}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              
+              if (bucketResponse.ok) {
+                const bucketData = await bucketResponse.json();
+                bucketStatus = {
+                  hasFolder: bucketData.hasFolder || false,
+                  fileCount: bucketData.fileCount || 0,
+                  totalSize: bucketData.totalSize || 0
+                };
+              }
+            } catch (bucketError) {
+              // Silent fail - use default empty bucket status
+            }
+            
+            // Update cache with fresh data including bucket status
+            const userWithBucket = {
+              ...userDoc,
+              bucketStatus: bucketStatus
+            };
+            setCache('users', currentUser, userWithBucket);
             
             if (userDoc.assignedAgentId) {
               // Use assignedAgentId as the source of truth
@@ -7602,10 +7631,10 @@ app.get('/vue-tooltip-test', (req, res) => {
   });
 });
 
-// Refresh raw users cache (new single-cache design)
+// Refresh users cache with bucket status (throttled)
 async function refreshUsersListCacheThrottled() {
   try {
-    console.log('🔄 [CACHE] Refreshing users cache...');
+    console.log('🔄 [CACHE] Refreshing users cache with bucket status...');
     
     // Fetch all users from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -7619,10 +7648,50 @@ async function refreshUsersListCacheThrottled() {
       return true;
     });
     
-    // Cache all users (raw documents - processing happens on-demand)
-    setCache('users', 'all', filteredUsers);
+    // Fetch bucket status for each user (throttled)
+    const usersWithBucket = [];
+    for (let i = 0; i < filteredUsers.length; i++) {
+      const user = filteredUsers[i];
+      
+      let bucketStatus = {
+        hasFolder: false,
+        fileCount: 0,
+        totalSize: 0
+      };
+      
+      try {
+        const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (bucketResponse.ok) {
+          const bucketData = await bucketResponse.json();
+          bucketStatus = {
+            hasFolder: bucketData.hasFolder || false,
+            fileCount: bucketData.fileCount || 0,
+            totalSize: bucketData.totalSize || 0
+          };
+        }
+      } catch (bucketError) {
+        // Silent fail
+      }
+      
+      usersWithBucket.push({
+        ...user,
+        bucketStatus: bucketStatus
+      });
+      
+      // Throttle between users
+      if (i < filteredUsers.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     
-    console.log(`✅ [CACHE] Refreshed ${filteredUsers.length} users in cache`);
+    // Cache all users with bucket status
+    setCache('users', 'all', usersWithBucket);
+    
+    console.log(`✅ [CACHE] Refreshed ${usersWithBucket.length} users with bucket status`);
   } catch (error) {
     console.error('❌ [CACHE] Failed to refresh users cache:', error.message);
   }
@@ -7967,10 +8036,10 @@ async function ensureAllUserBuckets() {
       }
     }
     
-    // Initialize raw users cache during startup (new single-cache design)
-    console.log(`🔄 [STARTUP] Initializing users cache...`);
+    // Initialize users cache with bucket status during startup (throttled, safe)
+    console.log(`🔄 [STARTUP] Initializing users cache with bucket status...`);
     try {
-      // Fetch all users from database and cache them
+      // Fetch all users from database
       const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
       
       // Filter out non-user documents
@@ -7982,10 +8051,53 @@ async function ensureAllUserBuckets() {
         return true;
       });
       
-      // Cache all users (raw documents - processing happens on-demand)
-      setCache('users', 'all', filteredUsers);
+      // Fetch bucket status for each user (throttled to avoid rate limits)
+      const usersWithBucket = [];
+      for (let i = 0; i < filteredUsers.length; i++) {
+        const user = filteredUsers[i];
+        
+        // Fetch bucket status for this user
+        let bucketStatus = {
+          hasFolder: false,
+          fileCount: 0,
+          totalSize: 0
+        };
+        
+        try {
+          const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/user-status/${user._id}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (bucketResponse.ok) {
+            const bucketData = await bucketResponse.json();
+            bucketStatus = {
+              hasFolder: bucketData.hasFolder || false,
+              fileCount: bucketData.fileCount || 0,
+              totalSize: bucketData.totalSize || 0
+            };
+          }
+        } catch (bucketError) {
+          // Silent fail - use default empty bucket status
+        }
+        
+        // Store user with bucket status
+        const userWithBucket = {
+          ...user,
+          bucketStatus: bucketStatus
+        };
+        usersWithBucket.push(userWithBucket);
+        
+        // Throttle: 100ms delay between users to avoid overwhelming the system
+        if (i < filteredUsers.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
       
-      console.log(`✅ [STARTUP] Cached ${filteredUsers.length} users (raw documents, processing on-demand)`);
+      // Cache all users with bucket status
+      setCache('users', 'all', usersWithBucket);
+      
+      console.log(`✅ [STARTUP] Cached ${usersWithBucket.length} users with bucket status`);
     } catch (error) {
       console.error(`❌ [STARTUP] CRITICAL: Failed to initialize users cache:`, error.message);
       console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
