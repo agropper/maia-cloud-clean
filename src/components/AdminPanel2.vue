@@ -1000,7 +1000,8 @@ import {
   QTable,
   QTabPanel,
   QTabPanels,
-  QSelect
+  QSelect,
+  QTooltip
 } from 'quasar'
 import { useGroupChat } from '../composables/useGroupChat'
 import GroupManagementModal from './GroupManagementModal.vue'
