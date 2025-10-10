@@ -58,11 +58,8 @@ let deploymentMonitoringInterval = null; // Track the monitoring interval
 const invalidateUserCache = (userId) => {
   if (!cacheFunctions) return;
   
-  // Invalidate single user cache entry (raw database document)
-  cacheFunctions.invalidateCache('users', userId);
-  
-  // Invalidate 'all' users cache (used by Admin2 for users list)
-  cacheFunctions.invalidateCache('users', 'all');
+  // NOTE: saveDocument now automatically updates cache, so we don't need to invalidate individual users
+  // We only invalidate related caches that might reference user data
   
   // Invalidate chats cache (may contain user-specific data)
   cacheFunctions.invalidateCache('chats');

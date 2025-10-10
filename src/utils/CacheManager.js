@@ -299,10 +299,25 @@ export class CacheManager {
           `saveDocument(${cacheKey})`
         );
         
-        // Success - invalidate related caches
-        this.invalidateCache(cacheType, documentId);
+        // Success - UPDATE cache with saved document (don't delete it!)
+        // The saved document now has the updated _rev from the database
+        const updatedDocument = {
+          ...document,
+          _rev: result.rev  // Include the new revision from save result
+        };
         
-        // If it's a user document, invalidate related caches
+        // For user documents, ensure bucketStatus is preserved from existing cache
+        if (databaseName === 'maia_users') {
+          const existingCached = this.getCached(cacheType, documentId);
+          if (existingCached?.bucketStatus && !updatedDocument.bucketStatus) {
+            // Preserve bucketStatus from cache if not in saved document
+            updatedDocument.bucketStatus = existingCached.bucketStatus;
+          }
+        }
+        
+        this.setCached(cacheType, documentId, updatedDocument);
+        
+        // If it's a user document, invalidate related caches (chats, health)
         if (databaseName === 'maia_users') {
           this.invalidateUserRelatedCaches(documentId);
         }
