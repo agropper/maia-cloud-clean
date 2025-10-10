@@ -87,6 +87,10 @@ export class CacheManager {
     if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
       const result = this.cache[cacheType].get(key);
       
+      // DEBUG: Log credentialID for thu1091
+      if (cacheType === 'users' && key === 'thu1091') {
+        console.log(`🔍 [CACHE-GET] Getting cache for thu1091 - credentialID: ${result?.credentialID || 'MISSING'}`);
+      }
       
       return result;
     }
@@ -114,6 +118,11 @@ export class CacheManager {
       }
       if (!(this.lastUpdated[cacheType] instanceof Map)) {
         this.lastUpdated[cacheType] = new Map();
+      }
+      
+      // DEBUG: Log credentialID for thu1091
+      if (cacheType === 'users' && key === 'thu1091') {
+        console.log(`🔍 [CACHE-SET] Setting cache for thu1091 - credentialID: ${data.credentialID || 'MISSING'}`);
       }
       
       this.cache[cacheType].set(key, data);

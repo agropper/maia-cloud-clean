@@ -138,7 +138,16 @@ export class CouchDBClient {
     try {
       const db = this.db.use(databaseName)
       const result = await db.list({ include_docs: true })
-      return result.rows.map(row => row.doc)
+      const docs = result.rows.map(row => row.doc)
+      
+      // DEBUG: Log thu1091 document from database
+      const thu1091 = docs.find(doc => doc._id === 'thu1091')
+      if (thu1091) {
+        console.log(`🔍 [DB-READ] thu1091 from database - credentialID: ${thu1091.credentialID || 'MISSING'}`)
+        console.log(`🔍 [DB-READ] thu1091 keys:`, Object.keys(thu1091))
+      }
+      
+      return docs
     } catch (error) {
       console.error('❌ Failed to get all documents:', error)
       throw error

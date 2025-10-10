@@ -8052,20 +8052,10 @@ async function ensureAllUserBuckets() {
       console.error('❌ [STARTUP] Failed to load saved chats into cache:', error.message);
     }
     
-    // Ensure bucket folders for all users
-    await ensureAllUserBuckets();
+    // REMOVED: Old bucket/cache initialization - replaced by new individual cache code below
+    // await ensureAllUserBuckets();
     
-    // Check session logs database
-    try {
-      const sessionLogs = await cacheManager.getAllDocuments(couchDBClient, 'maia_session_logs');
-      console.log(`📊 [STARTUP] Found ${sessionLogs.length} entries in session logs`);
-    } catch (error) {
-      if (error.message.includes('Database does not exist')) {
-        console.log(`📊 [STARTUP] Session logs database will be created on first use`);
-      } else {
-        console.log(`📊 [STARTUP] Session logs database not accessible: ${error.message}`);
-      }
-    }
+    // Session logs database will be created on first use (no need to read at startup)
     
     // Initialize users cache with bucket status during startup (throttled, safe)
     console.log(`🔄 [STARTUP] Initializing users cache with bucket status...`);
@@ -8113,6 +8103,12 @@ async function ensureAllUserBuckets() {
           ...user,
           bucketStatus: bucketStatus
         };
+        
+        // DEBUG: Log credentialID during caching
+        if (user._id === 'thu1091') {
+          console.log(`🔍 [STARTUP-CACHE] Caching thu1091 - credentialID: ${user.credentialID || 'MISSING'}`);
+          console.log(`🔍 [STARTUP-CACHE] userWithBucket has credentialID: ${userWithBucket.credentialID || 'MISSING'}`);
+        }
         
         // Cache INDIVIDUAL user entry (not 'all' array - single source of truth!)
         setCache('users', user._id, userWithBucket);

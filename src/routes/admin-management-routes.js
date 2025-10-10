@@ -1009,7 +1009,10 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     // Get user document (cache-aware)
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     
-    // Debug: Log email field for user details
+    // DEBUG: Log credentialID from retrieved userDoc
+    if (userId === 'thu1091') {
+      console.log(`🔍 [USER-DETAILS] Retrieved userDoc for thu1091 - credentialID: ${userDoc?.credentialID || 'MISSING'}`);
+    }
     
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
@@ -1681,6 +1684,11 @@ function processUserDataSync(user) {
     user._id = user.userId;
   }
   
+  // DEBUG: Log credentialID in processUserDataSync
+  if (user._id === 'thu1091' || user.userId === 'thu1091') {
+    console.log(`🔍 [PROCESS-SYNC] Processing thu1091 - credentialID: ${user.credentialID || 'MISSING'}`);
+  }
+  
   // Extract current agent information from assignedAgentId (source of truth)
   let assignedAgentId = user.assignedAgentId || null;
   let assignedAgentName = user.assignedAgentName || null;
@@ -1702,6 +1710,12 @@ function processUserDataSync(user) {
     }
   }
   
+  // DEBUG: Log hasPasskey calculation
+  const hasPasskeyValue = !!user.credentialID;
+  if (user._id === 'thu1091' || user.userId === 'thu1091') {
+    console.log(`🔍 [PROCESS-SYNC] Calculated hasPasskey for thu1091: ${hasPasskeyValue} (credentialID: ${user.credentialID || 'MISSING'})`);
+  }
+  
   // Return processed user data with consistent structure
   return {
     userId: user._id || user.userId,
@@ -1709,7 +1723,7 @@ function processUserDataSync(user) {
     email: user.email || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    hasPasskey: !!user.credentialID,
+    hasPasskey: hasPasskeyValue,
     hasValidPasskey: !!(user.credentialID && 
       user.credentialID !== 'test-credential-id-wed271' && 
       user.credentialPublicKey && 
