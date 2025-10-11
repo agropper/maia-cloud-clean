@@ -85,14 +85,7 @@ export class CacheManager {
     }
     
     if (key && this.cache[cacheType] && this.cache[cacheType] instanceof Map) {
-      const result = this.cache[cacheType].get(key);
-      
-      // DEBUG: Log credentialID for thu1091
-      if (cacheType === 'users' && key === 'thu1091') {
-        console.log(`🔍 [CACHE-GET] Getting cache for thu1091 - credentialID: ${result?.credentialID || 'MISSING'}`);
-      }
-      
-      return result;
+      return this.cache[cacheType].get(key);
     }
     
     
@@ -120,13 +113,20 @@ export class CacheManager {
         this.lastUpdated[cacheType] = new Map();
       }
       
-      // DEBUG: Log credentialID for thu1091
-      if (cacheType === 'users' && key === 'thu1091') {
-        console.log(`🔍 [CACHE-SET] Setting cache for thu1091 - credentialID: ${data.credentialID || 'MISSING'}`);
+      // ⚠️ DEFENSIVE: Prevent caching null/undefined values
+      if (data === null || data === undefined) {
+        console.error(`❌ [CACHE] Attempted to cache null/undefined value for ${cacheType}:${key}`);
+        console.error(`❌ [CACHE] Stack trace:`, new Error().stack);
+        return; // Don't cache null values!
       }
       
       this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
+      
+      // Debug: Log when users with specific workflow stages are cached
+      if (cacheType === 'users' && data?.workflowStage === 'polling_for_deployment') {
+        console.log(`💾 [USER LIST] Cached user ${key} with workflowStage: polling_for_deployment`);
+      }
       
     }
     
@@ -261,8 +261,10 @@ export class CacheManager {
         `getDocument(${cacheKey})`
       );
       
-      // Cache the result
-      this.setCached(cacheType, documentId, result);
+      // Cache the result only if document exists (don't cache null/undefined)
+      if (result) {
+        this.setCached(cacheType, documentId, result);
+      }
       
       return result;
     } catch (error) {
@@ -425,11 +427,10 @@ export class CacheManager {
    * Invalidate all caches related to a user
    */
   invalidateUserRelatedCaches(userId) {
+    // NOTE: We do NOT invalidate the user document itself here!
+    // The user was just updated by saveDocument and is already in cache with fresh data.
     
-    // Invalidate user document
-    this.invalidateCache('users', userId);
-    
-    // Invalidate agent assignments
+    // Invalidate agent assignments (may reference user data)
     this.invalidateCache('agentAssignments', userId);
     
     // Invalidate all chats (they might contain user data)

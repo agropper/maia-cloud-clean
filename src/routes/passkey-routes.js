@@ -148,7 +148,6 @@ router.post("/check-user", async (req, res) => {
       if (existingUser) {
         // User exists - check if they have a valid passkey
         const hasValidPasskey = !!(existingUser.credentialID && 
-          existingUser.credentialID !== 'test-credential-id-wed271' && 
           existingUser.credentialPublicKey && 
           existingUser.counter !== undefined);
         
@@ -223,7 +222,6 @@ router.post("/register", async (req, res) => {
       
       // If user already has a valid passkey, check for admin replacement or reset flag
       const hasValidPasskey = !!(existingUser.credentialID && 
-        existingUser.credentialID !== 'test-credential-id-wed271' && 
         existingUser.credentialPublicKey && 
         existingUser.counter !== undefined);
       

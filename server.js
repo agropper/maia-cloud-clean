@@ -7688,14 +7688,13 @@ async function refreshUsersListCacheThrottled() {
       if (!userId) return false;
       if (userId.startsWith('_design/')) return false;
       if (userId === 'maia_config') return false;
-      if (userId === 'Public User' || userId === 'wed271') return true;
+      if (userId === 'Public User') return true;
       if (userId.startsWith('deep_link_')) return true;
       if (user.isAdmin) return false;
       return true;
     });
     
-    // Fetch bucket status for each user (throttled)
-    const usersWithBucket = [];
+    // Fetch bucket status for each user and cache individually (throttled)
     for (let i = 0; i < filteredUsers.length; i++) {
       const user = filteredUsers[i];
       
@@ -7708,10 +7707,13 @@ async function refreshUsersListCacheThrottled() {
         totalSize: bucketData.totalSize || 0
       };
       
-      usersWithBucket.push({
+      const userWithBucket = {
         ...user,
         bucketStatus: bucketStatus
-      });
+      };
+      
+      // Cache INDIVIDUAL user entry (single source of truth)
+      setCache('users', user._id, userWithBucket);
       
       // Throttle between users
       if (i < filteredUsers.length - 1) {
@@ -7719,10 +7721,7 @@ async function refreshUsersListCacheThrottled() {
       }
     }
     
-    // Cache all users with bucket status
-    setCache('users', 'all', usersWithBucket);
-    
-    console.log(`✅ [CACHE] Refreshed ${usersWithBucket.length} users with bucket status`);
+    console.log(`✅ [CACHE] Refreshed ${filteredUsers.length} individual user entries with bucket status`);
   } catch (error) {
     console.error('❌ [CACHE] Failed to refresh users cache:', error.message);
   }
@@ -7780,9 +7779,8 @@ async function ensureAllUserBuckets() {
         assignedAgentName = firstAgent.name;
       }
       
-      // Check if passkey is valid (not a test credential)
+      // Check if passkey is valid
       const hasValidPasskey = !!(user.credentialID && 
-        user.credentialID !== 'test-credential-id-wed271' && 
         user.credentialPublicKey && 
         user.counter !== undefined);
       
@@ -8079,7 +8077,7 @@ async function ensureAllUserBuckets() {
         }
         if (userId.startsWith('_design/')) return false;
         if (userId === 'maia_config') return false;
-        if (userId === 'Public User' || userId === 'wed271') return true;
+        if (userId === 'Public User') return true;
         if (userId.startsWith('deep_link_')) return true;
         if (user.isAdmin) return false;
         return true;
@@ -8103,12 +8101,6 @@ async function ensureAllUserBuckets() {
           ...user,
           bucketStatus: bucketStatus
         };
-        
-        // DEBUG: Log credentialID during caching
-        if (user._id === 'thu1091') {
-          console.log(`🔍 [STARTUP-CACHE] Caching thu1091 - credentialID: ${user.credentialID || 'MISSING'}`);
-          console.log(`🔍 [STARTUP-CACHE] userWithBucket has credentialID: ${userWithBucket.credentialID || 'MISSING'}`);
-        }
         
         // Cache INDIVIDUAL user entry (not 'all' array - single source of truth!)
         setCache('users', user._id, userWithBucket);

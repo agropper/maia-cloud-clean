@@ -206,8 +206,7 @@ const checkAgentDeployments = async () => {
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
               
-              // Invalidate user cache to ensure fresh data
-              invalidateUserCache(userId);
+              // Note: invalidateUserCache removed - saveDocument now updates cache automatically
               
               console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
               break;
@@ -841,6 +840,38 @@ router.post('/register', checkDatabaseReady, async (req, res) => {
   }
 });
 
+// Shared filter function for user list (used in both cached and database paths)
+function isValidUserForList(user) {
+  // Skip null/undefined entries
+  if (!user) return false;
+  
+  // Handle database corruption: restore _id from userId if missing
+  if (!user._id && user.userId) {
+    user._id = user.userId;
+  }
+  
+  const userId = user._id || user.userId;
+  
+  // Must have an ID
+  if (!userId) return false;
+  
+  // Exclude CouchDB system documents
+  if (userId.startsWith('_design/')) return false;
+  
+  // Exclude config document
+  if (userId === 'maia_config') return false;
+  
+  // Include special users
+  if (userId === 'Public User') return true;
+  if (userId.startsWith('deep_link_')) return true;
+  
+  // Exclude admin users
+  if (user.isAdmin) return false;
+  
+  // Include all other users
+  return true;
+}
+
 // Get all private AI users and their workflow status - PROTECTED
 router.get('/users', requireAdminAuth, async (req, res) => {
   try {
@@ -859,15 +890,23 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Get all individual user entries from cache Map
     const cachedUsers = cacheFunc ? Array.from(cacheManager.cache.users.values()) : [];
+    console.log(`📋 [USER LIST] Step 2: Retrieved ${cachedUsers.length} users from cache Map`);
     
-    // Filter out non-user entries (if any administrative keys exist)
+    // Log users with polling_for_deployment stage
+    const pollingUsers = cachedUsers.filter(u => u?.workflowStage === 'polling_for_deployment');
+    if (pollingUsers.length > 0) {
+      console.log(`🔍 [USER LIST] Found ${pollingUsers.length} users in polling_for_deployment:`, pollingUsers.map(u => u._id || u.userId));
+    }
+    
+    // Filter cached users using shared filter function
     let allUsers = cachedUsers.filter(user => {
-      const userId = user._id || user.userId;
-      if (!userId) return false;
-      if (userId.startsWith('_design/')) return false;
-      if (userId === 'maia_config') return false;
-      return true; // All cached users are valid
+      const isValid = isValidUserForList(user);
+      if (!isValid && user) {
+        console.log(`🚫 [USER LIST] Filtered OUT user: ${user._id || user.userId}, isAdmin: ${user.isAdmin}, workflowStage: ${user.workflowStage}`);
+      }
+      return isValid;
     });
+    console.log(`📋 [USER LIST] Step 3: After filter, ${allUsers.length} users remain`);
     
     // If cache is empty (server just started or cache was cleared), rebuild from database
     if (allUsers.length === 0) {
@@ -876,23 +915,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       // Fetch from database
       allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
       
-      // Filter out non-user documents
-      allUsers = allUsers.filter(user => {
-        // Handle database corruption: restore _id from userId if missing
-        if (!user._id && user.userId) {
-          user._id = user.userId;
-        }
-        
-        const userId = user._id || user.userId;
-        
-        if (!userId) return false;
-        if (userId.startsWith('_design/')) return false;
-        if (userId === 'maia_config') return false;
-        if (userId === 'Public User' || userId === 'wed271') return true;
-        if (userId.startsWith('deep_link_')) return true;
-        if (user.isAdmin) return false;
-        return true;
-      });
+      // Filter database users using shared filter function
+      allUsers = allUsers.filter(isValidUserForList);
       
       // Fetch bucket status for each user (throttled) - same as startup
       // Import bucket status function from server
@@ -929,12 +953,11 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       }
       
       console.log(`✅ [ADMIN-USERS] Cached ${allUsers.length} individual user entries`);
-    } else {
-      console.log(`✅ [ADMIN-USERS] Built list from ${allUsers.length} cached users`);
     }
     
     // Process users on-demand (fast in-memory operation)
     const processedUsers = allUsers.map(user => processUserDataSync(user));
+    console.log(`📋 [USER LIST] Step 5: Processed ${processedUsers.length} users`);
     
     // Apply sorting to processed data
     const sortedUsers = processedUsers.sort((a, b) => {
@@ -968,6 +991,8 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       paginatedUsers = sortedUsers.slice(startIndex, endIndex);
     }
     // If rowsPerPage is -1 or 0, show all records (no pagination)
+    
+    console.log(`📋 [USER LIST] Step 7: Returning ${paginatedUsers.length} users (page ${page}, total: ${sortedUsers.length})`);
     
     return res.json({
       users: paginatedUsers,
@@ -1005,11 +1030,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     
     // Get user document (cache-aware)
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
-    
-    // DEBUG: Log credentialID from retrieved userDoc
-    if (userId === 'thu1091') {
-      console.log(`🔍 [USER-DETAILS] Retrieved userDoc for thu1091 - credentialID: ${userDoc?.credentialID || 'MISSING'}`);
-    }
     
     if (!userDoc) {
       return res.status(404).json({ error: 'User not found' });
@@ -1094,16 +1114,6 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     const cacheFunc = cacheFunctions || global.cacheFunctions;
     if (cacheFunc) {
       cacheFunc.setCache('users', userId, userWithBucket);
-      
-      // Also update this user in the 'all' cache if it exists
-      const allUsersCache = cacheFunc.getCache('users', 'all');
-      if (allUsersCache && Array.isArray(allUsersCache)) {
-        const userIndex = allUsersCache.findIndex(u => (u._id || u.userId) === userId);
-        if (userIndex !== -1) {
-          allUsersCache[userIndex] = userWithBucket;
-          cacheFunc.setCache('users', 'all', allUsersCache);
-        }
-      }
     }
     
     res.json(userInfo);
@@ -1280,7 +1290,8 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
                   })
                 });
                 
-                agentApiKey = apiKeyResponse.api_key?.key || apiKeyResponse.key || apiKeyResponse.data?.key;
+                // DigitalOcean API returns: { api_key_info: { secret_key: "..." } }
+                agentApiKey = apiKeyResponse.api_key_info?.secret_key || apiKeyResponse.api_key?.key || apiKeyResponse.key || apiKeyResponse.data?.key;
                 console.log(`🔑 [AUTO-AGENT] API key created for agent ${newAgentId}`);
               } catch (apiKeyError) {
                 console.error(`❌ [AUTO-AGENT] Failed to create API key for agent ${newAgentId}:`, apiKeyError.message);
@@ -1298,7 +1309,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
               };
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', finalUserUpdate);
-              invalidateUserCache(userId);
+              // Note: invalidateUserCache removed - saveDocument now updates cache automatically
               
               // Add user to deployment tracking
               addToDeploymentTracking(userId, newAgentId, agentName);
@@ -1325,7 +1336,7 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
     // If no agent creation happened, save the user document now
     if (!agentCreationResult) {
       await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
-      invalidateUserCache(userId);
+      // Note: invalidateUserCache removed - saveDocument now updates cache automatically
     }
     
     res.json({ 
@@ -1681,11 +1692,6 @@ function processUserDataSync(user) {
     user._id = user.userId;
   }
   
-  // DEBUG: Log credentialID in processUserDataSync
-  if (user._id === 'thu1091' || user.userId === 'thu1091') {
-    console.log(`🔍 [PROCESS-SYNC] Processing thu1091 - credentialID: ${user.credentialID || 'MISSING'}`);
-  }
-  
   // Extract current agent information from assignedAgentId (source of truth)
   let assignedAgentId = user.assignedAgentId || null;
   let assignedAgentName = user.assignedAgentName || null;
@@ -1707,12 +1713,6 @@ function processUserDataSync(user) {
     }
   }
   
-  // DEBUG: Log hasPasskey calculation
-  const hasPasskeyValue = !!user.credentialID;
-  if (user._id === 'thu1091' || user.userId === 'thu1091') {
-    console.log(`🔍 [PROCESS-SYNC] Calculated hasPasskey for thu1091: ${hasPasskeyValue} (credentialID: ${user.credentialID || 'MISSING'})`);
-  }
-  
   // Return processed user data with consistent structure
   return {
     userId: user._id || user.userId,
@@ -1720,9 +1720,8 @@ function processUserDataSync(user) {
     email: user.email || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    hasPasskey: hasPasskeyValue,
+    hasPasskey: !!user.credentialID,
     hasValidPasskey: !!(user.credentialID && 
-      user.credentialID !== 'test-credential-id-wed271' && 
       user.credentialPublicKey && 
       user.counter !== undefined),
     credentialID: user.credentialID,
@@ -3487,7 +3486,7 @@ router.post('/refresh-cache', requireAdminAuth, async (req, res) => {
       if (!userId) return false;
       if (userId.startsWith('_design/')) return false;
       if (userId === 'maia_config') return false;
-      if (userId === 'Public User' || userId === 'wed271') return true;
+      if (userId === 'Public User') return true;
       if (userId.startsWith('deep_link_')) return true;
       if (user.isAdmin) return false;
       return true;
