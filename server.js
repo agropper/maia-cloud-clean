@@ -1953,6 +1953,76 @@ async function updateUserBucketCache(userId) {
   }
 }
 
+// Clean up temporary files in user's root folder and ensure archived/ exists
+async function cleanupUserBucket(userId) {
+  try {
+    const { S3Client, ListObjectsV2Command, DeleteObjectCommand, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    if (!bucketUrl) return;
+    
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+    
+    // Step 1: List all files in root folder (temporary files)
+    const listRootCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/`,
+      Delimiter: '/' // Only get files in root, not subfolders
+    });
+    
+    const rootResult = await s3Client.send(listRootCommand);
+    const rootFiles = (rootResult.Contents || []).filter(file => 
+      file.Key !== `${userId}/` && // Skip folder itself
+      !file.Key.includes('/archived/') && // Skip archived subfolder
+      !file.Key.endsWith('.folder-marker') &&
+      file.Size > 0
+    );
+    
+    // Step 2: Delete temporary files from root
+    if (rootFiles.length > 0) {
+      console.log(`🧹 [CLEANUP] Deleting ${rootFiles.length} temporary files from ${userId}/ root`);
+      for (const file of rootFiles) {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: file.Key
+        });
+        await s3Client.send(deleteCommand);
+      }
+    }
+    
+    // Step 3: Ensure archived/ folder exists
+    const archivedMarkerKey = `${userId}/archived/.folder-marker`;
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: archivedMarkerKey,
+      Body: '',
+      ContentLength: 0
+    });
+    
+    try {
+      await s3Client.send(putCommand);
+      if (rootFiles.length > 0) {
+        console.log(`✅ [CLEANUP] ${userId}: Deleted ${rootFiles.length} temp files, ensured archived/ exists`);
+      }
+    } catch (error) {
+      // Ignore errors - folder marker is optional
+    }
+    
+  } catch (error) {
+    console.error(`❌ [CLEANUP] Error cleaning bucket for ${userId}:`, error.message);
+  }
+}
+
 // Reconcile user document files with actual bucket contents
 async function reconcileUserFiles(userId) {
   try {
@@ -1962,7 +2032,7 @@ async function reconcileUserFiles(userId) {
       return 0;
     }
     
-    // Get actual files from bucket
+    // Get actual files from bucket (only archived/ folder)
     const bucketData = await getBucketStatusForUser(userId);
     const actualFiles = bucketData.files || [];
     
@@ -8334,10 +8404,13 @@ async function ensureAllUserBuckets() {
       for (let i = 0; i < filteredUsers.length; i++) {
         const user = filteredUsers[i];
         
-        // Step 1: Reconcile files in user document with actual bucket contents
+        // Step 1: Clean up temporary files and ensure archived/ folder exists
+        await cleanupUserBucket(user._id);
+        
+        // Step 2: Reconcile files in user document with actual bucket contents
         await reconcileUserFiles(user._id);
         
-        // Step 2: Fetch bucket status and cache the user
+        // Step 3: Fetch bucket status and cache the user
         const bucketData = await getBucketStatusForUser(user._id);
         
         const bucketStatus = {
