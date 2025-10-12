@@ -2051,7 +2051,6 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const bucketStatus = await getBucketStatusForUser(userId);
-    console.log(`📁 [BUCKET STATUS] User ${userId}: ${bucketStatus.fileCount} files`, bucketStatus.files?.map(f => f.key));
     res.json(bucketStatus);
   } catch (error) {
     console.error('❌ Error getting user bucket status:', error);
@@ -5871,17 +5870,6 @@ app.post('/api/knowledge-bases', async (req, res) => {
       documentUuids: document_uuids
     });
     
-    // Debug: List actual bucket folder structure
-    // Checking bucket folder structure
-    try {
-      const bucketFiles = await doRequest(`/v2/spaces/maia.tor1/objects?prefix=${username}/&limit=100`);
-      const bucketFileList = bucketFiles.objects || bucketFiles.data?.objects || [];
-      // Bucket folder contents checked
-    } catch (bucketError) {
-      console.log('[KB CREATE] Could not list bucket folder:', bucketError.message);
-    }
-    
-
     
     // Get available embedding models first
     let embeddingModelId = null;
