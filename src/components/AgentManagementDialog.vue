@@ -1986,6 +1986,55 @@ export default defineComponent({
       }
     };
 
+    // Pre-select files for KB creation based on current KB and recency
+    const preselectFilesForKB = async (files: any[]) => {
+      if (!files || files.length === 0) return;
+      
+      try {
+        // Get user document to check which files are in current KB
+        const username = localCurrentUser.value?.userId;
+        if (!username) return;
+        
+        const userResponse = await fetch(`/api/admin-management/users/${username}`);
+        if (!userResponse.ok) return;
+        
+        const userData = await userResponse.json();
+        const userFiles = userData.files || [];
+        
+        // Find the current KB ID (if any)
+        let currentKBId = null;
+        if (currentKnowledgeBase.value?.id) {
+          currentKBId = currentKnowledgeBase.value.id;
+        }
+        
+        // Find the most recent file by lastModified date
+        let mostRecentFile = files[0];
+        for (const file of files) {
+          if (new Date(file.lastModified) > new Date(mostRecentFile.lastModified)) {
+            mostRecentFile = file;
+          }
+        }
+        
+        // Pre-select files
+        for (const file of files) {
+          // Check if this file is in the current KB
+          const userFileEntry = userFiles.find((uf: any) => uf.bucketKey === file.key);
+          const isInCurrentKB = userFileEntry?.knowledgeBases?.some((kb: any) => kb.id === currentKBId);
+          
+          // Pre-select if: in current KB OR is the most recent file
+          file.selected = isInCurrentKB || (file.key === mostRecentFile.key);
+        }
+        
+        console.log(`📋 Pre-selected ${files.filter(f => f.selected).length} of ${files.length} files for KB`);
+      } catch (error) {
+        console.error('Error pre-selecting files:', error);
+        // Default: select the most recent file only
+        if (files.length > 0) {
+          files[files.length - 1].selected = true;
+        }
+      }
+    };
+
     // Check for existing files in user's bucket folder (with robust caching)
     const checkUserBucketFiles = async (forceRefresh = false) => {
       if (!localCurrentUser.value?.userId) {
@@ -2006,9 +2055,18 @@ export default defineComponent({
         if (response.ok) {
           const result = await response.json()
           if (result.success && result.files) {
+            // Add selection state to each file
+            const filesWithSelection = result.files.map((file: any) => ({
+              ...file,
+              selected: false  // Will be set by pre-selection logic
+            }));
+            
+            // Pre-select files based on current KB and recency
+            await preselectFilesForKB(filesWithSelection);
+            
             // Update the cached value
-            userBucketFiles.value = result.files;
-            return result.files
+            userBucketFiles.value = filesWithSelection;
+            return filesWithSelection
           }
         }
       } catch (error) {
