@@ -1400,6 +1400,8 @@ import {
   QItemLabel,
   QCheckbox,
   QChip,
+  QBadge,
+  QBanner,
   QTooltip,
   QAvatar,
   QSpinnerDots,
