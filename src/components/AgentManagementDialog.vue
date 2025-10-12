@@ -3749,8 +3749,11 @@ export default defineComponent({
         !f.knowledgeBases || f.knowledgeBases.length === 0
       );
       const isInKB = file.knowledgeBases && file.knowledgeBases.length > 0;
+      const shouldDisable = isInKB && !hasNewFiles;
       
-      return isInKB && !hasNewFiles;
+      console.log(`☑️ [CHECKBOX] File ${file.key?.split('/').pop()}: isInKB=${isInKB}, hasNewFiles=${hasNewFiles}, disabled=${shouldDisable}`);
+      
+      return shouldDisable;
     };
 
     // Computed property for KB button state
@@ -3759,19 +3762,24 @@ export default defineComponent({
         !f.knowledgeBases || f.knowledgeBases.length === 0
       );
       
+      console.log(`🔘 [KB BUTTON] userBucketFiles: ${userBucketFiles.value.length}, newFiles: ${newFiles.length}`);
+      
       if (newFiles.length === 0 && userBucketFiles.value.length > 0) {
+        console.log(`🔘 [KB BUTTON] Returning: All Files Indexed (disabled)`);
         return {
           label: "All Files Indexed",
           disabled: true,
           color: "grey"
         };
       } else if (newFiles.length > 0) {
+        console.log(`🔘 [KB BUTTON] Returning: UPDATE KNOWLEDGE BASE`);
         return {
           label: "UPDATE KNOWLEDGE BASE",
           disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
           color: "primary"
         };
       } else {
+        console.log(`🔘 [KB BUTTON] Returning: CREATE KNOWLEDGE BASE (no files)`);
         return {
           label: "CREATE KNOWLEDGE BASE",
           disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
