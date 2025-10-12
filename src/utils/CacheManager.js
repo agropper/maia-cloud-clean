@@ -123,11 +123,6 @@ export class CacheManager {
       this.cache[cacheType].set(key, data);
       this.lastUpdated[cacheType].set(key, now);
       
-      // Debug: Log when users with specific workflow stages are cached
-      if (cacheType === 'users' && data?.workflowStage === 'polling_for_deployment') {
-        console.log(`💾 [USER LIST] Cached user ${key} with workflowStage: polling_for_deployment`);
-      }
-      
     }
     
   }

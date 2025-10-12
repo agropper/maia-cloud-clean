@@ -449,40 +449,27 @@ export default defineComponent({
     const checkForKnowledgeBaseWelcome = () => {
       // Simple logic: Show if user has an agent but no linked KB
       
-      console.log('🔍 [KB Modal Check]', {
-        user: currentUser.value?.userId,
-        hasAgent: !!currentAgent.value,
-        agentName: currentAgent.value?.name,
-        hasKB: !!currentKnowledgeBase.value,
-        kbName: currentKnowledgeBase.value?.name
-      });
-      
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
-        console.log('❌ [KB Modal] No current user');
         return;
       }
       
       // Must have an agent (shown in Agent Badge)
       if (!currentAgent.value) {
-        console.log('❌ [KB Modal] No current agent');
         return;
       }
       
       // Must NOT have a KB attached (from Agent Badge)
       if (currentKnowledgeBase.value) {
-        console.log('✅ [KB Modal] Already has KB attached');
         return; // User already has KB attached
       }
 
       // ✅ User has agent but no KB - show the appropriate welcome modal
       if (currentUser.value.userId === 'Public User') {
         // Show Public User specific modal
-        console.log('✅ [KB Modal] Showing PUBLIC USER modal');
         showPublicUserKBWelcomeModal.value = true;
       } else {
         // Show private user KB welcome modal
-        console.log('✅ [KB Modal] Showing PRIVATE USER modal');
         showKnowledgeBaseWelcomeModal.value = true;
       }
     };

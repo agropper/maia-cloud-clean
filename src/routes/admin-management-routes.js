@@ -890,23 +890,9 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Get all individual user entries from cache Map
     const cachedUsers = cacheFunc ? Array.from(cacheManager.cache.users.values()) : [];
-    console.log(`📋 [USER LIST] Step 2: Retrieved ${cachedUsers.length} users from cache Map`);
-    
-    // Log users with polling_for_deployment stage
-    const pollingUsers = cachedUsers.filter(u => u?.workflowStage === 'polling_for_deployment');
-    if (pollingUsers.length > 0) {
-      console.log(`🔍 [USER LIST] Found ${pollingUsers.length} users in polling_for_deployment:`, pollingUsers.map(u => u._id || u.userId));
-    }
     
     // Filter cached users using shared filter function
-    let allUsers = cachedUsers.filter(user => {
-      const isValid = isValidUserForList(user);
-      if (!isValid && user) {
-        console.log(`🚫 [USER LIST] Filtered OUT user: ${user._id || user.userId}, isAdmin: ${user.isAdmin}, workflowStage: ${user.workflowStage}`);
-      }
-      return isValid;
-    });
-    console.log(`📋 [USER LIST] Step 3: After filter, ${allUsers.length} users remain`);
+    let allUsers = cachedUsers.filter(isValidUserForList);
     
     // If cache is empty (server just started or cache was cleared), rebuild from database
     if (allUsers.length === 0) {
@@ -957,7 +943,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     
     // Process users on-demand (fast in-memory operation)
     const processedUsers = allUsers.map(user => processUserDataSync(user));
-    console.log(`📋 [USER LIST] Step 5: Processed ${processedUsers.length} users`);
     
     // Apply sorting to processed data
     const sortedUsers = processedUsers.sort((a, b) => {
@@ -991,8 +976,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       paginatedUsers = sortedUsers.slice(startIndex, endIndex);
     }
     // If rowsPerPage is -1 or 0, show all records (no pagination)
-    
-    console.log(`📋 [USER LIST] Step 7: Returning ${paginatedUsers.length} users (page ${page}, total: ${sortedUsers.length})`);
     
     return res.json({
       users: paginatedUsers,

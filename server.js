@@ -2051,6 +2051,7 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const bucketStatus = await getBucketStatusForUser(userId);
+    console.log(`📁 [BUCKET STATUS] User ${userId}: ${bucketStatus.fileCount} files`, bucketStatus.files?.map(f => f.key));
     res.json(bucketStatus);
   } catch (error) {
     console.error('❌ Error getting user bucket status:', error);
