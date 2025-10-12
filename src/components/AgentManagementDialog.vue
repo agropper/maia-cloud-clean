@@ -1990,22 +1990,38 @@ export default defineComponent({
     const preselectFilesForKB = async (files: any[]) => {
       if (!files || files.length === 0) return;
       
+      console.log(`📋 [FILE PRESELECT] Starting pre-selection for ${files.length} files`);
+      
       try {
         // Get user document to check which files are in current KB
         const username = localCurrentUser.value?.userId;
-        if (!username) return;
+        if (!username) {
+          console.log('⚠️ [FILE PRESELECT] No username, selecting most recent file only');
+          if (files.length > 0) {
+            files[files.length - 1].selected = true;
+          }
+          return;
+        }
         
         const userResponse = await fetch(`/api/admin-management/users/${username}`);
-        if (!userResponse.ok) return;
+        if (!userResponse.ok) {
+          console.log('⚠️ [FILE PRESELECT] Failed to fetch user data, selecting most recent file only');
+          if (files.length > 0) {
+            files[files.length - 1].selected = true;
+          }
+          return;
+        }
         
         const userData = await userResponse.json();
         const userFiles = userData.files || [];
         
         // Find the current KB ID (if any)
         let currentKBId = null;
-        if (currentKnowledgeBase.value?.id) {
-          currentKBId = currentKnowledgeBase.value.id;
+        if (props.currentKnowledgeBase?.id) {
+          currentKBId = props.currentKnowledgeBase.id;
         }
+        
+        console.log(`📋 [FILE PRESELECT] Current KB: ${currentKBId || 'none'}`);
         
         // Find the most recent file by lastModified date
         let mostRecentFile = files[0];
@@ -2015,6 +2031,8 @@ export default defineComponent({
           }
         }
         
+        console.log(`📋 [FILE PRESELECT] Most recent file: ${mostRecentFile.key}`);
+        
         // Pre-select files
         for (const file of files) {
           // Check if this file is in the current KB
@@ -2023,14 +2041,19 @@ export default defineComponent({
           
           // Pre-select if: in current KB OR is the most recent file
           file.selected = isInCurrentKB || (file.key === mostRecentFile.key);
+          
+          if (file.selected) {
+            console.log(`✅ [FILE PRESELECT] Selected: ${file.key.split('/').pop()}`);
+          }
         }
         
-        console.log(`📋 Pre-selected ${files.filter(f => f.selected).length} of ${files.length} files for KB`);
+        console.log(`📋 [FILE PRESELECT] Pre-selected ${files.filter((f: any) => f.selected).length} of ${files.length} files`);
       } catch (error) {
-        console.error('Error pre-selecting files:', error);
+        console.error('❌ [FILE PRESELECT] Error:', error);
         // Default: select the most recent file only
         if (files.length > 0) {
           files[files.length - 1].selected = true;
+          console.log(`📋 [FILE PRESELECT] Fallback: selected most recent file`);
         }
       }
     };
