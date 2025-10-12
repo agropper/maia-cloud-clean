@@ -167,8 +167,19 @@ const updateUserFileMetadata = async (userId: string, fileMetadata: {
 const uploadTranscriptFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     const content = await file.text()
@@ -195,8 +206,13 @@ const uploadTranscriptFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
-      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      // CRITICAL: Must have authenticated user for file upload
+      if (!currentUser || !currentUser.userId) {
+        throw new Error('Authentication required to upload files. Please sign in.');
+      }
+      
+      const userId = currentUser.userId;
+      const userFolder = `${userId}/`;
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -220,7 +236,7 @@ const uploadTranscriptFile = async (
         uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
         
         // Update user record with file metadata
-        await updateUserFileMetadata(currentUser, {
+        await updateUserFileMetadata(userId, {
           fileName: file.name,
           bucketKey: uploadResult.fileInfo.bucketKey,
           bucketPath: uploadResult.fileInfo.userFolder,
@@ -305,8 +321,36 @@ const uploadPDFFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      const resolvedUserId = currentUser?.userId || currentUser?.displayName || 'Public User'
-      const userFolder = resolvedUserId === 'Public User' ? 'root' : `${resolvedUserId}/`
+      // CRITICAL: Must have authenticated user for file upload
+      if (!currentUser || !currentUser.userId) {
+        const errorMsg = 'CRITICAL: PDF upload attempted without authenticated user';
+        console.error('🚨 [SECURITY]', errorMsg, {
+          currentUser: currentUser,
+          fileName: file.name,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Send alert to admin (backend will handle this)
+        await fetch('/api/admin-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            severity: 'CRITICAL',
+            category: 'SECURITY_VIOLATION',
+            message: 'PDF upload attempted without authenticated user',
+            details: {
+              fileName: file.name,
+              timestamp: new Date().toISOString(),
+              currentUserState: currentUser ? 'partial' : 'null'
+            }
+          })
+        }).catch(err => console.error('Failed to send admin alert:', err));
+        
+        throw new Error('Authentication required to upload files. Please sign in.');
+      }
+      
+      const resolvedUserId = currentUser.userId;
+      const userFolder = `${resolvedUserId}/`;
       
       // Ensure user has a bucket folder if they're authenticated (not Public User)
       if (resolvedUserId !== 'Public User' && currentUser?.isAuthenticated) {
@@ -411,8 +455,19 @@ const uploadPDFFile = async (
 const uploadMarkdownFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     const content = await file.text()
@@ -430,8 +485,13 @@ const uploadMarkdownFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
-      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      // CRITICAL: Must have authenticated user for file upload
+      if (!currentUser || !currentUser.userId) {
+        throw new Error('Authentication required to upload files. Please sign in.');
+      }
+      
+      const userId = currentUser.userId;
+      const userFolder = `${userId}/`;
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -455,7 +515,7 @@ const uploadMarkdownFile = async (
         uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
         
         // Update user record with file metadata
-        await updateUserFileMetadata(currentUser, {
+        await updateUserFileMetadata(userId, {
           fileName: file.name,
           bucketKey: uploadResult.fileInfo.bucketKey,
           bucketPath: uploadResult.fileInfo.userFolder,
@@ -487,8 +547,10 @@ const uploadMarkdownFile = async (
 const uploadTimelineFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // Timeline files don't currently upload to bucket, so no user validation needed
   appState.isLoading = true
   try {
     const content = await file.text()
@@ -520,8 +582,19 @@ const uploadTimelineFile = async (
 const uploadRTFFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     const markdownContent = await processRTFFile(file)
@@ -539,8 +612,13 @@ const uploadRTFFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
-      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      // CRITICAL: Must have authenticated user for file upload
+      if (!currentUser || !currentUser.userId) {
+        throw new Error('Authentication required to upload files. Please sign in.');
+      }
+      
+      const userId = currentUser.userId;
+      const userFolder = `${userId}/`;
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -564,7 +642,7 @@ const uploadRTFFile = async (
         uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
         
         // Update user record with file metadata
-        await updateUserFileMetadata(currentUser, {
+        await updateUserFileMetadata(userId, {
           fileName: uploadedFile.name,
           bucketKey: uploadResult.fileInfo.bucketKey,
           bucketPath: uploadResult.fileInfo.userFolder,
@@ -595,8 +673,19 @@ const uploadRTFFile = async (
 const uploadTextFile = async (
   file: File,
   appState: AppState,
-  writeMessage: (message: string, type: string) => void
+  writeMessage: (message: string, type: string) => void,
+  currentUser?: any
 ) => {
+  // If currentUser is not provided, try to get it from AppStateManager
+  if (!currentUser) {
+    try {
+      const { appStateManager } = await import('../utils/AppStateManager.js');
+      currentUser = appStateManager.getStateProperty('currentUser');
+    } catch (error) {
+      console.warn(`Failed to get currentUser from AppStateManager:`, error);
+    }
+  }
+  
   appState.isLoading = true
   try {
     const content = await file.text()
@@ -614,8 +703,13 @@ const uploadTextFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
-      const currentUser = appState.currentUser?.userId || appState.currentUser?.displayName || 'Public User'
-      const userFolder = currentUser === 'Public User' ? 'root' : `${currentUser}/`
+      // CRITICAL: Must have authenticated user for file upload
+      if (!currentUser || !currentUser.userId) {
+        throw new Error('Authentication required to upload files. Please sign in.');
+      }
+      
+      const userId = currentUser.userId;
+      const userFolder = `${userId}/`;
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -639,7 +733,7 @@ const uploadTextFile = async (
         uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
         
         // Update user record with file metadata
-        await updateUserFileMetadata(currentUser, {
+        await updateUserFileMetadata(userId, {
           fileName: file.name,
           bucketKey: uploadResult.fileInfo.bucketKey,
           bucketPath: uploadResult.fileInfo.userFolder,
@@ -680,22 +774,22 @@ export const uploadFile = async (
   
   switch (fileType) {
     case 'transcript':
-      await uploadTranscriptFile(file, appState, writeMessage)
+      await uploadTranscriptFile(file, appState, writeMessage, currentUser)
       break
     case 'pdf':
       await uploadPDFFile(file, appState, writeMessage, currentUser)
       break
     case 'markdown':
-      await uploadMarkdownFile(file, appState, writeMessage)
+      await uploadMarkdownFile(file, appState, writeMessage, currentUser)
       break
     case 'timeline':
-      await uploadTimelineFile(file, appState, writeMessage)
+      await uploadTimelineFile(file, appState, writeMessage, currentUser)
       break
     case 'rtf':
-      await uploadRTFFile(file, appState, writeMessage)
+      await uploadRTFFile(file, appState, writeMessage, currentUser)
       break
     case 'text':
-      await uploadTextFile(file, appState, writeMessage)
+      await uploadTextFile(file, appState, writeMessage, currentUser)
       break
     default:
       writeMessage('Unsupported file type', 'error')

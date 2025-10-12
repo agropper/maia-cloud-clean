@@ -27,6 +27,7 @@ import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
+import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
 import { WorkflowUtils } from "../utils/workflow-utils.js";
 import { appStateManager } from "../utils/AppStateManager.js";
 
@@ -53,6 +54,7 @@ export default defineComponent({
     DeepLinkUserModal,
     NoPrivateAgentModal,
     KnowledgeBaseWelcomeModal,
+    PublicUserKBWelcomeModal,
     QDialog,
     QCard,
     QCardSection,
@@ -98,6 +100,7 @@ export default defineComponent({
     const showAgentSelectionModal = ref(false);
     const showNoPrivateAgentModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
+    const showPublicUserKBWelcomeModal = ref(false);
     const noPrivateAgentModalRef = ref<any>(null);
 
     // Get state from centralized state manager - use refs for reactivity
@@ -350,6 +353,12 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
+    // Handle opening Agent Manager from Public User KB Welcome Modal
+    const handleOpenPublicKBManager = () => {
+      showPublicUserKBWelcomeModal.value = false;
+      showAgentManagementDialog.value = true;
+    };
+
     // Handle request for private agent
     const handleRequestPrivateAgent = () => {
       console.log("User requested private agent");
@@ -438,29 +447,49 @@ export default defineComponent({
 
     // Check if Knowledge Base Welcome Modal should be shown
     const checkForKnowledgeBaseWelcome = () => {
-      // Only show for authenticated users
-      if (!currentUser.value || currentUser.value.userId === 'Public User') {
+      // Simple logic: Show if user has an agent but no linked KB
+      
+      console.log('🔍 [KB Modal Check]', {
+        user: currentUser.value?.userId,
+        hasAgent: !!currentAgent.value,
+        agentName: currentAgent.value?.name,
+        hasKB: !!currentKnowledgeBase.value,
+        kbName: currentKnowledgeBase.value?.name
+      });
+      
+      // Must have a current user (not null/undefined)
+      if (!currentUser.value) {
+        console.log('❌ [KB Modal] No current user');
         return;
       }
-
-      // Only show if workflow stage is AGENT_ASSIGNED
-      if (workflowStage.value !== 'agent_assigned') {
+      
+      // Must have an agent (shown in Agent Badge)
+      if (!currentAgent.value) {
+        console.log('❌ [KB Modal] No current agent');
         return;
       }
-
-      // Check if user has a KB ATTACHED to their agent (from Agent Badge)
-      // A KB that exists but isn't attached should still show the modal
+      
+      // Must NOT have a KB attached (from Agent Badge)
       if (currentKnowledgeBase.value) {
+        console.log('✅ [KB Modal] Already has KB attached');
         return; // User already has KB attached
       }
 
-      // Show the modal (even if available KBs exist but aren't attached)
-      showKnowledgeBaseWelcomeModal.value = true;
+      // ✅ User has agent but no KB - show the appropriate welcome modal
+      if (currentUser.value.userId === 'Public User') {
+        // Show Public User specific modal
+        console.log('✅ [KB Modal] Showing PUBLIC USER modal');
+        showPublicUserKBWelcomeModal.value = true;
+      } else {
+        // Show private user KB welcome modal
+        console.log('✅ [KB Modal] Showing PRIVATE USER modal');
+        showKnowledgeBaseWelcomeModal.value = true;
+      }
     };
 
-    // Watch for user, workflow, and KB changes to check if modal should be shown
-    // Include currentKnowledgeBase so modal disappears after KB attachment
-    watch([currentUser, workflowStage, currentAgent, currentKnowledgeBase], () => {
+    // Watch for user, agent, and KB changes to check if modal should be shown
+    // Modal appears when agent is assigned, disappears when KB is attached
+    watch([currentUser, currentAgent, currentKnowledgeBase], () => {
       checkForKnowledgeBaseWelcome();
     }, { immediate: true });
 
@@ -816,7 +845,10 @@ const triggerUploadFile = (file: File) => {
       showAgentSelectionModal,
       showNoPrivateAgentModal,
       showKnowledgeBaseWelcomeModal,
+      showPublicUserKBWelcomeModal,
       handleOpenKBManager,
+      handleOpenPublicKBManager,
+      checkForKnowledgeBaseWelcome,
       noPrivateAgentModalRef,
       
       // Methods
@@ -935,6 +967,7 @@ const triggerUploadFile = (file: File) => {
       @show-popup="showPopup"
       @sign-in="handleSignIn"
       @sign-out="handleSignOut"
+      @file-uploaded="checkForKnowledgeBaseWelcome"
     />
 
     <!-- Modals and Dialogs -->
@@ -980,6 +1013,12 @@ const triggerUploadFile = (file: File) => {
       v-model="showKnowledgeBaseWelcomeModal"
       :current-user="currentUser"
       @open-manager="handleOpenKBManager"
+    />
+
+    <PublicUserKBWelcomeModal
+      v-model="showPublicUserKBWelcomeModal"
+      :current-user="currentUser"
+      @open-manager="handleOpenPublicKBManager"
     />
 
     <!-- Agent Selection Modal -->

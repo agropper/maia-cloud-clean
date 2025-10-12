@@ -349,7 +349,7 @@ import {
 export default defineComponent({
   name: 'BottomToolbar',
   
-  emits: ['sign-in', 'sign-out', 'chat-loaded', 'group-deleted'],
+  emits: ['write-message', 'show-saved-chats', 'trigger-agent-management', 'show-popup', 'sign-in', 'sign-out', 'chat-loaded', 'group-deleted', 'file-uploaded'],
 
   components: {
     QBtn,
@@ -569,7 +569,7 @@ export default defineComponent({
             // Process file through the proper upload pipeline (which handles bucket upload)
             await uploadFile(file, props.appState, (message: string, type: string) => {
               console.log(`${type}: ${message}`)
-            })
+            }, props.appState.currentUser)
             
             // Show success notification
             $q.notify({
@@ -577,6 +577,9 @@ export default defineComponent({
               message: `File "${file.name}" processed and uploaded successfully!`,
               timeout: 3000
             })
+            
+            // Emit event to parent to re-check for KB Welcome Modal
+            emit('file-uploaded')
             
           } catch (error: any) {
             console.error('File upload failed:', error)

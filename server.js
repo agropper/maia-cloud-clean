@@ -40,6 +40,7 @@ import multer from 'multer';
 import session from 'express-session';
 import fs from 'fs';
 import { cacheManager } from './src/utils/CacheManager.js';
+import { initializeAlertSystem, sendAdminAlert, AlertCategory, AlertSeverity } from './src/utils/admin-alerts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -1360,6 +1361,26 @@ app.post('/api/upload-file', async (req, res) => {
         error: 'UPLOAD_FAILED'
       });
     }
+  }
+});
+
+// Admin alert endpoint - receive alerts from frontend
+app.post('/api/admin-alert', async (req, res) => {
+  try {
+    const { severity, category, message, details } = req.body;
+    
+    // Send the alert through the system
+    await sendAdminAlert({
+      severity,
+      category,
+      message,
+      details
+    });
+    
+    res.json({ success: true, message: 'Alert sent to administrators' });
+  } catch (error) {
+    console.error('❌ Failed to process admin alert:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to process alert' });
   }
 });
 
@@ -8037,6 +8058,10 @@ async function ensureAllUserBuckets() {
     } catch (error) {
       console.log(`❌ [Database] Consistency check failed: ${error.message}`);
     }
+    
+    // Initialize admin alert system
+    initializeAlertSystem(cacheManager, couchDBClient, addUpdateToAllAdmins);
+    console.log(`✅ [STARTUP] Admin alert system initialized`);
     
     // Server ready for requests
     console.log(`✅ [STARTUP] Server ready for authentication requests`);
