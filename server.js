@@ -8185,9 +8185,25 @@ async function ensureAllUserBuckets() {
     // Pre-cache agents for Admin2
     try {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
-      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
-      await cacheManager.cacheAgents(agents);
-      console.log(`✅ [STARTUP] Cached ${agents.length} agents for Admin2`);
+      const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
+      const transformedAgents = rawAgents.map((agent) => {
+        return {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
+          endpoint: null,
+          description: null
+        };
+      });
+      
+      await cacheManager.cacheAgents(transformedAgents);
+      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents for Admin2`);
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
