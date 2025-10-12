@@ -212,7 +212,7 @@ const uploadTranscriptFile = async (
       }
       
       const userId = currentUser.userId;
-      const userFolder = `${userId}/`;
+      const userFolder = `${userId}/archived/`;  // Save to archived subfolder
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -350,7 +350,7 @@ const uploadPDFFile = async (
       }
       
       const resolvedUserId = currentUser.userId;
-      const userFolder = `${resolvedUserId}/`;
+      const userFolder = `${resolvedUserId}/archived/`;  // Save to archived subfolder
       
       // Ensure user has a bucket folder if they're authenticated (not Public User)
       if (resolvedUserId !== 'Public User' && currentUser?.isAuthenticated) {
@@ -491,7 +491,7 @@ const uploadMarkdownFile = async (
       }
       
       const userId = currentUser.userId;
-      const userFolder = `${userId}/`;
+      const userFolder = `${userId}/archived/`;  // Save to archived subfolder
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -618,7 +618,7 @@ const uploadRTFFile = async (
       }
       
       const userId = currentUser.userId;
-      const userFolder = `${userId}/`;
+      const userFolder = `${userId}/archived/`;  // Save to archived subfolder
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',
@@ -709,7 +709,7 @@ const uploadTextFile = async (
       }
       
       const userId = currentUser.userId;
-      const userFolder = `${userId}/`;
+      const userFolder = `${userId}/archived/`;  // Save to archived subfolder
       
       const uploadResponse = await fetch('/api/upload-to-bucket', {
         method: 'POST',

@@ -1983,7 +1983,7 @@ async function getBucketStatusForUser(userId) {
       }
     });
 
-    const userFolder = `${userId}/`;
+    const userFolder = `${userId}/archived/`;  // Check archived subfolder
     
     const listCommand = new ListObjectsV2Command({
       Bucket: bucketName,
