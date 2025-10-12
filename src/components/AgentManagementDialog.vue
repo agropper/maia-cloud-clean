@@ -1464,6 +1464,8 @@ export default defineComponent({
     NewUserWelcomeModal,
     QCheckbox,
     QChip,
+    QBadge,
+    QBanner,
     QTooltip,
     QAvatar,
     QSpinnerDots,
