@@ -357,6 +357,7 @@
                             <q-checkbox
                               v-model="file.selected"
                               color="primary"
+                              :disable="isFileCheckboxDisabled(file)"
                             />
                           </q-item-section>
                           <q-item-section>
@@ -366,6 +367,23 @@
                             <q-item-label caption class="text-grey-6">
                               {{ file.size }} bytes
                             </q-item-label>
+                            
+                            <!-- KB Association Badges -->
+                            <div v-if="file.knowledgeBases && file.knowledgeBases.length > 0" class="q-mt-xs">
+                              <q-badge 
+                                v-for="kb in file.knowledgeBases" 
+                                :key="kb.id"
+                                color="positive" 
+                                class="q-mr-xs"
+                              >
+                                ✅ In KB: {{ kb.name }}
+                              </q-badge>
+                            </div>
+                            <div v-else class="q-mt-xs">
+                              <q-badge color="orange">
+                                🆕 Not indexed yet
+                              </q-badge>
+                            </div>
                           </q-item-section>
                           <q-item-section side>
                             <q-btn
@@ -387,10 +405,10 @@
                     </div>
                     
                     <q-btn
-                      label="CREATE KNOWLEDGE BASE"
-                      color="primary"
+                      :label="kbButtonState.label"
+                      :color="kbButtonState.color"
                       icon="add_circle"
-                      :disable="getSelectedFilesCount() === 0"
+                      :disable="kbButtonState.disabled"
                       @click="createKnowledgeBaseFromSelectedFiles"
                       class="q-px-lg q-mt-md"
                     />
