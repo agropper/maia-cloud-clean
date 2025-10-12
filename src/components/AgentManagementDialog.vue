@@ -3742,6 +3742,14 @@ export default defineComponent({
       return bucketFilesNotInKB.length > 0 || (props.uploadedFiles && props.uploadedFiles.length > 0);
     });
 
+    // Watch userBucketFiles to see what data we have when rendering
+    watch(userBucketFiles, (files) => {
+      console.log(`👁️ [WATCH] userBucketFiles changed, now has ${files.length} files`);
+      files.forEach(f => {
+        console.log(`  - ${f.key}: knowledgeBases=${f.knowledgeBases?.length || 0}, selected=${f.selected}`);
+      });
+    }, { deep: true, immediate: true });
+
     // Computed property to check if a file should have its checkbox disabled
     const isFileCheckboxDisabled = (file) => {
       // If file is in KB AND no new files exist → DISABLE
