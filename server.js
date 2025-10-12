@@ -1953,6 +1953,75 @@ async function updateUserBucketCache(userId) {
   }
 }
 
+// Reconcile user document files with actual bucket contents
+async function reconcileUserFiles(userId) {
+  try {
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return 0;
+    }
+    
+    // Get actual files from bucket
+    const bucketData = await getBucketStatusForUser(userId);
+    const actualFiles = bucketData.files || [];
+    
+    // Build a map of actual files by bucketKey
+    const actualFileMap = new Map();
+    for (const file of actualFiles) {
+      actualFileMap.set(file.key, {
+        fileName: file.key.split('/').pop(),
+        bucketKey: file.key,
+        bucketPath: `${userId}/archived/`,
+        fileSize: file.size,
+        fileType: file.key.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text',
+        uploadedAt: file.lastModified || new Date().toISOString()
+      });
+    }
+    
+    // Initialize files array if it doesn't exist
+    if (!userDoc.files) {
+      userDoc.files = [];
+    }
+    
+    // Filter out files that no longer exist in bucket or have wrong paths
+    const validFiles = userDoc.files.filter(file => {
+      const hasArchivedPath = file.bucketPath?.includes('/archived/');
+      const existsInBucket = actualFileMap.has(file.bucketKey);
+      return hasArchivedPath && existsInBucket;
+    });
+    
+    // Add files from bucket that aren't in the document
+    for (const [bucketKey, fileData] of actualFileMap) {
+      const existsInDoc = validFiles.some(f => f.bucketKey === bucketKey);
+      if (!existsInDoc) {
+        validFiles.push({
+          ...fileData,
+          addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    }
+    
+    // Check if any changes were made
+    const changesMade = validFiles.length !== userDoc.files.length;
+    
+    if (changesMade) {
+      console.log(`🔄 [RECONCILE] ${userId}: ${userDoc.files.length} → ${validFiles.length} files`);
+      userDoc.files = validFiles;
+      userDoc.updatedAt = new Date().toISOString();
+      
+      // Save to database
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+    }
+    
+    return validFiles.length;
+  } catch (error) {
+    console.error(`❌ [RECONCILE] Error for user ${userId}:`, error.message);
+    return 0;
+  }
+}
+
 // Helper function to get bucket status (reusable for startup and API)
 async function getBucketStatusForUser(userId) {
   try {
@@ -8242,7 +8311,10 @@ async function ensureAllUserBuckets() {
       for (let i = 0; i < filteredUsers.length; i++) {
         const user = filteredUsers[i];
         
-        // Call bucket status function directly (not via HTTP)
+        // Step 1: Reconcile files in user document with actual bucket contents
+        await reconcileUserFiles(user._id);
+        
+        // Step 2: Fetch bucket status and cache the user
         const bucketData = await getBucketStatusForUser(user._id);
         
         const bucketStatus = {
@@ -8251,9 +8323,12 @@ async function ensureAllUserBuckets() {
           totalSize: bucketData.totalSize || 0
         };
         
+        // Get fresh user doc after reconciliation
+        const freshUser = await cacheManager.getDocument(couchDBClient, 'maia_users', user._id) || user;
+        
         // Store user with bucket status
         const userWithBucket = {
-          ...user,
+          ...freshUser,
           bucketStatus: bucketStatus
         };
         
