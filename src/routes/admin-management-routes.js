@@ -1056,12 +1056,23 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     // Bucket files are already in bucketData from the direct call above
     let bucketFiles = [];
     if (bucketData.success && bucketData.files) {
-      // Transform bucket files to match frontend expectations
+      // Create a map of file metadata from user document
+      const fileMetadataMap = new Map();
+      if (userDoc.files && Array.isArray(userDoc.files)) {
+        for (const fileInfo of userDoc.files) {
+          fileMetadataMap.set(fileInfo.bucketKey, fileInfo);
+        }
+      }
+      
+      // Transform bucket files and merge KB associations
       bucketFiles = bucketData.files.map(file => {
         // Extract filename from key (remove user folder prefix)
-        const fileName = file.key.replace(`${userId}/`, '');
+        const fileName = file.key.replace(`${userId}/archived/`, '').replace(`${userId}/`, '');
         // Extract file type from filename extension
         const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+        
+        // Get KB associations from user document
+        const metadata = fileMetadataMap.get(file.key);
         
         return {
           bucketKey: file.key,
@@ -1071,7 +1082,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
           uploadedAt: file.lastModified,
           lastModified: file.lastModified,
           etag: file.etag,
-          knowledgeBases: [] // Will be populated from database later
+          knowledgeBases: metadata?.knowledgeBases || []
         };
       });
     }
@@ -1084,7 +1095,7 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
     userInfo.hasBucket = userInfo.bucketStatus?.hasFolder || false;
     userInfo.bucketFileCount = userInfo.bucketStatus?.fileCount || 0;
     userInfo.bucketTotalSize = userInfo.bucketStatus?.totalSize || 0;
-    userInfo.files = bucketFiles; // Use bucket files instead of database files
+    userInfo.files = bucketFiles; // Use bucket files merged with KB associations from database
     userInfo.approvalRequests = [];
     userInfo.agents = [];
     userInfo.knowledgeBases = [];
