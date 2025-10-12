@@ -2137,6 +2137,17 @@ export default defineComponent({
         if (response.ok) {
           const result = await response.json()
           if (result.success && result.files) {
+            console.log(`📋 [BUCKET FILES] Received ${result.files.length} files from API`);
+            
+            // Debug: Check if KB associations are present
+            result.files.forEach((file: any) => {
+              if (file.knowledgeBases && file.knowledgeBases.length > 0) {
+                console.log(`📋 [BUCKET FILES] ${file.key} has ${file.knowledgeBases.length} KB(s):`, file.knowledgeBases.map((kb: any) => kb.name));
+              } else {
+                console.log(`📋 [BUCKET FILES] ${file.key} has NO KB associations`);
+              }
+            });
+            
             // Add selection state to each file
             const filesWithSelection = result.files.map((file: any) => ({
               ...file,
