@@ -3020,7 +3020,7 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     // Get agents from DigitalOcean API (same as /api/agents)
     const agents = await doRequest('/v2/gen-ai/agents');
     
-    // Transform agents to match frontend expectations (simplified to avoid multiple API calls)
+    // Transform agents to match frontend expectations
     const allAgents = (agents.agents || []).map((agent) => {
       return {
         id: agent.id,
@@ -3029,7 +3029,7 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
         model: agent.model || 'unknown',
         createdAt: agent.created_at,
         updatedAt: agent.updated_at,
-        knowledgeBases: [], // Simplified - avoid additional API calls
+        knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
         endpoint: null,
         description: null
       };
