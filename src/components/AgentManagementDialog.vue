@@ -3461,11 +3461,15 @@ export default defineComponent({
     };
 
     // Perform the actual KB creation (called after confirmation or if no existing KB)
+    // NEW SIMPLIFIED VERSION: Works with archived/ folder structure
     const performKBCreation = async () => {
-      const selectedUploadedFiles = props.uploadedFiles?.filter(file => file.selected) || [];
-      const selectedBucketFiles = userBucketFiles.value?.filter(file => file.selected) || [];
+      const selectedBucketFiles = userBucketFiles.value?.filter((file: any) => file.selected) || [];
       
-      if (selectedUploadedFiles.length === 0 && selectedBucketFiles.length === 0) {
+      if (selectedBucketFiles.length === 0) {
+        $q.notify({
+          type: 'warning',
+          message: 'Please select at least one file to create a knowledge base'
+        });
         return;
       }
 
@@ -3482,12 +3486,37 @@ export default defineComponent({
       }
 
       isCreatingKb.value = true;
-      currentKbStatus.value = 'Creating KB';
+      currentKbStatus.value = 'Copying files for indexing';
 
       try {
-        // Step 1: Upload files to bucket if needed
-        if (selectedUploadedFiles.length > 0) {
-          for (const file of selectedUploadedFiles) {
+        const username = localCurrentUser.value?.userId;
+        if (!username) {
+          throw new Error('User not authenticated');
+        }
+
+        // Step 1: Copy selected files from archived/ to root folder for indexing
+        console.log(`📁 [KB CREATE] Copying ${selectedBucketFiles.length} files from archived/ to root for indexing`);
+        currentKbStatus.value = 'Copying files for indexing';
+        
+        const fileKeys = selectedBucketFiles.map(f => f.key);
+        const copyResponse = await fetch('/api/bucket/copy-files-for-kb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: username, fileKeys: fileKeys })
+        });
+        
+        if (!copyResponse.ok) {
+          throw new Error('Failed to copy files for KB indexing');
+        }
+        
+        const copyResult = await copyResponse.json();
+        console.log(`✅ [KB CREATE] Copied ${copyResult.count} files to root for indexing`);
+
+        // OLD CODE REMOVED - was uploading in-memory files
+        // Now we just copy from archived/ to root
+        
+        if (false) {  // This block will be removed - keeping structure for now
+          for (const file of []) {
             try {
               // Prepare file content and metadata
               let aiContent = null;
@@ -3573,22 +3602,18 @@ export default defineComponent({
           await checkUserBucketFiles(true);
         }
 
-        // Step 2: Create knowledge base
+        // Step 2: Create knowledge base from root folder
         console.log('[KB CREATE] Creating knowledge base...');
-        currentKbStatus.value = 'Indexing KB';
+        currentKbStatus.value = 'Creating knowledge base';
         
-        // Get all files for KB creation (both uploaded and bucket files)
-        const allSelectedFiles = [...selectedUploadedFiles, ...selectedBucketFiles];
-        
-        // Generate KB name following the format: {first8chars}-MMDDYYYY (lowercase, hyphens only)
-        // Note: Backend will add username prefix automatically
-        const firstFile = allSelectedFiles[0];
-        const fileName = firstFile?.key ? firstFile.key.split('/').pop() : firstFile?.name || 'kb';
+        // Generate KB name following the format: {first8chars}-MMDDYYYY
+        const firstFile = selectedBucketFiles[0];
+        const fileName = firstFile.key.split('/').pop() || 'kb';
         const filePrefix = fileName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toLowerCase();
         const today = new Date();
         const dateStr = `${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}${today.getFullYear()}`;
-        const kbName = `${filePrefix}-${dateStr}`.toLowerCase();
-        const kbDescription = `Knowledge base created from ${allSelectedFiles.length} files`;
+        const kbName = `${filePrefix}-${dateStr}`;
+        const kbDescription = `Knowledge base created from ${selectedBucketFiles.length} files`;
         
         // Create knowledge base using the existing function
         const kbResponse = await fetch('/api/knowledge-bases', {
@@ -3640,70 +3665,49 @@ export default defineComponent({
           
           console.log('[KB CREATE] Knowledge base attached to agent');
           
-          // Step 4: Update file KB associations
+          // Step 4: Update file KB associations in user document
           console.log('[KB CREATE] Updating file KB associations...');
-          const currentUser = localCurrentUser.value?.userId || 'unknown';
-          const kbName = kbResult.knowledge_base?.name || kbResult.data?.name || kbName;
+          const finalKBName = kbResult.knowledge_base?.name || kbName;
           
-          for (const file of allSelectedFiles) {
+          for (const file of selectedBucketFiles) {
             try {
-              // Get the bucket key for the file
-              const fileName = file.key ? file.key.split('/').pop() : file.name;
-              const bucketKey = `${currentUser}/${fileName}`;
+              const fileName = file.key.split('/').pop();
               
               await fetch('/api/user-file-kb-association', {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  userId: currentUser,
+                  userId: username,
                   fileName: fileName,
-                  bucketKey: bucketKey,
+                  bucketKey: file.key,  // Keep archived/ path in user document
                   knowledgeBaseId: knowledgeBaseId,
-                  knowledgeBaseName: kbName,
+                  knowledgeBaseName: finalKBName,
                   action: 'add'
                 })
               });
               
               console.log(`✅ Updated KB association for file: ${fileName}`);
             } catch (kbAssocError) {
-              console.warn('Failed to update KB association for file:', file.name, kbAssocError);
+              console.warn('Failed to update KB association:', kbAssocError);
             }
           }
           
-          // Step 5: Clean up files
-          console.log('[KB CREATE] Cleaning up files...');
+          // Step 5: Clean up temp files from root folder
+          console.log('[KB CREATE] Cleaning up temp files from root folder...');
+          currentKbStatus.value = 'Cleaning up';
           
-          // Remove uploaded files from appState
-          selectedUploadedFiles.forEach(file => {
-            const index = props.uploadedFiles.findIndex(f => f.id === file.id);
-            if (index !== -1) {
-              props.uploadedFiles.splice(index, 1);
-            }
+          const cleanupResponse = await fetch('/api/bucket/cleanup-kb-temp-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: username })
           });
           
-          // Delete files from bucket
-          const username = localCurrentUser.value?.userId || 'unknown';
-          for (const file of allSelectedFiles) {
-            try {
-              const fileName = file.key ? file.key.split('/').pop() : file.name;
-              await fetch(`/api/delete-bucket-file`, {
-                method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId: username,
-                  fileName: fileName
-                })
-              });
-            } catch (deleteError) {
-              console.warn('Failed to delete file from bucket:', file.name, deleteError);
-            }
+          if (cleanupResponse.ok) {
+            const cleanupResult = await cleanupResponse.json();
+            console.log(`✅ [KB CREATE] Deleted ${cleanupResult.count} temp files from root folder`);
           }
           
-          // Refresh knowledge bases
+          // Step 6: Refresh knowledge bases
           await loadAvailableKnowledgeBases();
           
           console.log('[KB CREATE] Knowledge base creation completed successfully');

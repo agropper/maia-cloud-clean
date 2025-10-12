@@ -2046,6 +2046,147 @@ async function getBucketStatusForUser(userId) {
   }
 }
 
+// Copy files from archived/ to root for KB indexing
+app.post('/api/bucket/copy-files-for-kb', async (req, res) => {
+  try {
+    const { userId, fileKeys } = req.body;
+    
+    if (!userId || !fileKeys || !Array.isArray(fileKeys)) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and fileKeys array required'
+      });
+    }
+
+    const { S3Client, CopyObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    const copiedFiles = [];
+    
+    for (const sourceKey of fileKeys) {
+      try {
+        // Source: userId/archived/filename.pdf
+        // Destination: userId/filename.pdf
+        const fileName = sourceKey.split('/').pop();
+        const destKey = `${userId}/${fileName}`;
+        
+        const copyCommand = new CopyObjectCommand({
+          Bucket: bucketName,
+          CopySource: `${bucketName}/${sourceKey}`,
+          Key: destKey
+        });
+        
+        await s3Client.send(copyCommand);
+        copiedFiles.push(destKey);
+        console.log(`✅ Copied ${sourceKey} → ${destKey}`);
+      } catch (copyError) {
+        console.error(`❌ Failed to copy ${sourceKey}:`, copyError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      copiedFiles: copiedFiles,
+      count: copiedFiles.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error copying files for KB:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Clean up temp files from root folder after KB creation
+app.post('/api/bucket/cleanup-kb-temp-files', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId required'
+      });
+    }
+
+    const { S3Client, ListObjectsV2Command, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    // List files in root folder (userId/) but NOT in archived/ subfolder
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/`,
+      MaxKeys: 1000
+    });
+
+    const result = await s3Client.send(listCommand);
+    const files = result.Contents || [];
+    
+    // Filter to only root-level files (not in archived/ or other subfolders)
+    const rootFiles = files.filter(file => {
+      const pathParts = file.Key.split('/');
+      // Should be exactly 2 parts: userId/filename.pdf (not userId/archived/filename.pdf)
+      return pathParts.length === 2 && pathParts[1] !== '' && !file.Key.includes('/archived/');
+    });
+
+    const deletedFiles = [];
+    
+    for (const file of rootFiles) {
+      try {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: file.Key
+        });
+        
+        await s3Client.send(deleteCommand);
+        deletedFiles.push(file.Key);
+        console.log(`🗑️ Deleted temp file: ${file.Key}`);
+      } catch (deleteError) {
+        console.error(`❌ Failed to delete ${file.Key}:`, deleteError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      deletedFiles: deletedFiles,
+      count: deletedFiles.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error cleaning up temp files:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Get user-specific bucket status
 app.get('/api/bucket/user-status/:userId', async (req, res) => {
   try {
