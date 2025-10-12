@@ -2347,6 +2347,11 @@ const loadKnowledgeBases = async () => {
     const response = await throttledFetchJson('/api/admin-management/knowledge-bases')
     knowledgeBases.value = response.knowledgeBases || []
     
+    console.log(`📚 [ADMIN2] Loaded ${knowledgeBases.value.length} KBs`)
+    knowledgeBases.value.forEach(kb => {
+      console.log(`  - KB: id=${kb.id}, name="${kb.name}", owner=${kb.owner}`)
+    })
+    
     // Update stats
     kbStats.value.totalKBs = knowledgeBases.value.length
     kbStats.value.protectedKBs = knowledgeBases.value.filter(kb => kb.isProtected).length
