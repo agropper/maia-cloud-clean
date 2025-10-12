@@ -3620,8 +3620,11 @@ export default defineComponent({
             console.log(`✅ [KB CREATE] Deleted ${cleanupResult.count} temp files from root folder`);
           }
           
-          // Step 6: Refresh knowledge bases
+          // Step 6: Refresh knowledge bases and file list
           await loadAvailableKnowledgeBases();
+          
+          // Step 7: Refresh bucket files to update KB associations
+          await checkUserBucketFiles(true);
           
           console.log('[KB CREATE] Knowledge base creation completed successfully');
           
