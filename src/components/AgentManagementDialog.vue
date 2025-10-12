@@ -2073,6 +2073,7 @@ export default defineComponent({
         
         // Find the current KB ID (if any)
         let currentKBId = null;
+        console.log(`📋 [FILE PRESELECT] props.currentKnowledgeBase:`, props.currentKnowledgeBase);
         if (props.currentKnowledgeBase?.id) {
           currentKBId = props.currentKnowledgeBase.id;
         }
@@ -2090,7 +2091,13 @@ export default defineComponent({
         console.log(`📋 [FILE PRESELECT] Most recent file: ${mostRecentFile.key}`);
         
         // Check if there are any new files (not in any KB)
+        console.log(`📋 [FILE PRESELECT] Analyzing ${files.length} files for new/indexed status`);
+        files.forEach(f => {
+          console.log(`  - ${f.key}: knowledgeBases=${f.knowledgeBases ? f.knowledgeBases.length : 'undefined'}`);
+        });
+        
         const hasNewFiles = files.some(file => !file.knowledgeBases || file.knowledgeBases.length === 0);
+        console.log(`📋 [FILE PRESELECT] Has new files (not in KB): ${hasNewFiles}`);
         
         // Pre-select files based on scenario
         for (const file of files) {
