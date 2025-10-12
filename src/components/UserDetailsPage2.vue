@@ -236,17 +236,20 @@
             <div class="file-type" data-label="Type">{{ file.fileType }}</div>
             <div class="file-kbs" data-label="Knowledge Bases">
               <div v-if="file.knowledgeBases && file.knowledgeBases.length > 0" class="kb-chips">
-                <QChip
+                <QBadge
                   v-for="kb in file.knowledgeBases"
                   :key="kb.id"
-                  :label="kb.name"
-                  size="sm"
-                  color="primary"
-                  outline
-                  class="kb-chip"
-                />
+                  color="positive"
+                  class="q-mr-xs"
+                >
+                  ✅ In KB: {{ kb.name }}
+                </QBadge>
               </div>
-              <div v-else class="no-kbs">Not in any KB</div>
+              <div v-else class="no-kbs">
+                <QBadge color="orange">
+                  🆕 Not indexed yet
+                </QBadge>
+              </div>
             </div>
             <div class="file-date" data-label="Uploaded">{{ formatRelativeTime(file.uploadedAt) }}</div>
           </div>

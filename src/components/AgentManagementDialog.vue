@@ -700,9 +700,30 @@
                         <q-item-label caption>{{
                           formatFileSize(file.size || 0)
                         }} bytes | Last modified: {{ new Date(file.lastModified).toLocaleDateString() }}</q-item-label>
+                        
+                        <!-- KB Association Badges -->
+                        <div v-if="file.knowledgeBases && file.knowledgeBases.length > 0" class="q-mt-xs">
+                          <q-badge 
+                            v-for="kb in file.knowledgeBases" 
+                            :key="kb.id"
+                            color="positive" 
+                            class="q-mr-xs"
+                          >
+                            ✅ In KB: {{ kb.name }}
+                          </q-badge>
+                        </div>
+                        <div v-else class="q-mt-xs">
+                          <q-badge color="orange">
+                            🆕 Not indexed yet
+                          </q-badge>
+                        </div>
                       </q-item-section>
                       <q-item-section side>
-                        <q-checkbox v-model="selectedBucketFiles" :val="file.key" />
+                        <q-checkbox 
+                          v-model="selectedBucketFiles" 
+                          :val="file.key"
+                          :disable="isFileCheckboxDisabled(file)"
+                        />
                       </q-item-section>
                       <q-item-section side>
                         <q-btn
@@ -720,14 +741,33 @@
                   </div>
                 </div>
               </div>
+              
+              <!-- Info message based on state -->
+              <div v-if="userBucketFiles.length > 0 && !hasUploadedDocuments" class="q-mb-md">
+                <q-banner class="bg-blue-1 text-primary">
+                  <template v-slot:avatar>
+                    <q-icon name="info" color="primary" />
+                  </template>
+                  All your files are already indexed. Upload a new file to update your knowledge base.
+                </q-banner>
+              </div>
+              
+              <div v-if="hasUploadedDocuments" class="q-mb-md">
+                <q-banner class="bg-orange-1 text-warning">
+                  <template v-slot:avatar>
+                    <q-icon name="warning" color="warning" />
+                  </template>
+                  Updating your knowledge base will replace the existing one with the selected files.
+                </q-banner>
+              </div>
 
               <div class="row q-gutter-sm q-mt-md">
                 <q-btn
-                  label="Create/Update Knowledge Base"
-                  color="primary"
+                  :label="kbButtonState.label"
+                  :color="kbButtonState.color"
                   type="submit"
                   :loading="isCreatingKb"
-                  :disable="selectedDocuments.length === 0 && selectedBucketFiles.length === 0"
+                  :disable="kbButtonState.disabled"
                 />
                 <q-btn label="Cancel" flat v-close-popup />
               </div>
@@ -2045,14 +2085,21 @@ export default defineComponent({
         
         console.log(`📋 [FILE PRESELECT] Most recent file: ${mostRecentFile.key}`);
         
-        // Pre-select files
+        // Check if there are any new files (not in any KB)
+        const hasNewFiles = files.some(file => !file.knowledgeBases || file.knowledgeBases.length === 0);
+        
+        // Pre-select files based on scenario
         for (const file of files) {
-          // Check if this file is in the current KB
-          const userFileEntry = userFiles.find((uf: any) => uf.bucketKey === file.key);
-          const isInCurrentKB = userFileEntry?.knowledgeBases?.some((kb: any) => kb.id === currentKBId);
+          const isInKB = file.knowledgeBases && file.knowledgeBases.length > 0;
+          const isNewFile = !isInKB;
           
-          // Pre-select if: in current KB OR is the most recent file
-          file.selected = isInCurrentKB || (file.key === mostRecentFile.key);
+          if (hasNewFiles) {
+            // Scenario: New files exist → Select ALL files (old + new) for update
+            file.selected = true;
+          } else {
+            // Scenario: All files indexed → Select none (checkboxes will be disabled)
+            file.selected = false;
+          }
           
           if (file.selected) {
             console.log(`✅ [FILE PRESELECT] Selected: ${file.key.split('/').pop()}`);
@@ -3672,6 +3719,44 @@ export default defineComponent({
       return bucketFilesNotInKB.length > 0 || (props.uploadedFiles && props.uploadedFiles.length > 0);
     });
 
+    // Computed property to check if a file should have its checkbox disabled
+    const isFileCheckboxDisabled = (file) => {
+      // If file is in KB AND no new files exist → DISABLE
+      const hasNewFiles = userBucketFiles.value.some(f => 
+        !f.knowledgeBases || f.knowledgeBases.length === 0
+      );
+      const isInKB = file.knowledgeBases && file.knowledgeBases.length > 0;
+      
+      return isInKB && !hasNewFiles;
+    };
+
+    // Computed property for KB button state
+    const kbButtonState = computed(() => {
+      const newFiles = userBucketFiles.value.filter(f => 
+        !f.knowledgeBases || f.knowledgeBases.length === 0
+      );
+      
+      if (newFiles.length === 0 && userBucketFiles.value.length > 0) {
+        return {
+          label: "All Files Indexed",
+          disabled: true,
+          color: "grey"
+        };
+      } else if (newFiles.length > 0) {
+        return {
+          label: "UPDATE KNOWLEDGE BASE",
+          disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
+          color: "primary"
+        };
+      } else {
+        return {
+          label: "CREATE KNOWLEDGE BASE",
+          disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
+          color: "primary"
+        };
+      }
+    });
+
     // Computed property for KB dropdown options
     const kbOptions = computed(() => {
       const options = [];
@@ -4847,6 +4932,8 @@ export default defineComponent({
       isCreatingKb,
       selectedDocuments,
       hasUploadedDocuments,
+      isFileCheckboxDisabled,
+      kbButtonState,
       onAgentSelected,
       updateAgent,
       confirmDelete,
