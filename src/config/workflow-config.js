@@ -17,6 +17,15 @@ export const WORKFLOW_CONFIG = {
       requiresAction: 'user',
       isLegacy: true
     },
+    'request_email_sent': {
+      step: 2,
+      name: 'Request Email Sent',
+      color: 'blue',
+      description: 'User sent request email',
+      canProceed: false,
+      requiresAction: 'admin',
+      isLegacy: true
+    },
     'awaiting_approval': {
       step: 2,
       name: 'Request Pending',
@@ -133,7 +142,8 @@ export const WORKFLOW_CONFIG = {
   
   // Define valid transitions (backward compatible)
   transitions: {
-    'no_passkey': ['awaiting_approval'],
+    'no_passkey': ['request_email_sent', 'awaiting_approval'],
+    'request_email_sent': ['awaiting_approval', 'approved', 'rejected'],
     'awaiting_approval': ['approved', 'rejected', 'suspended'],
     'rejected': ['awaiting_approval'],
     'approved': ['agent_assigned', 'has_bucket', 'suspended'],
