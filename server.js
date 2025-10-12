@@ -4145,10 +4145,12 @@ const agentApiKeys = {};
 
 // Helper function to get agent-specific API key
 const getAgentApiKey = async (agentId) => {
+  // Declare agentName at function scope so it's available in error handling
+  let agentName = agentId; // fallback to ID
+  
   // Check if we have a cached key for this agent
   if (agentApiKeys[agentId]) {
     // Try to get agent name from cached users for better logging
-    let agentName = agentId; // fallback to ID
     try {
       const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
       let userList;
@@ -4190,7 +4192,10 @@ const getAgentApiKey = async (agentId) => {
     
     const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
     
-    const agentName = userWithAgent ? (userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown') : 'Unknown';
+    // Update agentName if we found the user
+    if (userWithAgent) {
+      agentName = userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown';
+    }
     // Agent API key lookup
     
     if (userWithAgent && userWithAgent.agentApiKey) {
