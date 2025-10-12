@@ -2074,11 +2074,12 @@ export default defineComponent({
         // Find the current KB ID (if any)
         let currentKBId = null;
         console.log(`📋 [FILE PRESELECT] props.currentKnowledgeBase:`, props.currentKnowledgeBase);
-        if (props.currentKnowledgeBase?.id) {
-          currentKBId = props.currentKnowledgeBase.id;
+        if (props.currentKnowledgeBase) {
+          // KB object has 'uuid' field from DigitalOcean API, or 'id' from some endpoints
+          currentKBId = props.currentKnowledgeBase.uuid || props.currentKnowledgeBase.id;
         }
         
-        console.log(`📋 [FILE PRESELECT] Current KB: ${currentKBId || 'none'}`);
+        console.log(`📋 [FILE PRESELECT] Current KB ID: ${currentKBId || 'none'}`);
         
         // Find the most recent file by lastModified date
         let mostRecentFile = files[0];
