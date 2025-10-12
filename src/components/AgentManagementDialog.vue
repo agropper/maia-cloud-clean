@@ -907,6 +907,14 @@
       </q-card>
     </q-dialog>
 
+    <!-- KB Update Warning Modal -->
+    <KBUpdateWarningModal
+      v-model="showKBUpdateWarning"
+      :existing-k-b-name="existingKBName"
+      @confirm="handleKBUpdateConfirm"
+      @cancel="handleKBUpdateCancel"
+    />
+
     <!-- Delete File Confirmation Dialog -->
     <q-dialog v-model="showDeleteFileDialog" persistent>
       <q-card style="min-width: 500px; max-width: 600px">
@@ -1360,6 +1368,7 @@ import {
 import AgentCreationWizard from "./AgentCreationWizard.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import KBOwnershipTransferModal from "./KBOwnershipTransferModal.vue";
+import KBUpdateWarningModal from "./KBUpdateWarningModal.vue";
 import AgentStatusIndicator from "./AgentStatusIndicator.vue";
 import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import type { UploadedFile } from "../types";
@@ -1408,6 +1417,7 @@ export default defineComponent({
     AgentCreationWizard,
     PasskeyAuthDialog,
     KBOwnershipTransferModal,
+    KBUpdateWarningModal,
     AgentStatusIndicator,
     NewUserWelcomeModal,
     QCheckbox,
@@ -1490,6 +1500,8 @@ export default defineComponent({
     const showSwitchKbDialog = ref(false);
     const showDeleteFileDialog = ref(false);
     const fileToDelete = ref(null);
+    const showKBUpdateWarning = ref(false);
+    const existingKBName = ref('');
     const showKbLinkSuggestionDialog = ref(false);
     const showNoAgentModal = ref(false);
     const showNewUserWelcomeModal = ref(false);
@@ -2897,6 +2909,18 @@ export default defineComponent({
       }
     };
 
+    // Handle KB update warning modal actions
+    const handleKBUpdateConfirm = async () => {
+      showKBUpdateWarning.value = false;
+      // User confirmed - proceed with KB update
+      await performKBCreation();
+    };
+
+    const handleKBUpdateCancel = () => {
+      showKBUpdateWarning.value = false;
+      // User cancelled - stay in Agent Management Dialog
+    };
+
     // Helper function to convert file to base64
     const fileToBase64 = (file: File): Promise<string> => {
       return new Promise((resolve, reject) => {
@@ -3421,6 +3445,27 @@ export default defineComponent({
           type: 'warning',
           message: 'Please select at least one file to create a knowledge base'
         });
+        return;
+      }
+
+      // Check if user already has a KB
+      if (props.currentKnowledgeBase && props.currentKnowledgeBase.name) {
+        // User has existing KB - show warning modal
+        existingKBName.value = props.currentKnowledgeBase.name;
+        showKBUpdateWarning.value = true;
+        return;  // Wait for user confirmation
+      }
+
+      // No existing KB - proceed with creation
+      await performKBCreation();
+    };
+
+    // Perform the actual KB creation (called after confirmation or if no existing KB)
+    const performKBCreation = async () => {
+      const selectedUploadedFiles = props.uploadedFiles?.filter(file => file.selected) || [];
+      const selectedBucketFiles = userBucketFiles.value?.filter(file => file.selected) || [];
+      
+      if (selectedUploadedFiles.length === 0 && selectedBucketFiles.length === 0) {
         return;
       }
 
@@ -4869,6 +4914,10 @@ export default defineComponent({
       showKbLinkSuggestionDialog,
       selectedKnowledgeBase,
       fileToDelete,
+      showKBUpdateWarning,
+      existingKBName,
+      handleKBUpdateConfirm,
+      handleKBUpdateCancel,
       newKbName,
       newKbDescription,
       isCreatingKb,
