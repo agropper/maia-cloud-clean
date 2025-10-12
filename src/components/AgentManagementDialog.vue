@@ -3658,11 +3658,15 @@ export default defineComponent({
       });
     };
 
-    // Computed property to check if there are documents available for KB creation
+    // Computed property to check if there are NEW documents available for KB creation
     const hasUploadedDocuments = computed(() => {
-      // Check if user has files in bucket OR uploaded files
-      return (userBucketFiles.value && userBucketFiles.value.length > 0) || 
-             (props.uploadedFiles && props.uploadedFiles.length > 0);
+      // Check if there are any files that are NOT already in a KB
+      const bucketFilesNotInKB = userBucketFiles.value.filter(file => {
+        // A file is NOT in KB if it has no knowledgeBases array or it's empty
+        return !file.knowledgeBases || file.knowledgeBases.length === 0;
+      });
+      
+      return bucketFilesNotInKB.length > 0 || (props.uploadedFiles && props.uploadedFiles.length > 0);
     });
 
     // Computed property for KB dropdown options

@@ -2260,7 +2260,30 @@ app.post('/api/bucket/cleanup-kb-temp-files', async (req, res) => {
 app.get('/api/bucket/user-status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Get bucket files
     const bucketStatus = await getBucketStatusForUser(userId);
+    
+    // Get user document to merge in KB associations
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    
+    if (userDoc && userDoc.files && bucketStatus.files) {
+      // Create a map of file metadata by bucketKey
+      const fileMetadataMap = new Map();
+      for (const fileInfo of userDoc.files) {
+        fileMetadataMap.set(fileInfo.bucketKey, fileInfo);
+      }
+      
+      // Merge KB associations into bucket files
+      bucketStatus.files = bucketStatus.files.map(bucketFile => {
+        const metadata = fileMetadataMap.get(bucketFile.key);
+        return {
+          ...bucketFile,
+          knowledgeBases: metadata?.knowledgeBases || []
+        };
+      });
+    }
+    
     res.json(bucketStatus);
   } catch (error) {
     console.error('❌ Error getting user bucket status:', error);
