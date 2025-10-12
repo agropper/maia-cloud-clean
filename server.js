@@ -8478,6 +8478,37 @@ async function ensureAllUserBuckets() {
       process.exit(1);
     }
     
+    // Pre-cache agents for Admin2
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      console.log(`📊 [STARTUP] Fetched ${rawAgents.length} agents from DO API`);
+      
+      // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
+      const transformedAgents = rawAgents.map((agent) => {
+        const kbs = agent.knowledge_bases || [];
+        console.log(`  - Agent ${agent.name}: ${kbs.length} KB(s) attached`);
+        
+        return {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: kbs, // Use knowledge_bases from DO API
+          endpoint: null,
+          description: null
+        };
+      });
+      
+      await cacheManager.cacheAgents(transformedAgents);
+      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
+    } catch (error) {
+      console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
+    }
+    
     // Deployment monitoring will be started automatically when agents are created
     // No need to start it on server startup since it only runs when there are active deployments
   
