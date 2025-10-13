@@ -2902,14 +2902,30 @@ app.post('/api/personal-chat', async (req, res) => {
     const responseTime = Date.now() - startTime;
     console.error(`❌ Personal AI error (${responseTime}ms):`, error.message);
     
-    // Fallback to mock response on error
+    // Return error message in chat instead of mock response
     let { chatHistory } = req.body;
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
     
-    const mockResponse = mockAIResponses['personal-chat'](req.body.newValue || '');
+    // Create helpful error message for user
+    let errorMessage = '❌ **Error communicating with your Private AI:**\n\n';
+    
+    if (error.message.includes('exceeds maximum token limit')) {
+      errorMessage += '**Token Limit Exceeded**\n\n';
+      errorMessage += 'The combined size of your uploaded file and knowledge base exceeds the model\'s maximum context window (96,000 tokens).\n\n';
+      errorMessage += '**Suggestions:**\n';
+      errorMessage += '- Remove the uploaded file and rely only on your knowledge base\n';
+      errorMessage += '- Try a shorter question\n';
+      errorMessage += '- Split your document into smaller files';
+    } else if (error.message.includes('unauthorized') || error.message.includes('authentication')) {
+      errorMessage += '**Authentication Error**\n\n';
+      errorMessage += 'Your API key may be invalid or expired. Please contact the administrator for assistance.';
+    } else {
+      errorMessage += `**Error Details:**\n\n${error.message}`;
+    }
+    
     const newChatHistory = [
       ...chatHistory,
-      { role: 'assistant', content: mockResponse, name: 'Personal AI (Fallback)' }
+      { role: 'assistant', content: errorMessage, name: 'System Error' }
     ];
     
     res.json(newChatHistory);
