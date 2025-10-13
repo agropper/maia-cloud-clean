@@ -1225,9 +1225,13 @@ const modelColumns = [
 
 // Methods - Static implementations (no real logic)
 const resetWelcomeModal = () => {
+  // Clear the welcome modal flags from localStorage
+  localStorage.removeItem('maia-welcome-seen')
+  localStorage.removeItem('maia-welcome-seen-timestamp')
+  
   $q.notify({
     type: 'positive',
-    message: 'Welcome modal reset (AdminPanel2 - Static)',
+    message: 'Welcome modal reset - reload page to see it again',
     position: 'top'
   })
 }
