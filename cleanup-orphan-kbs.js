@@ -14,7 +14,7 @@ dotenv.config();
 
 const DIGITALOCEAN_TOKEN = process.env.DIGITALOCEAN_TOKEN;
 const DIGITALOCEAN_BASE_URL = 'https://api.digitalocean.com';
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3001';
 
 if (!DIGITALOCEAN_TOKEN) {
   console.error('❌ DIGITALOCEAN_TOKEN not found in environment');

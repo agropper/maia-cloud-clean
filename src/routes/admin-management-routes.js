@@ -3135,26 +3135,16 @@ router.get('/knowledge-bases', requireAdminAuth, async (req, res) => {
     // Get all knowledge bases from maia_knowledge_bases database
     const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
     
-    console.log(`📚 [KB LIST] Fetched ${allKBs.length} KB documents from database`);
-    
     // Transform to expected format
-    const knowledgeBases = allKBs.map(doc => {
-      const transformed = {
-        id: doc.kbId || doc._id,
-        name: doc.kbName || doc.name,
-        description: doc.description || 'No description',
-        isProtected: !!doc.isProtected,
-        owner: doc.owner || 'Unknown',
-        createdAt: doc.createdAt || doc.timestamp,
-        status: doc.status || 'unknown'
-      };
-      
-      console.log(`  - KB ${transformed.id}: name="${transformed.name}", owner=${transformed.owner}`);
-      
-      return transformed;
-    }).filter(kb => kb.id && !kb.id.startsWith('_design/'));
-    
-    console.log(`📚 [KB LIST] Returning ${knowledgeBases.length} transformed KBs`);
+    const knowledgeBases = allKBs.map(doc => ({
+      id: doc.kbId || doc._id,
+      name: doc.kbName || doc.name,
+      description: doc.description || 'No description',
+      isProtected: !!doc.isProtected,
+      owner: doc.owner || 'Unknown',
+      createdAt: doc.createdAt || doc.timestamp,
+      status: doc.status || 'unknown'
+    })).filter(kb => kb.id && !kb.id.startsWith('_design/'));
     
     res.json({
       knowledgeBases: knowledgeBases,
