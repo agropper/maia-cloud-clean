@@ -189,7 +189,7 @@
                 size="sm"
                 class="q-mr-sm"
               />
-              <div class="tooltip-text">Show help guide</div>
+              <div class="tooltip-text">Show welcome guide</div>
             </div>
             
             <div class="tooltip-wrapper">
@@ -244,8 +244,8 @@
       @chatLoaded="handleChatLoaded"
     />
 
-    <!-- Help Welcome Modal -->
-    <HelpWelcomeModal 
+    <!-- Welcome Modal (Full 3-page flow) -->
+    <WelcomeModal 
       v-model="showHelpWelcomeModal"
     />
 
@@ -339,7 +339,7 @@ import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
 import HelpPage from './HelpPage.vue'
-import HelpWelcomeModal from './HelpWelcomeModal.vue'
+import WelcomeModal from './WelcomeModal.vue'
 import NewUserWelcomeModal from './NewUserWelcomeModal.vue'
 import {
   initSpeechRecognition,
@@ -370,7 +370,7 @@ export default defineComponent({
     GNAP,
     GroupManagementModal,
     HelpPage,
-    HelpWelcomeModal,
+    WelcomeModal,
     NewUserWelcomeModal
   },
 

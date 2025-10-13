@@ -32,7 +32,7 @@
 
       <!-- Page 2: Three Steps to Sponsored Personal AI (new) -->
       <QCardSection v-if="currentPage === 2">
-        <div class="text-h5 q-mb-lg text-center">Three Steps to a Sponsored Personal AI</div>
+           <div class="text-h5 q-mb-lg text-center">Three Steps to a Supported Private AI</div>
         <div class="welcome-content">
           <div class="step-section">
             <div class="step-number">1</div>
