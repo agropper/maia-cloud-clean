@@ -26,6 +26,7 @@ import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
+import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
 import { WorkflowUtils } from "../utils/workflow-utils.js";
@@ -53,6 +54,7 @@ export default defineComponent({
     PasskeyAuthDialog,
     DeepLinkUserModal,
     NoPrivateAgentModal,
+    NewUserWelcomeModal,
     KnowledgeBaseWelcomeModal,
     PublicUserKBWelcomeModal,
     QDialog,
@@ -99,6 +101,7 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
     const showNoPrivateAgentModal = ref(false);
+    const showNewUserWelcomeModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
     const showPublicUserKBWelcomeModal = ref(false);
     const noPrivateAgentModalRef = ref<any>(null);
@@ -359,6 +362,13 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
+    // Handle support request from New User Welcome Modal
+    const handleSupportRequested = (data) => {
+      console.log('✅ Support requested for new user:', data);
+      showNewUserWelcomeModal.value = false;
+      // The NewUserWelcomeModal handles the actual support request internally
+    };
+
     // Handle request for private agent
     const handleRequestPrivateAgent = () => {
       console.log("User requested private agent");
@@ -445,6 +455,29 @@ export default defineComponent({
       }
     });
 
+    // Check if No Agent Welcome Modal should be shown
+    const checkForNoAgentWelcome = () => {
+      // Simple logic: Show if user is authenticated but has no agent
+      
+      // Must have a current user (not null/undefined)
+      if (!currentUser.value) {
+        return;
+      }
+      
+      // Skip for Public User
+      if (currentUser.value.userId === 'Public User') {
+        return;
+      }
+      
+      // Must NOT have an agent (shown in Agent Badge)
+      if (currentAgent.value) {
+        return; // User already has agent
+      }
+
+      // ✅ User is authenticated but has no agent - show NewUserWelcomeModal
+      showNewUserWelcomeModal.value = true;
+    };
+
     // Check if Knowledge Base Welcome Modal should be shown
     const checkForKnowledgeBaseWelcome = () => {
       // Simple logic: Show if user has an agent but no linked KB
@@ -473,6 +506,12 @@ export default defineComponent({
         showKnowledgeBaseWelcomeModal.value = true;
       }
     };
+
+    // Watch for user and agent changes to check if No Agent modal should be shown
+    // Modal appears when user signs in without agent, disappears when agent is assigned
+    watch([currentUser, currentAgent], () => {
+      checkForNoAgentWelcome();
+    }, { immediate: true });
 
     // Watch for user, agent, and KB changes to check if modal should be shown
     // Modal appears when agent is assigned, disappears when KB is attached
@@ -831,10 +870,12 @@ const triggerUploadFile = (file: File) => {
       showDeepLinkUserModal,
       showAgentSelectionModal,
       showNoPrivateAgentModal,
+      showNewUserWelcomeModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
       handleOpenKBManager,
       handleOpenPublicKBManager,
+      handleSupportRequested,
       checkForKnowledgeBaseWelcome,
       noPrivateAgentModalRef,
       
@@ -994,6 +1035,12 @@ const triggerUploadFile = (file: File) => {
       ref="noPrivateAgentModalRef"
       @sign-out="handleSignOut"
       @request="handleRequestPrivateAgent"
+    />
+
+    <NewUserWelcomeModal
+      v-model="showNewUserWelcomeModal"
+      :currentUser="currentUser"
+      @support-requested="handleSupportRequested"
     />
 
     <KnowledgeBaseWelcomeModal
