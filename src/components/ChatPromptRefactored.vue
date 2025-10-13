@@ -886,7 +886,6 @@ const triggerUploadFile = (file: File) => {
       handleDeepLinkUserIdentified,
       handleUserAuthenticated,
       handleSignOut,
-      handleRequestPrivateAgent,
       trackUserActivity,
       
       // Additional methods for compatibility
