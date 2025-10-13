@@ -2103,6 +2103,12 @@ export default defineComponent({
         // Check if there are any new files (not in any KB)
         const hasNewFiles = files.some(file => !file.knowledgeBases || file.knowledgeBases.length === 0);
         
+        console.log('📋 [FILE PRESELECT] hasNewFiles:', hasNewFiles);
+        console.log('📋 [FILE PRESELECT] Files to process:', files.map(f => ({
+          name: f.key,
+          kbs: f.knowledgeBases?.length || 0
+        })));
+        
         // Pre-select files based on scenario
         for (const file of files) {
           const isInKB = file.knowledgeBases && file.knowledgeBases.length > 0;
@@ -2111,6 +2117,7 @@ export default defineComponent({
           if (hasNewFiles) {
             // Scenario: New files exist → Select ALL files (old + new) for update
             file.selected = true;
+            console.log('📋 [FILE PRESELECT] Selected:', file.key);
           } else {
             // Scenario: All files indexed → Select none (checkboxes will be disabled)
             file.selected = false;
@@ -3745,25 +3752,35 @@ export default defineComponent({
         !f.knowledgeBases || f.knowledgeBases.length === 0
       );
       
+      const hasExistingKB = props.currentKnowledgeBase !== null && props.currentKnowledgeBase !== undefined;
+      
+      // Check if any files are selected (from bucket files with file.selected = true)
+      const hasSelectedFiles = userBucketFiles.value.some(f => f.selected === true);
+      
+      // All files already indexed → disabled
       if (newFiles.length === 0 && userBucketFiles.value.length > 0) {
         return {
           label: "All Files Indexed",
           disabled: true,
           color: "grey"
         };
-      } else if (newFiles.length > 0) {
+      }
+      
+      // Has existing KB AND new files → UPDATE
+      if (hasExistingKB && newFiles.length > 0) {
         return {
           label: "UPDATE KNOWLEDGE BASE",
-          disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
-          color: "primary"
-        };
-      } else {
-        return {
-          label: "CREATE KNOWLEDGE BASE",
-          disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
+          disabled: !hasSelectedFiles,
           color: "primary"
         };
       }
+      
+      // No KB or all new files → CREATE
+      return {
+        label: "CREATE KNOWLEDGE BASE",
+        disabled: !hasSelectedFiles,
+        color: "primary"
+      };
     });
 
     // Computed property for KB dropdown options
