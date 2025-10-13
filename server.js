@@ -1424,9 +1424,10 @@ app.post('/api/user-file-metadata', async (req, res) => {
         updatedAt: new Date().toISOString()
       };
     } else {
-      // Add new file metadata
+      // Add new file metadata with initialized knowledgeBases array
       userDoc.files.push({
         ...fileMetadata,
+        knowledgeBases: [], // Initialize as empty array for consistency
         addedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });

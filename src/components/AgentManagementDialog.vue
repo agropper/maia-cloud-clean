@@ -3513,13 +3513,19 @@ export default defineComponent({
       }
 
       // Check if user already has a KB
+      console.log('[KB CREATE CHECK] currentKnowledgeBase:', props.currentKnowledgeBase);
+      console.log('[KB CREATE CHECK] assignedAgent:', assignedAgent.value);
+      console.log('[KB CREATE CHECK] Agent KBs:', assignedAgent.value?.knowledge_bases);
+      
       if (props.currentKnowledgeBase && props.currentKnowledgeBase.name) {
         // User has existing KB - show warning modal
+        console.log('[KB CREATE CHECK] Existing KB found, showing warning modal');
         existingKBName.value = props.currentKnowledgeBase.name;
         showKBUpdateWarning.value = true;
         return;  // Wait for user confirmation
       }
 
+      console.log('[KB CREATE CHECK] No existing KB detected, proceeding with creation');
       // No existing KB - proceed with creation
       await performKBCreation();
     };
@@ -3555,14 +3561,14 @@ export default defineComponent({
             }
             
             // Check if indexing is complete
-            // Status can be: 'running', 'completed', 'failed', etc.
-            // Phase can be: 'indexing', 'completed', etc.
-            if (status === 'completed' || status === 'success' || phase === 'completed') {
+            // Status: 'index_job_status_completed', 'index_job_status_in_progress', 'index_job_status_failed'
+            // Phase: 'batch_job_phase_succeeded', 'batch_job_phase_running', 'batch_job_phase_failed'
+            if (status?.includes('completed') || phase?.includes('succeeded')) {
               console.log(`✅ [INDEXING] Indexing completed! Tokens: ${job.tokens}`);
               return true;
             }
             
-            if (status === 'failed' || status === 'error') {
+            if (status?.includes('failed') || phase?.includes('failed')) {
               console.error(`❌ [INDEXING] Indexing failed!`);
               throw new Error('Indexing job failed');
             }
