@@ -218,27 +218,25 @@
           <h4 class="section-title">📁 User Files</h4>
           
           <!-- Orphaned KB Warning -->
-          <QBanner
-            v-if="hasOrphanedKBs"
-            class="orphaned-kb-banner q-mb-md"
-            dense
-            rounded
-          >
-            <template v-slot:avatar>
-              <QIcon name="warning" color="warning" />
-            </template>
-            <div class="text-weight-bold">Orphaned Knowledge Base Detected</div>
-            <div class="text-caption">This user's files reference knowledge base(s) that no longer exist in DigitalOcean.</div>
-            <template v-slot:action>
-              <QBtn
-                flat
-                color="warning"
-                label="Fix Now"
-                @click="fixOrphanedKBs"
-                :loading="isFixingOrphanedKBs"
-              />
-            </template>
-          </QBanner>
+          <QCard v-if="hasOrphanedKBs" flat bordered class="q-mb-md bg-warning text-white">
+            <QCardSection>
+              <div class="row items-center q-gutter-md">
+                <QIcon name="warning" size="md" />
+                <div class="col">
+                  <div class="text-weight-bold">⚠️ Orphaned Knowledge Base Detected</div>
+                  <div class="text-caption">This user's files reference knowledge base(s) that no longer exist in DigitalOcean.</div>
+                </div>
+                <QBtn
+                  flat
+                  color="white"
+                  text-color="orange-9"
+                  label="Fix Now"
+                  @click="fixOrphanedKBs"
+                  :loading="isFixingOrphanedKBs"
+                />
+              </div>
+            </QCardSection>
+          </QCard>
         </div>
         <div class="files-table">
           <div class="file-header">
@@ -389,7 +387,6 @@ const loadUserDetails = async () => {
     
     // Load existing admin notes
     adminNotes.value = userData.adminNotes || ''
-    
     
     console.log(`✅ [UserDetailsPage2] Loaded user details for ${userId}`)
   } catch (err) {
@@ -578,6 +575,8 @@ const fixOrphanedKBs = async () => {
       throw new Error('User ID not found in URL')
     }
     
+    console.log(`🔧 [FIX ORPHANED KBS] Starting fix for user ${userId}`)
+    
     const response = await fetch(`/api/admin-management/users/${userId}/fix-orphaned-kbs`, {
       method: 'POST',
       credentials: 'include',
@@ -592,19 +591,19 @@ const fixOrphanedKBs = async () => {
     }
     
     const result = await response.json()
+    console.log(`✅ [FIX ORPHANED KBS] Removed ${result.removedCount} orphaned KB reference(s)`)
     
     $q.notify({
       type: 'positive',
-      message: `Fixed ${result.removedCount} orphaned KB reference(s)`,
+      message: `✅ Fixed ${result.removedCount} orphaned KB reference(s)`,
       position: 'top'
     })
     
     // Reload user details to show updated information
     await loadUserDetails()
     
-    console.log(`✅ [UserDetailsPage2] Fixed orphaned KBs for user ${userId}`)
   } catch (err) {
-    console.error('❌ [UserDetailsPage2] Failed to fix orphaned KBs:', err)
+    console.error('❌ [FIX ORPHANED KBS] Failed:', err)
     $q.notify({
       type: 'negative',
       message: err.message || 'Failed to fix orphaned KB references',
