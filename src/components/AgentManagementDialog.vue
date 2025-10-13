@@ -3526,6 +3526,65 @@ export default defineComponent({
 
     // Perform the actual KB creation (called after confirmation or if no existing KB)
     // NEW SIMPLIFIED VERSION: Works with archived/ folder structure
+    // Poll KB indexing status until complete
+    const pollIndexingStatus = async (kbId: string) => {
+      const maxAttempts = 60; // 60 attempts = 5 minutes max
+      const pollInterval = 5000; // 5 seconds
+      
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const response = await fetch(`/api/knowledge-bases/${kbId}/indexing-status`);
+          if (!response.ok) {
+            console.warn(`[INDEXING] Status check failed (attempt ${attempt}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            continue;
+          }
+          
+          const data = await response.json();
+          
+          if (data.success && data.indexingJob) {
+            const job = data.indexingJob;
+            const status = job.status?.toLowerCase();
+            const phase = job.phase?.toLowerCase();
+            
+            console.log(`[INDEXING] Status: ${status}, Phase: ${phase}, Tokens: ${job.tokens}, Attempt: ${attempt}/${maxAttempts}`);
+            
+            // Update status message with progress
+            if (job.tokens > 0) {
+              currentKbStatus.value = `Indexing... (${job.tokens} tokens processed)`;
+            }
+            
+            // Check if indexing is complete
+            // Status can be: 'running', 'completed', 'failed', etc.
+            // Phase can be: 'indexing', 'completed', etc.
+            if (status === 'completed' || status === 'success' || phase === 'completed') {
+              console.log(`✅ [INDEXING] Indexing completed! Tokens: ${job.tokens}`);
+              return true;
+            }
+            
+            if (status === 'failed' || status === 'error') {
+              console.error(`❌ [INDEXING] Indexing failed!`);
+              throw new Error('Indexing job failed');
+            }
+          }
+          
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          
+        } catch (error) {
+          console.error(`❌ [INDEXING] Error checking status (attempt ${attempt}/${maxAttempts}):`, error);
+          if (attempt === maxAttempts) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
+      }
+      
+      // Timeout reached
+      console.warn('⚠️ [INDEXING] Polling timeout - indexing may still be in progress');
+      return false;
+    };
+
     const performKBCreation = async () => {
       const selectedBucketFiles = userBucketFiles.value?.filter((file: any) => file.selected) || [];
       
@@ -3619,6 +3678,11 @@ export default defineComponent({
         if (!knowledgeBaseId) {
           throw new Error('Failed to extract knowledge base ID from creation response');
         }
+        
+        // Step 2.5: Wait for indexing to complete
+        console.log('[KB CREATE] Waiting for indexing to complete...');
+        currentKbStatus.value = 'Indexing documents...';
+        await pollIndexingStatus(knowledgeBaseId);
         
         // Step 3: Attach to agent
         console.log('[KB CREATE] Attaching to agent...');

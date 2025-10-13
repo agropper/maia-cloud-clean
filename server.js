@@ -8094,9 +8094,6 @@ async function ensureAllUserBuckets() {
       
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
-        const kbs = agent.knowledge_bases || [];
-        console.log(`  - Agent ${agent.name}: ${kbs.length} KB(s) attached`);
-        
         return {
           id: agent.id,
           name: agent.name,
@@ -8104,7 +8101,7 @@ async function ensureAllUserBuckets() {
           model: agent.model || 'unknown',
           createdAt: agent.created_at,
           updatedAt: agent.updated_at,
-          knowledgeBases: kbs, // Use knowledge_bases from DO API
+          knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
           endpoint: null,
           description: null
         };
@@ -8390,9 +8387,6 @@ async function ensureAllUserBuckets() {
       
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
-        const kbs = agent.knowledge_bases || [];
-        console.log(`  - Agent ${agent.name}: ${kbs.length} KB(s) attached`);
-        
         return {
           id: agent.id,
           name: agent.name,
@@ -8400,7 +8394,7 @@ async function ensureAllUserBuckets() {
           model: agent.model || 'unknown',
           createdAt: agent.created_at,
           updatedAt: agent.updated_at,
-          knowledgeBases: kbs, // Use knowledge_bases from DO API
+          knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
           endpoint: null,
           description: null
         };
