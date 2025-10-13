@@ -453,6 +453,11 @@ export default defineComponent({
         return;
       }
       
+      // Skip for deep link users
+      if (currentUser.value.userId?.startsWith('deep_link_')) {
+        return;
+      }
+      
       // Must NOT have an agent (shown in Agent Badge)
       if (currentAgent.value) {
         return; // User already has agent
@@ -468,6 +473,11 @@ export default defineComponent({
       
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
+        return;
+      }
+      
+      // Skip for deep link users
+      if (currentUser.value.userId?.startsWith('deep_link_')) {
         return;
       }
       
