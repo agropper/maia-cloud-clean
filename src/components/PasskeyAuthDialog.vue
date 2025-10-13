@@ -41,10 +41,12 @@
             outlined
             :rules="[
               (val) => !!val || 'User ID is required',
-              (val) =>
-                val.length >= 3 || 'User ID must be at least 3 characters',
+              (val) => val.length >= 3 || 'User ID must be at least 3 characters',
+              (val) => val.length <= 20 || 'User ID must be 20 characters or less',
+              (val) => /^[a-z0-9-]+$/.test(val) || 'User ID must contain only lowercase letters, numbers, and hyphens',
+              (val) => !val.startsWith('-') && !val.endsWith('-') || 'User ID cannot start or end with a hyphen',
             ]"
-            hint="Choose a unique user ID (minimum 3 characters) - checking availability automatically..."
+            hint="3-20 characters: lowercase letters, numbers, hyphens only"
             :error="userIdError"
             :error-message="userIdErrorMessage"
             @update:model-value="onUserIdChange"
@@ -56,7 +58,7 @@
               label="Continue"
               color="primary"
               :loading="checkingUserId"
-              :disable="userIdError || !userId || userId.length < 3"
+              :disable="userIdError || !userId || userId.length < 3 || userId.length > 20 || !/^[a-z0-9-]+$/.test(userId) || userId.startsWith('-') || userId.endsWith('-')"
               @click="checkUserIdAvailability()"
             />
             <q-btn

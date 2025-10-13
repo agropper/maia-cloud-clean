@@ -204,6 +204,20 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "User ID and display name are required" });
     }
 
+    // Validate userId format (server-side enforcement)
+    if (userId.length < 3) {
+      return res.status(400).json({ error: "User ID must be at least 3 characters" });
+    }
+    if (userId.length > 20) {
+      return res.status(400).json({ error: "User ID must be 20 characters or less" });
+    }
+    if (!/^[a-z0-9-]+$/.test(userId)) {
+      return res.status(400).json({ error: "User ID must contain only lowercase letters, numbers, and hyphens" });
+    }
+    if (userId.startsWith('-') || userId.endsWith('-')) {
+      return res.status(400).json({ error: "User ID cannot start or end with a hyphen" });
+    }
+
 
     // Check if user already exists
     let existingUser;
