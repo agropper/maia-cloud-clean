@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import {
   QDialog,
   QCard,
@@ -99,9 +99,33 @@ import {
 } from 'quasar'
 import HelpPage from './HelpPage.vue'
 
+// Props for v-model support
+const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false
+  }
+})
+
+// Emits for v-model support
+const emit = defineEmits(['update:modelValue'])
+
 const showModal = ref(false)
 const showHelpPage = ref(false)
 const currentPage = ref(1)
+
+// Watch for external modelValue changes
+watch(() => props.modelValue, (newValue) => {
+  showModal.value = newValue
+})
+
+// Watch for internal showModal changes and emit to parent
+watch(showModal, (newValue) => {
+  emit('update:modelValue', newValue)
+})
+
+// Initialize showModal with prop value
+showModal.value = props.modelValue
 
 const goToPage2 = () => {
   currentPage.value = 2
