@@ -1,15 +1,16 @@
 <template>
-  <!-- Welcome Modal -->
+  <!-- Welcome Modal - Page 1: Privacy Options -->
   <QDialog v-model="showModal" persistent>
     <QCard class="welcome-modal">
-      <QCardSection class="text-center">
+      <QCardSection v-if="currentPage === 1" class="text-center">
         <div class="text-h4 q-mb-md">Welcome to MAIA</div>
         <div class="text-subtitle1 text-grey-7 q-mb-lg">
           Your Medical AI Assistant
         </div>
       </QCardSection>
 
-      <QCardSection class="q-px-xl">
+      <!-- Page 1: Privacy Options (existing) -->
+      <QCardSection v-if="currentPage === 1" class="q-px-xl">
         <div class="welcome-content">
           <p class="welcome-paragraph">
             The Medical AI Assistant (MAIA) lets you choose from different privacy modes: Public, Supported, and Private.
@@ -29,18 +30,57 @@
         </div>
       </QCardSection>
 
+      <!-- Page 2: Three Steps to Sponsored Personal AI (new) -->
+      <QCardSection v-if="currentPage === 2">
+        <div class="text-h5 q-mb-lg text-center">Three Steps to a Sponsored Personal AI</div>
+        <div class="welcome-content">
+          <div class="step-section">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <strong>Get your complete health records</strong> using your patient portal. This can take 48 hours or more. You can expect a PDF file that could be more than 500 pages long.
+            </div>
+          </div>
+
+          <div class="step-section">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <strong>Click SIGN-IN, CREATE NEW PASSKEY and REQUEST SUPPORT.</strong> Expect a personal email when your Private AI agent is ready.
+            </div>
+          </div>
+
+          <div class="step-section">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <strong>Import your downloaded health record</strong> using the paperclip icon. Click CREATE KNOWLEDGE BASE to have it indexed. This can take a minute.
+            </div>
+          </div>
+
+          <p class="welcome-paragraph q-mt-lg">
+            You should now be able to get patient summaries and otherwise chat with your Private AI. You can edit the chats for privacy, consult the large commercial AIs, and share links to your saved chats with physicians and others.
+          </p>
+        </div>
+      </QCardSection>
+
       <QCardActions class="q-px-xl q-pb-xl">
         <QBtn
+          v-if="currentPage === 1"
           color="primary"
-          label="I understand these options"
-          @click="handleUnderstand"
+          label="I understand and agree"
+          @click="goToPage2"
+          class="full-width welcome-button"
+        />
+        <QBtn
+          v-if="currentPage === 2"
+          color="primary"
+          label="OK"
+          @click="goToPage3"
           class="full-width welcome-button"
         />
       </QCardActions>
     </QCard>
   </QDialog>
 
-  <!-- Help Page -->
+  <!-- Help Page (Page 3) -->
   <HelpPage 
     v-if="showHelpPage" 
     :is-visible="showHelpPage"
@@ -61,20 +101,27 @@ import HelpPage from './HelpPage.vue'
 
 const showModal = ref(false)
 const showHelpPage = ref(false)
+const currentPage = ref(1)
 
-const handleUnderstand = () => {
+const goToPage2 = () => {
+  currentPage.value = 2
+}
+
+const goToPage3 = () => {
   showModal.value = false
   // Store that user has seen the welcome modal
   localStorage.setItem('maia-welcome-seen', 'true')
   // Also store the timestamp for future reference
   localStorage.setItem('maia-welcome-seen-timestamp', new Date().toISOString())
   
-  // Always show help page after welcome modal
+  // Show help page (PDF UI legend)
   showHelpPage.value = true
 }
 
 const handleHelpClose = () => {
   showHelpPage.value = false
+  // Reset to page 1 for next time
+  currentPage.value = 1
 }
 
 onMounted(() => {
@@ -112,5 +159,33 @@ onMounted(() => {
   height: 48px;
   font-size: 16px;
   font-weight: 500;
+}
+
+.step-section {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #1976d2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.step-content {
+  flex: 1;
+  font-size: 1rem;
+  color: #333;
+  line-height: 1.6;
 }
 </style>
