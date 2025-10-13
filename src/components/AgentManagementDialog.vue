@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="showDialog" persistent @before-show="onDialogBeforeShow" @show="onDialogOpen">
+  <q-dialog v-model="showDialog" @before-show="onDialogBeforeShow" @show="onDialogOpen">
     <q-card style="min-width: 600px; max-width: 800px">
       <q-card-section class="row items-center q-pb-none">
         <div class="text-h6">🤖 Agent Management</div>
@@ -2230,11 +2230,11 @@ export default defineComponent({
           
           // Verify this is a public agent
           if (!agent.name.startsWith('public-')) {
-            $q.notify({
-              type: "negative",
+      $q.notify({
+        type: "negative",
               message: "Only public agents can be selected by Public User.",
-              timeout: 5000,
-            });
+        timeout: 5000,
+      });
             return;
           }
           
@@ -2551,7 +2551,7 @@ export default defineComponent({
           }
         } else {
           // For Public User or deep link users, use the agent as-is
-          assignedAgent.value = props.assignedAgent;
+        assignedAgent.value = props.assignedAgent;
         }
       } else {
         assignedAgent.value = null;
@@ -2654,8 +2654,8 @@ export default defineComponent({
           }
         } else {
           // For Public User or deep link users, use the agent as-is
-          assignedAgent.value = newAgent;
-          currentAgent.value = newAgent;
+        assignedAgent.value = newAgent;
+        currentAgent.value = newAgent;
         }
       }
     });
@@ -2920,10 +2920,10 @@ export default defineComponent({
           showNoAgentModal.value = true;
         } else {
           // User has an agent, proceed with KB creation dialog
-          // Load user's existing files from bucket folder (force refresh)
-          await checkUserBucketFiles(true);
-          
-          showCreateKbDialog.value = true;
+        // Load user's existing files from bucket folder (force refresh)
+        await checkUserBucketFiles(true);
+        
+        showCreateKbDialog.value = true;
         }
       }
     };
@@ -3045,7 +3045,7 @@ export default defineComponent({
                 fileType = 'application/pdf'
                 if (!aiContent) {
                   console.warn(`⚠️ PDF file ${fileName} has no original file - skipping`)
-                  continue
+                continue
                 }
               }
             } else if (file.type === 'rtf') {
@@ -3547,8 +3547,8 @@ export default defineComponent({
           if (!response.ok) {
             console.warn(`[INDEXING] Status check failed (attempt ${attempt}/${maxAttempts})`);
             await new Promise(resolve => setTimeout(resolve, pollInterval));
-            continue;
-          }
+                  continue;
+                }
           
           const data = await response.json();
           
