@@ -25,7 +25,6 @@ import { UserService } from "../utils/UserService";
 import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
-import NoPrivateAgentModal from "./NoPrivateAgentModal.vue";
 import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
@@ -53,7 +52,6 @@ export default defineComponent({
     AgentManagementDialog,
     PasskeyAuthDialog,
     DeepLinkUserModal,
-    NoPrivateAgentModal,
     NewUserWelcomeModal,
     KnowledgeBaseWelcomeModal,
     PublicUserKBWelcomeModal,
@@ -100,11 +98,9 @@ export default defineComponent({
     const showPasskeyAuthDialog = ref(false);
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
-    const showNoPrivateAgentModal = ref(false);
     const showNewUserWelcomeModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
     const showPublicUserKBWelcomeModal = ref(false);
-    const noPrivateAgentModalRef = ref<any>(null);
 
     // Get state from centralized state manager - use refs for reactivity
     const currentUser = ref(appStateManager.getStateProperty('currentUser'));
@@ -369,11 +365,6 @@ export default defineComponent({
       // The NewUserWelcomeModal handles the actual support request internally
     };
 
-    // Handle request for private agent
-    const handleRequestPrivateAgent = () => {
-      console.log("User requested private agent");
-      // TODO: Implement agent request logic
-    };
 
     // Watch for state changes and update UI accordingly
     watch([currentUser, currentAgent], ([newUser, newAgent], [oldUser, oldAgent]) => {
@@ -446,13 +437,6 @@ export default defineComponent({
     // Watch for current user changes to update group count
     watch(() => currentUser.value, () => {
       updateGroupCount();
-    });
-
-    // Watch for modal state changes
-    watch(() => appStateManager.getStateProperty('showNoPrivateAgentModal'), (show) => {
-      if (show && noPrivateAgentModalRef.value) {
-        noPrivateAgentModalRef.value.show();
-      }
     });
 
     // Check if No Agent Welcome Modal should be shown
@@ -869,7 +853,6 @@ const triggerUploadFile = (file: File) => {
       showPasskeyAuthDialog,
       showDeepLinkUserModal,
       showAgentSelectionModal,
-      showNoPrivateAgentModal,
       showNewUserWelcomeModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
@@ -877,7 +860,6 @@ const triggerUploadFile = (file: File) => {
       handleOpenPublicKBManager,
       handleSupportRequested,
       checkForKnowledgeBaseWelcome,
-      noPrivateAgentModalRef,
       
       // Methods
       writeMessage,
@@ -1029,12 +1011,6 @@ const triggerUploadFile = (file: File) => {
       v-model="showDeepLinkUserModal"
       :shareId="pendingShareId || ''"
       @user-identified="handleDeepLinkUserIdentified"
-    />
-
-    <NoPrivateAgentModal
-      ref="noPrivateAgentModalRef"
-      @sign-out="handleSignOut"
-      @request="handleRequestPrivateAgent"
     />
 
     <NewUserWelcomeModal

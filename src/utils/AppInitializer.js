@@ -218,18 +218,7 @@ export class AppInitializer {
     const user = context.user;
     this.initializationState.currentUser = user;
 
-    // Check if user should see no private agent modal
-    if (WorkflowUtils.shouldShowNoAgentModal(user, null)) {
-      return {
-        user,
-        agent: null,
-        knowledgeBase: null,
-        userType: 'authenticated',
-        showNoPrivateAgentModal: true
-      };
-    }
-
-    // Load assigned agent
+    // Load assigned agent (modal logic now handled by ChatPromptRefactored watcher)
     const agent = await this.loadAssignedAgent(user);
     this.initializationState.currentAgent = agent;
 
