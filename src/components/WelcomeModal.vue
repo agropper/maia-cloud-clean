@@ -37,7 +37,7 @@
           <div class="step-section">
             <div class="step-number">1</div>
             <div class="step-content">
-              <strong>Get your complete health records</strong> using your patient portal. This can take 48 hours or more. You can expect a PDF file that could be more than 500 pages long.
+              <strong>Get your complete health records</strong> using your patient portal. This can take 48 hours or more. You can expect a PDF file that could be more than 500 pages long. <a href="https://www.youtube.com/watch?v=oSwgTSbIhAw" target="_blank" rel="noopener noreferrer">Here's how.</a>
             </div>
           </div>
 
@@ -211,5 +211,15 @@ onMounted(() => {
   font-size: 1rem;
   color: #333;
   line-height: 1.6;
+}
+
+.step-content a {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.step-content a:hover {
+  text-decoration: underline;
 }
 </style>
