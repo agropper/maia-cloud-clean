@@ -2347,21 +2347,12 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
       // Merge KB associations into bucket files
       bucketStatus.files = bucketStatus.files.map(bucketFile => {
         const metadata = fileMetadataMap.get(bucketFile.key);
-        const mergedFile = {
+        return {
           ...bucketFile,
           knowledgeBases: metadata?.knowledgeBases || []
         };
-        
-        // Debug logging for KB associations
-        if (metadata?.knowledgeBases && metadata.knowledgeBases.length > 0) {
-          console.log(`📋 [BUCKET STATUS] File ${bucketFile.key} has ${metadata.knowledgeBases.length} KB associations`);
-        }
-        
-        return mergedFile;
       });
     }
-    
-    console.log(`📋 [BUCKET STATUS] Returning ${bucketStatus.files?.length || 0} files for user ${userId}`);
     res.json(bucketStatus);
   } catch (error) {
     console.error('❌ Error getting user bucket status:', error);

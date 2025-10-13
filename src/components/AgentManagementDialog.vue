@@ -2064,13 +2064,10 @@ export default defineComponent({
     const preselectFilesForKB = async (files: any[]) => {
       if (!files || files.length === 0) return;
       
-      console.log(`📋 [FILE PRESELECT] Starting pre-selection for ${files.length} files`);
-      
       try {
         // Get user document to check which files are in current KB
         const username = localCurrentUser.value?.userId;
         if (!username) {
-          console.log('⚠️ [FILE PRESELECT] No username, selecting most recent file only');
           if (files.length > 0) {
             files[files.length - 1].selected = true;
           }
@@ -2079,7 +2076,6 @@ export default defineComponent({
         
         const userResponse = await fetch(`/api/admin-management/users/${username}`);
         if (!userResponse.ok) {
-          console.log('⚠️ [FILE PRESELECT] Failed to fetch user data, selecting most recent file only');
           if (files.length > 0) {
             files[files.length - 1].selected = true;
           }
@@ -2091,13 +2087,10 @@ export default defineComponent({
         
         // Find the current KB ID (if any)
         let currentKBId = null;
-        console.log(`📋 [FILE PRESELECT] props.currentKnowledgeBase:`, props.currentKnowledgeBase);
         if (props.currentKnowledgeBase) {
           // KB object has 'uuid' field from DigitalOcean API, or 'id' from some endpoints
           currentKBId = props.currentKnowledgeBase.uuid || props.currentKnowledgeBase.id;
         }
-        
-        console.log(`📋 [FILE PRESELECT] Current KB ID: ${currentKBId || 'none'}`);
         
         // Find the most recent file by lastModified date
         let mostRecentFile = files[0];
@@ -2107,16 +2100,8 @@ export default defineComponent({
           }
         }
         
-        console.log(`📋 [FILE PRESELECT] Most recent file: ${mostRecentFile.key}`);
-        
         // Check if there are any new files (not in any KB)
-        console.log(`📋 [FILE PRESELECT] Analyzing ${files.length} files for new/indexed status`);
-        files.forEach(f => {
-          console.log(`  - ${f.key}: knowledgeBases=${f.knowledgeBases ? f.knowledgeBases.length : 'undefined'}`);
-        });
-        
         const hasNewFiles = files.some(file => !file.knowledgeBases || file.knowledgeBases.length === 0);
-        console.log(`📋 [FILE PRESELECT] Has new files (not in KB): ${hasNewFiles}`);
         
         // Pre-select files based on scenario
         for (const file of files) {
@@ -2131,12 +2116,7 @@ export default defineComponent({
             file.selected = false;
           }
           
-          if (file.selected) {
-            console.log(`✅ [FILE PRESELECT] Selected: ${file.key.split('/').pop()}`);
-          }
         }
-        
-        console.log(`📋 [FILE PRESELECT] Pre-selected ${files.filter((f: any) => f.selected).length} of ${files.length} files`);
       } catch (error) {
         console.error('❌ [FILE PRESELECT] Error:', error);
         // Default: select the most recent file only
@@ -2167,17 +2147,6 @@ export default defineComponent({
         if (response.ok) {
           const result = await response.json()
           if (result.success && result.files) {
-            console.log(`📋 [BUCKET FILES] Received ${result.files.length} files from API`);
-            
-            // Debug: Check if KB associations are present
-            result.files.forEach((file: any) => {
-              if (file.knowledgeBases && file.knowledgeBases.length > 0) {
-                console.log(`📋 [BUCKET FILES] ${file.key} has ${file.knowledgeBases.length} KB(s):`, file.knowledgeBases.map((kb: any) => kb.name));
-              } else {
-                console.log(`📋 [BUCKET FILES] ${file.key} has NO KB associations`);
-              }
-            });
-            
             // Add selection state to each file
             const filesWithSelection = result.files.map((file: any) => ({
               ...file,
@@ -3760,14 +3729,6 @@ export default defineComponent({
       return bucketFilesNotInKB.length > 0 || (props.uploadedFiles && props.uploadedFiles.length > 0);
     });
 
-    // Watch userBucketFiles to see what data we have when rendering
-    watch(userBucketFiles, (files) => {
-      console.log(`👁️ [WATCH] userBucketFiles changed, now has ${files.length} files`);
-      files.forEach(f => {
-        console.log(`  - ${f.key}: knowledgeBases=${f.knowledgeBases?.length || 0}, selected=${f.selected}`);
-      });
-    }, { deep: true, immediate: true });
-
     // Computed property to check if a file should have its checkbox disabled
     const isFileCheckboxDisabled = (file) => {
       // If file is in KB AND no new files exist → DISABLE
@@ -3775,11 +3736,7 @@ export default defineComponent({
         !f.knowledgeBases || f.knowledgeBases.length === 0
       );
       const isInKB = file.knowledgeBases && file.knowledgeBases.length > 0;
-      const shouldDisable = isInKB && !hasNewFiles;
-      
-      console.log(`☑️ [CHECKBOX] File ${file.key?.split('/').pop()}: isInKB=${isInKB}, hasNewFiles=${hasNewFiles}, disabled=${shouldDisable}`);
-      
-      return shouldDisable;
+      return isInKB && !hasNewFiles;
     };
 
     // Computed property for KB button state
@@ -3788,24 +3745,19 @@ export default defineComponent({
         !f.knowledgeBases || f.knowledgeBases.length === 0
       );
       
-      console.log(`🔘 [KB BUTTON] userBucketFiles: ${userBucketFiles.value.length}, newFiles: ${newFiles.length}`);
-      
       if (newFiles.length === 0 && userBucketFiles.value.length > 0) {
-        console.log(`🔘 [KB BUTTON] Returning: All Files Indexed (disabled)`);
         return {
           label: "All Files Indexed",
           disabled: true,
           color: "grey"
         };
       } else if (newFiles.length > 0) {
-        console.log(`🔘 [KB BUTTON] Returning: UPDATE KNOWLEDGE BASE`);
         return {
           label: "UPDATE KNOWLEDGE BASE",
           disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
           color: "primary"
         };
       } else {
-        console.log(`🔘 [KB BUTTON] Returning: CREATE KNOWLEDGE BASE (no files)`);
         return {
           label: "CREATE KNOWLEDGE BASE",
           disabled: selectedBucketFiles.value.length === 0 && selectedDocuments.value.length === 0,
