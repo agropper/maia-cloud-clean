@@ -214,7 +214,32 @@
 
       <!-- User Files -->
       <div class="files-section" v-if="user.files && user.files.length > 0">
-        <h4 class="section-title">📁 User Files</h4>
+        <div class="section-header">
+          <h4 class="section-title">📁 User Files</h4>
+          
+          <!-- Orphaned KB Warning -->
+          <QBanner
+            v-if="hasOrphanedKBs"
+            class="orphaned-kb-banner q-mb-md"
+            dense
+            rounded
+          >
+            <template v-slot:avatar>
+              <QIcon name="warning" color="warning" />
+            </template>
+            <div class="text-weight-bold">Orphaned Knowledge Base Detected</div>
+            <div class="text-caption">This user's files reference knowledge base(s) that no longer exist in DigitalOcean.</div>
+            <template v-slot:action>
+              <QBtn
+                flat
+                color="warning"
+                label="Fix Now"
+                @click="fixOrphanedKBs"
+                :loading="isFixingOrphanedKBs"
+              />
+            </template>
+          </QBanner>
+        </div>
         <div class="files-table">
           <div class="file-header">
             <div class="file-name" data-label="File Name">File Name</div>
@@ -285,9 +310,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useQuasar } from 'quasar'
-import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput, QChip } from 'quasar'
+import { QBtn, QCard, QCardSection, QBadge, QSpinner, QIcon, QInput, QChip, QBanner } from 'quasar'
 
 const $q = useQuasar()
 
@@ -301,12 +326,43 @@ const isGeneratingApiKey = ref(false)
 const isFixingWorkflow = ref(false)
 const isResettingPasskey = ref(false)
 const isResettingWorkflow = ref(false)
+const isFixingOrphanedKBs = ref(false)
+const allKBs = ref([])
 
 // Extract userId from pathname
 const getUserIdFromPath = () => {
   const pathname = window.location.pathname
   const match = pathname.match(/\/admin2\/user\/(.+)/)
   return match ? match[1] : null
+}
+
+// Computed: Check if user has orphaned KB references
+const hasOrphanedKBs = computed(() => {
+  if (!user.value?.files || !allKBs.value.length) return false
+  
+  const validKBIds = new Set(allKBs.value.map(kb => kb.id))
+  
+  // Check if any file references a KB that doesn't exist in DO
+  return user.value.files.some(file => {
+    if (!file.knowledgeBases || file.knowledgeBases.length === 0) return false
+    return file.knowledgeBases.some(kb => !validKBIds.has(kb.id))
+  })
+})
+
+// Load all KBs from DO
+const loadAllKBs = async () => {
+  try {
+    const response = await fetch('/api/admin-management/knowledge-bases', {
+      credentials: 'include'
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      allKBs.value = data.knowledgeBases || []
+    }
+  } catch (err) {
+    console.error('❌ Failed to load KBs:', err)
+  }
 }
 
 // Load user details
@@ -511,6 +567,53 @@ const getTimeRemaining = (expiryString: string) => {
     return `${remainingMinutes}m`;
   }
 };
+
+// Fix orphaned KB references
+const fixOrphanedKBs = async () => {
+  try {
+    isFixingOrphanedKBs.value = true
+    
+    const userId = getUserIdFromPath()
+    if (!userId) {
+      throw new Error('User ID not found in URL')
+    }
+    
+    const response = await fetch(`/api/admin-management/users/${userId}/fix-orphaned-kbs`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || `Failed to fix orphaned KBs: ${response.status}`)
+    }
+    
+    const result = await response.json()
+    
+    $q.notify({
+      type: 'positive',
+      message: `Fixed ${result.removedCount} orphaned KB reference(s)`,
+      position: 'top'
+    })
+    
+    // Reload user details to show updated information
+    await loadUserDetails()
+    
+    console.log(`✅ [UserDetailsPage2] Fixed orphaned KBs for user ${userId}`)
+  } catch (err) {
+    console.error('❌ [UserDetailsPage2] Failed to fix orphaned KBs:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Failed to fix orphaned KB references',
+      position: 'top'
+    })
+  } finally {
+    isFixingOrphanedKBs.value = false
+  }
+}
 
 // Navigation
 const goBack = () => {
@@ -808,6 +911,7 @@ const saveNotes = async () => {
 // Lifecycle
 onMounted(() => {
   loadUserDetails()
+  loadAllKBs()
 })
 </script>
 

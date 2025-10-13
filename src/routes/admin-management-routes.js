@@ -1389,6 +1389,66 @@ router.post('/users/:userId/notes', requireAdminAuth, async (req, res) => {
   }
 });
 
+// Fix orphaned KB references in user's files
+router.post('/users/:userId/fix-orphaned-kbs', requireAdminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get all valid KBs from DigitalOcean
+    const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+    const validKBs = doResponse.knowledge_bases || [];
+    const validKBIds = new Set(validKBs.map(kb => kb.uuid));
+    
+    let removedCount = 0;
+    
+    // Clean up file KB associations
+    if (userDoc.files && Array.isArray(userDoc.files)) {
+      userDoc.files = userDoc.files.map(file => {
+        if (file.knowledgeBases && Array.isArray(file.knowledgeBases)) {
+          const originalLength = file.knowledgeBases.length;
+          
+          // Remove KB references that don't exist in DO
+          file.knowledgeBases = file.knowledgeBases.filter(kb => validKBIds.has(kb.id));
+          
+          const removedFromFile = originalLength - file.knowledgeBases.length;
+          removedCount += removedFromFile;
+        }
+        return file;
+      });
+    }
+    
+    if (removedCount > 0) {
+      // Update user document
+      const { hasPasskey, hasValidPasskey, ...userDataForDatabase } = userDoc;
+      const updatedUser = {
+        ...userDataForDatabase,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+      
+      console.log(`✅ [FIX ORPHANED KBS] Removed ${removedCount} orphaned KB reference(s) from user ${userId}`);
+    }
+    
+    res.json({ 
+      message: `Fixed ${removedCount} orphaned KB reference(s)`,
+      removedCount,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fixing orphaned KBs:', error);
+    res.status(500).json({ error: 'Failed to fix orphaned KB references' });
+  }
+});
+
 // Assign agent to a user or create new agent
 router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) => {
   try {
