@@ -1648,6 +1648,7 @@ export default defineComponent({
     const workflowStateMessages = {
       'no_passkey': 'No Passkey - Please register a passkey to access private features',
       'no_request_yet': 'No Request Yet - You can request support for a private AI agent',
+      'request_email_sent': 'Request Email Sent - Your support request has been sent to the administrator',
       'awaiting_approval': 'Awaiting Approval - Your request for a private agent has been sent to the administrator',
       'approved': 'Approved - You have been approved for private AI access',
       'agent_assigned': 'Agent Assigned - You have access to your private AI agent',
@@ -1691,6 +1692,7 @@ export default defineComponent({
       const styles = {
         'no_passkey': 'background-color: #ffebee; border-radius: 8px; border-left: 4px solid #f44336;',
         'no_request_yet': 'background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;',
+        'request_email_sent': 'background-color: #e1f5fe; border-radius: 8px; border-left: 4px solid #03a9f4;',
         'awaiting_approval': 'background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;',
         'approved': 'background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #4caf50;',
         'agent_assigned': 'background-color: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;',
@@ -1703,6 +1705,7 @@ export default defineComponent({
       const icons = {
         'no_passkey': 'vpn_key_off',
         'no_request_yet': 'help_outline',
+        'request_email_sent': 'email',
         'awaiting_approval': 'hourglass_empty',
         'approved': 'check_circle',
         'agent_assigned': 'smart_toy',
@@ -1715,6 +1718,7 @@ export default defineComponent({
       const colors = {
         'no_passkey': 'negative',
         'no_request_yet': 'primary',
+        'request_email_sent': 'info',
         'awaiting_approval': 'warning',
         'approved': 'positive',
         'agent_assigned': 'primary',
