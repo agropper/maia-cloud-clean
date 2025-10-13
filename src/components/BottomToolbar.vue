@@ -665,6 +665,11 @@ export default defineComponent({
     }
 
     const handleInfoClick = () => {
+      // Skip for deep link users
+      if (props.currentUser?.userId?.startsWith('deep_link_')) {
+        return
+      }
+      
       // Handle info icon click - show help welcome modal first
       showHelpWelcomeModal.value = true
     }
