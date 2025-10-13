@@ -17,6 +17,15 @@ export const WORKFLOW_CONFIG = {
       requiresAction: 'user',
       isLegacy: true
     },
+    'no_request_yet': {
+      step: 1,
+      name: 'No Request Yet',
+      color: 'orange',
+      description: 'User has passkey but hasn\'t requested support',
+      canProceed: true,
+      requiresAction: 'user',
+      isLegacy: true
+    },
     'request_email_sent': {
       step: 2,
       name: 'Request Email Sent',
@@ -142,7 +151,8 @@ export const WORKFLOW_CONFIG = {
   
   // Define valid transitions (backward compatible)
   transitions: {
-    'no_passkey': ['request_email_sent', 'awaiting_approval'],
+    'no_passkey': ['no_request_yet', 'request_email_sent', 'awaiting_approval'],
+    'no_request_yet': ['request_email_sent', 'awaiting_approval'],
     'request_email_sent': ['awaiting_approval', 'approved', 'rejected'],
     'awaiting_approval': ['approved', 'rejected', 'suspended'],
     'rejected': ['awaiting_approval'],
