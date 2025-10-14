@@ -3,9 +3,10 @@
     <!-- PDF Viewer -->
     <div v-if="pdfUrl" class="pdf-container">
       <VuePDF
-        :src="pdfUrl"
+        :pdf="pdfDocument"
         :page="currentPage"
         :scale="scale"
+        :textLayer="true"
         class="pdf-viewer"
         @loaded="onPdfLoaded"
         @error="onPdfError"
@@ -77,6 +78,7 @@ const props = defineProps<Props>()
 const currentPage = ref(1)
 const totalPages = ref(0)
 const scale = ref(1.0)
+const pdfDocument = ref(null)
 
 // Computed
 const pdfUrl = computed(() => {
@@ -99,6 +101,25 @@ const pdfUrl = computed(() => {
 })
 
 // Methods
+const loadPdfDocument = async () => {
+  if (!pdfUrl.value) {
+    pdfDocument.value = null
+    return
+  }
+
+  try {
+    console.log('🔄 Vue PDF: Loading PDF document from:', pdfUrl.value)
+    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
+    pdfDocument.value = loadingTask
+    const pdf = await loadingTask.promise
+    console.log('✅ Vue PDF: PDF document loaded successfully:', pdf)
+    totalPages.value = pdf.numPages || 0
+  } catch (error) {
+    console.error('❌ Vue PDF: PDF document loading error:', error)
+    pdfDocument.value = null
+  }
+}
+
 const onPdfLoaded = (pdf: any) => {
   console.log('✅ Vue PDF: PDF loaded successfully:', pdf)
   totalPages.value = pdf.numPages || 0
@@ -134,7 +155,13 @@ watch(() => props.file, (newFile) => {
   if (newFile) {
     currentPage.value = 1
     totalPages.value = 0
+    loadPdfDocument()
   }
+}, { immediate: true })
+
+// Watch for URL changes
+watch(pdfUrl, () => {
+  loadPdfDocument()
 }, { immediate: true })
 </script>
 
