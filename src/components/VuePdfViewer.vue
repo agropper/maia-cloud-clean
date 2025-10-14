@@ -2,12 +2,42 @@
   <div class="vue-pdf-viewer">
     <!-- PDF Viewer -->
     <div v-if="pdfUrl" class="pdf-container">
-      <VPdfViewer
+      <VuePDF
         :src="pdfUrl"
+        :page="currentPage"
+        :scale="scale"
         class="pdf-viewer"
         @loaded="onPdfLoaded"
         @error="onPdfError"
       />
+      
+      <!-- PDF Controls -->
+      <div class="pdf-controls">
+        <q-btn 
+          icon="chevron_left" 
+          @click="previousPage" 
+          :disable="currentPage <= 1"
+          size="sm"
+        />
+        <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
+        <q-btn 
+          icon="chevron_right" 
+          @click="nextPage" 
+          :disable="currentPage >= totalPages"
+          size="sm"
+        />
+        <q-btn 
+          icon="zoom_out" 
+          @click="zoomOut" 
+          size="sm"
+        />
+        <span class="scale-info">{{ Math.round(scale * 100) }}%</span>
+        <q-btn 
+          icon="zoom_in" 
+          @click="zoomIn" 
+          size="sm"
+        />
+      </div>
     </div>
 
     <!-- No PDF state -->
@@ -19,18 +49,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { VPdfViewer } from '@vue-pdf-viewer/viewer'
-import { QIcon } from 'quasar'
-import * as pdfjsLib from 'pdfjs-dist'
-
-// Configure PDF.js worker for better compatibility
-onMounted(() => {
-  // Set the worker source to use the bundled worker
-  if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
-  }
-})
+import { computed, ref, watch } from 'vue'
+import { VuePDF } from '@tato30/vue-pdf'
+import { QIcon, QBtn } from 'quasar'
 
 // Props
 interface Props {
@@ -43,6 +64,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// Reactive state
+const currentPage = ref(1)
+const totalPages = ref(0)
+const scale = ref(1.0)
 
 // Computed
 const pdfUrl = computed(() => {
@@ -66,12 +92,42 @@ const pdfUrl = computed(() => {
 
 // Methods
 const onPdfLoaded = (pdf: any) => {
-  console.log('✅ Vue PDF Viewer: PDF loaded successfully:', pdf)
+  console.log('✅ Vue PDF: PDF loaded successfully:', pdf)
+  totalPages.value = pdf.numPages || 0
 }
 
 const onPdfError = (err: any) => {
-  console.error('❌ Vue PDF Viewer: PDF loading error:', err)
+  console.error('❌ Vue PDF: PDF loading error:', err)
 }
+
+
+const previousPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+  }
+}
+
+const zoomIn = () => {
+  scale.value = Math.min(scale.value + 0.25, 3.0)
+}
+
+const zoomOut = () => {
+  scale.value = Math.max(scale.value - 0.25, 0.5)
+}
+
+// Watch for file changes
+watch(() => props.file, (newFile) => {
+  if (newFile) {
+    currentPage.value = 1
+    totalPages.value = 0
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -103,5 +159,35 @@ const onPdfError = (err: any) => {
   min-height: 0;
   width: 100%;
   height: 100%;
+}
+
+.pdf-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.page-info, .scale-info {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .pdf-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .page-info, .scale-info {
+    font-size: 12px;
+    min-width: 50px;
+  }
 }
 </style>
