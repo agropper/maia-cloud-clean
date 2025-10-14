@@ -1666,26 +1666,67 @@ app.post('/api/upload-to-bucket', async (req, res) => {
   }
 });
 
+// Test endpoint to check if a specific file exists
+app.get('/api/test-file/:bucketKey(*)', async (req, res) => {
+  try {
+    const { bucketKey } = req.params;
+    const fileUrl = `https://maia.tor1.digitaloceanspaces.com/${bucketKey}`;
+    
+    console.log(`🔍 Testing file existence: ${fileUrl}`);
+    
+    const response = await fetch(fileUrl, { method: 'HEAD' });
+    
+    res.json({
+      success: true,
+      bucketKey,
+      fileUrl,
+      status: response.status,
+      statusText: response.statusText,
+      exists: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    
+  } catch (error) {
+    console.error('❌ Error testing file:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Proxy PDF files from DigitalOcean Spaces to avoid CORS issues
 app.get('/api/proxy-pdf/:bucketKey(*)', async (req, res) => {
   try {
     const { bucketKey } = req.params;
     
-    // Construct the full URL
-    const fileUrl = `https://maia.tor1.digitaloceanspaces.com/${bucketKey}`;
+    console.log(`📄 Proxying PDF file with bucket key: ${bucketKey}`);
     
-    console.log(`📄 Proxying PDF file: ${fileUrl}`);
+    // Use S3 client to fetch the file with proper authentication
+    const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
     
-    // Fetch the file from DigitalOcean Spaces
-    const response = await fetch(fileUrl);
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
     
-    if (!response.ok) {
-      return res.status(response.status).json({ 
-        success: false, 
-        message: `Failed to fetch PDF: ${response.statusText}`,
-        error: 'PDF_FETCH_FAILED'
-      });
-    }
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+    
+    const getObjectCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: bucketKey
+    });
+    
+    console.log(`📄 Fetching from S3: ${bucketName}/${bucketKey}`);
+    
+    const response = await s3Client.send(getObjectCommand);
     
     // Set appropriate headers
     res.setHeader('Content-Type', 'application/pdf');
@@ -1695,14 +1736,17 @@ app.get('/api/proxy-pdf/:bucketKey(*)', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     // Stream the PDF content
-    response.body.pipe(res);
+    response.Body.pipe(res);
+    
+    console.log(`✅ Successfully streaming PDF: ${bucketKey}`);
     
   } catch (error) {
     console.error('❌ Error proxying PDF:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Failed to proxy PDF file',
-      error: 'PROXY_ERROR'
+      error: 'PROXY_ERROR',
+      details: error.message
     });
   }
 });
