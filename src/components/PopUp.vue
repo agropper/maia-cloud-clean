@@ -152,6 +152,12 @@ export default {
         // @ts-ignore
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
         
+        // Debug: Log the currentFile properties
+        console.log('Current file properties:', this.currentFile)
+        console.log('Has fileUrl:', !!this.currentFile.fileUrl)
+        console.log('Has bucketKey:', !!(this.currentFile as any).bucketKey)
+        console.log('Has originalFile:', !!this.currentFile.originalFile)
+        
         // For debugging, let's use the URL-based approach first
         let pdf
         
@@ -159,6 +165,14 @@ export default {
           console.log('Loading PDF from URL:', this.currentFile.fileUrl)
           // @ts-ignore
           const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
+          pdf = await task.promise
+        } else if ((this.currentFile as any).bucketKey) {
+          // Construct URL from bucket key
+          const bucketKey = (this.currentFile as any).bucketKey
+          const fileUrl = `https://maia.tor1.digitaloceanspaces.com/${bucketKey}`
+          console.log('Loading PDF from constructed URL:', fileUrl)
+          // @ts-ignore
+          const task = pdfjsLib.getDocument({ url: fileUrl })
           pdf = await task.promise
         } else if (this.currentFile.originalFile instanceof File) {
           // Fresh File object - use arrayBuffer()
