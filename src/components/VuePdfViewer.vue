@@ -188,7 +188,7 @@ const zoomOut = () => {
   console.log('🔍 Vue PDF: Zoom out, scale now:', scale.value)
 }
 
-// Watch for file changes
+// Watch for file changes - this handles both initial load and file changes
 watch(() => props.file, (newFile) => {
   if (newFile && !isLoading.value) {
     console.log('📄 Vue PDF: File changed, resetting state')
@@ -198,15 +198,8 @@ watch(() => props.file, (newFile) => {
   }
 }, { immediate: true })
 
-// Watch for URL changes - but prevent multiple loads
-watch(pdfUrl, (newUrl, oldUrl) => {
-  if (newUrl && newUrl !== oldUrl && !isLoading.value) {
-    console.log('📄 Vue PDF: URL changed from', oldUrl, 'to', newUrl)
-    currentPage.value = 1
-    totalPages.value = 0
-    loadPdfDocument()
-  }
-}, { immediate: true })
+// Note: Removed redundant URL watcher since file changes already trigger loadPdfDocument()
+// The URL is computed from the file prop, so watching the file is sufficient
 
 // Watch for page changes to debug navigation
 watch(currentPage, (newPage, oldPage) => {
