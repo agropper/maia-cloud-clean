@@ -11,23 +11,33 @@
       <div class="popup-content">
         <!-- PDF viewer -->
         <div v-if="isPDF" class="pdf-viewer-container">
-          <div v-if="isLoading" class="pdf-loading-overlay">
-            <q-spinner-dots size="40px" color="primary" />
-            <p>Loading PDF...</p>
-          </div>
+          <!-- Vue PDF Viewer (new implementation with text selection) -->
+          <VuePdfViewer 
+            v-if="useVuePdfViewer"
+            :file="currentFile"
+            class="vue-pdf-viewer-container"
+          />
           
-          <div v-if="pdfError" class="pdf-error-overlay">
-            <q-icon name="error_outline" size="48px" color="warning" />
-            <h3>PDF Could Not Be Displayed</h3>
-            <p>{{ pdfErrorMessage }}</p>
-            <div class="pdf-error-content">
-              <h4>Extracted Text Content:</h4>
-              <pre class="pdf-error-text">{{ currentFile?.content || 'No content available' }}</pre>
+          <!-- Original PDF.js implementation (fallback) -->
+          <div v-else>
+            <div v-if="isLoading" class="pdf-loading-overlay">
+              <q-spinner-dots size="40px" color="primary" />
+              <p>Loading PDF...</p>
             </div>
-          </div>
-          
-          <div v-else ref="pdfContainer" class="pdf-content">
-            <!-- PDF pages will be rendered here with text layers -->
+            
+            <div v-if="pdfError" class="pdf-error-overlay">
+              <q-icon name="error_outline" size="48px" color="warning" />
+              <h3>PDF Could Not Be Displayed</h3>
+              <p>{{ pdfErrorMessage }}</p>
+              <div class="pdf-error-content">
+                <h4>Extracted Text Content:</h4>
+                <pre class="pdf-error-text">{{ currentFile?.content || 'No content available' }}</pre>
+              </div>
+            </div>
+            
+            <div v-else ref="pdfContainer" class="pdf-content">
+              <!-- PDF pages will be rendered here with text layers -->
+            </div>
           </div>
         </div>
 
@@ -48,6 +58,8 @@ import VueMarkdown from 'vue-markdown-render'
 import { QIcon, QSpinnerDots } from 'quasar'
 // PDF.js legacy build for better bundler compatibility
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
+// Vue PDF Viewer for proper text selection
+import VuePdfViewer from './VuePdfViewer.vue'
 
 // Check what's available in pdfjsLib for text layer functionality
 console.log('Available PDF.js exports:', Object.keys(pdfjsLib))
@@ -61,7 +73,8 @@ export default {
   components: {
     VueMarkdown,
     QIcon,
-    QSpinnerDots
+    QSpinnerDots,
+    VuePdfViewer
   },
   props: {
     appState: {
@@ -92,6 +105,7 @@ export default {
       isLoading: false as boolean,
       pdfError: false as boolean,
       pdfErrorMessage: '' as string,
+      useVuePdfViewer: true as boolean, // Enable Vue PDF Viewer by default
       // PDF rendering properties
       pdfDocument: null as any
     }
@@ -522,6 +536,13 @@ export default {
   margin: 0;
   max-width: 100%;
   height: auto;
+}
+
+/* Vue PDF Viewer container */
+.vue-pdf-viewer-container {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
 }
 
 /* PDF page container styling */
