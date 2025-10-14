@@ -189,59 +189,14 @@ export default {
         const naturalWidth = naturalViewport.width
         const naturalHeight = naturalViewport.height
         
-        // Calculate optimal modal size based on PDF dimensions and browser window
-        const browserWidth = window.innerWidth
-        const browserHeight = window.innerHeight
-        const maxModalWidth = browserWidth * 0.8  // 80% of browser width
-        const maxModalHeight = browserHeight * 0.8 // 80% of browser height
-        
-        // Calculate scale to fit PDF in available browser space (minus padding)
-        const availableWidth = maxModalWidth - 80  // 40px padding on each side
-        const availableHeight = maxModalHeight - 80 // 40px padding top/bottom
-        
-        const scaleX = availableWidth / naturalWidth
-        const scaleY = availableHeight / naturalHeight
-        const actualScale = Math.min(scaleX, scaleY)
-        
-        // Calculate final modal dimensions based on scaled PDF
-        const scaledWidth = naturalWidth * actualScale
-        const scaledHeight = naturalHeight * actualScale
-        
-        // Calculate modal size maintaining PDF aspect ratio
-        const pdfAspectRatio = naturalWidth / naturalHeight
-        const modalContentWidth = scaledWidth + 80  // Add back padding
-        const modalContentHeight = scaledHeight + 80 // Add back padding
-        
-        // Ensure modal maintains PDF aspect ratio
-        let modalWidth = modalContentWidth
-        let modalHeight = modalContentHeight
-        
-        // If modal aspect ratio doesn't match PDF, adjust to match PDF aspect ratio
-        const modalAspectRatio = modalWidth / modalHeight
-        if (Math.abs(modalAspectRatio - pdfAspectRatio) > 0.01) {
-          // Adjust modal height to match PDF aspect ratio
-          modalHeight = modalWidth / pdfAspectRatio
-        }
-        
-        // Set modal dimensions FIRST
-        const modalContainer = container.closest('.popup-container')
-        if (modalContainer) {
-          modalContainer.style.width = `${modalWidth}px`
-          modalContainer.style.height = `${modalHeight}px`
-        }
-        
-        // Wait for modal to resize, then capture container dimensions
-        await new Promise(resolve => setTimeout(resolve, 200))
+        // Use a conservative scale that fits within the modal
+        const actualScale = Math.min(1.0, 800 / naturalWidth, 600 / naturalHeight)
         
         // Set loading to false so container becomes visible
         this.isLoading = false
         
         // Wait for container to become visible
         await new Promise(resolve => setTimeout(resolve, 50))
-        
-        // NOW capture container dimensions after modal is properly sized and visible
-        const containerWidth = container.offsetWidth
-        const containerHeight = container.offsetHeight
         
         // Render pages
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
@@ -267,19 +222,6 @@ export default {
           // @ts-ignore
           await page.render({ canvasContext: ctx, viewport: properViewport }).promise
           container.appendChild(canvas)
-          
-          // Set container size to match canvas to avoid empty space
-          container.style.width = `${properViewport.width + 32}px` // Add padding
-          container.style.height = `${properViewport.height + 32}px` // Add padding
-          
-          // Fix the pdf-viewer-container size to match the content
-          const pdfViewerContainer = container.parentElement
-          if (pdfViewerContainer) {
-            pdfViewerContainer.style.width = `${properViewport.width + 32}px`
-            pdfViewerContainer.style.height = `${properViewport.height + 32}px`
-            pdfViewerContainer.style.flex = 'none'
-            pdfViewerContainer.style.minHeight = '0'
-          }
           
           // Wait for DOM to update
           await new Promise(resolve => setTimeout(resolve, 10))
@@ -415,6 +357,8 @@ export default {
   position: relative;
   max-width: 100%;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .pdf-content {
@@ -425,6 +369,7 @@ export default {
   min-height: 0;
   max-width: 100%;
   box-sizing: border-box;
+  height: 100%;
 }
 
 .pdf-content canvas {
