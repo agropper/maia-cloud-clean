@@ -50,17 +50,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { VuePDF } from '@tato30/vue-pdf'
 import { QIcon, QBtn } from 'quasar'
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Configure PDF.js worker to match the library version
-onMounted(() => {
-  if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
-  }
-})
+// Configure PDF.js worker immediately when module loads
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
+}
 
 // Props
 interface Props {
