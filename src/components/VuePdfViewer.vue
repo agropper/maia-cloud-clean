@@ -77,6 +77,7 @@ const currentPage = ref(1)
 const totalPages = ref(0)
 const scale = ref(1.0)
 const pdfDocument = ref(null)
+const isLoading = ref(false)
 
 // Computed
 const pdfUrl = computed(() => {
@@ -103,10 +104,18 @@ const loadPdfDocument = async () => {
   if (!pdfUrl.value) {
     pdfDocument.value = null
     totalPages.value = 0
+    isLoading.value = false
+    return
+  }
+
+  // Prevent multiple simultaneous loads
+  if (isLoading.value) {
+    console.log('🔄 Vue PDF: Already loading, skipping duplicate load')
     return
   }
 
   try {
+    isLoading.value = true
     console.log('🔄 Vue PDF: Loading PDF document from:', pdfUrl.value)
     const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
     pdfDocument.value = loadingTask
@@ -118,6 +127,8 @@ const loadPdfDocument = async () => {
     console.error('❌ Vue PDF: PDF document loading error:', error)
     pdfDocument.value = null
     totalPages.value = 0
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -172,16 +183,22 @@ const zoomOut = () => {
 
 // Watch for file changes
 watch(() => props.file, (newFile) => {
-  if (newFile) {
+  if (newFile && !isLoading.value) {
+    console.log('📄 Vue PDF: File changed, resetting state')
     currentPage.value = 1
     totalPages.value = 0
     loadPdfDocument()
   }
 }, { immediate: true })
 
-// Watch for URL changes
-watch(pdfUrl, () => {
-  loadPdfDocument()
+// Watch for URL changes - but prevent multiple loads
+watch(pdfUrl, (newUrl, oldUrl) => {
+  if (newUrl && newUrl !== oldUrl && !isLoading.value) {
+    console.log('📄 Vue PDF: URL changed from', oldUrl, 'to', newUrl)
+    currentPage.value = 1
+    totalPages.value = 0
+    loadPdfDocument()
+  }
 }, { immediate: true })
 
 // Watch for page changes to debug navigation
