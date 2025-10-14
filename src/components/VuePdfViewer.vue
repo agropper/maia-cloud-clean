@@ -19,9 +19,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { VPdfViewer } from '@vue-pdf-viewer/viewer'
 import { QIcon } from 'quasar'
+import * as pdfjsLib from 'pdfjs-dist'
+
+// Configure PDF.js worker for better compatibility
+onMounted(() => {
+  // Set the worker source to use the bundled worker
+  if (typeof window !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
+  }
+})
 
 // Props
 interface Props {

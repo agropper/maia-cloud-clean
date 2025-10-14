@@ -410,7 +410,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'"], // Safari compatibility
+      scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'", "data:"], // Safari + PDF.js compatibility
       connectSrc: ["'self'", "https:", "wss:"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "data:", "https:"],
