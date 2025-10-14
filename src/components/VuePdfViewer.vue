@@ -131,21 +131,25 @@ const onPdfError = (err: any) => {
 const previousPage = () => {
   if (currentPage.value > 1) {
     currentPage.value--
+    console.log('📄 Vue PDF: Previous page, now on page:', currentPage.value)
   }
 }
 
 const nextPage = () => {
   if (currentPage.value < totalPages.value) {
     currentPage.value++
+    console.log('📄 Vue PDF: Next page, now on page:', currentPage.value)
   }
 }
 
 const zoomIn = () => {
   scale.value = Math.min(scale.value + 0.25, 3.0)
+  console.log('🔍 Vue PDF: Zoom in, scale now:', scale.value)
 }
 
 const zoomOut = () => {
   scale.value = Math.max(scale.value - 0.25, 0.5)
+  console.log('🔍 Vue PDF: Zoom out, scale now:', scale.value)
 }
 
 // Watch for file changes
@@ -161,6 +165,16 @@ watch(() => props.file, (newFile) => {
 watch(pdfUrl, () => {
   loadPdfDocument()
 }, { immediate: true })
+
+// Watch for page changes to debug navigation
+watch(currentPage, (newPage, oldPage) => {
+  console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
+})
+
+// Watch for scale changes to debug zoom
+watch(scale, (newScale, oldScale) => {
+  console.log('🔍 Vue PDF: Scale changed from', oldScale, 'to', newScale)
+})
 </script>
 
 <style scoped>
@@ -169,6 +183,7 @@ watch(pdfUrl, () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .no-pdf {
@@ -185,6 +200,7 @@ watch(pdfUrl, () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pdf-viewer {
@@ -192,6 +208,53 @@ watch(pdfUrl, () => {
   min-height: 0;
   width: 100%;
   height: 100%;
+  overflow: auto;
+  position: relative;
+}
+
+/* Ensure PDF content is properly contained */
+.pdf-viewer :deep(.vue-pdf-embed) {
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+  display: block !important;
+}
+
+/* Text layer styling for better selection */
+.pdf-viewer :deep(.textLayer) {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1.0;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.pdf-viewer :deep(.textLayer > span) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.pdf-viewer :deep(.textLayer > span:hover) {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+
+.pdf-viewer :deep(.textLayer > span::selection) {
+  background-color: rgba(0, 123, 255, 0.3);
 }
 
 .pdf-controls {
@@ -202,6 +265,7 @@ watch(pdfUrl, () => {
   padding: 12px;
   background: rgba(0, 0, 0, 0.05);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .page-info, .scale-info {
