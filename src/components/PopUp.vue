@@ -304,6 +304,8 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
+  width: 90vw;
+  height: 90vh;
   max-width: 90vw;
   max-height: 90vh;
 }
@@ -470,6 +472,8 @@ export default {
   }
   
   .popup-container {
+    width: 95vw;
+    height: 95vh;
     max-width: 95vw;
     max-height: 95vh;
   }
