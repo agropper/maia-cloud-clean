@@ -3,7 +3,7 @@
     <!-- PDF Viewer -->
     <div v-if="pdfUrl" class="pdf-container">
       <VuePDF
-        :src="pdfUrl"
+        :pdf="pdfDocument"
         :page="currentPage"
         :scale="scale"
         :textLayer="true"
@@ -76,6 +76,8 @@ const props = defineProps<Props>()
 const currentPage = ref(1)
 const totalPages = ref(0)
 const scale = ref(1.0)
+const pdfDocument = ref(null)
+const isLoading = ref(false)
 
 // Computed
 const pdfUrl = computed(() => {
@@ -97,18 +99,52 @@ const pdfUrl = computed(() => {
   return ''
 })
 
-// Methods - PDF loading is now handled by the VuePDF component internally
+// Methods
+const loadPdfDocument = async () => {
+  if (!pdfUrl.value) {
+    pdfDocument.value = null
+    totalPages.value = 0
+    isLoading.value = false
+    return
+  }
+
+  // Prevent multiple simultaneous loads
+  if (isLoading.value) {
+    console.log('🔄 Vue PDF: Already loading, skipping duplicate load')
+    return
+  }
+
+  try {
+    isLoading.value = true
+    console.log('🔄 Vue PDF: Loading PDF document from:', pdfUrl.value)
+    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
+    pdfDocument.value = loadingTask
+    const pdf = await loadingTask.promise
+    console.log('✅ Vue PDF: PDF document loaded successfully:', pdf)
+    totalPages.value = pdf.numPages || 0
+    console.log('📄 Vue PDF: Total pages set to:', totalPages.value)
+  } catch (error) {
+    console.error('❌ Vue PDF: PDF document loading error:', error)
+    pdfDocument.value = null
+    totalPages.value = 0
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const onPdfLoaded = (pdf: any) => {
   console.log('✅ Vue PDF: PDF loaded via component event:', pdf)
   console.log('📄 Vue PDF: Component PDF object has numPages:', pdf.numPages)
+  console.log('📄 Vue PDF: Current totalPages value:', totalPages.value)
   
-  // Set totalPages from the component's loaded PDF
-  if (pdf.numPages && pdf.numPages > 0) {
+  // Only update totalPages if it's not already set AND the component provides a valid numPages
+  if (totalPages.value === 0 && pdf.numPages && pdf.numPages > 0) {
     totalPages.value = pdf.numPages
-    console.log('📄 Vue PDF: Total pages set to:', totalPages.value)
+    console.log('📄 Vue PDF: Total pages updated via component to:', totalPages.value)
+  } else if (totalPages.value > 0) {
+    console.log('📄 Vue PDF: Total pages already set to', totalPages.value, ', ignoring component event')
   } else {
-    console.log('📄 Vue PDF: Component PDF object has invalid numPages:', pdf.numPages)
+    console.log('📄 Vue PDF: Component PDF object has invalid numPages:', pdf.numPages, ', keeping current value')
   }
 }
 
@@ -152,15 +188,18 @@ const zoomOut = () => {
   console.log('🔍 Vue PDF: Zoom out, scale now:', scale.value)
 }
 
-// Watch for file changes - reset state when file changes
+// Watch for file changes - this handles both initial load and file changes
 watch(() => props.file, (newFile) => {
-  if (newFile) {
+  if (newFile && !isLoading.value) {
     console.log('📄 Vue PDF: File changed, resetting state')
     currentPage.value = 1
     totalPages.value = 0
-    // PDF loading is now handled by the VuePDF component via :src binding
+    loadPdfDocument()
   }
 }, { immediate: true })
+
+// Note: Removed redundant URL watcher since file changes already trigger loadPdfDocument()
+// The URL is computed from the file prop, so watching the file is sufficient
 
 // Watch for page changes to debug navigation
 watch(currentPage, (newPage, oldPage) => {
