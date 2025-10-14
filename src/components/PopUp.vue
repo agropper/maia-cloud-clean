@@ -26,7 +26,26 @@
             </div>
           </div>
           
-          <div v-else ref="pdfContainer" class="pdf-content"></div>
+          <div v-else class="pdf-content" @scroll="handleScroll">
+            <!-- Virtual scrolling container -->
+            <div class="pdf-virtual-container" :style="{ height: `${totalPages * pageHeight}px` }">
+              <!-- Rendered pages -->
+              <div 
+                v-for="pageNum in visiblePages" 
+                :key="pageNum"
+                class="pdf-page-container"
+                :style="{ 
+                  position: 'absolute', 
+                  top: `${(pageNum - 1) * pageHeight}px`,
+                  width: '100%'
+                }"
+              >
+                <div :id="`page-${pageNum}`" class="pdf-page">
+                  <canvas :id="`canvas-${pageNum}`" class="pdf-canvas"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Markdown / non-PDF content -->
@@ -84,7 +103,16 @@ export default {
       displayMode: 'auto' as 'auto' | 'pdf' | 'text', // Track how to display the file
       isLoading: false as boolean,
       pdfError: false as boolean,
-      pdfErrorMessage: '' as string
+      pdfErrorMessage: '' as string,
+      // Virtual scrolling properties
+      totalPages: 0 as number,
+      visiblePages: [] as number[],
+      pageHeight: 0 as number,
+      scrollTop: 0 as number,
+      containerHeight: 0 as number,
+      // PDF rendering properties
+      pdfDocument: null as any,
+      renderedPages: new Map() as Map<number, any>
     }
   },
   computed: {
@@ -99,6 +127,21 @@ export default {
     // Use locally served worker to avoid CSP issues
     // @ts-ignore
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
+    
+    // Set up event listeners
+    document.addEventListener('keydown', this.handleKeydown)
+    window.addEventListener('resize', this.handleResize)
+  },
+  beforeUnmount() {
+    // Clean up event listeners
+    document.removeEventListener('keydown', this.handleKeydown)
+    window.removeEventListener('resize', this.handleResize)
+    
+    // Clean up PDF document
+    if (this.pdfDocument) {
+      this.pdfDocument.destroy()
+      this.pdfDocument = null
+    }
   },
   watch: {
     isVisible(val: boolean) {
@@ -126,17 +169,14 @@ export default {
       this.onClose()
     },
     async loadPDF() {
-      const container = this.$refs.pdfContainer as HTMLDivElement | undefined
-      if (!container || !this.currentFile) return
+      if (!this.currentFile) return
       
       this.isLoading = true
       this.pdfError = false
       this.pdfErrorMessage = ''
+      this.renderedPages.clear()
       
       try {
-        // Clear any existing content
-        container.innerHTML = ''
-        
         // Use locally served worker to avoid CSP issues
         // @ts-ignore
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
@@ -180,54 +220,30 @@ export default {
           throw new Error('PDF binary not available')
         }
 
-        const maxPages = 10
-        const totalPages = Math.min(pdf.numPages, maxPages)
+        // Store PDF document for virtual scrolling
+        this.pdfDocument = pdf
+        this.totalPages = pdf.numPages
         
-        // Get the first page to calculate modal size
+        // Get the first page to calculate scale and page height
         const firstPage = await pdf.getPage(1)
         const naturalViewport = firstPage.getViewport({ scale: 1.0 })
         const naturalWidth = naturalViewport.width
         const naturalHeight = naturalViewport.height
         
-        // Use a conservative scale that fits within the modal
-        const actualScale = Math.min(1.0, 800 / naturalWidth, 600 / naturalHeight)
+        // Calculate optimal scale with high-DPI support
+        const containerWidth = 800 // Approximate container width
+        const devicePixelRatio = window.devicePixelRatio || 1
+        const scale = Math.min(containerWidth / naturalWidth, 1.0) * devicePixelRatio
+        
+        // Calculate page height for virtual scrolling
+        this.pageHeight = Math.floor(naturalHeight * scale / devicePixelRatio) + 32 // Add padding
         
         // Set loading to false so container becomes visible
         this.isLoading = false
         
-        // Wait for container to become visible
-        await new Promise(resolve => setTimeout(resolve, 50))
-        
-        // Render pages
-        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-          const page = await pdf.getPage(pageNum)
-        
-          // Recalculate viewport with proper scale
-          const properViewport = page.getViewport({ scale: actualScale })
-          
-          const canvas = document.createElement('canvas')
-          const ctx = canvas.getContext('2d')
-          if (!ctx) throw new Error('Could not get canvas context')
-          
-          canvas.width = Math.floor(properViewport.width)
-          canvas.height = Math.floor(properViewport.height)
-          
-          canvas.style.width = `${properViewport.width}px`
-          canvas.style.height = `${properViewport.height}px`
-          canvas.style.display = 'block'
-          canvas.style.margin = '0 auto 16px auto'
-          canvas.style.maxWidth = 'none'
-          canvas.style.maxHeight = 'none'
-          
-          // @ts-ignore
-          await page.render({ canvasContext: ctx, viewport: properViewport }).promise
-          container.appendChild(canvas)
-          
-          // Wait for DOM to update
-          await new Promise(resolve => setTimeout(resolve, 10))
-        }
-        
-        this.isLoading = false
+        // Wait for container to become visible, then initialize virtual scrolling
+        await new Promise(resolve => setTimeout(resolve, 100))
+        this.initializeVirtualScrolling()
         
       } catch (error) {
         this.isLoading = false
@@ -240,6 +256,96 @@ export default {
           this.displayMode = 'text'
           return
         }
+      }
+    },
+
+    initializeVirtualScrolling() {
+      const container = document.querySelector('.pdf-content') as HTMLElement
+      if (!container) return
+      
+      this.containerHeight = container.clientHeight
+      this.updateVisiblePages()
+    },
+
+    updateVisiblePages() {
+      if (!this.pdfDocument || this.pageHeight === 0) return
+      
+      const buffer = 2 // Render 2 extra pages above and below
+      const startPage = Math.max(1, Math.floor(this.scrollTop / this.pageHeight) - buffer)
+      const endPage = Math.min(this.totalPages, Math.ceil((this.scrollTop + this.containerHeight) / this.pageHeight) + buffer)
+      
+      this.visiblePages = []
+      for (let i = startPage; i <= endPage; i++) {
+        this.visiblePages.push(i)
+      }
+      
+      // Render visible pages
+      this.renderVisiblePages()
+    },
+
+    async renderVisiblePages() {
+      if (!this.pdfDocument) return
+      
+      for (const pageNum of this.visiblePages) {
+        if (this.renderedPages.has(pageNum)) continue
+        
+        try {
+          await this.renderPage(pageNum)
+          this.renderedPages.set(pageNum, true)
+        } catch (error) {
+          console.error(`Failed to render page ${pageNum}:`, error)
+        }
+      }
+    },
+
+    async renderPage(pageNum: number) {
+      if (!this.pdfDocument) return
+      
+      try {
+        const page = await this.pdfDocument.getPage(pageNum)
+        const naturalViewport = page.getViewport({ scale: 1.0 })
+        const devicePixelRatio = window.devicePixelRatio || 1
+        const scale = Math.min(800 / naturalViewport.width, 1.0) * devicePixelRatio
+        const viewport = page.getViewport({ scale })
+        
+        // Get canvas and context
+        const canvas = document.getElementById(`canvas-${pageNum}`) as HTMLCanvasElement
+        const textLayerDiv = document.getElementById(`text-layer-${pageNum}`) as HTMLDivElement
+        const annotationLayerDiv = document.getElementById(`annotation-layer-${pageNum}`) as HTMLDivElement
+        
+        if (!canvas || !textLayerDiv || !annotationLayerDiv) return
+        
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        
+        // Set canvas size
+        canvas.width = Math.floor(viewport.width)
+        canvas.height = Math.floor(viewport.height)
+        canvas.style.width = `${viewport.width / devicePixelRatio}px`
+        canvas.style.height = `${viewport.height / devicePixelRatio}px`
+        
+        // Render canvas
+        // @ts-ignore
+        await page.render({ canvasContext: ctx, viewport }).promise
+        
+        // For now, we'll focus on high-quality canvas rendering
+        // Text layer and annotation layer can be added later when PDF.js exports are available
+        // The canvas rendering with high-DPI support provides much better quality than before
+        
+      } catch (error) {
+        console.error(`Error rendering page ${pageNum}:`, error)
+      }
+    },
+
+    handleScroll(event: Event) {
+      const target = event.target as HTMLElement
+      this.scrollTop = target.scrollTop
+      this.updateVisiblePages()
+    },
+
+    handleResize() {
+      if (this.pdfDocument) {
+        this.initializeVirtualScrolling()
       }
     },
     saveMarkdown() {
@@ -374,14 +480,31 @@ export default {
   height: 100%;
 }
 
-.pdf-content canvas {
-  max-width: 100% !important;
-  width: auto !important;
-  height: auto !important;
-  display: block !important;
-  margin: 0 auto 16px auto !important;
-  box-sizing: border-box !important;
+.pdf-virtual-container {
+  position: relative;
+  width: 100%;
 }
+
+.pdf-page-container {
+  position: absolute;
+  width: 100%;
+}
+
+.pdf-page {
+  position: relative;
+  margin: 0 auto 16px auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.pdf-canvas {
+  display: block;
+  margin: 0;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Text layer and annotation layer styles will be added when PDF.js exports are available */
 
 .pdf-loading-overlay {
   position: absolute;
