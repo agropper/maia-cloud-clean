@@ -138,9 +138,7 @@ export default {
   },
   watch: {
     isVisible(val: boolean) {
-      if (val && this.isPDF) {
-        this.$nextTick(() => this.loadPDF())
-      }
+      // PDF loading is handled by the currentFile watcher to avoid duplicate calls
     },
     currentFile: {
       handler() {
@@ -173,11 +171,8 @@ export default {
         // @ts-ignore
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
         
-        // Debug: Log the currentFile properties
-        console.log('Current file properties:', this.currentFile)
-        console.log('Has fileUrl:', !!this.currentFile.fileUrl)
-        console.log('Has bucketKey:', !!(this.currentFile as any).bucketKey)
-        console.log('Has originalFile:', !!this.currentFile.originalFile)
+        // Debug: Log the currentFile properties (essential only)
+        console.log('[*] Loading PDF for file:', this.currentFile.name)
         
         // For debugging, let's use the URL-based approach first
         let pdf
@@ -191,7 +186,7 @@ export default {
           // For debugging, use the hardcoded file URL you specified via proxy
           const hardcodedBucketKey = 'fri1/archived/GROPPER_ADRIAN_09_24_25_1314.PDF'
           const proxyUrl = `/api/proxy-pdf/${hardcodedBucketKey}`
-          console.log('Loading PDF from proxy URL:', proxyUrl)
+          // Loading PDF from proxy URL
           // @ts-ignore
           const task = pdfjsLib.getDocument({ url: proxyUrl })
           pdf = await task.promise
@@ -206,7 +201,7 @@ export default {
           throw new Error('No PDF source available')
         }
 
-        console.log('PDF loaded successfully, pages:', pdf.numPages)
+        console.log('[*] PDF loaded successfully, pages:', pdf.numPages)
         
         // Simple rendering approach - render first 10 pages
         const container = document.querySelector('.pdf-content') as HTMLDivElement
