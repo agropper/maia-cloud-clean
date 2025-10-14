@@ -9,8 +9,8 @@
 ### Core Functionality
 - **📄 Health Record Import**: Import and index hundreds of pages of records downloaded from modern EHR patient portals
 - **🤖 Private AI Assistant**: Create patient summaries that correct errors and protect sensitive information
-- **🔍 Natural Language Search**: Search health records using natural language chats without sharing with commercial AIs
-- **💬 Multi-AI Integration**: Use patient summaries to ask questions of commercial LLMs (ChatGPT, Gemini, Claude, DeepSeek)
+- **🔍 Natural Language Search**: Search and abstract health records using natural language chats without sharing with commercial AIs
+- **💬 Multi-AI Integration**: Use patient summaries and human chat threads to ask questions of commercial LLMs (ChatGPT, Gemini, Claude, DeepSeek)
 - **🔗 Secure Sharing**: Share chats with physicians using links that can be added to patient portal messages, emails, or texts
 
 ### Privacy & Security
@@ -24,7 +24,7 @@
 - **🤖 Agent Management**: Create and deploy private AI agents for users
 - **📊 Knowledge Base Management**: Monitor and manage user knowledge bases
 - **📈 Analytics Dashboard**: View user statistics, session data, and system health
-- **🔧 System Administration**: Cache management, database operations, and maintenance tools
+- **🔧 System Administration**: Database operations, and maintenance tools
 
 ## 🏗️ Architecture
 
@@ -42,7 +42,7 @@
 
 ### Database
 - **IBM Cloudant** (CouchDB-compatible) for user data, chat history, and metadata
-- **Free tier** available for development and small deployments
+- **Free tier** supports over a dozen patients
 
 ## 🔧 Essential APIs & Services
 
