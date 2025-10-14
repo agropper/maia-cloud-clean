@@ -26,26 +26,7 @@
             </div>
           </div>
           
-          <div v-else class="pdf-content" @scroll="handleScroll">
-            <!-- Virtual scrolling container -->
-            <div class="pdf-virtual-container" :style="{ height: `${totalPages * pageHeight}px` }">
-              <!-- Rendered pages -->
-              <div 
-                v-for="pageNum in visiblePages" 
-                :key="pageNum"
-                class="pdf-page-container"
-                :style="{ 
-                  position: 'absolute', 
-                  top: `${(pageNum - 1) * pageHeight}px`,
-                  width: '100%'
-                }"
-              >
-                <div :id="`page-${pageNum}`" class="pdf-page">
-                  <canvas :id="`canvas-${pageNum}`" class="pdf-canvas"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div v-else ref="pdfContainer" class="pdf-content"></div>
         </div>
 
         <!-- Markdown / non-PDF content -->
@@ -104,15 +85,8 @@ export default {
       isLoading: false as boolean,
       pdfError: false as boolean,
       pdfErrorMessage: '' as string,
-      // Virtual scrolling properties
-      totalPages: 0 as number,
-      visiblePages: [] as number[],
-      pageHeight: 0 as number,
-      scrollTop: 0 as number,
-      containerHeight: 0 as number,
       // PDF rendering properties
-      pdfDocument: null as any,
-      renderedPages: new Map() as Map<number, any>
+      pdfDocument: null as any
     }
   },
   computed: {
@@ -130,12 +104,10 @@ export default {
     
     // Set up event listeners
     document.addEventListener('keydown', this.handleKeydown)
-    window.addEventListener('resize', this.handleResize)
   },
   beforeUnmount() {
     // Clean up event listeners
     document.removeEventListener('keydown', this.handleKeydown)
-    window.removeEventListener('resize', this.handleResize)
     
     // Clean up PDF document
     if (this.pdfDocument) {
@@ -174,180 +146,84 @@ export default {
       this.isLoading = true
       this.pdfError = false
       this.pdfErrorMessage = ''
-      this.renderedPages.clear()
       
       try {
         // Use locally served worker to avoid CSP issues
         // @ts-ignore
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
         
-        // Handle both fresh File objects and database-loaded objects
+        // For debugging, let's use the URL-based approach first
         let pdf
         
-        if (this.currentFile.originalFile instanceof File) {
+        if (this.currentFile.fileUrl) {
+          console.log('Loading PDF from URL:', this.currentFile.fileUrl)
+          // @ts-ignore
+          const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
+          pdf = await task.promise
+        } else if (this.currentFile.originalFile instanceof File) {
           // Fresh File object - use arrayBuffer()
+          console.log('Loading PDF from File object')
           const buf = await this.currentFile.originalFile.arrayBuffer()
           // @ts-ignore
           const task = pdfjsLib.getDocument({ data: buf })
           pdf = await task.promise
-        } else if (this.currentFile.originalFile && typeof this.currentFile.originalFile === 'object' && 'base64' in this.currentFile.originalFile && (this.currentFile.originalFile as any).base64) {
-          // Database-loaded file with base64 data - reconstruct the PDF
-          try {
-            const base64 = (this.currentFile.originalFile as any).base64
-            
-            // Check if base64 is suspiciously short (likely corrupted)
-            if (base64.length < 1000) {
-              throw new Error('PDF binary data appears to be corrupted')
-            }
-            
-            const binaryString = atob(base64)
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i)
-            }
-            // @ts-ignore
-            const task = pdfjsLib.getDocument({ data: bytes })
-            pdf = await task.promise
-          } catch (base64Error) {
-            throw new Error('PDF binary not available')
-          }
-        } else if (this.currentFile.fileUrl) {
-          // @ts-ignore
-          const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
-          pdf = await task.promise
         } else {
-          // For database-loaded files without base64 data (old format)
-          throw new Error('PDF binary not available')
+          throw new Error('No PDF source available')
         }
 
-        // Store PDF document for virtual scrolling
-        this.pdfDocument = pdf
-        this.totalPages = pdf.numPages
+        console.log('PDF loaded successfully, pages:', pdf.numPages)
         
-        // Get the first page to calculate scale and page height
-        const firstPage = await pdf.getPage(1)
-        const naturalViewport = firstPage.getViewport({ scale: 1.0 })
-        const naturalWidth = naturalViewport.width
-        const naturalHeight = naturalViewport.height
+        // Simple rendering approach - render first 10 pages
+        const container = document.querySelector('.pdf-content') as HTMLDivElement
+        if (!container) return
         
-        // Calculate optimal scale with high-DPI support
-        const containerWidth = 800 // Approximate container width
-        const devicePixelRatio = window.devicePixelRatio || 1
-        const scale = Math.min(containerWidth / naturalWidth, 1.0) * devicePixelRatio
+        // Clear any existing content
+        container.innerHTML = ''
         
-        // Calculate page height for virtual scrolling
-        this.pageHeight = Math.floor(naturalHeight * scale / devicePixelRatio) + 32 // Add padding
+        const maxPages = Math.min(pdf.numPages, 10)
         
-        // Set loading to false so container becomes visible
+        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+          console.log(`Rendering page ${pageNum}`)
+          const page = await pdf.getPage(pageNum)
+          const naturalViewport = page.getViewport({ scale: 1.0 })
+          const naturalWidth = naturalViewport.width
+          const naturalHeight = naturalViewport.height
+          
+          // Use conservative scale
+          const actualScale = Math.min(1.0, 800 / naturalWidth, 600 / naturalHeight)
+          const viewport = page.getViewport({ scale: actualScale })
+          
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          if (!ctx) continue
+          
+          canvas.width = Math.floor(viewport.width)
+          canvas.height = Math.floor(viewport.height)
+          canvas.style.width = `${viewport.width}px`
+          canvas.style.height = `${viewport.height}px`
+          canvas.style.display = 'block'
+          canvas.style.margin = '0 auto 16px auto'
+          canvas.style.maxWidth = '100%'
+          canvas.style.height = 'auto'
+          
+          // @ts-ignore
+          await page.render({ canvasContext: ctx, viewport }).promise
+          container.appendChild(canvas)
+          
+          console.log(`Page ${pageNum} rendered successfully`)
+        }
+        
         this.isLoading = false
-        
-        // Wait for container to become visible, then initialize virtual scrolling
-        await new Promise(resolve => setTimeout(resolve, 100))
-        this.initializeVirtualScrolling()
+        console.log('PDF rendering completed')
         
       } catch (error) {
         this.isLoading = false
         this.pdfError = true
         this.pdfErrorMessage = error instanceof Error ? error.message : 'Failed to load PDF'
-        
-        // Check if this is a database-loaded file that should show text instead
-        if (error instanceof Error && error.message && error.message.includes('PDF binary not available')) {
-          // Switch to text view for database files
-          this.displayMode = 'text'
-          return
-        }
+        console.error('PDF loading error:', error)
       }
     },
 
-    initializeVirtualScrolling() {
-      const container = document.querySelector('.pdf-content') as HTMLElement
-      if (!container) return
-      
-      this.containerHeight = container.clientHeight
-      this.updateVisiblePages()
-    },
-
-    updateVisiblePages() {
-      if (!this.pdfDocument || this.pageHeight === 0) return
-      
-      const buffer = 2 // Render 2 extra pages above and below
-      const startPage = Math.max(1, Math.floor(this.scrollTop / this.pageHeight) - buffer)
-      const endPage = Math.min(this.totalPages, Math.ceil((this.scrollTop + this.containerHeight) / this.pageHeight) + buffer)
-      
-      this.visiblePages = []
-      for (let i = startPage; i <= endPage; i++) {
-        this.visiblePages.push(i)
-      }
-      
-      // Render visible pages
-      this.renderVisiblePages()
-    },
-
-    async renderVisiblePages() {
-      if (!this.pdfDocument) return
-      
-      for (const pageNum of this.visiblePages) {
-        if (this.renderedPages.has(pageNum)) continue
-        
-        try {
-          await this.renderPage(pageNum)
-          this.renderedPages.set(pageNum, true)
-        } catch (error) {
-          console.error(`Failed to render page ${pageNum}:`, error)
-        }
-      }
-    },
-
-    async renderPage(pageNum: number) {
-      if (!this.pdfDocument) return
-      
-      try {
-        const page = await this.pdfDocument.getPage(pageNum)
-        const naturalViewport = page.getViewport({ scale: 1.0 })
-        const devicePixelRatio = window.devicePixelRatio || 1
-        const scale = Math.min(800 / naturalViewport.width, 1.0) * devicePixelRatio
-        const viewport = page.getViewport({ scale })
-        
-        // Get canvas and context
-        const canvas = document.getElementById(`canvas-${pageNum}`) as HTMLCanvasElement
-        const textLayerDiv = document.getElementById(`text-layer-${pageNum}`) as HTMLDivElement
-        const annotationLayerDiv = document.getElementById(`annotation-layer-${pageNum}`) as HTMLDivElement
-        
-        if (!canvas || !textLayerDiv || !annotationLayerDiv) return
-        
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-        
-        // Set canvas size
-        canvas.width = Math.floor(viewport.width)
-        canvas.height = Math.floor(viewport.height)
-        canvas.style.width = `${viewport.width / devicePixelRatio}px`
-        canvas.style.height = `${viewport.height / devicePixelRatio}px`
-        
-        // Render canvas
-        // @ts-ignore
-        await page.render({ canvasContext: ctx, viewport }).promise
-        
-        // For now, we'll focus on high-quality canvas rendering
-        // Text layer and annotation layer can be added later when PDF.js exports are available
-        // The canvas rendering with high-DPI support provides much better quality than before
-        
-      } catch (error) {
-        console.error(`Error rendering page ${pageNum}:`, error)
-      }
-    },
-
-    handleScroll(event: Event) {
-      const target = event.target as HTMLElement
-      this.scrollTop = target.scrollTop
-      this.updateVisiblePages()
-    },
-
-    handleResize() {
-      if (this.pdfDocument) {
-        this.initializeVirtualScrolling()
-      }
-    },
     saveMarkdown() {
       const url = URL.createObjectURL(
         new Blob([generateTimeline(this.appState.timeline, this.appState.timelineChunks)], {
