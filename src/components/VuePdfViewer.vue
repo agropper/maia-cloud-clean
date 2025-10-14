@@ -102,6 +102,7 @@ const pdfUrl = computed(() => {
 const loadPdfDocument = async () => {
   if (!pdfUrl.value) {
     pdfDocument.value = null
+    totalPages.value = 0
     return
   }
 
@@ -112,33 +113,50 @@ const loadPdfDocument = async () => {
     const pdf = await loadingTask.promise
     console.log('✅ Vue PDF: PDF document loaded successfully:', pdf)
     totalPages.value = pdf.numPages || 0
+    console.log('📄 Vue PDF: Total pages set to:', totalPages.value)
   } catch (error) {
     console.error('❌ Vue PDF: PDF document loading error:', error)
     pdfDocument.value = null
+    totalPages.value = 0
   }
 }
 
 const onPdfLoaded = (pdf: any) => {
-  console.log('✅ Vue PDF: PDF loaded successfully:', pdf)
-  totalPages.value = pdf.numPages || 0
+  console.log('✅ Vue PDF: PDF loaded via component event:', pdf)
+  // Only update totalPages if it's not already set or if it's different
+  if (totalPages.value === 0 || totalPages.value !== pdf.numPages) {
+    totalPages.value = pdf.numPages || 0
+    console.log('📄 Vue PDF: Total pages updated via component to:', totalPages.value)
+  }
 }
 
 const onPdfError = (err: any) => {
   console.error('❌ Vue PDF: PDF loading error:', err)
+  totalPages.value = 0
 }
 
 
 const previousPage = () => {
+  console.log('📄 Vue PDF: Previous page clicked - current:', currentPage.value, 'total:', totalPages.value)
   if (currentPage.value > 1) {
     currentPage.value--
     console.log('📄 Vue PDF: Previous page, now on page:', currentPage.value)
+  } else {
+    console.log('📄 Vue PDF: Already on first page, cannot go previous')
   }
 }
 
 const nextPage = () => {
+  console.log('📄 Vue PDF: Next page clicked - current:', currentPage.value, 'total:', totalPages.value)
+  if (totalPages.value === 0) {
+    console.log('📄 Vue PDF: Total pages is 0, cannot navigate')
+    return
+  }
   if (currentPage.value < totalPages.value) {
     currentPage.value++
     console.log('📄 Vue PDF: Next page, now on page:', currentPage.value)
+  } else {
+    console.log('📄 Vue PDF: Already on last page, cannot go next')
   }
 }
 
@@ -174,6 +192,11 @@ watch(currentPage, (newPage, oldPage) => {
 // Watch for scale changes to debug zoom
 watch(scale, (newScale, oldScale) => {
   console.log('🔍 Vue PDF: Scale changed from', oldScale, 'to', newScale)
+})
+
+// Watch for totalPages changes to debug page count issues
+watch(totalPages, (newTotal, oldTotal) => {
+  console.log('📄 Vue PDF: Total pages changed from', oldTotal, 'to', newTotal)
 })
 </script>
 
