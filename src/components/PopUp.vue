@@ -49,7 +49,10 @@ import { QIcon, QSpinnerDots } from 'quasar'
 // PDF.js legacy build for better bundler compatibility
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
 
-// PDF.js legacy build loaded successfully
+// Check what's available in pdfjsLib for text layer functionality
+console.log('Available PDF.js exports:', Object.keys(pdfjsLib))
+console.log('TextLayer available:', !!pdfjsLib.TextLayer)
+console.log('renderTextLayer available:', !!pdfjsLib.renderTextLayer)
 
 const { generateTimeline } = useTranscript()
 
@@ -265,20 +268,34 @@ export default {
             const textContent = await page.getTextContent()
             console.log(`Page ${pageNum} text content:`, textContent)
             
-            // Check if TextLayerBuilder is available
-            if (pdfjsLib.TextLayerBuilder) {
-              const textLayer = new pdfjsLib.TextLayerBuilder({
+            // Create display viewport for text layer (not high-DPI viewport)
+            const displayViewport = page.getViewport({ scale: baseScale })
+            console.log(`Page ${pageNum} display viewport: ${displayViewport.width}x${displayViewport.height}`)
+            
+            // Use PDF.js TextLayer class (should be available in legacy build)
+            if (pdfjsLib.TextLayer) {
+              console.log('Using PDF.js TextLayer class')
+              const textLayer = new pdfjsLib.TextLayer({
                 textLayerDiv,
                 pageIndex: pageNum - 1,
-                viewport: viewport
+                viewport: displayViewport
               })
               textLayer.setTextContent(textContent)
               textLayer.render()
-              console.log(`Text layer rendered for page ${pageNum}`)
+              console.log(`Text layer rendered for page ${pageNum} using TextLayer class`)
+            } else if (pdfjsLib.renderTextLayer) {
+              console.log('Using PDF.js renderTextLayer function')
+              pdfjsLib.renderTextLayer({
+                textContent: textContent,
+                container: textLayerDiv,
+                viewport: displayViewport,
+                textDivs: []
+              })
+              console.log(`Text layer rendered for page ${pageNum} using renderTextLayer`)
             } else {
-              console.log('TextLayerBuilder not available, creating simple text layer')
-              // Fallback: create simple text layer manually with proper scaling
-              this.createSimpleTextLayer(textLayerDiv, textContent, viewport, devicePixelRatio)
+              console.log('No PDF.js text layer functions available, creating simple text layer')
+              // Fallback: create simple text layer manually with display viewport
+              this.createSimpleTextLayer(textLayerDiv, textContent, displayViewport)
             }
           } catch (textError) {
             console.warn(`Failed to render text layer for page ${pageNum}:`, textError)
@@ -303,7 +320,7 @@ export default {
       }
     },
 
-    createSimpleTextLayer(textLayerDiv: HTMLElement, textContent: any, viewport: any, devicePixelRatio: number = 1) {
+    createSimpleTextLayer(textLayerDiv: HTMLElement, textContent: any, viewport: any) {
       // Simple fallback text layer implementation
       textLayerDiv.innerHTML = ''
       
@@ -312,19 +329,28 @@ export default {
           const span = document.createElement('span')
           span.textContent = item.str
           span.style.position = 'absolute'
-          span.style.color = 'rgba(0, 0, 0, 0.01)'
+          span.style.color = 'rgba(255, 0, 0, 0.5)' // Red for debugging
           span.style.whiteSpace = 'pre'
           span.style.cursor = 'text'
           span.style.transformOrigin = '0% 0%'
           
-          // Position the text based on the item's transform, accounting for device pixel ratio
+          // Position the text based on the item's transform using display viewport
           if (item.transform) {
             const transform = item.transform
-            // Scale down coordinates to match display size (not high-DPI canvas size)
-            span.style.left = `${transform[4] / devicePixelRatio}px`
-            span.style.top = `${transform[5] / devicePixelRatio}px`
-            span.style.fontSize = `${Math.abs(transform[0]) / devicePixelRatio}px`
+            // Use the transform coordinates directly (they're already scaled for the display viewport)
+            const left = transform[4]
+            const top = transform[5]
+            const fontSize = Math.abs(transform[0])
+            
+            span.style.left = `${left}px`
+            span.style.top = `${top}px`
+            span.style.fontSize = `${fontSize}px`
             span.style.fontFamily = item.fontName || 'sans-serif'
+            
+            // Debug first few items
+            if (index < 5) {
+              console.log(`Text item ${index}: "${item.str}" at (${left.toFixed(1)}, ${top.toFixed(1)}) size ${fontSize.toFixed(1)}px`)
+            }
           }
           
           // Add hover effect
@@ -339,7 +365,7 @@ export default {
         })
       }
       
-      console.log('Simple text layer created with', textContent?.items?.length || 0, 'text items (devicePixelRatio:', devicePixelRatio, ')')
+      console.log('Simple text layer created with', textContent?.items?.length || 0, 'text items using display viewport')
     },
 
     saveMarkdown() {
@@ -507,7 +533,7 @@ export default {
   background: white;
 }
 
-/* Text layer styling */
+/* PDF.js Text Layer styling */
 .text-layer {
   position: absolute;
   top: 0;
@@ -515,7 +541,7 @@ export default {
   right: 0;
   bottom: 0;
   overflow: hidden;
-  opacity: 1.0;
+  opacity: 0.2;
   line-height: 1.0;
   pointer-events: auto;
   -webkit-user-select: text;
@@ -525,7 +551,7 @@ export default {
 }
 
 .text-layer span {
-  color: rgba(0, 0, 0, 0.01);
+  color: transparent;
   position: absolute;
   white-space: pre;
   cursor: text;
@@ -544,12 +570,41 @@ export default {
   background-color: rgba(0, 123, 255, 0.3);
 }
 
-/* Ensure text is selectable */
-.text-layer {
+/* PDF.js specific text layer classes */
+.textLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1.0;
+  pointer-events: auto;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
   user-select: text;
+}
+
+.textLayer > span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.textLayer > span:hover {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+
+.textLayer > span::selection {
+  background-color: rgba(0, 123, 255, 0.3);
 }
 
 .pdf-loading-overlay {
