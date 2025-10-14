@@ -101,7 +101,12 @@ const pdfUrl = computed(() => {
 
 // Methods
 const loadPdfDocument = async () => {
+  console.log('🔄 Vue PDF: loadPdfDocument() called')
+  console.log('🔄 Vue PDF: pdfUrl.value:', pdfUrl.value)
+  console.log('🔄 Vue PDF: isLoading.value:', isLoading.value)
+  
   if (!pdfUrl.value) {
+    console.log('🔄 Vue PDF: No PDF URL, clearing state')
     pdfDocument.value = null
     totalPages.value = 0
     isLoading.value = false
@@ -116,7 +121,7 @@ const loadPdfDocument = async () => {
 
   try {
     isLoading.value = true
-    console.log('🔄 Vue PDF: Loading PDF document from:', pdfUrl.value)
+    console.log('🔄 Vue PDF: Starting PDF load from:', pdfUrl.value)
     const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
     pdfDocument.value = loadingTask
     const pdf = await loadingTask.promise
@@ -129,6 +134,7 @@ const loadPdfDocument = async () => {
     totalPages.value = 0
   } finally {
     isLoading.value = false
+    console.log('🔄 Vue PDF: Loading completed, isLoading set to false')
   }
 }
 
@@ -189,12 +195,21 @@ const zoomOut = () => {
 }
 
 // Watch for file changes - this handles both initial load and file changes
-watch(() => props.file, (newFile) => {
+watch(() => props.file, (newFile, oldFile) => {
+  console.log('📄 Vue PDF: File watcher triggered')
+  console.log('📄 Vue PDF: Old file:', oldFile?.name || 'none')
+  console.log('📄 Vue PDF: New file:', newFile?.name || 'none')
+  console.log('📄 Vue PDF: Is loading:', isLoading.value)
+  
   if (newFile && !isLoading.value) {
-    console.log('📄 Vue PDF: File changed, resetting state')
+    console.log('📄 Vue PDF: File changed, resetting state and loading PDF')
     currentPage.value = 1
     totalPages.value = 0
     loadPdfDocument()
+  } else if (isLoading.value) {
+    console.log('📄 Vue PDF: Skipping load because already loading')
+  } else {
+    console.log('📄 Vue PDF: No file or same file, skipping load')
   }
 }, { immediate: true })
 
