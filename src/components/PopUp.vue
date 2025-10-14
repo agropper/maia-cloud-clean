@@ -49,8 +49,7 @@ import { QIcon, QSpinnerDots } from 'quasar'
 // PDF.js legacy build for better bundler compatibility
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
 
-// Check what's available in pdfjsLib
-console.log('Available PDF.js exports:', Object.keys(pdfjsLib))
+// PDF.js legacy build loaded successfully
 
 const { generateTimeline } = useTranscript()
 
@@ -199,7 +198,7 @@ export default {
         // Clear any existing content
         container.innerHTML = ''
         
-        const maxPages = Math.min(pdf.numPages, 10)
+        const maxPages = Math.min(pdf.numPages, 3)
         
         for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
           console.log(`Rendering page ${pageNum}`)
@@ -253,7 +252,7 @@ export default {
           textLayerDiv.style.width = `${displayWidth}px`
           textLayerDiv.style.height = `${displayHeight}px`
           textLayerDiv.style.overflow = 'hidden'
-          textLayerDiv.style.opacity = '0.2'
+          textLayerDiv.style.opacity = '1.0'
           textLayerDiv.style.lineHeight = '1.0'
           textLayerDiv.style.pointerEvents = 'auto'
           
@@ -313,7 +312,7 @@ export default {
           const span = document.createElement('span')
           span.textContent = item.str
           span.style.position = 'absolute'
-          span.style.color = 'transparent'
+          span.style.color = 'rgba(0, 0, 0, 0.01)'
           span.style.whiteSpace = 'pre'
           span.style.cursor = 'text'
           span.style.transformOrigin = '0% 0%'
@@ -516,13 +515,17 @@ export default {
   right: 0;
   bottom: 0;
   overflow: hidden;
-  opacity: 0.2;
+  opacity: 1.0;
   line-height: 1.0;
   pointer-events: auto;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 .text-layer span {
-  color: transparent;
+  color: rgba(0, 0, 0, 0.01);
   position: absolute;
   white-space: pre;
   cursor: text;
