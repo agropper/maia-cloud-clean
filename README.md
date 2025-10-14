@@ -1,156 +1,175 @@
 # MAIA - Medical AI Assistant
 
-A secure, multi-user medical AI assistant with passkey authentication, knowledge base management, and advanced chat features.
+**MAIA** (Medical AI Assistant) is a non-commercial, open source demonstration of patient-controlled health records and private AI technology. MAIA puts patients and physicians in complete control of their information technology, including modern, open source AI.
 
-## 🎉 Latest Release: v1.1.0
+> **📖 For a general introduction and getting started guide, visit our [GitHub Wiki](https://github.com/agropper/maia-cloud-clean/wiki)**
 
-**Production-ready release with enhanced user experience and cloud deployment capabilities.**
+## 🎯 Key Features
 
-### ✨ New Features in v1.1.0
-- **🗑️ Message Deletion System**: Delete messages with confirmation modals and intelligent cleanup
-- **🔧 Enhanced AI Integration**: Fixed Gemini API and improved error handling
-- **🌐 Production Domain Support**: Dynamic domain configuration for cloud deployment
-- **📱 Improved UI/UX**: Better message editing and management tools
-- **🛡️ Enhanced Security**: Improved passkey authentication and CORS handling
+### Core Functionality
+- **📄 Health Record Import**: Import and index hundreds of pages of records downloaded from modern EHR patient portals
+- **🤖 Private AI Assistant**: Create patient summaries that correct errors and protect sensitive information
+- **🔍 Natural Language Search**: Search health records using natural language chats without sharing with commercial AIs
+- **💬 Multi-AI Integration**: Use patient summaries to ask questions of commercial LLMs (ChatGPT, Gemini, Claude, DeepSeek)
+- **🔗 Secure Sharing**: Share chats with physicians using links that can be added to patient portal messages, emails, or texts
 
-## Features
-
-- **🔐 Passkey Authentication**: Secure user authentication using WebAuthn
-- **🧠 Knowledge Base Management**: Create and manage medical knowledge bases
-- **🤖 Multi-AI Integration**: Support for Anthropic Claude, Google Gemini, ChatGPT, DeepSeek, and DigitalOcean AI
+### Privacy & Security
+- **🔐 Passkey Authentication**: Secure WebAuthn-based authentication
+- **🛡️ Privacy-First Design**: Private AI acts as a privacy-preserving bridge between EHRs and commercial AI
 - **👥 Multi-User Support**: Each user has their own secure workspace
-- **📁 File Upload & Processing**: Support for PDF and medical document uploads with AI analysis
-- **💬 Advanced Chat Management**: Edit, delete, and manage chat messages with intelligent cleanup
-- **🌐 Group Sharing**: Share chats with team members via secure deep links
-- **📊 Agent Management**: Create and configure custom AI agents for specific use cases
-- **🔒 Enterprise Security**: CORS protection, rate limiting, and secure data handling
+- **🌐 Deep Link Sharing**: Secure sharing of conversations with invited participants
 
-## 🗑️ Message Management Features
+### Admin Panel Features (`/admin2`)
+- **👤 User Management**: Approve, reject, and manage user accounts
+- **🤖 Agent Management**: Create and deploy private AI agents for users
+- **📊 Knowledge Base Management**: Monitor and manage user knowledge bases
+- **📈 Analytics Dashboard**: View user statistics, session data, and system health
+- **🔧 System Administration**: Cache management, database operations, and maintenance tools
 
-### Message Editing & Deletion
-- **Edit Messages**: Click the edit button on any message to modify content
-- **Delete Messages**: Use the "Delete this message" button with confirmation modal
-- **Intelligent Cleanup**: Automatically removes related user questions when deleting AI responses
-- **Audit Trail**: Comprehensive console logging for all deletion operations
+## 🏗️ Architecture
 
-### Group Chat Sharing
-- **Secure Deep Links**: Share conversations via encrypted URLs
-- **Team Collaboration**: Multiple users can access shared chat sessions
-- **Real-time Updates**: Live synchronization of chat changes across users
+### Frontend
+- **Vue.js 3** with Composition API
+- **Quasar Framework** for UI components
+- **TypeScript** for type safety
+- **Vite** for build tooling
 
-## Quick Start
+### Backend
+- **Node.js** with Express.js
+- **Session Management** with in-memory storage
+- **Rate Limiting** and security middleware
+- **RESTful API** design
 
+### Database
+- **IBM Cloudant** (CouchDB-compatible) for user data, chat history, and metadata
+- **Free tier** available for development and small deployments
+
+## 🔧 Essential APIs & Services
+
+### DigitalOcean Hosting
+**Primary hosting platform for the complete MAIA stack:**
+
+- **🌐 App Hosting**: Deploy the MAIA application
+- **🤖 Private AI Agents**: Host and manage personal AI agents
+- **📚 Knowledge Base with Embeddings**: Store and index health records
+- **📁 File Storage**: Secure storage for uploaded documents
+
+> **💰 Get $200 credit for your MAIA deployment: [DigitalOcean Referral Link](https://m.do.co/c/6837d806e656)**
+
+### IBM Cloudant Database
+- **Free tier** available
+- **CouchDB-compatible** NoSQL database
+- **Automatic scaling** and backup
+- **Global availability**
+
+### Resend Email Service
+- **Free tier** available
+- **Transactional emails** for user notifications
+- **Admin notifications** and support communications
+
+### AI Provider APIs
+- **Google Gemini**: `GEMINI_API_KEY`
+- **Anthropic Claude**: `ANTHROPIC_API_KEY`
+- **OpenAI ChatGPT**: `CHATGPT_API_KEY`
+- **DeepSeek**: `DEEPSEEK_API_KEY`
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+- DigitalOcean account (for hosting)
+- API keys for AI providers
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/agropper/maia-cloud-clean.git
+   cd maia-cloud-clean
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. **Configure Environment**
-
+3. **Configure environment**
    ```bash
    cp .env.example .env
-   # Edit .env with your configuration
+   # Edit .env with your API keys and configuration
    ```
 
-3. **Start Development Server**
-
+4. **Start development server**
    ```bash
    npm run dev
    ```
 
-4. **Build for Production**
+5. **Build for production**
    ```bash
    npm run build
    npm start
    ```
 
-## Environment Variables
+## 💰 Cost Structure
 
-See `.env` file for all required configuration variables.
+### Hosting Costs
+- **DigitalOcean**: ~$30/month for full MAIA deployment
+- **Supports**: Up to a dozen family/community members
+- **Free Credit**: $200 with [referral link](https://m.do.co/c/6837d806e656) (covers ~6 months)
 
-### 🔐 Passkey Configuration
+### Free Services
+- **IBM Cloudant**: Free tier database
+- **Resend**: Free tier email service
+- **AI APIs**: Pay-per-use (typically very low cost for on-demand usage)
 
-The passkey system now supports flexible domain configuration through environment variables. See [DOMAIN_CONFIGURATION.md](./DOMAIN_CONFIGURATION.md) for detailed configuration options.
+## 🔐 Environment Configuration
 
-**Quick Setup:**
+See `.env.example` for all required configuration variables:
+
 ```bash
-# For production deployment
-PASSKEY_RPID=your-domain.com
-PASSKEY_ORIGIN=https://your-domain.com
+# DigitalOcean Configuration
+DIGITALOCEAN_TOKEN=your-digitalocean-token-here
+DIGITALOCEAN_ACCESS_KEY=your-access-key-here
+DIGITALOCEAN_SECRET_KEY=your-secret-key-here
 
-# Or use general domain variables
-DOMAIN=your-domain.com
-HTTPS=true
+# Database Configuration
+CLOUDANT_URL=your-cloudant-url-here
+CLOUDANT_USERNAME=your-cloudant-username-here
+CLOUDANT_PASSWORD=your-cloudant-password-here
+
+# AI Provider APIs
+GEMINI_API_KEY=your-gemini-api-key-here
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+CHATGPT_API_KEY=your-chatgpt-api-key-here
+DEEPSEEK_API_KEY=your-deepseek-api-key-here
+
+# Email Service
+RESEND_API_KEY=your-resend-api-key-here
+RESEND_FROM_EMAIL=your-from-email@yourdomain.com
 ```
 
-## API Endpoints
+## 📚 Documentation
 
-### Core Services
-- `GET /health` - Health check
-- `GET /api/agents` - List available AI agents
-- `GET /api/current-agent` - Get current agent details
-- `POST /api/knowledge-bases` - Create knowledge base
+- **[GitHub Wiki](https://github.com/agropper/maia-cloud-clean/wiki)**: General introduction and getting started
+- **[Environment Variables](./Documents/ENVIRONMENT_VARIABLES.md)**: Detailed configuration guide
+- **[Admin Panel](./Documents/ADMIN_PANEL.md)**: Admin panel documentation
+- **[Build & Debug](./Documents/BUILD_AND_DEBUG.md)**: Development setup guide
 
-### Authentication
-- `POST /api/passkey/register` - Register passkey
-- `POST /api/passkey/authenticate` - Authenticate with passkey
+## 🤝 Contributing
 
-### AI Chat Services
-- `POST /api/anthropic-chat` - Anthropic Claude integration
-- `POST /api/gemini-chat` - Google Gemini integration
-- `POST /api/chatgpt-chat` - OpenAI ChatGPT integration
-- `POST /api/deepseek-r1-chat` - DeepSeek integration
-- `POST /api/personal-chat` - DigitalOcean Personal AI
+MAIA is an open source project. Contributions are welcome! Please see our [GitHub Wiki](https://github.com/agropper/maia-cloud-clean/wiki) for more information about the project and how to get involved.
 
-### File & Chat Management
-- `POST /api/parse-pdf` - PDF document processing
-- `POST /api/group-chats` - Group chat management
-- `GET /api/shared/{shareId}` - Access shared conversations
+## 📄 License
 
-## Development
+GPL-3.0 License - see [LICENSE](./LICENSE) file for details.
 
-- **Frontend**: Vue.js 3 with Quasar UI
-- **Backend**: Node.js with Express
-- **Database**: Cloudant/CouchDB
-- **Authentication**: WebAuthn passkeys
-- **AI**: Multi-provider support (Anthropic, Gemini, DeepSeek, DigitalOcean)
+## 🆘 Support
 
-## 🚀 Production Deployment
+- **Documentation**: [GitHub Wiki](https://github.com/agropper/maia-cloud-clean/wiki)
+- **Issues**: [GitHub Issues](https://github.com/agropper/maia-cloud-clean/issues)
+- **Live Demo**: [test.agropper.xyz](https://test.agropper.xyz)
 
-### DigitalOcean App Platform
-The application is configured for easy deployment on DigitalOcean App Platform:
+---
 
-1. **Automatic Deployment**: Connected to GitHub with auto-deploy on push to main
-2. **Environment Variables**: Configure production settings in DigitalOcean dashboard
-3. **Domain Configuration**: Dynamic domain handling for production environments
-4. **SSL/TLS**: Automatic HTTPS certificate management
-
-### Environment Configuration
-See `DOMAIN_CONFIGURATION.md` for detailed setup instructions and environment variable examples.
-
-### Health Monitoring
-- Health check endpoint: `/health`
-- Built-in logging and error tracking
-- Rate limiting and security measures
-
-## 📋 Changelog
-
-### v1.1.0 (2025-08-15) - Production Release
-- ✨ **NEW**: Message deletion system with confirmation modals
-- ✨ **NEW**: Intelligent cleanup of related messages
-- 🔧 **FIXED**: Gemini API integration errors
-- 🔧 **FIXED**: Vue component warnings and event handling
-- 🌐 **IMPROVED**: Production domain configuration
-- 🛡️ **ENHANCED**: CORS and security improvements
-- 📱 **IMPROVED**: Message editing and management UI
-- 🚀 **READY**: Cloud deployment configuration
-
-### v1.0.0 (Initial Release)
-- Core MAIA application with passkey authentication
-- Knowledge base management
-- Multi-AI provider support
-- File upload and processing
-- Group chat sharing
-
-## License
-
-GPL-3
+**MAIA puts patients first, their invited physicians and caregivers second, and leaves hospital and institutional interests completely out of the picture.**
