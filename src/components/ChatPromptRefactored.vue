@@ -615,7 +615,17 @@ export default defineComponent({
 const triggerUploadFile = (file: File) => {
   return uploadFile(file, appState, writeMessage, currentUser.value);
 };
-    const saveMessage = () => {};
+    const saveMessage = (idx: number, content: string) => {
+      appState.chatHistory[idx].content = content;
+      const index = appState.editBox.indexOf(idx);
+      if (index > -1) {
+        appState.editBox.splice(index, 1);
+      }
+      logMessage({
+        role: "user",
+        content: `Saved message at index ${idx}`,
+      });
+    };
     const saveToFile = async () => {
       try {
         // Ensure userName is set from currentUser for transcript generation
