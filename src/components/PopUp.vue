@@ -208,9 +208,14 @@ export default {
           const naturalWidth = naturalViewport.width
           const naturalHeight = naturalViewport.height
           
-          // Use conservative scale
-          const actualScale = Math.min(1.0, 800 / naturalWidth, 600 / naturalHeight)
+          // Calculate optimal scale with high-DPI support
+          const devicePixelRatio = window.devicePixelRatio || 1
+          const containerWidth = 800 // Approximate container width
+          const baseScale = Math.min(containerWidth / naturalWidth, 1.0)
+          const actualScale = baseScale * devicePixelRatio
           const viewport = page.getViewport({ scale: actualScale })
+          
+          console.log(`Page ${pageNum} scaling: baseScale=${baseScale.toFixed(2)}, devicePixelRatio=${devicePixelRatio}, actualScale=${actualScale.toFixed(2)}`)
           
           // Create page container
           const pageContainer = document.createElement('div')
@@ -224,22 +229,29 @@ export default {
           const ctx = canvas.getContext('2d')
           if (!ctx) continue
           
+          // Set canvas size for high-DPI rendering
           canvas.width = Math.floor(viewport.width)
           canvas.height = Math.floor(viewport.height)
-          canvas.style.width = `${viewport.width}px`
-          canvas.style.height = `${viewport.height}px`
+          
+          // Set display size (scaled down for display)
+          const displayWidth = viewport.width / devicePixelRatio
+          const displayHeight = viewport.height / devicePixelRatio
+          canvas.style.width = `${displayWidth}px`
+          canvas.style.height = `${displayHeight}px`
           canvas.style.display = 'block'
           canvas.style.maxWidth = '100%'
           canvas.style.height = 'auto'
           
-          // Create text layer container
+          console.log(`Page ${pageNum} canvas: ${canvas.width}x${canvas.height} (display: ${displayWidth.toFixed(0)}x${displayHeight.toFixed(0)})`)
+          
+          // Create text layer container (matches display size, not high-DPI canvas size)
           const textLayerDiv = document.createElement('div')
           textLayerDiv.className = 'text-layer'
           textLayerDiv.style.position = 'absolute'
           textLayerDiv.style.top = '0'
           textLayerDiv.style.left = '0'
-          textLayerDiv.style.right = '0'
-          textLayerDiv.style.bottom = '0'
+          textLayerDiv.style.width = `${displayWidth}px`
+          textLayerDiv.style.height = `${displayHeight}px`
           textLayerDiv.style.overflow = 'hidden'
           textLayerDiv.style.opacity = '0.2'
           textLayerDiv.style.lineHeight = '1.0'
@@ -266,8 +278,8 @@ export default {
               console.log(`Text layer rendered for page ${pageNum}`)
             } else {
               console.log('TextLayerBuilder not available, creating simple text layer')
-              // Fallback: create simple text layer manually
-              this.createSimpleTextLayer(textLayerDiv, textContent, viewport)
+              // Fallback: create simple text layer manually with proper scaling
+              this.createSimpleTextLayer(textLayerDiv, textContent, viewport, devicePixelRatio)
             }
           } catch (textError) {
             console.warn(`Failed to render text layer for page ${pageNum}:`, textError)
@@ -292,7 +304,7 @@ export default {
       }
     },
 
-    createSimpleTextLayer(textLayerDiv: HTMLElement, textContent: any, viewport: any) {
+    createSimpleTextLayer(textLayerDiv: HTMLElement, textContent: any, viewport: any, devicePixelRatio: number = 1) {
       // Simple fallback text layer implementation
       textLayerDiv.innerHTML = ''
       
@@ -306,12 +318,13 @@ export default {
           span.style.cursor = 'text'
           span.style.transformOrigin = '0% 0%'
           
-          // Position the text based on the item's transform
+          // Position the text based on the item's transform, accounting for device pixel ratio
           if (item.transform) {
             const transform = item.transform
-            span.style.left = `${transform[4]}px`
-            span.style.top = `${transform[5]}px`
-            span.style.fontSize = `${Math.abs(transform[0])}px`
+            // Scale down coordinates to match display size (not high-DPI canvas size)
+            span.style.left = `${transform[4] / devicePixelRatio}px`
+            span.style.top = `${transform[5] / devicePixelRatio}px`
+            span.style.fontSize = `${Math.abs(transform[0]) / devicePixelRatio}px`
             span.style.fontFamily = item.fontName || 'sans-serif'
           }
           
@@ -327,7 +340,7 @@ export default {
         })
       }
       
-      console.log('Simple text layer created with', textContent?.items?.length || 0, 'text items')
+      console.log('Simple text layer created with', textContent?.items?.length || 0, 'text items (devicePixelRatio:', devicePixelRatio, ')')
     },
 
     saveMarkdown() {
