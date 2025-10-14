@@ -167,12 +167,12 @@ export default {
           const task = pdfjsLib.getDocument({ url: this.currentFile.fileUrl })
           pdf = await task.promise
         } else if ((this.currentFile as any).bucketKey) {
-          // Construct URL from bucket key
-          const bucketKey = (this.currentFile as any).bucketKey
-          const fileUrl = `https://maia.tor1.digitaloceanspaces.com/${bucketKey}`
-          console.log('Loading PDF from constructed URL:', fileUrl)
+          // For debugging, use the hardcoded file URL you specified via proxy
+          const hardcodedBucketKey = 'fri1/archived/GROPPER_ADRIAN_09_24_25_1314.PDF'
+          const proxyUrl = `/api/proxy-pdf/${hardcodedBucketKey}`
+          console.log('Loading PDF from proxy URL:', proxyUrl)
           // @ts-ignore
-          const task = pdfjsLib.getDocument({ url: fileUrl })
+          const task = pdfjsLib.getDocument({ url: proxyUrl })
           pdf = await task.promise
         } else if (this.currentFile.originalFile instanceof File) {
           // Fresh File object - use arrayBuffer()

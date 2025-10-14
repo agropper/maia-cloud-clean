@@ -1666,6 +1666,47 @@ app.post('/api/upload-to-bucket', async (req, res) => {
   }
 });
 
+// Proxy PDF files from DigitalOcean Spaces to avoid CORS issues
+app.get('/api/proxy-pdf/:bucketKey(*)', async (req, res) => {
+  try {
+    const { bucketKey } = req.params;
+    
+    // Construct the full URL
+    const fileUrl = `https://maia.tor1.digitaloceanspaces.com/${bucketKey}`;
+    
+    console.log(`📄 Proxying PDF file: ${fileUrl}`);
+    
+    // Fetch the file from DigitalOcean Spaces
+    const response = await fetch(fileUrl);
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        success: false, 
+        message: `Failed to fetch PDF: ${response.statusText}`,
+        error: 'PDF_FETCH_FAILED'
+      });
+    }
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${bucketKey.split('/').pop()}"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Stream the PDF content
+    response.body.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Error proxying PDF:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to proxy PDF file',
+      error: 'PROXY_ERROR'
+    });
+  }
+});
+
 // Get files from DigitalOcean Spaces bucket
 app.get('/api/bucket-files', async (req, res) => {
   try {
