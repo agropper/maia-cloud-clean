@@ -134,10 +134,17 @@ const loadPdfDocument = async () => {
 
 const onPdfLoaded = (pdf: any) => {
   console.log('✅ Vue PDF: PDF loaded via component event:', pdf)
-  // Only update totalPages if it's not already set or if it's different
-  if (totalPages.value === 0 || totalPages.value !== pdf.numPages) {
-    totalPages.value = pdf.numPages || 0
+  console.log('📄 Vue PDF: Component PDF object has numPages:', pdf.numPages)
+  console.log('📄 Vue PDF: Current totalPages value:', totalPages.value)
+  
+  // Only update totalPages if it's not already set AND the component provides a valid numPages
+  if (totalPages.value === 0 && pdf.numPages && pdf.numPages > 0) {
+    totalPages.value = pdf.numPages
     console.log('📄 Vue PDF: Total pages updated via component to:', totalPages.value)
+  } else if (totalPages.value > 0) {
+    console.log('📄 Vue PDF: Total pages already set to', totalPages.value, ', ignoring component event')
+  } else {
+    console.log('📄 Vue PDF: Component PDF object has invalid numPages:', pdf.numPages, ', keeping current value')
   }
 }
 
