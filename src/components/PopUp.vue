@@ -26,7 +26,9 @@
             </div>
           </div>
           
-          <div v-else ref="pdfContainer" class="pdf-content"></div>
+          <div v-else ref="pdfContainer" class="pdf-content">
+            <!-- PDF pages will be rendered here with text layers -->
+          </div>
         </div>
 
         <!-- Markdown / non-PDF content -->
@@ -46,6 +48,9 @@ import VueMarkdown from 'vue-markdown-render'
 import { QIcon, QSpinnerDots } from 'quasar'
 // PDF.js legacy build for better bundler compatibility
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
+
+// Check what's available in pdfjsLib
+console.log('Available PDF.js exports:', Object.keys(pdfjsLib))
 
 const { generateTimeline } = useTranscript()
 
@@ -207,6 +212,14 @@ export default {
           const actualScale = Math.min(1.0, 800 / naturalWidth, 600 / naturalHeight)
           const viewport = page.getViewport({ scale: actualScale })
           
+          // Create page container
+          const pageContainer = document.createElement('div')
+          pageContainer.className = 'pdf-page-container'
+          pageContainer.style.position = 'relative'
+          pageContainer.style.margin = '0 auto 16px auto'
+          pageContainer.style.maxWidth = '100%'
+          
+          // Create canvas
           const canvas = document.createElement('canvas')
           const ctx = canvas.getContext('2d')
           if (!ctx) continue
@@ -216,15 +229,56 @@ export default {
           canvas.style.width = `${viewport.width}px`
           canvas.style.height = `${viewport.height}px`
           canvas.style.display = 'block'
-          canvas.style.margin = '0 auto 16px auto'
           canvas.style.maxWidth = '100%'
           canvas.style.height = 'auto'
           
+          // Create text layer container
+          const textLayerDiv = document.createElement('div')
+          textLayerDiv.className = 'text-layer'
+          textLayerDiv.style.position = 'absolute'
+          textLayerDiv.style.top = '0'
+          textLayerDiv.style.left = '0'
+          textLayerDiv.style.right = '0'
+          textLayerDiv.style.bottom = '0'
+          textLayerDiv.style.overflow = 'hidden'
+          textLayerDiv.style.opacity = '0.2'
+          textLayerDiv.style.lineHeight = '1.0'
+          textLayerDiv.style.pointerEvents = 'auto'
+          
+          // Render canvas
           // @ts-ignore
           await page.render({ canvasContext: ctx, viewport }).promise
-          container.appendChild(canvas)
           
-          console.log(`Page ${pageNum} rendered successfully`)
+          // Render text layer
+          try {
+            const textContent = await page.getTextContent()
+            console.log(`Page ${pageNum} text content:`, textContent)
+            
+            // Check if TextLayerBuilder is available
+            if (pdfjsLib.TextLayerBuilder) {
+              const textLayer = new pdfjsLib.TextLayerBuilder({
+                textLayerDiv,
+                pageIndex: pageNum - 1,
+                viewport: viewport
+              })
+              textLayer.setTextContent(textContent)
+              textLayer.render()
+              console.log(`Text layer rendered for page ${pageNum}`)
+            } else {
+              console.log('TextLayerBuilder not available, creating simple text layer')
+              // Fallback: create simple text layer manually
+              this.createSimpleTextLayer(textLayerDiv, textContent, viewport)
+            }
+          } catch (textError) {
+            console.warn(`Failed to render text layer for page ${pageNum}:`, textError)
+          }
+          
+          // Add elements to page container
+          pageContainer.appendChild(canvas)
+          pageContainer.appendChild(textLayerDiv)
+          container.appendChild(pageContainer)
+          
+          console.log(`Page ${pageNum} rendered successfully with text layer`)
         }
         
         this.isLoading = false
@@ -236,6 +290,44 @@ export default {
         this.pdfErrorMessage = error instanceof Error ? error.message : 'Failed to load PDF'
         console.error('PDF loading error:', error)
       }
+    },
+
+    createSimpleTextLayer(textLayerDiv: HTMLElement, textContent: any, viewport: any) {
+      // Simple fallback text layer implementation
+      textLayerDiv.innerHTML = ''
+      
+      if (textContent && textContent.items) {
+        textContent.items.forEach((item: any, index: number) => {
+          const span = document.createElement('span')
+          span.textContent = item.str
+          span.style.position = 'absolute'
+          span.style.color = 'transparent'
+          span.style.whiteSpace = 'pre'
+          span.style.cursor = 'text'
+          span.style.transformOrigin = '0% 0%'
+          
+          // Position the text based on the item's transform
+          if (item.transform) {
+            const transform = item.transform
+            span.style.left = `${transform[4]}px`
+            span.style.top = `${transform[5]}px`
+            span.style.fontSize = `${Math.abs(transform[0])}px`
+            span.style.fontFamily = item.fontName || 'sans-serif'
+          }
+          
+          // Add hover effect
+          span.addEventListener('mouseenter', () => {
+            span.style.backgroundColor = 'rgba(255, 255, 0, 0.3)'
+          })
+          span.addEventListener('mouseleave', () => {
+            span.style.backgroundColor = 'transparent'
+          })
+          
+          textLayerDiv.appendChild(span)
+        })
+      }
+      
+      console.log('Simple text layer created with', textContent?.items?.length || 0, 'text items')
     },
 
     saveMarkdown() {
@@ -394,7 +486,55 @@ export default {
   height: auto;
 }
 
-/* Text layer and annotation layer styles will be added when PDF.js exports are available */
+/* PDF page container styling */
+.pdf-page-container {
+  position: relative;
+  margin: 0 auto 16px auto;
+  max-width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+/* Text layer styling */
+.text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 0.2;
+  line-height: 1.0;
+  pointer-events: auto;
+}
+
+.text-layer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.text-layer span:hover {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+
+.text-layer span::selection {
+  background-color: rgba(0, 123, 255, 0.3);
+}
+
+/* Ensure text is selectable */
+.text-layer {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
 
 .pdf-loading-overlay {
   position: absolute;
