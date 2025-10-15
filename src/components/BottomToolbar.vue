@@ -162,57 +162,63 @@
               <div class="tooltip-text">Choose a saved and shared chat.</div>
             </div>
             
-            <!-- Agent Icon -->
-            <div class="tooltip-wrapper">
-              <q-icon 
-                name="manage_accounts" 
-                size="sm" 
-                :color="hasAgent ? 'primary' : 'grey-5'"
-                class="status-icon"
-                :class="{ 'icon-disabled': !hasAgent }"
-                @click="triggerAgentManagement"
-              />
-              <div class="tooltip-text">{{ hasAgent ? 'Manage your agent' : 'No agent configured yet' }}</div>
-            </div>
-            
-            <!-- Knowledge Base Icon -->
-            <div class="tooltip-wrapper icon-with-badge">
-              <q-icon 
-                name="library_books" 
-                size="sm" 
-                :color="hasKnowledgeBase ? 'secondary' : 'grey-5'"
-                class="status-icon"
-                :class="{ 'icon-disabled': !hasKnowledgeBase }"
-                @click="triggerAgentManagement"
-              />
-              <!-- Debug: Show badge state in template -->
-              <span v-if="false" style="display:none;">{{ console.log('[BT STATUS] 🎨 Template rendering KB badge. v-if hasUnattachedKB =', hasUnattachedKB) }}</span>
-              <q-badge 
-                v-if="hasUnattachedKB" 
-                floating 
-                color="warning" 
-                text-color="black"
-                class="warning-badge"
-              >
-                !
-              </q-badge>
-              <div class="tooltip-text">
-                {{ hasKnowledgeBase ? 'Manage your knowledge bases' : 'No knowledge base yet' }}
-                {{ hasUnattachedKB ? ' - Unattached KB available!' : '' }}
+            <!-- Status Icons - Only render after initialization complete -->
+            <template v-if="isStatusReady">
+              <!-- Agent Icon -->
+              <div class="tooltip-wrapper">
+                <q-icon 
+                  name="manage_accounts" 
+                  size="sm" 
+                  :color="hasAgent ? 'primary' : 'grey-5'"
+                  class="status-icon"
+                  :class="{ 'icon-disabled': !hasAgent }"
+                  @click="triggerAgentManagement"
+                />
+                <div class="tooltip-text">{{ hasAgent ? 'Manage your agent' : 'No agent configured yet' }}</div>
               </div>
-            </div>
+              
+              <!-- Knowledge Base Icon -->
+              <div class="tooltip-wrapper icon-with-badge">
+                <q-icon 
+                  name="library_books" 
+                  size="sm" 
+                  :color="hasKnowledgeBase ? 'secondary' : 'grey-5'"
+                  class="status-icon"
+                  :class="{ 'icon-disabled': !hasKnowledgeBase }"
+                  @click="triggerAgentManagement"
+                />
+                <q-badge 
+                  v-if="hasUnattachedKB" 
+                  floating 
+                  color="warning" 
+                  text-color="black"
+                  class="warning-badge"
+                >
+                  !
+                </q-badge>
+                <div class="tooltip-text">
+                  {{ hasKnowledgeBase ? 'Manage your knowledge bases' : 'No knowledge base yet' }}
+                  {{ hasUnattachedKB ? ' - Unattached KB available!' : '' }}
+                </div>
+              </div>
+              
+              <!-- Patient Summary Icon -->
+              <div class="tooltip-wrapper">
+                <q-icon 
+                  name="description" 
+                  size="sm" 
+                  :color="hasPatientSummary ? 'accent' : 'grey-5'"
+                  class="status-icon patient-summary-icon"
+                  :class="{ 'icon-disabled': !hasPatientSummary }"
+                />
+                <div class="tooltip-text">{{ hasPatientSummary ? 'View patient summary' : 'No patient summary yet' }}</div>
+              </div>
+            </template>
             
-            <!-- Patient Summary Icon -->
-            <div class="tooltip-wrapper">
-              <q-icon 
-                name="description" 
-                size="sm" 
-                :color="hasPatientSummary ? 'accent' : 'grey-5'"
-                class="status-icon patient-summary-icon"
-                :class="{ 'icon-disabled': !hasPatientSummary }"
-              />
-              <div class="tooltip-text">{{ hasPatientSummary ? 'View patient summary' : 'No patient summary yet' }}</div>
-            </div>
+            <!-- Loading placeholder while initializing -->
+            <template v-else>
+              <span class="status-text text-grey-6" style="font-size: 11px;">Loading status...</span>
+            </template>
             
             <!-- Deep Link Icon - Right end of status line -->
             <div v-if="deepLink" class="tooltip-wrapper">
@@ -501,6 +507,10 @@ export default defineComponent({
     const showNewUserWelcomeModal = ref(false)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
+    
+    // State initialization flag - block template until ready
+    const isStatusReady = ref(false)
+    const availableKBs = ref<any[]>([])
 
     const contactForm = ref({
       email: '',
@@ -867,46 +877,73 @@ export default defineComponent({
       return false
     })
 
-    // Fetch available KBs to check for unattached ones
-    const availableKBs = ref<any[]>([])
-    
-    const fetchAvailableKBs = async () => {
-      if (!props.currentUser) {
-        console.log('[BT STATUS] fetchAvailableKBs: skipped (no user)')
-        return
-      }
+    // Initialize status icons state BEFORE template renders
+    const initializeStatusIcons = async () => {
+      const timestamp = new Date().toISOString().substr(11, 12)
+      console.log(`[BT STATUS] [${timestamp}] 🚀 INITIALIZATION START - Template is BLOCKED`)
       
+      // Step 1: Determine current user
+      const userId = (() => {
+        if (!props.currentUser) return 'Public User'
+        if (typeof props.currentUser === 'string') return props.currentUser
+        return props.currentUser.userId || props.currentUser.displayName || 'Public User'
+      })()
+      console.log(`[BT STATUS] [${timestamp}] Step 1: User identified as "${userId}"`)
+      
+      // Step 2: Fetch available KBs (synchronously wait)
       try {
-        const userId = typeof props.currentUser === 'string' 
-          ? props.currentUser 
-          : props.currentUser.userId || props.currentUser.displayName
-        
-        console.log('[BT STATUS] Fetching available KBs for user:', userId)
-        
-        // For Public User, fetch all KBs without user filter
-        // For authenticated users, fetch user-specific KBs
         let url = '/api/knowledge-bases'
         if (userId !== 'Public User') {
           url += `?user=${userId}`
         }
-        
-        console.log('[BT STATUS] Fetching from URL:', url)
+        console.log(`[BT STATUS] [${timestamp}] Step 2: Fetching KBs from ${url}...`)
         const response = await fetch(url)
         if (response.ok) {
           availableKBs.value = await response.json()
-          console.log('[BT STATUS] Fetched available KBs:', availableKBs.value.length, availableKBs.value)
+          console.log(`[BT STATUS] [${timestamp}] Step 2: ✅ Fetched ${availableKBs.value.length} available KBs`)
+        } else {
+          console.warn(`[BT STATUS] [${timestamp}] Step 2: ❌ Failed to fetch KBs: ${response.status}`)
+          availableKBs.value = []
         }
       } catch (error) {
-        console.error('[BT STATUS] Failed to fetch available KBs:', error)
+        console.error(`[BT STATUS] [${timestamp}] Step 2: ❌ Error fetching KBs:`, error)
         availableKBs.value = []
       }
+      
+      // Step 3: Determine agent state
+      const agentState = {
+        hasAgent: !!(props.currentAgent && props.currentAgent.id),
+        agentName: props.currentAgent?.name || 'none'
+      }
+      console.log(`[BT STATUS] [${timestamp}] Step 3: Agent state - hasAgent: ${agentState.hasAgent}, name: ${agentState.agentName}`)
+      
+      // Step 4: Determine KB attachment state
+      const attachedKBIds = new Set()
+      if (props.currentAgent?.knowledgeBases) {
+        props.currentAgent.knowledgeBases.forEach((kb: any) => {
+          attachedKBIds.add(kb.uuid || kb.id)
+        })
+      }
+      if (props.currentAgent?.knowledgeBase) {
+        attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
+      }
+      console.log(`[BT STATUS] [${timestamp}] Step 4: KB attachment - ${attachedKBIds.size} attached:`, Array.from(attachedKBIds))
+      
+      // Step 5: Calculate if warning needed
+      const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
+      console.log(`[BT STATUS] [${timestamp}] Step 5: Warning calculation - ${availableKBs.value.length} available, ${attachedKBIds.size} attached, hasUnattached: ${hasUnattached}`)
+      
+      // Step 6: Ready to render
+      isStatusReady.value = true
+      console.log(`[BT STATUS] [${timestamp}] ✅ INITIALIZATION COMPLETE - Template is now UNBLOCKED`)
+      console.log(`[BT STATUS] [${timestamp}] Final state: hasAgent=${agentState.hasAgent}, hasKB=${attachedKBIds.size > 0}, needsWarning=${hasUnattached}`)
     }
     
-    // Watch for user or agent changes to fetch KBs
-    // Use deep watch to detect KB attachment changes
-    watch(() => [props.currentUser, props.currentAgent], () => {
-      console.log('[BT STATUS] Watch triggered - refetching available KBs')
-      fetchAvailableKBs()
+    // Watch for user or agent changes to re-initialize
+    watch(() => [props.currentUser, props.currentAgent], async () => {
+      const timestamp = new Date().toISOString().substr(11, 12)
+      console.log(`[BT STATUS] [${timestamp}] 🔄 Props changed - re-initializing status icons`)
+      await initializeStatusIcons()
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
@@ -1007,7 +1044,8 @@ export default defineComponent({
       hasAgent,
       hasKnowledgeBase,
       hasUnattachedKB,
-      hasPatientSummary
+      hasPatientSummary,
+      isStatusReady
     }
   }
 })
