@@ -6982,17 +6982,37 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] User has agent: ${agentId}`);
     
-    // Step 3: Get agent details to extract project_id and database_id
+    // Step 3: Get agent details to extract project_id
     const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
     const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
     const projectId = agentData.project_id;
-    const databaseId = agentData.database?.uuid || agentData.database_id;
     
     if (!projectId) {
       throw new Error('Agent does not have a project_id - cannot create knowledge base');
     }
     
     console.log(`🤖 [AUTO PS] Using project: ${projectId}`);
+    
+    // Step 3b: Get database_id from genai-driftwood database
+    let databaseId = null;
+    try {
+      const databasesResponse = await doRequest('/v2/gen-ai/databases');
+      const databases = databasesResponse.databases || databasesResponse.data?.databases || [];
+      
+      // Find genai-driftwood database
+      const driftwoodDb = databases.find(db => 
+        db.name && db.name.toLowerCase().includes('genai-driftwood')
+      );
+      
+      if (driftwoodDb) {
+        databaseId = driftwoodDb.uuid;
+        console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
+      } else {
+        console.warn(`🤖 [AUTO PS] ⚠️ genai-driftwood database not found, proceeding without database_id`);
+      }
+    } catch (dbError) {
+      console.error(`🤖 [AUTO PS] ❌ Failed to get databases:`, dbError.message);
+    }
     
     // Step 4: Get embedding model ID (required for KB creation)
     let embeddingModelId = null;
