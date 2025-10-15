@@ -879,7 +879,16 @@ export default defineComponent({
           : props.currentUser.userId || props.currentUser.displayName
         
         console.log('[BT STATUS] Fetching available KBs for user:', userId)
-        const response = await fetch(`/api/knowledge-bases?user=${userId}`)
+        
+        // For Public User, fetch all KBs without user filter
+        // For authenticated users, fetch user-specific KBs
+        let url = '/api/knowledge-bases'
+        if (userId !== 'Public User') {
+          url += `?user=${userId}`
+        }
+        
+        console.log('[BT STATUS] Fetching from URL:', url)
+        const response = await fetch(url)
         if (response.ok) {
           availableKBs.value = await response.json()
           console.log('[BT STATUS] Fetched available KBs:', availableKBs.value.length, availableKBs.value)
