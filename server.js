@@ -9068,35 +9068,47 @@ app.listen(PORT, async () => {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
-    // Fetch and cache GenAI databases (CRITICAL for KB creation)
+    // Get genai-driftwood database ID from existing agents (CRITICAL for KB creation)
+    // Note: /v2/gen-ai/databases endpoint returns 404, so we get database_id from agents instead
     let genaiDriftwoodId = null;
     try {
-      console.log(`🔄 [STARTUP] Fetching GenAI databases...`);
-      const databasesResponse = await doRequest('/v2/gen-ai/databases');
-      const databases = databasesResponse.databases || databasesResponse.data?.databases || [];
+      console.log(`🔄 [STARTUP] Getting genai-driftwood database ID from agents...`);
       
-      console.log(`📊 [STARTUP] Found ${databases.length} GenAI database(s)`);
-      
-      // REQUIREMENT: Must have exactly 1 database (genai-driftwood)
-      if (databases.length !== 1) {
-        throw new Error(`❌ CRITICAL: Expected exactly 1 GenAI database, found ${databases.length}. This is a configuration error!`);
+      // All agents in the same project share the same database
+      // Get database_id from any agent
+      if (rawAgents && rawAgents.length > 0) {
+        const firstAgent = rawAgents[0];
+        genaiDriftwoodId = firstAgent.database?.uuid || firstAgent.database_id;
+        
+        if (!genaiDriftwoodId) {
+          throw new Error(`❌ CRITICAL: Agents found but no database_id available. First agent: ${firstAgent.name}`);
+        }
+        
+        // Verify all agents use the same database (validation)
+        const databaseIds = new Set();
+        rawAgents.forEach(agent => {
+          const dbId = agent.database?.uuid || agent.database_id;
+          if (dbId) databaseIds.add(dbId);
+        });
+        
+        console.log(`📊 [STARTUP] Found ${databaseIds.size} unique database ID(s) across ${rawAgents.length} agents`);
+        
+        // REQUIREMENT: All agents must use exactly 1 database
+        if (databaseIds.size !== 1) {
+          throw new Error(`❌ CRITICAL: Expected all agents to use 1 database, found ${databaseIds.size} different databases!`);
+        }
+        
+        console.log(`✅ [STARTUP] Using database from agents: genai-driftwood (${genaiDriftwoodId})`);
+        
+        // Cache the database ID globally for KB creation
+        global.genaiDriftwoodId = genaiDriftwoodId;
+        
+      } else {
+        throw new Error(`❌ CRITICAL: No agents found - cannot determine database_id for KB creation`);
       }
-      
-      const database = databases[0];
-      genaiDriftwoodId = database.uuid;
-      
-      // Verify it's genai-driftwood
-      if (!database.name || !database.name.toLowerCase().includes('genai-driftwood')) {
-        throw new Error(`❌ CRITICAL: Database found is not genai-driftwood: ${database.name}`);
-      }
-      
-      console.log(`✅ [STARTUP] Using database: ${database.name} (${genaiDriftwoodId})`);
-      
-      // Cache the database ID globally for KB creation
-      global.genaiDriftwoodId = genaiDriftwoodId;
       
     } catch (databaseError) {
-      console.error(`❌ [STARTUP] CRITICAL ERROR - Cannot fetch GenAI database:`, databaseError.message);
+      console.error(`❌ [STARTUP] CRITICAL ERROR - Cannot get database ID:`, databaseError.message);
       throw databaseError; // Stop server startup - this is critical!
     }
     
