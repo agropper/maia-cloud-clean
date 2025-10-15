@@ -1207,9 +1207,9 @@ export default defineComponent({
 
 /* Status icon styling */
 .status-icon {
-  cursor: pointer;
+  cursor: pointer !important;
   transition: transform 0.2s ease, opacity 0.2s ease;
-  pointer-events: auto; /* Ensure icon receives hover events */
+  pointer-events: auto !important; /* Ensure icon always receives click events */
 }
 
 .status-icon:hover {
@@ -1218,9 +1218,9 @@ export default defineComponent({
 }
 
 .status-icon.icon-disabled {
-  cursor: default;
+  cursor: pointer !important; /* Still clickable when disabled */
   opacity: 0.5;
-  pointer-events: auto; /* Still allow hover for tooltip even when disabled */
+  pointer-events: auto !important;
 }
 
 .status-icon.icon-disabled:hover {
@@ -1241,6 +1241,7 @@ export default defineComponent({
   height: 18px;
   padding: 3px;
   line-height: 1;
+  pointer-events: none; /* Allow clicks to pass through to icon below */
 }
 
 /* Patient summary icon - for custom styling if needed */
