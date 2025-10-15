@@ -185,6 +185,8 @@
                 :class="{ 'icon-disabled': !hasKnowledgeBase }"
                 @click="triggerAgentManagement"
               />
+              <!-- Debug: Show badge state in template -->
+              <span v-if="false" style="display:none;">{{ console.log('[BT STATUS] 🎨 Template rendering KB badge. v-if hasUnattachedKB =', hasUnattachedKB) }}</span>
               <q-badge 
                 v-if="hasUnattachedKB" 
                 floating 
@@ -908,16 +910,20 @@ export default defineComponent({
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
-      console.log('[BT STATUS] ==== hasUnattachedKB computed property called ====')
+      const timestamp = new Date().toISOString().substr(11, 12)
+      console.log(`[BT STATUS] [${timestamp}] ==== hasUnattachedKB EVALUATION START ====`)
+      console.log(`[BT STATUS] [${timestamp}] availableKBs reactive ref length:`, availableKBs.value.length)
+      console.log(`[BT STATUS] [${timestamp}] currentAgent:`, props.currentAgent?.name)
+      
       // Must have an agent first
       if (!props.currentAgent || !props.currentAgent.id) {
-        console.log('[BT STATUS] hasUnattachedKB: false (no agent)')
+        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: false (no agent) - v-if will be FALSE, badge will NOT render`)
         return false
       }
       
       // Check if there are available KBs
       if (availableKBs.value.length === 0) {
-        console.log('[BT STATUS] hasUnattachedKB: false (no available KBs, availableKBs.value.length =', availableKBs.value.length, ')')
+        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: false (availableKBs.value.length = 0) - v-if will be FALSE, badge will NOT render`)
         return false
       }
       
@@ -932,13 +938,20 @@ export default defineComponent({
         attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
       }
       
-      console.log('[BT STATUS] Attached KB IDs:', Array.from(attachedKBIds))
-      console.log('[BT STATUS] Available KB IDs:', availableKBs.value.map(kb => kb.uuid || kb.id))
+      console.log(`[BT STATUS] [${timestamp}] Comparing: ${attachedKBIds.size} attached vs ${availableKBs.value.length} available`)
+      console.log(`[BT STATUS] [${timestamp}] - Attached IDs:`, Array.from(attachedKBIds))
+      console.log(`[BT STATUS] [${timestamp}] - Available IDs:`, availableKBs.value.map(kb => kb.uuid || kb.id))
       
       // Check if there are any available KBs not attached
       const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
       
-      console.log('[BT STATUS] hasUnattachedKB RESULT:', hasUnattached, '(available:', availableKBs.value.length, 'attached:', attachedKBIds.size, ')')
+      if (hasUnattached) {
+        console.log(`[BT STATUS] [${timestamp}] ✅ RESULT: TRUE - v-if will be TRUE, badge SHOULD render in template`)
+      } else {
+        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: FALSE - v-if will be FALSE, badge will NOT render`)
+      }
+      console.log(`[BT STATUS] [${timestamp}] ==== hasUnattachedKB EVALUATION END ====`)
+      
       return hasUnattached
     })
 
@@ -947,6 +960,21 @@ export default defineComponent({
       // Will be enabled when user creates their first summary
       return false
     })
+
+    // Watch hasUnattachedKB to see when it changes (should trigger template re-render)
+    watch(hasUnattachedKB, (newValue, oldValue) => {
+      const timestamp = new Date().toISOString().substr(11, 12)
+      console.log(`[BT STATUS] [${timestamp}] 🔄 hasUnattachedKB CHANGED from ${oldValue} to ${newValue}`)
+      console.log(`[BT STATUS] [${timestamp}] 🔄 Template should now re-render. v-if="hasUnattachedKB" should be ${newValue}`)
+      console.log(`[BT STATUS] [${timestamp}] 🔄 QBadge element should ${newValue ? 'APPEAR' : 'DISAPPEAR'} in DOM`)
+    })
+
+    // Watch availableKBs to see when the fetch completes
+    watch(availableKBs, (newValue, oldValue) => {
+      const timestamp = new Date().toISOString().substr(11, 12)
+      console.log(`[BT STATUS] [${timestamp}] 📦 availableKBs changed from length ${oldValue.length} to ${newValue.length}`)
+      console.log(`[BT STATUS] [${timestamp}] 📦 This should trigger hasUnattachedKB recomputation`)
+    }, { deep: true })
 
     return {
       isListening,
