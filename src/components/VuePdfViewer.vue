@@ -40,7 +40,6 @@
             class="page-input"
             @keyup.enter="goToPage"
             @blur="goToPage"
-            placeholder="Page"
           />
           <q-btn 
             icon="arrow_forward" 
@@ -225,10 +224,12 @@ const goToPage = () => {
   if (targetPage >= 1 && targetPage <= totalPages.value) {
     currentPage.value = targetPage
     console.log('📄 Vue PDF: Navigated to page:', currentPage.value)
+    // Clear the input field after successful navigation
+    pageInput.value = ''
   } else {
     console.log('📄 Vue PDF: Invalid page number:', targetPage, ', must be between 1 and', totalPages.value)
-    // Reset input to current page
-    pageInput.value = currentPage.value
+    // Clear the input field for invalid entries
+    pageInput.value = ''
   }
 }
 
@@ -269,10 +270,13 @@ watch(totalPages, (newTotal, oldTotal) => {
   console.log('📄 Vue PDF: Total pages changed from', oldTotal, 'to', newTotal)
 })
 
-// Watch for currentPage changes to sync pageInput
+// Watch for currentPage changes to sync pageInput (only when not empty)
 watch(currentPage, (newPage, oldPage) => {
   console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
-  pageInput.value = newPage
+  // Only update pageInput if it's empty (to avoid overriding user input)
+  if (pageInput.value === '') {
+    pageInput.value = newPage
+  }
 })
 </script>
 
