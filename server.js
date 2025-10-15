@@ -8457,7 +8457,7 @@ async function ensureAllUserBuckets() {
         console.warn('⚠️ [STARTUP] Failed to cleanup agents:', cleanupError.message);
       }
       
-      console.log(`Loaded ${rawAgents.length} agents to maia_agents and cacheManager`);
+      console.log(`✅ [STARTUP] Loaded ${rawAgents.length} agents to maia_agents and cacheManager`);
       
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
@@ -8627,7 +8627,7 @@ async function ensureAllUserBuckets() {
       
       await cacheManager.cacheKnowledgeBases(transformedKBs);
       
-      console.log(`Loaded ${doKBs.length} knowledge bases to maia_kb and cacheManager`);
+      console.log(`✅ [STARTUP] Loaded ${doKBs.length} knowledge bases to maia_kb and cacheManager`);
       
     } catch (error) {
       console.error('❌ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
