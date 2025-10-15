@@ -5020,12 +5020,12 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
     // Check cache first
     let template = agentManagementTemplates.get(userId);
     
-    // If not in cache or stale (> 5 minutes), rebuild
-    if (!template || (Date.now() - new Date(template.timestamp).getTime() > 5 * 60 * 1000)) {
-      console.log(`[TEMPLATE] Cache miss or stale for ${userId}, building fresh template`);
+    // If not in cache, build it
+    if (!template) {
+      console.log(`[TEMPLATE] Cache miss for ${userId}, building template`);
       template = await buildAgentManagementTemplate(userId);
     } else {
-      console.log(`[TEMPLATE] Cache hit for ${userId}, age: ${Math.round((Date.now() - new Date(template.timestamp).getTime()) / 1000)}s`);
+      console.log(`[TEMPLATE] Returning cached template for ${userId}`);
     }
     
     if (!template) {
@@ -7374,6 +7374,18 @@ app.delete('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       });
     } else {
       // console.log(`✅ [VERIFICATION] KB ${kbId} successfully detached from agent ${agentId}`);
+      
+      // Rebuild agent management template for the user who owns this agent
+      const userId = await getUserFromAgentId(agentId);
+      if (userId) {
+        try {
+          await buildAgentManagementTemplate(userId);
+          console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB detachment`);
+        } catch (templateError) {
+          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+        }
+      }
+      
       res.json({
         success: true,
         message: 'Knowledge base detached successfully',

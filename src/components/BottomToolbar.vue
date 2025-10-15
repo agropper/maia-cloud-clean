@@ -854,81 +854,59 @@ export default defineComponent({
 
     // Computed properties - read directly from backend template
     const hasAgent = computed(() => {
-      const result = agentTemplate.value?.agentStatus?.hasAgent || false
-      console.log('[BT STATUS] hasAgent (from template):', result)
-      return result
+      return agentTemplate.value?.agentStatus?.hasAgent || false
     })
 
     const hasKnowledgeBase = computed(() => {
-      const result = agentTemplate.value?.kbStatus?.hasKB || false
-      console.log('[BT STATUS] hasKnowledgeBase (from template):', result)
-      return result
+      return agentTemplate.value?.kbStatus?.hasKB || false
     })
 
     // Initialize status icons by fetching pre-computed template from backend
     const initializeStatusIcons = async () => {
-      const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 🚀 INITIALIZATION START`)
-      
-      // Step 1: Determine current user
+      // Determine current user
       const userId = (() => {
         if (!props.currentUser) return 'Public User'
         if (typeof props.currentUser === 'string') return props.currentUser
         return props.currentUser.userId || props.currentUser.displayName || 'Public User'
       })()
-      console.log(`[BT STATUS] [${timestamp}] Step 1: User = "${userId}"`)
       
-      // Step 2: Fetch pre-computed template from backend
+      // Fetch pre-computed template from backend
       try {
-        console.log(`[BT STATUS] [${timestamp}] Step 2: Fetching agent template from backend...`)
         const response = await fetch(`/api/users/${encodeURIComponent(userId)}/agent-template`)
         
         if (response.ok) {
           agentTemplate.value = await response.json()
-          console.log(`[BT STATUS] [${timestamp}] Step 2: ✅ Template fetched successfully`)
-          console.log(`[BT STATUS] [${timestamp}]   - hasAgent: ${agentTemplate.value.agentStatus.hasAgent}`)
-          console.log(`[BT STATUS] [${timestamp}]   - hasKB: ${agentTemplate.value.kbStatus.hasKB}`)
-          console.log(`[BT STATUS] [${timestamp}]   - needsWarning: ${agentTemplate.value.kbStatus.needsWarning}`)
-          console.log(`[BT STATUS] [${timestamp}]   - hasWarning: ${agentTemplate.value.warning.hasWarning}`)
+          console.log(`[TEMPLATE] Fetched template for ${userId}: hasAgent=${agentTemplate.value.agentStatus.hasAgent}, hasKB=${agentTemplate.value.kbStatus.hasKB}, needsWarning=${agentTemplate.value.kbStatus.needsWarning}`)
         } else {
-          console.warn(`[BT STATUS] [${timestamp}] Step 2: ❌ Failed to fetch template: ${response.status}`)
+          console.warn(`[TEMPLATE] Failed to fetch template for ${userId}: ${response.status}`)
           agentTemplate.value = null
         }
       } catch (error) {
-        console.error(`[BT STATUS] [${timestamp}] Step 2: ❌ Error fetching template:`, error)
+        console.error(`[TEMPLATE] Error fetching template for ${userId}:`, error)
         agentTemplate.value = null
       }
       
-      // Step 3: Ready to render
+      // Ready to render
       isStatusReady.value = true
-      console.log(`[BT STATUS] [${timestamp}] ✅ INITIALIZATION COMPLETE - Template ready for UI`)
     }
     
     // Watch for user or agent changes to re-fetch template
     watch(() => [props.currentUser, props.currentAgent], async () => {
-      const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 🔄 Props changed - re-fetching template`)
+      console.log(`[TEMPLATE] Props changed - re-fetching template`)
       isStatusReady.value = false  // Block UI during refetch
       await initializeStatusIcons()
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
       const result = agentTemplate.value?.kbStatus?.needsWarning || false
-      const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] hasUnattachedKB (from template): ${result}`)
       if (agentTemplate.value) {
-        console.log(`[BT STATUS] [${timestamp}]   - Agent: ${agentTemplate.value.agentStatus.hasAgent}`)
-        console.log(`[BT STATUS] [${timestamp}]   - Attached: ${agentTemplate.value.kbStatus.attachedCount}`)
-        console.log(`[BT STATUS] [${timestamp}]   - Available: ${agentTemplate.value.kbStatus.availableCount}`)
-        console.log(`[BT STATUS] [${timestamp}]   - Logic: hasAgent && attachedCount===0 && availableCount>0`)
+        console.log(`[TEMPLATE] Yellow badge (needsWarning): ${result} [Agent:${agentTemplate.value.agentStatus.hasAgent}, Attached:${agentTemplate.value.kbStatus.attachedCount}, Available:${agentTemplate.value.kbStatus.availableCount}]`)
       }
       return result
     })
 
     const hasPatientSummary = computed(() => {
-      const result = agentTemplate.value?.summaryStatus?.hasSummary || false
-      console.log('[BT STATUS] hasPatientSummary (from template):', result)
-      return result
+      return agentTemplate.value?.summaryStatus?.hasSummary || false
     })
 
     return {
