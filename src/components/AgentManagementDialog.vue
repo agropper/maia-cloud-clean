@@ -1189,13 +1189,13 @@
       </q-card>
     </q-dialog>
 
-    <!-- Warning Modal for Multiple Knowledge Bases -->
+    <!-- Warning Modal for Agent Issues -->
     <q-dialog v-model="showWarningModal" persistent no-esc-dismiss no-backdrop-dismiss class="warning-modal-dialog">
       <q-card style="min-width: 400px; max-width: 600px; z-index: 9999;" class="warning-modal-card">
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6 text-warning">
             <q-icon name="warning" color="warning" class="q-mr-sm" />
-            Multiple Knowledge Bases Warning
+            Agent Warning
           </div>
         </q-card-section>
 
@@ -1203,7 +1203,7 @@
           <div class="text-body1 q-mb-md">
             {{ warningMessage }}
           </div>
-          <div class="text-caption text-grey-6">
+          <div v-if="isMultipleKBWarning" class="text-caption text-grey-6">
             This warning appears when your agent has more than one knowledge base attached, which can cause data contamination and hallucinations in AI responses.
           </div>
         </q-card-section>
@@ -1611,6 +1611,13 @@ export default defineComponent({
     // Warning modal state
     const showWarningModal = ref(false);
     const warningMessage = computed(() => props.warning || '');
+    
+    // Detect if this is a multiple KB warning
+    const isMultipleKBWarning = computed(() => {
+      const warning = warningMessage.value.toLowerCase();
+      return warning.includes('multiple knowledge base') || 
+             warning.includes('more than one knowledge base');
+    });
 
     // Watch for warning changes and show modal immediately
     watch(() => props.warning, (newWarning) => {
@@ -5082,6 +5089,7 @@ export default defineComponent({
       ownershipTransferData,
       showWarningModal,
       warningMessage,
+      isMultipleKBWarning,
       handleClose,
       handleWarningConfirmed,
       showAdminApprovalDialog,
