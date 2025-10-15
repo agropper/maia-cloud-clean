@@ -6961,7 +6961,43 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] User has agent: ${agentId}`);
     
-    // Step 3: Create Knowledge Base
+    // Step 3: Get embedding model ID (required for KB creation)
+    let embeddingModelId = null;
+    try {
+      const modelsResponse = await doRequest('/v2/gen-ai/models');
+      const models = modelsResponse.models || [];
+      
+      // Find embedding models (models with "gte" in lowercase name)
+      const embeddingModels = models.filter(model => 
+        model.name && 
+        model.name.toLowerCase().includes('gte') &&
+        model.capabilities &&
+        model.capabilities.some(cap => 
+          cap.toLowerCase().includes('embedding') || 
+          cap.toLowerCase().includes('knowledge')
+        )
+      );
+      
+      if (embeddingModels.length > 0) {
+        // Prefer GTE Large EN v1.5 as it's the high-quality embedding model
+        const preferredModel = embeddingModels.find(model => 
+          model.name.includes('GTE Large EN v1.5')
+        ) || embeddingModels[0];
+        
+        embeddingModelId = preferredModel.uuid;
+        console.log(`🤖 [AUTO PS] Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
+      } else {
+        console.warn(`🤖 [AUTO PS] ⚠️ No embedding models found`);
+      }
+    } catch (modelError) {
+      console.error(`🤖 [AUTO PS] ❌ Failed to get embedding models:`, modelError.message);
+    }
+    
+    if (!embeddingModelId) {
+      throw new Error('No embedding model available - cannot create knowledge base');
+    }
+    
+    // Step 4: Create Knowledge Base
     const kbName = `${userId}-kb-${Date.now()}`;
     console.log(`🤖 [AUTO PS] Creating KB "${kbName}" from file ${fileName}`);
     
@@ -6969,36 +7005,39 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
     
     // Create KB with the user's folder as data source
+    const kbData = {
+      name: kbName,
+      embedding_model_uuid: embeddingModelId,
+      datasources: [{
+        spaces_data_source: {
+          name: `${kbName}-datasource`,
+          bucket_name: process.env.DIGITALOCEAN_SPACE_NAME,
+          bucket_region: process.env.DIGITALOCEAN_SPACE_REGION,
+          bucket_prefix: userFolder,
+          access_key_id: process.env.DIGITALOCEAN_SPACE_KEY,
+          secret_access_key: process.env.DIGITALOCEAN_SPACE_SECRET
+        }
+      }]
+    };
+    
     const kbCreateResponse = await doRequest('/v2/gen-ai/knowledge_bases', {
       method: 'POST',
-      body: JSON.stringify({
-        name: kbName,
-        datasources: [{
-          spaces_data_source: {
-            name: `${kbName}-datasource`,
-            bucket_name: process.env.DIGITALOCEAN_SPACE_NAME,
-            bucket_region: process.env.DIGITALOCEAN_SPACE_REGION,
-            bucket_prefix: userFolder,
-            access_key_id: process.env.DIGITALOCEAN_SPACE_KEY,
-            secret_access_key: process.env.DIGITALOCEAN_SPACE_SECRET
-          }
-        }]
-      })
+      body: JSON.stringify(kbData)
     });
     
-    const kbData = kbCreateResponse.data || kbCreateResponse;
-    const kb = kbData.knowledge_base || kbData;
+    const kbResponseData = kbCreateResponse.data || kbCreateResponse;
+    const kb = kbResponseData.knowledge_base || kbResponseData;
     const kbId = kb.uuid || kb.id;
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 4: Attach KB to agent
+    // Step 5: Attach KB to agent
     console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
     await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
       method: 'POST'
     });
     
-    // Step 5: Start indexing
+    // Step 6: Start indexing
     console.log(`🤖 [AUTO PS] Starting indexing for KB ${kbId}`);
     const dataSourceUuid = kb.datasources[0].spaces_data_source.uuid;
     const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
@@ -7011,7 +7050,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     const indexingJob = indexingResponse.data || indexingResponse;
     const jobId = indexingJob.uuid || indexingJob.id;
     
-    // Step 6: Poll for indexing completion
+    // Step 7: Poll for indexing completion
     console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
     let indexingComplete = false;
     let attempts = 0;
@@ -7050,7 +7089,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('Indexing timeout after 5 minutes');
     }
     
-    // Step 7: Update maia_kb document with file and token info
+    // Step 8: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
@@ -7065,7 +7104,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 8: Generate patient summary via Personal AI
+    // Step 9: Generate patient summary via Personal AI
     console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
     
     // Make request to Personal AI with the patient summary prompt
@@ -7085,7 +7124,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Patient summary generated (${summary.length} characters)`);
     
-    // Step 9: Save patient summary to user document
+    // Step 10: Save patient summary to user document
     console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
     userDoc.patientSummary = {
       content: summary,
@@ -7098,7 +7137,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     userDoc.updatedAt = new Date().toISOString();
     await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
-    // Step 10: Rebuild agent template to update status icons
+    // Step 11: Rebuild agent template to update status icons
     console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
     await buildAgentManagementTemplate(userId);
     
