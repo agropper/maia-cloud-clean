@@ -366,6 +366,13 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
+    // Handle "DO IT" button from Create KB Action Modal
+    const handleDoItCreateKB = () => {
+      showCreateKBActionModal.value = false;
+      // Open Agent Management Dialog to create KB
+      showAgentManagementDialog.value = true;
+    };
+
     // Handle support request from New User Welcome Modal
     const handleSupportRequested = (data) => {
       console.log('✅ Support requested for new user:', data);
@@ -475,10 +482,12 @@ export default defineComponent({
       showNewUserWelcomeModal.value = true;
     };
 
+    // New modal state for KB creation action after file upload
+    const showCreateKBActionModal = ref(false);
+
     // Check if Knowledge Base Welcome Modal should be shown
     const checkForKnowledgeBaseWelcome = () => {
-      // Simple logic: Show if user has an agent but no linked KB
-      
+      // After file upload, show the action modal instead of welcome modal
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
         return;
@@ -486,6 +495,11 @@ export default defineComponent({
       
       // Skip for deep link users
       if (currentUser.value.userId?.startsWith('deep_link_')) {
+        return;
+      }
+      
+      // Skip for Public User
+      if (currentUser.value.userId === 'Public User') {
         return;
       }
       
@@ -499,14 +513,9 @@ export default defineComponent({
         return; // User already has KB attached
       }
 
-      // ✅ User has agent but no KB - show the appropriate welcome modal
-      if (currentUser.value.userId === 'Public User') {
-        // Show Public User specific modal
-        showPublicUserKBWelcomeModal.value = true;
-      } else {
-        // Show private user KB welcome modal
-        showKnowledgeBaseWelcomeModal.value = true;
-      }
+      // ✅ User has agent but no KB and just uploaded a file
+      // Show the Create KB Action modal
+      showCreateKBActionModal.value = true;
     };
 
     // Watch for user and agent changes to check if No Agent modal should be shown
@@ -884,10 +893,12 @@ const triggerUploadFile = (file: File) => {
       showNewUserWelcomeModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
+      showCreateKBActionModal,
       triggerFileImport,
       handleOpenKBManager,
       handleImportFile,
       handleOpenPublicKBManager,
+      handleDoItCreateKB,
       handleSupportRequested,
       checkForKnowledgeBaseWelcome,
       
@@ -1061,6 +1072,31 @@ const triggerUploadFile = (file: File) => {
       :current-user="currentUser"
       @open-manager="handleOpenPublicKBManager"
     />
+
+    <!-- Create KB and Summary Action Modal -->
+    <QDialog v-model="showCreateKBActionModal" persistent>
+      <QCard style="min-width: 400px; max-width: 500px">
+        <QCardSection class="text-center q-pt-lg">
+          <div class="text-h5 q-mb-md">📚 Create a Knowledge Base and Patient Summary</div>
+        </QCardSection>
+
+        <QCardActions align="center" class="q-pa-lg">
+          <QBtn
+            flat
+            label="Not yet"
+            @click="showCreateKBActionModal = false"
+            class="q-mr-md"
+          />
+          <QBtn
+            color="primary"
+            label="DO IT"
+            @click="handleDoItCreateKB"
+            class="q-px-xl"
+            unelevated
+          />
+        </QCardActions>
+      </QCard>
+    </QDialog>
 
     <!-- Agent Selection Modal -->
     <QDialog v-model="showAgentSelectionModal" persistent>
