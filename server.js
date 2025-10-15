@@ -7087,9 +7087,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     // Extract user folder from bucketKey (e.g., "fri1/archived/file.pdf" -> "fri1/")
     const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
     
-    // Get bucket configuration from environment
-    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    // Get bucket region from URL (bucketUrl and bucketName already declared above)
     const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
     
     // Create KB with the user's folder as data source (matching working code at line 6492)
