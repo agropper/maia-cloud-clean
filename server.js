@@ -8384,24 +8384,13 @@ async function ensureAllUserBuckets() {
       console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
       
       // Create new maia_agents database and populate with DO API data
-      console.log('🔄 [STARTUP] Ensuring maia_agents database exists...');
-      
-      // Ensure the maia_agents database exists
       try {
         await couchDBClient.createDatabase('maia_agents');
-        console.log('✅ [STARTUP] Created new maia_agents database');
       } catch (createError) {
-        if (createError.message.includes('already exists')) {
-          console.log('✅ [STARTUP] maia_agents database ready (already exists)');
-        } else {
-          console.warn('⚠️ [STARTUP] Failed to create maia_agents database:', createError.message);
-        }
+        // Database already exists or other error - continue silently
       }
       
       // Populate maia_agents with DO API data using agent name as _id
-      let agentDocsCreated = 0;
-      let agentDocsUpdated = 0;
-      
       for (const agent of rawAgents) {
         try {
           const agentDoc = {
@@ -8419,7 +8408,6 @@ async function ensureAllUserBuckets() {
           
           // Try to save the document
           await couchDBClient.saveDocument('maia_agents', agentDoc);
-          agentDocsCreated++;
           
         } catch (saveError) {
           if (saveError.message.includes('conflict')) {
@@ -8438,17 +8426,12 @@ async function ensureAllUserBuckets() {
                 ...agent
               };
               await couchDBClient.saveDocument('maia_agents', updatedDoc);
-              agentDocsUpdated++;
             } catch (updateError) {
-              console.warn(`⚠️ [STARTUP] Failed to update agent ${agent.name}:`, updateError.message);
+              // Silent update failure
             }
-          } else {
-            console.warn(`⚠️ [STARTUP] Failed to save agent ${agent.name}:`, saveError.message);
           }
         }
       }
-      
-      console.log(`✅ [STARTUP] Populated maia_agents database: ${agentDocsCreated} created, ${agentDocsUpdated} updated`);
       
       // Cleanup: Remove agents that exist in Cloudant but not in DO API
       try {
@@ -8467,20 +8450,14 @@ async function ensureAllUserBuckets() {
         });
         
         if (agentsToDelete.length > 0) {
-          console.log(`🔄 [STARTUP] Found ${agentsToDelete.length} agents in database not in DO API - cleaning up...`);
-          let deletedCount = 0;
           for (const agentToDelete of agentsToDelete) {
             try {
               await couchDBClient.deleteDocument('maia_agents', agentToDelete.id);
               console.log(`🟡 [STARTUP] Deleted agent: ${agentToDelete.id}`);
-              deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete agent ${agentToDelete.id}:`, deleteError.message);
+              // Silent delete failure
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} agents removed`);
-        } else {
-          console.log('✅ [STARTUP] All agents in database match DO API - no cleanup needed');
         }
       } catch (cleanupError) {
         console.warn('⚠️ [STARTUP] Failed to cleanup agents:', cleanupError.message);
@@ -8501,24 +8478,13 @@ async function ensureAllUserBuckets() {
       const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
       // 1.5. Create new maia_kb database and populate with DO API data
-      console.log('🔄 [STARTUP] Ensuring maia_kb database exists...');
-      
-      // Ensure the maia_kb database exists
       try {
         await couchDBClient.createDatabase('maia_kb');
-        console.log('✅ [STARTUP] Created new maia_kb database');
       } catch (createError) {
-        if (createError.message.includes('already exists')) {
-          console.log('✅ [STARTUP] maia_kb database ready (already exists)');
-        } else {
-          console.warn('⚠️ [STARTUP] Failed to create maia_kb database:', createError.message);
-        }
+        // Database already exists or other error - continue silently
       }
       
       // Populate maia_kb with DO API data using kbName as _id
-      let kbDocsCreated = 0;
-      let kbDocsUpdated = 0;
-      
       for (const doKB of doKBs) {
         try {
           const kbDoc = {
@@ -8535,7 +8501,6 @@ async function ensureAllUserBuckets() {
           
           // Try to save the document
           await couchDBClient.saveDocument('maia_kb', kbDoc);
-          kbDocsCreated++;
           
         } catch (saveError) {
           if (saveError.message.includes('conflict')) {
@@ -8553,17 +8518,13 @@ async function ensureAllUserBuckets() {
                 ...doKB
               };
               await couchDBClient.saveDocument('maia_kb', updatedDoc);
-              kbDocsUpdated++;
             } catch (updateError) {
-              console.warn(`⚠️ [STARTUP] Failed to update KB ${doKB.name}:`, updateError.message);
+              // Silent update failure
             }
-          } else {
-            console.warn(`⚠️ [STARTUP] Failed to save KB ${doKB.name}:`, saveError.message);
           }
         }
       }
       
-      console.log(`✅ [STARTUP] Populated maia_kb database: ${kbDocsCreated} created, ${kbDocsUpdated} updated`);
       
       // Cleanup: Remove knowledge bases that exist in Cloudant but not in DO API
       try {
@@ -8582,20 +8543,14 @@ async function ensureAllUserBuckets() {
         });
         
         if (kbsToDelete.length > 0) {
-          console.log(`🔄 [STARTUP] Found ${kbsToDelete.length} knowledge bases in database not in DO API - cleaning up...`);
-          let deletedCount = 0;
           for (const kbToDelete of kbsToDelete) {
             try {
               await couchDBClient.deleteDocument('maia_kb', kbToDelete.id);
               console.log(`🟡 [STARTUP] Deleted knowledge base: ${kbToDelete.id}`);
-              deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete KB ${kbToDelete.id}:`, deleteError.message);
+              // Silent delete failure
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} knowledge bases removed`);
-        } else {
-          console.log('✅ [STARTUP] All knowledge bases in database match DO API - no cleanup needed');
         }
       } catch (cleanupError) {
         console.warn('⚠️ [STARTUP] Failed to cleanup knowledge bases:', cleanupError.message);
@@ -8628,23 +8583,18 @@ async function ensureAllUserBuckets() {
       
       // Remove deleted KBs from local database
       if (deletedKBIds.length > 0) {
-        console.log(`🔄 [STARTUP] Updating database to match DO API - removing ${deletedKBIds.length} deleted knowledge bases`);
-        console.log(`🗑️ [STARTUP] KBs to be removed: ${deletedKBIds.join(', ')}`);
         for (const kbId of deletedKBIds) {
           try {
-            const kbName = existingKBsMap[kbId]?.kbName || 'Unknown';
-            console.log(`🗑️ [STARTUP] Removing KB: ${kbName} (${kbId})`);
             await couchDBClient.deleteDocument('maia_knowledge_bases', existingKBsMap[kbId]._id);
             dbUpdated = true;
           } catch (deleteError) {
-            console.warn(`⚠️ [STARTUP] Failed to remove deleted KB ${kbId}:`, deleteError.message);
+            // Silent delete failure
           }
         }
       }
       
       // Add new KBs to local database (with default protection settings)
       if (newKBIds.length > 0) {
-        console.log(`🔄 [STARTUP] Updating database to match DO API - adding ${newKBIds.length} new knowledge bases`);
         for (const kbId of newKBIds) {
           const doKB = doKBs.find(kb => kb.uuid === kbId);
           if (doKB) {
@@ -8668,7 +8618,6 @@ async function ensureAllUserBuckets() {
       }
       
       if (dbUpdated) {
-        console.log('✅ [STARTUP] Database updated to match DigitalOcean API');
       }
       
       // 4. Merge DO KBs with protection info for caching
@@ -8685,7 +8634,6 @@ async function ensureAllUserBuckets() {
       });
       
       await cacheManager.cacheKnowledgeBases(transformedKBs);
-      console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from DigitalOcean API and cached for Admin2`);
       
     } catch (error) {
       console.error('❌ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
