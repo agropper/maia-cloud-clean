@@ -1292,10 +1292,13 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
                 
                 // Also update the agents cache in memory
                 const currentAgentsCache = cacheManager.getCachedAgentsSync();
-                currentAgentsCache.push(newAgent);
-                cacheManager.setCached('agents', 'all', currentAgentsCache);
-                
-                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
+                if (Array.isArray(currentAgentsCache)) {
+                  currentAgentsCache.push(newAgent);
+                  cacheManager.setCached('agents', 'all', currentAgentsCache);
+                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
+                } else {
+                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
+                }
               } catch (saveAgentError) {
                 console.error(`❌ [AUTO-AGENT] Failed to save agent to maia_agents:`, saveAgentError.message);
               }
