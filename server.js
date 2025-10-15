@@ -5549,16 +5549,6 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
     
     if (isAttached) {
       console.log(`✅ KB ${knowledgeBaseId} attached to agent ${agentId}`);
-      // Rebuild agent management template for the user who owns this agent
-      const userId = await getUserFromAgentId(agentId);
-      if (userId) {
-        try {
-          await buildAgentManagementTemplate(userId);
-        } catch (templateError) {
-          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
-        }
-      }
-      
       res.json({
         success: true,
         message: 'Knowledge base attached successfully',
@@ -5754,6 +5744,17 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
           // Don't fail the operation if Cloudant update fails
         }
         
+        // Rebuild agent management template for the user who owns this agent
+        const userId = await getUserFromAgentId(agentId);
+        if (userId) {
+          try {
+            await buildAgentManagementTemplate(userId);
+            console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB attachment`);
+          } catch (templateError) {
+            console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+          }
+        }
+        
         res.json({ 
           success: true, 
           message: 'Knowledge base attached successfully', 
@@ -5871,6 +5872,17 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       } catch (cloudantUpdateError) {
 //         console.log(`⚠️ [CLOUDANT] Failed to update KB attachment info:`, cloudantUpdateError.message);
         // Don't fail the operation if Cloudant update fails
+      }
+      
+      // Rebuild agent management template for the user who owns this agent
+      const userId = await getUserFromAgentId(agentId);
+      if (userId) {
+        try {
+          await buildAgentManagementTemplate(userId);
+          console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB attachment (verification path)`);
+        } catch (templateError) {
+          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+        }
       }
       
       res.json({ 
