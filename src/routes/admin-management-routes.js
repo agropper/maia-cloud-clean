@@ -894,38 +894,6 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Filter cached users using shared filter function
     let allUsers = cachedUsers.filter(isValidUserForList);
     
-    // Validate and fix stale agent assignments before processing
-    const cachedAgents = cacheManager.getCachedAgentsSync();
-    for (const user of allUsers) {
-      if (user.assignedAgentId) {
-        const agentExists = cachedAgents.some(agent => 
-          (agent.uuid || agent.id) === user.assignedAgentId
-        );
-        
-        if (!agentExists) {
-          // Agent deleted from DO - update database to clear stale assignment
-          console.log(`🔄 [ADMIN-USERS] Clearing deleted agent from user ${user.userId}: ${user.assignedAgentName}`);
-          
-          user.assignedAgentId = null;
-          user.assignedAgentName = null;
-          user.agentAssignedAt = null;
-          user.agentApiKey = null;
-          user.agentDeployedAt = null;
-          
-          // Reset workflow stage
-          if (user.workflowStage === 'agent_assigned' || user.workflowStage === 'approved') {
-            user.workflowStage = 'request_email_sent';
-          }
-          
-          user.updatedAt = new Date().toISOString();
-          
-          // Save updated document to database
-          await cacheManager.saveDocument(couchDBClient, 'maia_users', user);
-          console.log(`✅ [ADMIN-USERS] Updated user ${user.userId} - cleared deleted agent, reset workflow to ${user.workflowStage}`);
-        }
-      }
-    }
-    
     // If cache is empty (server just started or cache was cleared), rebuild from database
     if (allUsers.length === 0) {
       console.log(`🔄 [ADMIN-USERS] Cache empty - fetching users from database`);
@@ -1805,13 +1773,14 @@ function processUserDataSync(user) {
     user._id = user.userId;
   }
   
-  // Extract current agent information from assignedAgentId (source of truth)
+  // Extract current agent information from assignedAgentId (source of truth from database)
   let assignedAgentId = user.assignedAgentId || null;
   let assignedAgentName = user.assignedAgentName || null;
   let agentAssignedAt = user.agentAssignedAt || null;
   let workflowStage = user.workflowStage || 'no_passkey';
   
-  // Validate agent exists in maia_agents cache (which is synced with DO API at startup)
+  // Validate agent exists for DISPLAY purposes only (read-only, no database updates)
+  // Database cleanup happens at STARTUP only to prevent race conditions
   if (assignedAgentId) {
     const cachedAgents = cacheManager.getCachedAgentsSync();
     const agentExists = cachedAgents.some(agent => 
@@ -1819,15 +1788,10 @@ function processUserDataSync(user) {
     );
     
     if (!agentExists) {
-      // Agent was deleted from DO - clear from user display and reset workflow
-      assignedAgentId = null;
-      assignedAgentName = null;
-      agentAssignedAt = null;
-      
-      // Reset workflow stage to request_email_sent so admin can re-approve
-      if (workflowStage === 'agent_assigned' || workflowStage === 'approved') {
-        workflowStage = 'request_email_sent';
-      }
+      // Agent deleted from DO - show warning in display (database will be fixed at next startup)
+      assignedAgentId = assignedAgentId; // Keep original ID for debugging
+      assignedAgentName = `⚠️ ${assignedAgentName || 'Deleted Agent'}`;
+      // Don't modify workflowStage here - let database cleanup at startup handle it
     }
   }
   

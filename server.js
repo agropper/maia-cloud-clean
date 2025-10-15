@@ -9080,6 +9080,50 @@ app.listen(PORT, async () => {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
+    // Clean up stale agent assignments in user documents (STARTUP ONLY - not on every request)
+    try {
+      console.log(`🔄 [STARTUP] Validating user agent assignments...`);
+      
+      // Get all users from database
+      const allUserDocs = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+      
+      // Get current agents from cache (just populated above)
+      const currentAgents = cacheManager.getCachedAgentsSync();
+      const agentIds = new Set(currentAgents.map(agent => agent.uuid || agent.id));
+      
+      let cleanedCount = 0;
+      
+      for (const userDoc of allUserDocs) {
+        if (userDoc.assignedAgentId && !agentIds.has(userDoc.assignedAgentId)) {
+          // Agent deleted from DO - clean up user document
+          console.log(`🟡 [STARTUP] Cleaning deleted agent from user ${userDoc.userId}: ${userDoc.assignedAgentName} (${userDoc.assignedAgentId})`);
+          
+          userDoc.assignedAgentId = null;
+          userDoc.assignedAgentName = null;
+          userDoc.agentAssignedAt = null;
+          userDoc.agentApiKey = null;
+          userDoc.agentDeployedAt = null;
+          
+          // Reset workflow stage
+          if (userDoc.workflowStage === 'agent_assigned' || userDoc.workflowStage === 'approved' || userDoc.workflowStage === 'polling_for_deployment') {
+            userDoc.workflowStage = 'request_email_sent';
+          }
+          
+          userDoc.updatedAt = new Date().toISOString();
+          
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+          cleanedCount++;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        console.log(`✅ [STARTUP] Cleaned ${cleanedCount} users with deleted agents`);
+      }
+      
+    } catch (cleanupError) {
+      console.warn('⚠️ [STARTUP] Failed to clean up user agent assignments:', cleanupError.message);
+    }
+    
     // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
     try {
       // 1. Get knowledge bases from DigitalOcean API (source of truth)
