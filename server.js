@@ -353,7 +353,7 @@ const trackPublicUserActivity = (req) => {
 };
 
 // Export session management functions for use in route files
-export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity, getBucketStatusForUser };
+export { activeSessions, createSession, removeSession, updateSessionActivity, logSessionEvent, addUpdateToSession, addUpdateToUser, addUpdateToAllAdmins, getPendingUpdates, trackPublicUserActivity, getBucketStatusForUser, buildAgentManagementTemplate };
 
 const initializeDatabase = async () => {
   try {
@@ -500,6 +500,10 @@ const sessionConfig = {
 const sessionEventCache = new Map();
 const writtenSessions = new Set(); // Track which sessions have been written to database
 // console.log('[*] [Session] Memory cache initialized for session event tracking');
+
+// Agent Management Template Cache - Pre-computed status for each user
+const agentManagementTemplates = new Map();
+console.log('✅ [TEMPLATE] Agent Management Template cache initialized');
 
 app.use(session(sessionConfig));
 
@@ -2191,7 +2195,7 @@ async function getBucketStatusForUser(userId) {
     // Check if bucket is configured
     if (!bucketUrl) {
       return {
-        success: false,
+        success: false, 
         hasFolder: false,
         fileCount: 0,
         totalSize: 0,
@@ -2269,6 +2273,150 @@ async function getBucketStatusForUser(userId) {
         files: []
       };
     }
+  }
+}
+
+// ============================================================================
+// Agent Management Template Builder
+// ============================================================================
+// Builds a pre-computed template for agent/KB/summary status for each user
+// This provides a single source of truth for status icons and Admin2 display
+
+// Helper: Find which user owns an agent
+async function getUserFromAgentId(agentId) {
+  try {
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    const user = allUsers.find(u => u.assignedAgentId === agentId);
+    return user?.userId || user?._id || null;
+  } catch (error) {
+    console.error('[TEMPLATE] Error finding user for agent:', error.message);
+    return null;
+  }
+}
+
+async function buildAgentManagementTemplate(userId) {
+  const timestamp = new Date().toISOString();
+  console.log(`[TEMPLATE] Building agent management template for ${userId}`);
+  
+  try {
+    // Step 1: Get user document from Cloudant
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      console.warn(`[TEMPLATE] User ${userId} not found in database`);
+      return null;
+    }
+    
+    // Step 2: Initialize template structure
+    const template = {
+      userId: userId,
+      timestamp: timestamp,
+      agentStatus: {
+        hasAgent: false,
+        agentName: null,
+        agentId: null,
+        agentModel: null,
+        agentStatus: null
+      },
+      kbStatus: {
+        hasKB: false,
+        attachedCount: 0,
+        attachedKBs: [],
+        availableCount: 0,
+        availableKBs: [],
+        needsWarning: false  // Only true if agent exists but NO KB attached and KBs are available
+      },
+      warning: {
+        hasWarning: false,
+        warningMessage: '',
+        warningType: null
+      },
+      summaryStatus: {
+        hasSummary: false,
+        lastGenerated: null
+      },
+      agentBadgeText: ''
+    };
+    
+    // Step 3: Get agent data if user has assigned agent
+    let agentData = null;
+    if (userDoc.assignedAgentId) {
+      try {
+        const agentResponse = await doRequest(`/v2/gen-ai/agents/${userDoc.assignedAgentId}`);
+        agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+        
+        if (agentData) {
+          template.agentStatus = {
+            hasAgent: true,
+            agentName: agentData.name,
+            agentId: userDoc.assignedAgentId,
+            agentModel: agentData.model || 'unknown',
+            agentStatus: agentData.status || 'unknown'
+          };
+        }
+      } catch (error) {
+        console.warn(`[TEMPLATE] Failed to fetch agent ${userDoc.assignedAgentId}:`, error.message);
+      }
+    }
+    
+    // Step 4: Get KB data if agent exists
+    if (agentData) {
+      // Get attached KBs from agent
+      const attachedKBs = [];
+      if (agentData.knowledge_bases && agentData.knowledge_bases.length > 0) {
+        attachedKBs.push(...agentData.knowledge_bases);
+      }
+      
+      // Get all available KBs for this user (from cache)
+      const allKBs = await cacheManager.getCachedKnowledgeBases();
+      // For Public User, show all KBs; for others, only their own
+      const userKBs = userId === 'Public User' 
+        ? allKBs 
+        : allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+      
+      template.kbStatus = {
+        hasKB: attachedKBs.length > 0,
+        attachedCount: attachedKBs.length,
+        attachedKBs: attachedKBs,
+        availableCount: userKBs.length,
+        availableKBs: userKBs,
+        // Warning only if: agent exists AND no KB attached AND KBs are available
+        needsWarning: attachedKBs.length === 0 && userKBs.length > 0
+      };
+      
+      // Step 5: Build agent badge text (mimics AgentStatusIndicator logic)
+      let badgeText = `Status: ${agentData.status} • Model: ${agentData.model}`;
+      
+      if (attachedKBs.length > 0) {
+        const primaryKB = attachedKBs[0];
+        const updatedDate = new Date(primaryKB.updated_at).toLocaleDateString();
+        if (attachedKBs.length === 1) {
+          badgeText += ` • Knowledge Base: ${primaryKB.name} (Updated: ${updatedDate})`;
+        } else {
+          badgeText += ` • Knowledge Bases: ${attachedKBs.length} attached (Primary: ${primaryKB.name})`;
+        }
+      }
+      
+      template.agentBadgeText = badgeText;
+      
+      // Step 6: Check for warnings (multiple KBs)
+      if (attachedKBs.length > 1) {
+        template.warning = {
+          hasWarning: true,
+          warningMessage: `Your agent has ${attachedKBs.length} knowledge bases attached. Multiple knowledge bases can cause data contamination and hallucinations in AI responses.`,
+          warningType: 'multiple_kb'
+        };
+      }
+    }
+    
+    // Step 7: Cache the template
+    agentManagementTemplates.set(userId, template);
+    console.log(`[TEMPLATE] ✅ Template built for ${userId}: hasAgent=${template.agentStatus.hasAgent}, hasKB=${template.kbStatus.hasKB}, needsWarning=${template.kbStatus.needsWarning}`);
+    
+    return template;
+    
+  } catch (error) {
+    console.error(`[TEMPLATE] ❌ Failed to build template for ${userId}:`, error.message);
+    return null;
   }
 }
 
@@ -2442,12 +2590,12 @@ app.get('/api/bucket/user-status/:userId', async (req, res) => {
     }
     res.json(bucketStatus);
   } catch (error) {
-    console.error('❌ Error getting user bucket status:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: `Failed to get user bucket status: ${error.message}`,
-      error: 'STATUS_CHECK_FAILED'
-    });
+      console.error('❌ Error getting user bucket status:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: `Failed to get user bucket status: ${error.message}`,
+        error: 'STATUS_CHECK_FAILED'
+      });
   }
 });
 
@@ -4864,6 +5012,33 @@ app.get('/api/test', (req, res) => {
 });
 
 // Get current agent
+// Get Agent Management Template for a user
+app.get('/api/users/:userId/agent-template', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check cache first
+    let template = agentManagementTemplates.get(userId);
+    
+    // If not in cache or stale (> 5 minutes), rebuild
+    if (!template || (Date.now() - new Date(template.timestamp).getTime() > 5 * 60 * 1000)) {
+      console.log(`[TEMPLATE] Cache miss or stale for ${userId}, building fresh template`);
+      template = await buildAgentManagementTemplate(userId);
+    } else {
+      console.log(`[TEMPLATE] Cache hit for ${userId}, age: ${Math.round((Date.now() - new Date(template.timestamp).getTime()) / 1000)}s`);
+    }
+    
+    if (!template) {
+      return res.status(404).json({ error: 'User not found or template build failed' });
+    }
+    
+    res.json(template);
+  } catch (error) {
+    console.error('[TEMPLATE] Error fetching template:', error);
+    res.status(500).json({ error: 'Failed to get agent template' });
+  }
+});
+
 app.get('/api/current-agent', async (req, res) => {
   // Determine the base URL dynamically from the request
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
@@ -5060,7 +5235,7 @@ app.get('/api/current-agent', async (req, res) => {
         try {
           const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
           
-          if (userDoc) {
+            if (userDoc) {
             // Call bucket status function directly (not via HTTP)
             const bucketData = await getBucketStatusForUser(currentUser);
             
@@ -5079,12 +5254,12 @@ app.get('/api/current-agent', async (req, res) => {
             
             if (userDoc.assignedAgentId) {
               // Use assignedAgentId as the source of truth
-              agentId = userDoc.assignedAgentId;
-            } else {
+            agentId = userDoc.assignedAgentId;
+          } else {
               // No agent assigned yet
-              return res.json({ 
-                agent: null, 
-                message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
+            return res.json({ 
+              agent: null, 
+              message: 'No current agent selected. Please choose an agent via the Agent Management dialog.',
                 requiresAgentSelection: true
               });
             }
@@ -5120,14 +5295,14 @@ app.get('/api/current-agent', async (req, res) => {
               if (agentData && !agentData.name.startsWith('public-')) {
                 // Clear invalid non-public agent selection
                 console.log(`🔧 [current-agent] Clearing invalid non-public agent selection for Public User: ${agentData.name}`);
-                userDoc.currentAgentId = null;
-                userDoc.currentAgentName = null;
-                userDoc.currentAgentEndpoint = null;
-                userDoc.currentAgentSetAt = null;
-                userDoc.updatedAt = new Date().toISOString();
-                
-                // Save the corrected document
-                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+            userDoc.currentAgentId = null;
+            userDoc.currentAgentName = null;
+            userDoc.currentAgentEndpoint = null;
+            userDoc.currentAgentSetAt = null;
+            userDoc.updatedAt = new Date().toISOString();
+            
+            // Save the corrected document
+            await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
               }
             } catch (error) {
               console.error(`❌ [current-agent] Error validating Public User agent selection:`, error);
@@ -5374,6 +5549,16 @@ app.post('/api/agents/:agentId/knowledge-bases', async (req, res) => {
     
     if (isAttached) {
       console.log(`✅ KB ${knowledgeBaseId} attached to agent ${agentId}`);
+      // Rebuild agent management template for the user who owns this agent
+      const userId = await getUserFromAgentId(agentId);
+      if (userId) {
+        try {
+          await buildAgentManagementTemplate(userId);
+        } catch (templateError) {
+          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+        }
+      }
+      
       res.json({
         success: true,
         message: 'Knowledge base attached successfully',
@@ -6292,7 +6477,7 @@ app.post('/api/knowledge-bases', async (req, res) => {
     if (embeddingModelId) {
       kbData.embedding_model_uuid = embeddingModelId;
     }
-
+    
     const knowledgeBase = await doRequest('/v2/gen-ai/knowledge_bases', {
       method: 'POST',
       body: JSON.stringify(kbData)
@@ -7049,13 +7234,13 @@ async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http:
             // Send polling notification to admin clients
             try {
               const updateData = {
-                kbId: kbId,
-                kbName: kbName,
-                duration: totalTime,
-                durationMinutes: durationMinutes,
-                tokens: job.tokens || null,
-                jobUuid: job.uuid,
-                message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
+                    kbId: kbId,
+                    kbName: kbName,
+                    duration: totalTime,
+                    durationMinutes: durationMinutes,
+                    tokens: job.tokens || null,
+                    jobUuid: job.uuid,
+                    message: `Knowledge base ${kbName} indexing completed in ${totalTime} seconds`
               };
               
               addUpdateToAllAdmins('kb_indexing_completed', updateData);
@@ -8070,7 +8255,7 @@ app.listen(PORT, async () => {
   // console.log(`📅 Server started at: ${new Date().toISOString()}`);
   
   // Helper function to ensure bucket folders for all users
-async function ensureAllUserBuckets() {
+  async function ensureAllUserBuckets() {
     
     // Get all user IDs from database
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');

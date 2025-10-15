@@ -510,7 +510,9 @@ export default defineComponent({
     
     // State initialization flag - block template until ready
     const isStatusReady = ref(false)
-    const availableKBs = ref<any[]>([])
+    
+    // Agent management template data from backend
+    const agentTemplate = ref<any>(null)
 
     const contactForm = ref({
       email: '',
@@ -850,37 +852,23 @@ export default defineComponent({
       }
     }
 
-    // Computed properties for icon states
+    // Computed properties - read directly from backend template
     const hasAgent = computed(() => {
-      const result = !!(props.currentAgent && props.currentAgent.id)
-      console.log('[BT STATUS] hasAgent:', result, 'currentAgent:', props.currentAgent)
+      const result = agentTemplate.value?.agentStatus?.hasAgent || false
+      console.log('[BT STATUS] hasAgent (from template):', result)
       return result
     })
 
     const hasKnowledgeBase = computed(() => {
-      if (!props.currentAgent) {
-        console.log('[BT STATUS] hasKnowledgeBase: false (no agent)')
-        return false
-      }
-      console.log('[BT STATUS] Checking KB attachment. Agent:', props.currentAgent.name, 'knowledgeBases:', props.currentAgent.knowledgeBases, 'knowledgeBase:', props.currentAgent.knowledgeBase)
-      // Check for knowledge bases array (multiple KBs)
-      if (props.currentAgent.knowledgeBases && props.currentAgent.knowledgeBases.length > 0) {
-        console.log('[BT STATUS] hasKnowledgeBase: true (knowledgeBases array)', props.currentAgent.knowledgeBases)
-        return true
-      }
-      // Check for single knowledge base object
-      if (props.currentAgent.knowledgeBase) {
-        console.log('[BT STATUS] hasKnowledgeBase: true (knowledgeBase object)', props.currentAgent.knowledgeBase)
-        return true
-      }
-      console.log('[BT STATUS] hasKnowledgeBase: false (no KB attached)')
-      return false
+      const result = agentTemplate.value?.kbStatus?.hasKB || false
+      console.log('[BT STATUS] hasKnowledgeBase (from template):', result)
+      return result
     })
 
-    // Initialize status icons state BEFORE template renders
+    // Initialize status icons by fetching pre-computed template from backend
     const initializeStatusIcons = async () => {
       const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 🚀 INITIALIZATION START - Template is BLOCKED`)
+      console.log(`[BT STATUS] [${timestamp}] 🚀 INITIALIZATION START`)
       
       // Step 1: Determine current user
       const userId = (() => {
@@ -888,130 +876,60 @@ export default defineComponent({
         if (typeof props.currentUser === 'string') return props.currentUser
         return props.currentUser.userId || props.currentUser.displayName || 'Public User'
       })()
-      console.log(`[BT STATUS] [${timestamp}] Step 1: User identified as "${userId}"`)
+      console.log(`[BT STATUS] [${timestamp}] Step 1: User = "${userId}"`)
       
-      // Step 2: Fetch available KBs (synchronously wait)
+      // Step 2: Fetch pre-computed template from backend
       try {
-        let url = '/api/knowledge-bases'
-        if (userId !== 'Public User') {
-          url += `?user=${userId}`
-        }
-        console.log(`[BT STATUS] [${timestamp}] Step 2: Fetching KBs from ${url}...`)
-        const response = await fetch(url)
+        console.log(`[BT STATUS] [${timestamp}] Step 2: Fetching agent template from backend...`)
+        const response = await fetch(`/api/users/${encodeURIComponent(userId)}/agent-template`)
+        
         if (response.ok) {
-          availableKBs.value = await response.json()
-          console.log(`[BT STATUS] [${timestamp}] Step 2: ✅ Fetched ${availableKBs.value.length} available KBs`)
+          agentTemplate.value = await response.json()
+          console.log(`[BT STATUS] [${timestamp}] Step 2: ✅ Template fetched successfully`)
+          console.log(`[BT STATUS] [${timestamp}]   - hasAgent: ${agentTemplate.value.agentStatus.hasAgent}`)
+          console.log(`[BT STATUS] [${timestamp}]   - hasKB: ${agentTemplate.value.kbStatus.hasKB}`)
+          console.log(`[BT STATUS] [${timestamp}]   - needsWarning: ${agentTemplate.value.kbStatus.needsWarning}`)
+          console.log(`[BT STATUS] [${timestamp}]   - hasWarning: ${agentTemplate.value.warning.hasWarning}`)
         } else {
-          console.warn(`[BT STATUS] [${timestamp}] Step 2: ❌ Failed to fetch KBs: ${response.status}`)
-          availableKBs.value = []
+          console.warn(`[BT STATUS] [${timestamp}] Step 2: ❌ Failed to fetch template: ${response.status}`)
+          agentTemplate.value = null
         }
       } catch (error) {
-        console.error(`[BT STATUS] [${timestamp}] Step 2: ❌ Error fetching KBs:`, error)
-        availableKBs.value = []
+        console.error(`[BT STATUS] [${timestamp}] Step 2: ❌ Error fetching template:`, error)
+        agentTemplate.value = null
       }
       
-      // Step 3: Determine agent state
-      const agentState = {
-        hasAgent: !!(props.currentAgent && props.currentAgent.id),
-        agentName: props.currentAgent?.name || 'none'
-      }
-      console.log(`[BT STATUS] [${timestamp}] Step 3: Agent state - hasAgent: ${agentState.hasAgent}, name: ${agentState.agentName}`)
-      
-      // Step 4: Determine KB attachment state
-      const attachedKBIds = new Set()
-      if (props.currentAgent?.knowledgeBases) {
-        props.currentAgent.knowledgeBases.forEach((kb: any) => {
-          attachedKBIds.add(kb.uuid || kb.id)
-        })
-      }
-      if (props.currentAgent?.knowledgeBase) {
-        attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
-      }
-      console.log(`[BT STATUS] [${timestamp}] Step 4: KB attachment - ${attachedKBIds.size} attached:`, Array.from(attachedKBIds))
-      
-      // Step 5: Calculate if warning needed
-      const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
-      console.log(`[BT STATUS] [${timestamp}] Step 5: Warning calculation - ${availableKBs.value.length} available, ${attachedKBIds.size} attached, hasUnattached: ${hasUnattached}`)
-      
-      // Step 6: Ready to render
+      // Step 3: Ready to render
       isStatusReady.value = true
-      console.log(`[BT STATUS] [${timestamp}] ✅ INITIALIZATION COMPLETE - Template is now UNBLOCKED`)
-      console.log(`[BT STATUS] [${timestamp}] Final state: hasAgent=${agentState.hasAgent}, hasKB=${attachedKBIds.size > 0}, needsWarning=${hasUnattached}`)
+      console.log(`[BT STATUS] [${timestamp}] ✅ INITIALIZATION COMPLETE - Template ready for UI`)
     }
     
-    // Watch for user or agent changes to re-initialize
+    // Watch for user or agent changes to re-fetch template
     watch(() => [props.currentUser, props.currentAgent], async () => {
       const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 🔄 Props changed - re-initializing status icons`)
+      console.log(`[BT STATUS] [${timestamp}] 🔄 Props changed - re-fetching template`)
+      isStatusReady.value = false  // Block UI during refetch
       await initializeStatusIcons()
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
+      const result = agentTemplate.value?.kbStatus?.needsWarning || false
       const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] ==== hasUnattachedKB EVALUATION START ====`)
-      console.log(`[BT STATUS] [${timestamp}] availableKBs reactive ref length:`, availableKBs.value.length)
-      console.log(`[BT STATUS] [${timestamp}] currentAgent:`, props.currentAgent?.name)
-      
-      // Must have an agent first
-      if (!props.currentAgent || !props.currentAgent.id) {
-        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: false (no agent) - v-if will be FALSE, badge will NOT render`)
-        return false
+      console.log(`[BT STATUS] [${timestamp}] hasUnattachedKB (from template): ${result}`)
+      if (agentTemplate.value) {
+        console.log(`[BT STATUS] [${timestamp}]   - Agent: ${agentTemplate.value.agentStatus.hasAgent}`)
+        console.log(`[BT STATUS] [${timestamp}]   - Attached: ${agentTemplate.value.kbStatus.attachedCount}`)
+        console.log(`[BT STATUS] [${timestamp}]   - Available: ${agentTemplate.value.kbStatus.availableCount}`)
+        console.log(`[BT STATUS] [${timestamp}]   - Logic: hasAgent && attachedCount===0 && availableCount>0`)
       }
-      
-      // Check if there are available KBs
-      if (availableKBs.value.length === 0) {
-        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: false (availableKBs.value.length = 0) - v-if will be FALSE, badge will NOT render`)
-        return false
-      }
-      
-      // Get attached KB IDs
-      const attachedKBIds = new Set()
-      if (props.currentAgent.knowledgeBases) {
-        props.currentAgent.knowledgeBases.forEach((kb: any) => {
-          attachedKBIds.add(kb.uuid || kb.id)
-        })
-      }
-      if (props.currentAgent.knowledgeBase) {
-        attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
-      }
-      
-      console.log(`[BT STATUS] [${timestamp}] Comparing: ${attachedKBIds.size} attached vs ${availableKBs.value.length} available`)
-      console.log(`[BT STATUS] [${timestamp}] - Attached IDs:`, Array.from(attachedKBIds))
-      console.log(`[BT STATUS] [${timestamp}] - Available IDs:`, availableKBs.value.map(kb => kb.uuid || kb.id))
-      
-      // Check if there are any available KBs not attached
-      const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
-      
-      if (hasUnattached) {
-        console.log(`[BT STATUS] [${timestamp}] ✅ RESULT: TRUE - v-if will be TRUE, badge SHOULD render in template`)
-      } else {
-        console.log(`[BT STATUS] [${timestamp}] ❌ RESULT: FALSE - v-if will be FALSE, badge will NOT render`)
-      }
-      console.log(`[BT STATUS] [${timestamp}] ==== hasUnattachedKB EVALUATION END ====`)
-      
-      return hasUnattached
+      return result
     })
 
     const hasPatientSummary = computed(() => {
-      // Patient summary feature not yet implemented
-      // Will be enabled when user creates their first summary
-      return false
+      const result = agentTemplate.value?.summaryStatus?.hasSummary || false
+      console.log('[BT STATUS] hasPatientSummary (from template):', result)
+      return result
     })
-
-    // Watch hasUnattachedKB to see when it changes (should trigger template re-render)
-    watch(hasUnattachedKB, (newValue, oldValue) => {
-      const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 🔄 hasUnattachedKB CHANGED from ${oldValue} to ${newValue}`)
-      console.log(`[BT STATUS] [${timestamp}] 🔄 Template should now re-render. v-if="hasUnattachedKB" should be ${newValue}`)
-      console.log(`[BT STATUS] [${timestamp}] 🔄 QBadge element should ${newValue ? 'APPEAR' : 'DISAPPEAR'} in DOM`)
-    })
-
-    // Watch availableKBs to see when the fetch completes
-    watch(availableKBs, (newValue, oldValue) => {
-      const timestamp = new Date().toISOString().substr(11, 12)
-      console.log(`[BT STATUS] [${timestamp}] 📦 availableKBs changed from length ${oldValue.length} to ${newValue.length}`)
-      console.log(`[BT STATUS] [${timestamp}] 📦 This should trigger hasUnattachedKB recomputation`)
-    }, { deep: true })
 
     return {
       isListening,

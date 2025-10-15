@@ -657,6 +657,14 @@ router.post("/authenticate-verify", async (req, res) => {
 
       console.log(`✅ Session created for user: ${updatedUser._id}`);
       
+      // Build agent management template for this user
+      try {
+        const { buildAgentManagementTemplate } = await import('../../server.js');
+        await buildAgentManagementTemplate(updatedUser._id);
+      } catch (templateError) {
+        console.warn(`⚠️ [TEMPLATE] Failed to build template for ${updatedUser._id}:`, templateError.message);
+      }
+      
       // Ensure user has a bucket folder
       try {
         const bucketResponse = await fetch(`${getBaseUrl()}/api/bucket/ensure-user-folder`, {
