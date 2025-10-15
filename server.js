@@ -8193,8 +8193,6 @@ async function ensureAllUserBuckets() {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
       
-      console.log(`📊 [STARTUP] Fetched ${rawAgents.length} agents from DO API`);
-      
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
         return {
@@ -8211,7 +8209,6 @@ async function ensureAllUserBuckets() {
       });
       
       await cacheManager.cacheAgents(transformedAgents);
-      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
@@ -8363,8 +8360,6 @@ async function ensureAllUserBuckets() {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
       
-      console.log(`📊 [STARTUP] Fetched ${rawAgents.length} agents from DO API`);
-      
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
         return {
@@ -8381,7 +8376,6 @@ async function ensureAllUserBuckets() {
       });
       
       await cacheManager.cacheAgents(transformedAgents);
-      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
       
       // Create new maia_agents database and populate with DO API data
       try {
@@ -8463,18 +8457,16 @@ async function ensureAllUserBuckets() {
         console.warn('⚠️ [STARTUP] Failed to cleanup agents:', cleanupError.message);
       }
       
+      console.log(`Loaded ${rawAgents.length} agents to maia_agents and cacheManager`);
+      
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
     // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
     try {
-      console.log('🔄 [STARTUP] Syncing knowledge bases with DigitalOcean API source of truth...');
-      
       // 1. Get knowledge bases from DigitalOcean API (source of truth)
-      console.log('🔄 [STARTUP] Fetching knowledge bases from DigitalOcean API...');
       const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
-      console.log('✅ [STARTUP] Successfully fetched knowledge bases from DO API');
       const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
       // 1.5. Create new maia_kb database and populate with DO API data
@@ -8634,6 +8626,8 @@ async function ensureAllUserBuckets() {
       });
       
       await cacheManager.cacheKnowledgeBases(transformedKBs);
+      
+      console.log(`Loaded ${doKBs.length} knowledge bases to maia_kb and cacheManager`);
       
     } catch (error) {
       console.error('❌ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
