@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, ref, watch, nextTick, onMounted, onUnmounted, computed } from "vue";
-import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions } from "quasar";
+import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions, useQuasar } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
@@ -86,6 +86,7 @@ export default defineComponent({
     },
   },
   setup() {
+    const $q = useQuasar();
     const { appState, writeMessage, clearLocalStorageKeys, setActiveQuestionName } = useChatState();
     const { logMessage, logContextSwitch, logSystemEvent, setTimelineChunks } = useChatLogger();
     const { generateTranscript } = useTranscript();
@@ -401,18 +402,28 @@ export default defineComponent({
       appState.isLoading = true;
       
       try {
-        // Step 2: Get user info and most recent file
+        // Step 2: Get user info from backend
         const userId = currentUser.value?.userId || currentUser.value?.displayName;
         if (!userId || userId === 'Public User') {
           throw new Error('User must be authenticated');
         }
         
-        if (!appState.uploadedFiles || appState.uploadedFiles.length === 0) {
-          throw new Error('No uploaded files found');
+        console.log(`[AUTO PS] Step 2: Fetching user document for ${userId}`);
+        
+        // Get user document from backend to find files
+        const userResponse = await fetch(`/api/users/${userId}`);
+        if (!userResponse.ok) {
+          throw new Error(`Failed to fetch user document: ${userResponse.status}`);
         }
         
-        const recentFile = appState.uploadedFiles[appState.uploadedFiles.length - 1];
-        console.log(`[AUTO PS] Step 2: Using file "${recentFile.name}" for user ${userId}`);
+        const userData = await userResponse.json();
+        if (!userData.files || userData.files.length === 0) {
+          throw new Error('No files found in user document');
+        }
+        
+        // Get the most recent file (last in array)
+        const recentFile = userData.files[userData.files.length - 1];
+        console.log(`[AUTO PS] Using file "${recentFile.fileName}" (bucketKey: ${recentFile.bucketKey})`);
         
         // Step 3: Call backend automation endpoint
         console.log(`[AUTO PS] Step 3: Calling backend automation endpoint`);
@@ -421,7 +432,7 @@ export default defineComponent({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: userId,
-            fileName: recentFile.name,
+            fileName: recentFile.fileName,
             bucketKey: recentFile.bucketKey
           })
         });
@@ -930,10 +941,10 @@ const triggerUploadFile = (file: File) => {
       window.addEventListener('resize', updateChatAreaMargin);
       
       // Add state listener for reactive updates
-    stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
-      if (newState.currentUser !== oldState.currentUser) {
-        currentUser.value = newState.currentUser;
-      }
+      stateListenerId.value = appStateManager.addListener((newState: any, oldState: any) => {
+        if (newState.currentUser !== oldState.currentUser) {
+          currentUser.value = newState.currentUser;
+        }
         if (newState.currentAgent !== oldState.currentAgent) {
           currentAgent.value = newState.currentAgent;
         }

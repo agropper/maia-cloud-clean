@@ -5023,6 +5023,23 @@ app.get('/api/test', (req, res) => {
 
 // Get current agent
 // Get Agent Management Template for a user
+// Get user document
+app.get('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(userDoc);
+  } catch (error) {
+    console.error('Error fetching user document:', error);
+    res.status(500).json({ error: 'Failed to get user document' });
+  }
+});
+
 app.get('/api/users/:userId/agent-template', async (req, res) => {
   try {
     const { userId } = req.params;
