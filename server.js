@@ -1610,7 +1610,8 @@ app.post('/api/upload-to-bucket', async (req, res) => {
     
     // Update cache with fresh bucket status IMMEDIATELY after successful upload
     if (userFolder && userFolder !== 'root') {
-      const userId = userFolder.replace('/', ''); // Remove trailing slash
+      // Extract userId from folder path (e.g., "sun2archived/" -> "sun2")
+      const userId = userFolder.split('/')[0];
       await updateUserBucketCache(userId);
       
       // Send admin notification
