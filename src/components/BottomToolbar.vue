@@ -399,7 +399,7 @@ import {
 export default defineComponent({
   name: 'BottomToolbar',
   
-  emits: ['write-message', 'show-saved-chats', 'trigger-agent-management', 'show-popup', 'sign-in', 'sign-out', 'chat-loaded', 'group-deleted', 'file-uploaded'],
+  emits: ['write-message', 'show-saved-chats', 'trigger-agent-management', 'show-popup', 'sign-in', 'sign-out', 'chat-loaded', 'group-deleted', 'file-uploaded', 'refresh-status-icons'],
 
   components: {
     QBtn,
@@ -850,6 +850,7 @@ export default defineComponent({
         console.log('[BT STATUS] hasKnowledgeBase: false (no agent)')
         return false
       }
+      console.log('[BT STATUS] Checking KB attachment. Agent:', props.currentAgent.name, 'knowledgeBases:', props.currentAgent.knowledgeBases, 'knowledgeBase:', props.currentAgent.knowledgeBase)
       // Check for knowledge bases array (multiple KBs)
       if (props.currentAgent.knowledgeBases && props.currentAgent.knowledgeBases.length > 0) {
         console.log('[BT STATUS] hasKnowledgeBase: true (knowledgeBases array)', props.currentAgent.knowledgeBases)
@@ -900,9 +901,11 @@ export default defineComponent({
     }
     
     // Watch for user or agent changes to fetch KBs
+    // Use deep watch to detect KB attachment changes
     watch(() => [props.currentUser, props.currentAgent], () => {
+      console.log('[BT STATUS] Watch triggered - refetching available KBs')
       fetchAvailableKBs()
-    }, { immediate: true })
+    }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
       // Must have an agent first
@@ -1269,11 +1272,12 @@ export default defineComponent({
 
 /* Warning badge styling */
 .warning-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: bold;
-  min-width: 14px;
-  height: 14px;
-  padding: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 3px;
+  line-height: 1;
 }
 
 /* Patient summary icon - for custom styling if needed */
