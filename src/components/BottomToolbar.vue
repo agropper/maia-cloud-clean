@@ -854,11 +854,54 @@ export default defineComponent({
       return false
     })
 
+    // Fetch available KBs to check for unattached ones
+    const availableKBs = ref<any[]>([])
+    
+    const fetchAvailableKBs = async () => {
+      if (!props.currentUser) return
+      
+      try {
+        const userId = typeof props.currentUser === 'string' 
+          ? props.currentUser 
+          : props.currentUser.userId || props.currentUser.displayName
+        
+        const response = await fetch(`/api/knowledge-bases?user=${userId}`)
+        if (response.ok) {
+          availableKBs.value = await response.json()
+        }
+      } catch (error) {
+        console.error('Failed to fetch available KBs:', error)
+        availableKBs.value = []
+      }
+    }
+    
+    // Watch for user or agent changes to fetch KBs
+    watch(() => [props.currentUser, props.currentAgent], () => {
+      fetchAvailableKBs()
+    }, { immediate: true })
+
     const hasUnattachedKB = computed(() => {
-      // Check if there are KBs available but not attached to the agent
-      // This will need to be enhanced when we fetch all available KBs
-      // For now, return false as a placeholder
-      return false
+      // Must have an agent first
+      if (!props.currentAgent || !props.currentAgent.id) return false
+      
+      // Check if there are available KBs
+      if (availableKBs.value.length === 0) return false
+      
+      // Get attached KB IDs
+      const attachedKBIds = new Set()
+      if (props.currentAgent.knowledgeBases) {
+        props.currentAgent.knowledgeBases.forEach((kb: any) => {
+          attachedKBIds.add(kb.uuid || kb.id)
+        })
+      }
+      if (props.currentAgent.knowledgeBase) {
+        attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
+      }
+      
+      // Check if there are any available KBs not attached
+      const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
+      
+      return hasUnattached
     })
 
     const hasPatientSummary = computed(() => {
