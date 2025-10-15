@@ -124,12 +124,7 @@ const pdfUrl = computed(() => {
 
 // Methods
 const loadPdfDocument = async () => {
-  console.log('🔄 Vue PDF: loadPdfDocument() called')
-  console.log('🔄 Vue PDF: pdfUrl.value:', pdfUrl.value)
-  console.log('🔄 Vue PDF: isLoading.value:', isLoading.value)
-  
   if (!pdfUrl.value) {
-    console.log('🔄 Vue PDF: No PDF URL, clearing state')
     pdfDocument.value = null
     totalPages.value = 0
     isLoading.value = false
@@ -138,42 +133,28 @@ const loadPdfDocument = async () => {
 
   // Prevent multiple simultaneous loads
   if (isLoading.value) {
-    console.log('🔄 Vue PDF: Already loading, skipping duplicate load')
     return
   }
 
   try {
     isLoading.value = true
-    console.log('🔄 Vue PDF: Starting PDF load from:', pdfUrl.value)
     const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
     pdfDocument.value = loadingTask
     const pdf = await loadingTask.promise
-    console.log('✅ Vue PDF: PDF document loaded successfully:', pdf)
     totalPages.value = pdf.numPages || 0
-    console.log('📄 Vue PDF: Total pages set to:', totalPages.value)
   } catch (error) {
     console.error('❌ Vue PDF: PDF document loading error:', error)
     pdfDocument.value = null
     totalPages.value = 0
   } finally {
     isLoading.value = false
-    console.log('🔄 Vue PDF: Loading completed, isLoading set to false')
   }
 }
 
 const onPdfLoaded = (pdf: any) => {
-  console.log('✅ Vue PDF: PDF loaded via component event:', pdf)
-  console.log('📄 Vue PDF: Component PDF object has numPages:', pdf.numPages)
-  console.log('📄 Vue PDF: Current totalPages value:', totalPages.value)
-  
   // Only update totalPages if it's not already set AND the component provides a valid numPages
   if (totalPages.value === 0 && pdf.numPages && pdf.numPages > 0) {
     totalPages.value = pdf.numPages
-    console.log('📄 Vue PDF: Total pages updated via component to:', totalPages.value)
-  } else if (totalPages.value > 0) {
-    console.log('📄 Vue PDF: Total pages already set to', totalPages.value, ', ignoring component event')
-  } else {
-    console.log('📄 Vue PDF: Component PDF object has invalid numPages:', pdf.numPages, ', keeping current value')
   }
 }
 
@@ -184,50 +165,36 @@ const onPdfError = (err: any) => {
 
 
 const previousPage = () => {
-  console.log('📄 Vue PDF: Previous page clicked - current:', currentPage.value, 'total:', totalPages.value)
   if (currentPage.value > 1) {
     currentPage.value--
-    console.log('📄 Vue PDF: Previous page, now on page:', currentPage.value)
-  } else {
-    console.log('📄 Vue PDF: Already on first page, cannot go previous')
   }
 }
 
 const nextPage = () => {
-  console.log('📄 Vue PDF: Next page clicked - current:', currentPage.value, 'total:', totalPages.value)
   if (totalPages.value === 0) {
-    console.log('📄 Vue PDF: Total pages is 0, cannot navigate')
     return
   }
   if (currentPage.value < totalPages.value) {
     currentPage.value++
-    console.log('📄 Vue PDF: Next page, now on page:', currentPage.value)
-  } else {
-    console.log('📄 Vue PDF: Already on last page, cannot go next')
   }
 }
 
 const zoomIn = () => {
   scale.value = Math.min(scale.value + 0.25, 3.0)
-  console.log('🔍 Vue PDF: Zoom in, scale now:', scale.value)
 }
 
 const zoomOut = () => {
   scale.value = Math.max(scale.value - 0.25, 0.5)
-  console.log('🔍 Vue PDF: Zoom out, scale now:', scale.value)
 }
 
 const goToPage = () => {
   const targetPage = pageInput.value
-  console.log('📄 Vue PDF: Go to page clicked - target:', targetPage, 'current:', currentPage.value, 'total:', totalPages.value)
   
   if (targetPage >= 1 && targetPage <= totalPages.value) {
     currentPage.value = targetPage
-    console.log('📄 Vue PDF: Navigated to page:', currentPage.value)
     // Clear the input field after successful navigation
     pageInput.value = ''
   } else {
-    console.log('📄 Vue PDF: Invalid page number:', targetPage, ', must be between 1 and', totalPages.value)
     // Clear the input field for invalid entries
     pageInput.value = ''
   }
@@ -235,45 +202,29 @@ const goToPage = () => {
 
 // Watch for file changes - this handles both initial load and file changes
 watch(() => props.file, (newFile, oldFile) => {
-  console.log('📄 Vue PDF: File watcher triggered')
-  console.log('📄 Vue PDF: Old file:', oldFile?.name || 'none')
-  console.log('📄 Vue PDF: New file:', newFile?.name || 'none')
-  console.log('📄 Vue PDF: Is loading:', isLoading.value)
-  
   if (newFile && !isLoading.value) {
-    console.log('📄 Vue PDF: File changed, resetting state and loading PDF')
     currentPage.value = 1
     totalPages.value = 0
     loadPdfDocument()
-  } else if (isLoading.value) {
-    console.log('📄 Vue PDF: Skipping load because already loading')
-  } else {
-    console.log('📄 Vue PDF: No file or same file, skipping load')
   }
 }, { immediate: true })
 
 // Note: Removed redundant URL watcher since file changes already trigger loadPdfDocument()
 // The URL is computed from the file prop, so watching the file is sufficient
 
-// Watch for page changes to debug navigation
+// Watchers for reactive state changes
 watch(currentPage, (newPage, oldPage) => {
-  console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
+  // Page changed
 })
 
-// Watch for scale changes to debug zoom
 watch(scale, (newScale, oldScale) => {
-  console.log('🔍 Vue PDF: Scale changed from', oldScale, 'to', newScale)
+  // Scale changed
 })
 
-// Watch for totalPages changes to debug page count issues
 watch(totalPages, (newTotal, oldTotal) => {
-  console.log('📄 Vue PDF: Total pages changed from', oldTotal, 'to', newTotal)
+  // Total pages changed
 })
 
-// Watch for currentPage changes (for debugging)
-watch(currentPage, (newPage, oldPage) => {
-  console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
-})
 </script>
 
 <style scoped>

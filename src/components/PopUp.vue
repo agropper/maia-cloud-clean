@@ -61,10 +61,7 @@ import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
 // Vue PDF Viewer for proper text selection
 import VuePdfViewer from './VuePdfViewer.vue'
 
-// Check what's available in pdfjsLib for text layer functionality
-console.log('Available PDF.js exports:', Object.keys(pdfjsLib))
-console.log('TextLayer available:', !!pdfjsLib.TextLayer)
-console.log('renderTextLayer available:', !!pdfjsLib.renderTextLayer)
+// PDF.js legacy build for better bundler compatibility
 
 const { generateTimeline } = useTranscript()
 
