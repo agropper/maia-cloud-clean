@@ -162,6 +162,41 @@
               <div class="tooltip-text">Choose a saved and shared chat.</div>
             </div>
             
+            <span class="status-text">; &nbsp;</span>
+            
+            <!-- Agent Icon -->
+            <div class="tooltip-wrapper">
+              <q-icon 
+                name="manage_accounts" 
+                size="sm" 
+                color="primary"
+                class="status-icon"
+              />
+              <div class="tooltip-text">Manage your agent</div>
+            </div>
+            
+            <!-- Knowledge Base Icon -->
+            <div class="tooltip-wrapper">
+              <q-icon 
+                name="library_books" 
+                size="sm" 
+                color="secondary"
+                class="status-icon"
+              />
+              <div class="tooltip-text">Manage your knowledge bases</div>
+            </div>
+            
+            <!-- Patient Summary Icon -->
+            <div class="tooltip-wrapper">
+              <q-icon 
+                name="description" 
+                size="sm" 
+                color="accent"
+                class="status-icon patient-summary-icon"
+              />
+              <div class="tooltip-text">Generate patient summary</div>
+            </div>
+            
             <!-- Deep Link Icon - Right end of status line -->
             <div v-if="deepLink" class="tooltip-wrapper">
               <q-btn
@@ -1071,6 +1106,22 @@ export default defineComponent({
 /* Right-justify the mail icon */
 .mail-icon-right {
   margin-left: auto;
+}
+
+/* Status icon styling */
+.status-icon {
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.status-icon:hover {
+  transform: scale(1.15);
+  opacity: 0.8;
+}
+
+/* Patient summary icon - for custom styling if needed */
+.patient-summary-icon {
+  /* Future customization */
 }
 
 </style>
