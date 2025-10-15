@@ -842,7 +842,16 @@ export default defineComponent({
     })
 
     const hasKnowledgeBase = computed(() => {
-      return !!(props.currentAgent && props.currentAgent.knowledgeBaseId)
+      if (!props.currentAgent) return false
+      // Check for knowledge bases array (multiple KBs)
+      if (props.currentAgent.knowledgeBases && props.currentAgent.knowledgeBases.length > 0) {
+        return true
+      }
+      // Check for single knowledge base object
+      if (props.currentAgent.knowledgeBase) {
+        return true
+      }
+      return false
     })
 
     const hasUnattachedKB = computed(() => {
@@ -1102,7 +1111,8 @@ export default defineComponent({
 
 .tooltip-wrapper {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   cursor: help;
 }
 
@@ -1156,6 +1166,7 @@ export default defineComponent({
 .status-icon {
   cursor: pointer;
   transition: transform 0.2s ease, opacity 0.2s ease;
+  pointer-events: auto; /* Ensure icon receives hover events */
 }
 
 .status-icon:hover {
@@ -1166,6 +1177,7 @@ export default defineComponent({
 .status-icon.icon-disabled {
   cursor: default;
   opacity: 0.5;
+  pointer-events: auto; /* Still allow hover for tooltip even when disabled */
 }
 
 .status-icon.icon-disabled:hover {
