@@ -8382,6 +8382,74 @@ async function ensureAllUserBuckets() {
       
       await cacheManager.cacheAgents(transformedAgents);
       console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
+      
+      // Create new maia_agents database and populate with DO API data
+      console.log('🔄 [STARTUP] Creating new maia_agents database with DigitalOcean API data...');
+      
+      // Ensure the maia_agents database exists
+      try {
+        await couchDBClient.createDatabase('maia_agents');
+        console.log('✅ [STARTUP] Created maia_agents database');
+      } catch (createError) {
+        if (createError.message.includes('already exists')) {
+          console.log('✅ [STARTUP] maia_agents database already exists');
+        } else {
+          console.warn('⚠️ [STARTUP] Failed to create maia_agents database:', createError.message);
+        }
+      }
+      
+      // Populate maia_agents with DO API data using agent name as _id
+      let agentDocsCreated = 0;
+      let agentDocsUpdated = 0;
+      
+      for (const agent of rawAgents) {
+        try {
+          const agentDoc = {
+            _id: agent.name, // Use agent name as _id since they're unique
+            agentId: agent.id,
+            agentName: agent.name,
+            status: agent.status || 'unknown',
+            model: agent.model || 'unknown',
+            createdAt: agent.created_at || new Date().toISOString(),
+            updatedAt: agent.updated_at || new Date().toISOString(),
+            knowledgeBases: agent.knowledge_bases || [], // Array of attached KB IDs
+            // Add all other fields from DO API
+            ...agent
+          };
+          
+          // Try to save the document
+          await couchDBClient.saveDocument('maia_agents', agentDoc);
+          agentDocsCreated++;
+          
+        } catch (saveError) {
+          if (saveError.message.includes('conflict')) {
+            // Document already exists, update it
+            try {
+              const existingDoc = await couchDBClient.getDocument('maia_agents', agent.name);
+              const updatedDoc = {
+                ...existingDoc,
+                agentId: agent.id,
+                agentName: agent.name,
+                status: agent.status || 'unknown',
+                model: agent.model || 'unknown',
+                updatedAt: agent.updated_at || new Date().toISOString(),
+                knowledgeBases: agent.knowledge_bases || [],
+                // Update with latest DO API data
+                ...agent
+              };
+              await couchDBClient.saveDocument('maia_agents', updatedDoc);
+              agentDocsUpdated++;
+            } catch (updateError) {
+              console.warn(`⚠️ [STARTUP] Failed to update agent ${agent.name}:`, updateError.message);
+            }
+          } else {
+            console.warn(`⚠️ [STARTUP] Failed to save agent ${agent.name}:`, saveError.message);
+          }
+        }
+      }
+      
+      console.log(`✅ [STARTUP] Populated maia_agents database: ${agentDocsCreated} created, ${agentDocsUpdated} updated`);
+      
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
