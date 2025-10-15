@@ -6993,26 +6993,14 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Using project: ${projectId}`);
     
-    // Step 3b: Get database_id from genai-driftwood database
-    let databaseId = null;
-    try {
-      const databasesResponse = await doRequest('/v2/gen-ai/databases');
-      const databases = databasesResponse.databases || databasesResponse.data?.databases || [];
-      
-      // Find genai-driftwood database
-      const driftwoodDb = databases.find(db => 
-        db.name && db.name.toLowerCase().includes('genai-driftwood')
-      );
-      
-      if (driftwoodDb) {
-        databaseId = driftwoodDb.uuid;
-        console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
-      } else {
-        console.warn(`🤖 [AUTO PS] ⚠️ genai-driftwood database not found, proceeding without database_id`);
-      }
-    } catch (dbError) {
-      console.error(`🤖 [AUTO PS] ❌ Failed to get databases:`, dbError.message);
+    // Step 3b: Get database_id from global cache (set at startup)
+    const databaseId = global.genaiDriftwoodId;
+    
+    if (!databaseId) {
+      throw new Error('genai-driftwood database ID not available - server startup may have failed');
     }
+    
+    console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
     
     // Step 4: Copy file from archived/ to root folder for indexing
     console.log(`🤖 [AUTO PS] Copying file from archived/ to root for indexing`);
@@ -9078,6 +9066,38 @@ app.listen(PORT, async () => {
       
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
+    }
+    
+    // Fetch and cache GenAI databases (CRITICAL for KB creation)
+    let genaiDriftwoodId = null;
+    try {
+      console.log(`🔄 [STARTUP] Fetching GenAI databases...`);
+      const databasesResponse = await doRequest('/v2/gen-ai/databases');
+      const databases = databasesResponse.databases || databasesResponse.data?.databases || [];
+      
+      console.log(`📊 [STARTUP] Found ${databases.length} GenAI database(s)`);
+      
+      // REQUIREMENT: Must have exactly 1 database (genai-driftwood)
+      if (databases.length !== 1) {
+        throw new Error(`❌ CRITICAL: Expected exactly 1 GenAI database, found ${databases.length}. This is a configuration error!`);
+      }
+      
+      const database = databases[0];
+      genaiDriftwoodId = database.uuid;
+      
+      // Verify it's genai-driftwood
+      if (!database.name || !database.name.toLowerCase().includes('genai-driftwood')) {
+        throw new Error(`❌ CRITICAL: Database found is not genai-driftwood: ${database.name}`);
+      }
+      
+      console.log(`✅ [STARTUP] Using database: ${database.name} (${genaiDriftwoodId})`);
+      
+      // Cache the database ID globally for KB creation
+      global.genaiDriftwoodId = genaiDriftwoodId;
+      
+    } catch (databaseError) {
+      console.error(`❌ [STARTUP] CRITICAL ERROR - Cannot fetch GenAI database:`, databaseError.message);
+      throw databaseError; // Stop server startup - this is critical!
     }
     
     // Clean up stale agent assignments in user documents (STARTUP ONLY - not on every request)
