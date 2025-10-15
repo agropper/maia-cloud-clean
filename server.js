@@ -9068,52 +9068,11 @@ app.listen(PORT, async () => {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
-    // Get genai-driftwood database ID from cached agents (CRITICAL for KB creation)
-    // Note: /v2/gen-ai/databases endpoint returns 404, so we get database_id from agents instead
-    let genaiDriftwoodId = null;
-    try {
-      console.log(`🔄 [STARTUP] Getting genai-driftwood database ID from agents...`);
-      
-      // Get agents from cache (just populated above)
-      const cachedAgents = cacheManager.getCachedAgentsSync();
-      
-      // All agents in the same project share the same database
-      // Get database_id from any agent
-      if (cachedAgents && cachedAgents.length > 0) {
-        const firstAgent = cachedAgents[0];
-        genaiDriftwoodId = firstAgent.database?.uuid || firstAgent.database_id;
-        
-        if (!genaiDriftwoodId) {
-          throw new Error(`❌ CRITICAL: Agents found but no database_id available. First agent: ${firstAgent.name}`);
-        }
-        
-        // Verify all agents use the same database (validation)
-        const databaseIds = new Set();
-        cachedAgents.forEach(agent => {
-          const dbId = agent.database?.uuid || agent.database_id;
-          if (dbId) databaseIds.add(dbId);
-        });
-        
-        console.log(`📊 [STARTUP] Found ${databaseIds.size} unique database ID(s) across ${cachedAgents.length} agents`);
-        
-        // REQUIREMENT: All agents must use exactly 1 database
-        if (databaseIds.size !== 1) {
-          throw new Error(`❌ CRITICAL: Expected all agents to use 1 database, found ${databaseIds.size} different databases!`);
-        }
-        
-        console.log(`✅ [STARTUP] Using database from agents: genai-driftwood (${genaiDriftwoodId})`);
-        
-        // Cache the database ID globally for KB creation
-        global.genaiDriftwoodId = genaiDriftwoodId;
-        
-      } else {
-        throw new Error(`❌ CRITICAL: No agents found - cannot determine database_id for KB creation`);
-      }
-      
-    } catch (databaseError) {
-      console.error(`❌ [STARTUP] CRITICAL ERROR - Cannot get database ID:`, databaseError.message);
-      throw databaseError; // Stop server startup - this is critical!
-    }
+    // Set genai-driftwood database ID (CRITICAL for KB creation)
+    // All knowledge bases use the shared genai-driftwood database
+    const genaiDriftwoodId = '881761c6-e72d-4f35-a48e-b320cd1f46e4';
+    global.genaiDriftwoodId = genaiDriftwoodId;
+    console.log(`✅ [STARTUP] Using database: genai-driftwood (${genaiDriftwoodId})`);
     
     // Clean up stale agent assignments in user documents (STARTUP ONLY - not on every request)
     try {
