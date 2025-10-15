@@ -6965,23 +6965,23 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     let embeddingModelId = null;
     try {
       const modelsResponse = await doRequest('/v2/gen-ai/models');
-      const models = modelsResponse.models || [];
+      const models = modelsResponse.models || modelsResponse.data?.models || [];
       
-      // Find embedding models (models with "gte" in lowercase name)
+      // Find embedding models (same logic as other KB creation endpoints)
+      // These are typically text embedding models
       const embeddingModels = models.filter(model => 
-        model.name && 
-        model.name.toLowerCase().includes('gte') &&
-        model.capabilities &&
-        model.capabilities.some(cap => 
-          cap.toLowerCase().includes('embedding') || 
-          cap.toLowerCase().includes('knowledge')
+        model.name && (
+          model.name.toLowerCase().includes('embedding') ||
+          model.name.toLowerCase().includes('gte') ||
+          model.name.toLowerCase().includes('mini') ||
+          model.name.toLowerCase().includes('mpnet')
         )
       );
       
       if (embeddingModels.length > 0) {
-        // Prefer GTE Large EN v1.5 as it's the high-quality embedding model
+        // Prefer GTE Large as it's the high-quality embedding model
         const preferredModel = embeddingModels.find(model => 
-          model.name.includes('GTE Large EN v1.5')
+          model.name.toLowerCase().includes('gte large')
         ) || embeddingModels[0];
         
         embeddingModelId = preferredModel.uuid;
@@ -7004,6 +7004,11 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     // Extract user folder from bucketKey (e.g., "fri1/archived/file.pdf" -> "fri1/")
     const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
     
+    // Get bucket configuration from environment
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    const bucketRegion = 'tor1'; // Toronto region
+    
     // Create KB with the user's folder as data source
     const kbData = {
       name: kbName,
@@ -7011,11 +7016,11 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       datasources: [{
         spaces_data_source: {
           name: `${kbName}-datasource`,
-          bucket_name: process.env.DIGITALOCEAN_SPACE_NAME,
-          bucket_region: process.env.DIGITALOCEAN_SPACE_REGION,
+          bucket_name: bucketName,
+          bucket_region: bucketRegion,
           bucket_prefix: userFolder,
-          access_key_id: process.env.DIGITALOCEAN_SPACE_KEY,
-          secret_access_key: process.env.DIGITALOCEAN_SPACE_SECRET
+          access_key_id: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+          secret_access_key: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
         }
       }]
     };
