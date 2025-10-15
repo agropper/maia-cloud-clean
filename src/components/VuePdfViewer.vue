@@ -106,9 +106,9 @@ const isLoading = ref(false)
 const pdfUrl = computed(() => {
   if (!props.file) return ''
   
-  // Use hardcoded URL for testing
+  // Use bucketKey to construct proxy URL for imported files
   if (props.file.bucketKey) {
-    return `/api/proxy-pdf/fri1/archived/GROPPER_ADRIAN_09_24_25_1314.PDF`
+    return `/api/proxy-pdf/${props.file.bucketKey}`
   }
   
   if (props.file.fileUrl) {
@@ -270,13 +270,9 @@ watch(totalPages, (newTotal, oldTotal) => {
   console.log('📄 Vue PDF: Total pages changed from', oldTotal, 'to', newTotal)
 })
 
-// Watch for currentPage changes to sync pageInput (only when not empty)
+// Watch for currentPage changes (for debugging)
 watch(currentPage, (newPage, oldPage) => {
   console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
-  // Only update pageInput if it's empty (to avoid overriding user input)
-  if (pageInput.value === '') {
-    pageInput.value = newPage
-  }
 })
 </script>
 
