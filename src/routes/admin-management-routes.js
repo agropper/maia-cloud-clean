@@ -1305,6 +1305,33 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
               
               console.log(`✅ [AUTO-AGENT] Agent created successfully: ${newAgentId}`);
               
+              // Save new agent to maia_agents database
+              try {
+                const agentDoc = {
+                  _id: agentName, // Use agent name as _id (unique)
+                  agentId: newAgentId,
+                  agentName: agentName,
+                  status: newAgent.status || 'deploying',
+                  model: newAgent.model || model,
+                  createdAt: newAgent.created_at || new Date().toISOString(),
+                  updatedAt: newAgent.updated_at || new Date().toISOString(),
+                  knowledgeBases: newAgent.knowledge_bases || [],
+                  userId: userId, // Track which user owns this agent
+                  ...newAgent // Include all DO API fields
+                };
+                
+                await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
+                
+                // Also update the agents cache in memory
+                const currentAgentsCache = cacheManager.getCachedAgentsSync();
+                currentAgentsCache.push(newAgent);
+                cacheManager.setCached('agents', 'all', currentAgentsCache);
+                
+                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
+              } catch (saveAgentError) {
+                console.error(`❌ [AUTO-AGENT] Failed to save agent to maia_agents:`, saveAgentError.message);
+              }
+              
               // Create API key for the agent
               let agentApiKey = null;
               try {
