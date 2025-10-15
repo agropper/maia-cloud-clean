@@ -98,7 +98,7 @@ const props = defineProps<Props>()
 const currentPage = ref(1)
 const totalPages = ref(0)
 const scale = ref(1.0)
-const pageInput = ref(1)
+const pageInput = ref('')
 const pdfDocument = ref(null)
 const isLoading = ref(false)
 
