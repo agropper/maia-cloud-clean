@@ -5017,16 +5017,9 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Check cache first
-    let template = agentManagementTemplates.get(userId);
-    
-    // If not in cache, build it
-    if (!template) {
-      console.log(`[TEMPLATE] Cache miss for ${userId}, building template`);
-      template = await buildAgentManagementTemplate(userId);
-    } else {
-      console.log(`[TEMPLATE] Returning cached template for ${userId}`);
-    }
+    // Always rebuild template to ensure fresh data
+    console.log(`[TEMPLATE] Rebuilding fresh template for ${userId}`);
+    const template = await buildAgentManagementTemplate(userId);
     
     if (!template) {
       return res.status(404).json({ error: 'User not found or template build failed' });
