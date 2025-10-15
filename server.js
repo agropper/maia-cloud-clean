@@ -7014,7 +7014,37 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.error(`🤖 [AUTO PS] ❌ Failed to get databases:`, dbError.message);
     }
     
-    // Step 4: Get embedding model ID (required for KB creation)
+    // Step 4: Copy file from archived/ to root folder for indexing
+    console.log(`🤖 [AUTO PS] Copying file from archived/ to root for indexing`);
+    const { S3Client, CopyObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    
+    // Copy from archived/ to root (e.g., wed15/archived/file.pdf -> wed15/file.pdf)
+    const sourceKey = bucketKey; // e.g., "wed15/archived/file.pdf"
+    const destKey = sourceKey.replace('/archived/', '/'); // e.g., "wed15/file.pdf"
+    
+    const copyCommand = new CopyObjectCommand({
+      Bucket: bucketName,
+      CopySource: `${bucketName}/${sourceKey}`,
+      Key: destKey
+    });
+    
+    await s3Client.send(copyCommand);
+    console.log(`🤖 [AUTO PS] Copied file to root: ${sourceKey} -> ${destKey}`);
+    
+    // Step 5: Get embedding model ID (required for KB creation)
     let embeddingModelId = null;
     try {
       const modelsResponse = await doRequest('/v2/gen-ai/models');
@@ -7050,7 +7080,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('No embedding model available - cannot create knowledge base');
     }
     
-    // Step 5: Create Knowledge Base
+    // Step 6: Create Knowledge Base
     const kbName = `${userId}-kb-${Date.now()}`;
     console.log(`🤖 [AUTO PS] Creating KB "${kbName}" from file ${fileName}`);
     
@@ -7093,7 +7123,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 6: Get KB details to extract datasource UUID (with retry for async creation)
+    // Step 7: Get KB details to extract datasource UUID (with retry for async creation)
     console.log(`🤖 [AUTO PS] Getting KB details for indexing`);
     let kbFull = null;
     let dataSourceUuid = null;
@@ -7128,7 +7158,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Starting indexing with datasource: ${dataSourceUuid}`);
     
-    // Step 7: Start indexing (MUST index before attaching to agent)
+    // Step 8: Start indexing (MUST index before attaching to agent)
     const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
       method: 'POST',
       body: JSON.stringify({
@@ -7139,7 +7169,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     const indexingJob = indexingResponse.data || indexingResponse;
     const jobId = indexingJob.uuid || indexingJob.id;
     
-    // Step 8: Poll for indexing completion
+    // Step 9: Poll for indexing completion
     console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
     let indexingComplete = false;
     let attempts = 0;
@@ -7178,14 +7208,26 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('Indexing timeout after 5 minutes');
     }
     
-    // Step 9: Attach KB to agent (AFTER indexing completes)
+    // Step 10: Attach KB to agent (AFTER indexing completes)
     console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
     await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
       method: 'POST'
     });
     console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
-    // Step 10: Update maia_kb document with file and token info
+    // Step 11: Clean up copied file from root folder
+    console.log(`🤖 [AUTO PS] Cleaning up temp file from root folder`);
+    const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: destKey
+    });
+    
+    await s3Client.send(deleteCommand);
+    console.log(`🤖 [AUTO PS] Cleaned up temp file: ${destKey}`);
+    
+    // Step 12: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
@@ -7200,7 +7242,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 11: Generate patient summary via Personal AI
+    // Step 13: Generate patient summary via Personal AI
     console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
     
     // Make request to Personal AI with the patient summary prompt
@@ -7220,7 +7262,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Patient summary generated (${summary.length} characters)`);
     
-    // Step 12: Save patient summary to user document
+    // Step 14: Save patient summary to user document
     console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
     userDoc.patientSummary = {
       content: summary,
@@ -7233,7 +7275,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     userDoc.updatedAt = new Date().toISOString();
     await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
-    // Step 13: Rebuild agent template to update status icons
+    // Step 15: Rebuild agent template to update status icons
     console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
     await buildAgentManagementTemplate(userId);
     
