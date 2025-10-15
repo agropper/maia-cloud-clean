@@ -887,6 +887,7 @@ const triggerUploadFile = (file: File) => {
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
       handleOpenKBManager,
+      handleImportFile,
       handleOpenPublicKBManager,
       handleSupportRequested,
       checkForKnowledgeBaseWelcome,
