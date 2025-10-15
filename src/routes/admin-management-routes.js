@@ -894,6 +894,38 @@ router.get('/users', requireAdminAuth, async (req, res) => {
     // Filter cached users using shared filter function
     let allUsers = cachedUsers.filter(isValidUserForList);
     
+    // Validate and fix stale agent assignments before processing
+    const cachedAgents = cacheManager.getCachedAgentsSync();
+    for (const user of allUsers) {
+      if (user.assignedAgentId) {
+        const agentExists = cachedAgents.some(agent => 
+          (agent.uuid || agent.id) === user.assignedAgentId
+        );
+        
+        if (!agentExists) {
+          // Agent deleted from DO - update database to clear stale assignment
+          console.log(`🔄 [ADMIN-USERS] Clearing deleted agent from user ${user.userId}: ${user.assignedAgentName}`);
+          
+          user.assignedAgentId = null;
+          user.assignedAgentName = null;
+          user.agentAssignedAt = null;
+          user.agentApiKey = null;
+          user.agentDeployedAt = null;
+          
+          // Reset workflow stage
+          if (user.workflowStage === 'agent_assigned' || user.workflowStage === 'approved') {
+            user.workflowStage = 'request_email_sent';
+          }
+          
+          user.updatedAt = new Date().toISOString();
+          
+          // Save updated document to database
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', user);
+          console.log(`✅ [ADMIN-USERS] Updated user ${user.userId} - cleared deleted agent, reset workflow to ${user.workflowStage}`);
+        }
+      }
+    }
+    
     // If cache is empty (server just started or cache was cleared), rebuild from database
     if (allUsers.length === 0) {
       console.log(`🔄 [ADMIN-USERS] Cache empty - fetching users from database`);
