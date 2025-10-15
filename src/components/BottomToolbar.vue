@@ -459,6 +459,10 @@ export default defineComponent({
       type: Function as PropType<() => void>,
       required: true
     },
+    triggerFileImport: {
+      type: Number,
+      default: 0
+    },
     placeholderText: {
       type: String,
       default: 'Message Anthropic',
@@ -907,6 +911,14 @@ export default defineComponent({
 
     const hasPatientSummary = computed(() => {
       return agentTemplate.value?.summaryStatus?.hasSummary || false
+    })
+
+    // Watch for file import trigger from KB Welcome Modal
+    watch(() => props.triggerFileImport, (newValue) => {
+      if (newValue > 0) {
+        console.log('[*] File import triggered from KB Welcome Modal')
+        pickFiles()
+      }
     })
 
     return {

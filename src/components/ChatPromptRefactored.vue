@@ -93,8 +93,8 @@ export default defineComponent({
     const { loadGroupChat } = useGroupChat();
     const localStorageKey = "noshuri";
     const popupRef = ref<InstanceType<typeof PopUp> | null>(null);
-    const bottomToolbarRef = ref<InstanceType<typeof BottomToolbar> | null>(null);
     const showSavedChatsDialog = ref(false);
+    const triggerFileImport = ref(0); // Increment to trigger file import
     const showAgentManagementDialog = ref(false);
     const showPasskeyAuthDialog = ref(false);
     const showDeepLinkUserModal = ref(false);
@@ -356,10 +356,8 @@ export default defineComponent({
     // Handle import file from KB Welcome Modal
     const handleImportFile = () => {
       showKnowledgeBaseWelcomeModal.value = false;
-      // Trigger file picker using ref to BottomToolbar
-      if (bottomToolbarRef.value && bottomToolbarRef.value.pickFiles) {
-        bottomToolbarRef.value.pickFiles();
-      }
+      // Trigger file import by incrementing the trigger value
+      triggerFileImport.value++;
     };
 
     // Handle opening Agent Manager from Public User KB Welcome Modal
@@ -886,6 +884,7 @@ const triggerUploadFile = (file: File) => {
       showNewUserWelcomeModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
+      triggerFileImport,
       handleOpenKBManager,
       handleImportFile,
       handleOpenPublicKBManager,
@@ -988,7 +987,6 @@ const triggerUploadFile = (file: File) => {
 
     <!-- Bottom Toolbar -->
     <BottomToolbar
-      ref="bottomToolbarRef"
       :appState="appState"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
@@ -1001,6 +999,7 @@ const triggerUploadFile = (file: File) => {
       :triggerJWT="showJWT"
       :triggerLoadSavedChats="() => { showSavedChatsDialog = true; }"
       :triggerAgentManagement="triggerAgentManagement"
+      :triggerFileImport="triggerFileImport"
       :clearLocalStorageKeys="clearLocalStorageKeys"
       @write-message="writeMessage"
       @show-saved-chats="showSavedChatsDialog = true"
