@@ -8575,19 +8575,28 @@ async function ensureAllUserBuckets() {
               console.warn(`⚠️ [STARTUP] Skipping KB with invalid ID: ${orphanedKB._id}`);
               continue;
             }
+            
+            // Check if document actually exists before trying to delete
             try {
-              // Use bulk delete with _deleted flag instead of deleteDocument
-              await couchDBClient.bulkDelete('maia_kb', [{ _id: orphanedKB._id, _rev: orphanedKB._rev, _deleted: true }]);
-              console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
-              deletedCount++;
-            } catch (deleteError) {
-              // If bulk delete fails, try direct delete as fallback
-              try {
-                await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
-                console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
-                deletedCount++;
-              } catch (fallbackError) {
-                console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, fallbackError.message);
+              const docExists = await couchDBClient.getDocument('maia_kb', orphanedKB._id);
+              if (docExists) {
+                // Document exists, proceed with deletion
+                try {
+                  await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
+                  console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
+                  deletedCount++;
+                } catch (deleteError) {
+                  console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, deleteError.message);
+                }
+              } else {
+                console.log(`ℹ️ [STARTUP] KB ${orphanedKB._id} already deleted or doesn't exist`);
+              }
+            } catch (checkError) {
+              // Document doesn't exist (404 error), which is fine
+              if (checkError.statusCode === 404) {
+                console.log(`ℹ️ [STARTUP] KB ${orphanedKB._id} already deleted or doesn't exist`);
+              } else {
+                console.warn(`⚠️ [STARTUP] Error checking KB ${orphanedKB._id}:`, checkError.message);
               }
             }
           }
