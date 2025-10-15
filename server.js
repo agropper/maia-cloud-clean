@@ -8221,7 +8221,9 @@ async function ensureAllUserBuckets() {
       console.log('🔄 [STARTUP] Syncing knowledge bases with DigitalOcean API source of truth...');
       
       // 1. Get knowledge bases from DigitalOcean API (source of truth)
+      console.log('🔄 [STARTUP] Fetching knowledge bases from DigitalOcean API...');
       const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
+      console.log('✅ [STARTUP] Successfully fetched knowledge bases from DO API');
       const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
       // 1.5. Create new maia_kb database and populate with DO API data
@@ -8376,7 +8378,8 @@ async function ensureAllUserBuckets() {
       console.log(`✅ [STARTUP] Loaded ${transformedKBs.length} knowledge bases from DigitalOcean API and cached for Admin2`);
       
     } catch (error) {
-      console.warn('⚠️ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
+      console.error('❌ [STARTUP] Failed to sync knowledge bases with DigitalOcean API:', error.message);
+      console.error('❌ [STARTUP] Full error:', error);
       
       // Fallback to local database if DO API fails
       try {
