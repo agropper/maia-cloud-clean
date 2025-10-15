@@ -144,7 +144,8 @@ export default {
       handler() {
         // Reset display mode when file changes
         this.displayMode = 'auto'
-        if (this.isVisible && this.isPDF) {
+        if (this.isVisible && this.isPDF && !this.useVuePdfViewer) {
+          // Only load PDF with old system if VuePdfViewer is not being used
           this.$nextTick(() => this.loadPDF())
         }
       },
