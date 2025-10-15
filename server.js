@@ -8452,17 +8452,18 @@ async function ensureAllUserBuckets() {
       
       // Cleanup: Remove agents that exist in Cloudant but not in DO API
       try {
-        const existingAgents = await cacheManager.getAllDocuments(couchDBClient, 'maia_agents');
+        // Get all documents directly from CouchDB to ensure we only get existing ones
+        const allDocsResponse = await couchDBClient.db.use('maia_agents').list();
         const doAgentNames = new Set(rawAgents.map(agent => agent.name));
         
         // Find agents in database that are NOT in DO API
-        const agentsToDelete = existingAgents.filter(doc => {
+        const agentsToDelete = allDocsResponse.rows.filter(doc => {
           // Skip invalid documents
-          if (!doc._id || doc._id === 'undefined') {
+          if (!doc.id || doc.id === 'undefined') {
             return false;
           }
           // Check if this agent exists in DO API
-          return !doAgentNames.has(doc._id);
+          return !doAgentNames.has(doc.id);
         });
         
         if (agentsToDelete.length > 0) {
@@ -8470,11 +8471,11 @@ async function ensureAllUserBuckets() {
           let deletedCount = 0;
           for (const agentToDelete of agentsToDelete) {
             try {
-              await couchDBClient.deleteDocument('maia_agents', agentToDelete._id);
-              console.log(`🟡 [STARTUP] Deleted agent: ${agentToDelete._id}`);
+              await couchDBClient.deleteDocument('maia_agents', agentToDelete.id);
+              console.log(`🟡 [STARTUP] Deleted agent: ${agentToDelete.id}`);
               deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete agent ${agentToDelete._id}:`, deleteError.message);
+              console.warn(`⚠️ [STARTUP] Failed to delete agent ${agentToDelete.id}:`, deleteError.message);
             }
           }
           console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} agents removed`);
@@ -8566,17 +8567,18 @@ async function ensureAllUserBuckets() {
       
       // Cleanup: Remove knowledge bases that exist in Cloudant but not in DO API
       try {
-        const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+        // Get all documents directly from CouchDB to ensure we only get existing ones
+        const allDocsResponse = await couchDBClient.db.use('maia_kb').list();
         const doKBNames = new Set(doKBs.map(kb => kb.name));
         
         // Find KBs in database that are NOT in DO API
-        const kbsToDelete = existingKBs.filter(doc => {
+        const kbsToDelete = allDocsResponse.rows.filter(doc => {
           // Skip invalid documents
-          if (!doc._id || doc._id === 'undefined') {
+          if (!doc.id || doc.id === 'undefined') {
             return false;
           }
           // Check if this KB exists in DO API
-          return !doKBNames.has(doc._id);
+          return !doKBNames.has(doc.id);
         });
         
         if (kbsToDelete.length > 0) {
@@ -8584,11 +8586,11 @@ async function ensureAllUserBuckets() {
           let deletedCount = 0;
           for (const kbToDelete of kbsToDelete) {
             try {
-              await couchDBClient.deleteDocument('maia_kb', kbToDelete._id);
-              console.log(`🟡 [STARTUP] Deleted knowledge base: ${kbToDelete._id}`);
+              await couchDBClient.deleteDocument('maia_kb', kbToDelete.id);
+              console.log(`🟡 [STARTUP] Deleted knowledge base: ${kbToDelete.id}`);
               deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete KB ${kbToDelete._id}:`, deleteError.message);
+              console.warn(`⚠️ [STARTUP] Failed to delete KB ${kbToDelete.id}:`, deleteError.message);
             }
           }
           console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} knowledge bases removed`);
