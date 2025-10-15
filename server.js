@@ -7073,13 +7073,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 6: Attach KB to agent
-    console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
-    await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
-      method: 'POST'
-    });
-    
-    // Step 7: Start indexing
+    // Step 6: Start indexing (MUST index before attaching to agent)
     console.log(`🤖 [AUTO PS] Starting indexing for KB ${kbId}`);
     const dataSourceUuid = kb.datasources[0].spaces_data_source.uuid;
     const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
@@ -7092,7 +7086,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     const indexingJob = indexingResponse.data || indexingResponse;
     const jobId = indexingJob.uuid || indexingJob.id;
     
-    // Step 8: Poll for indexing completion
+    // Step 7: Poll for indexing completion
     console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
     let indexingComplete = false;
     let attempts = 0;
@@ -7130,6 +7124,13 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     if (!indexingComplete) {
       throw new Error('Indexing timeout after 5 minutes');
     }
+    
+    // Step 8: Attach KB to agent (AFTER indexing completes)
+    console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
+    await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
+      method: 'POST'
+    });
+    console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
     // Step 9: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
