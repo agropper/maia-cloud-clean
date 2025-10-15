@@ -456,6 +456,15 @@ export class CacheManager {
   }
 
   /**
+   * Get cached agents data synchronously (no TTL check, for fast validation)
+   * Used by processUserDataSync to validate agent existence
+   */
+  getCachedAgentsSync() {
+    const cached = this.getCached('agents', 'all');
+    return cached || [];
+  }
+
+  /**
    * Get cached knowledge bases data
    */
   getCachedKnowledgeBases() {

@@ -1751,6 +1751,21 @@ function processUserDataSync(user) {
   let assignedAgentName = user.assignedAgentName || null;
   let agentAssignedAt = user.agentAssignedAt || null;
   
+  // Validate agent exists in maia_agents cache (which is synced with DO API at startup)
+  if (assignedAgentId) {
+    const cachedAgents = cacheManager.getCachedAgentsSync();
+    const agentExists = cachedAgents.some(agent => 
+      (agent.uuid || agent.id) === assignedAgentId
+    );
+    
+    if (!agentExists) {
+      // Agent was deleted from DO - clear from user display
+      assignedAgentId = null;
+      assignedAgentName = null;
+      agentAssignedAt = null;
+    }
+  }
+  
   // If we have ownedAgents but no assignedAgentId, use the first owned agent
   if (user.ownedAgents && user.ownedAgents.length > 0 && !assignedAgentId) {
     const firstAgent = user.ownedAgents[0];
