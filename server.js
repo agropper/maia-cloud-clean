@@ -6982,40 +6982,13 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] User has agent: ${agentId}`);
     
-    // Step 3: Get agent details from cache (agent might not be in DO API if deleted)
-    // First try cache, then fall back to API
-    let agentData = null;
-    let projectId = null;
-    
-    // Try to get from cache first
-    const cachedAgents = await cacheManager.getCachedAgents();
-    const cachedAgent = cachedAgents.find(a => (a.uuid || a.id) === agentId);
-    
-    if (cachedAgent) {
-      console.log(`🤖 [AUTO PS] Found agent in cache: ${cachedAgent.name}`);
-      projectId = cachedAgent.project_id;
-    } else {
-      // Agent not in cache, try DO API
-      try {
-        const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-        agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
-        projectId = agentData.project_id;
-      } catch (agentError) {
-        console.error(`🤖 [AUTO PS] ❌ Agent not found in cache or DO API: ${agentId}`);
-        throw new Error(`Agent ${agentId} not found - it may have been deleted from DigitalOcean`);
-      }
-    }
+    // Step 3: Get agent details to extract project_id
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+    const projectId = agentData.project_id;
     
     if (!projectId) {
-      // If no project_id from agent, get from any existing agent
-      console.warn(`🤖 [AUTO PS] ⚠️ Agent has no project_id, getting from other agents`);
-      const allAgents = await cacheManager.getCachedAgents();
-      if (allAgents.length > 0) {
-        projectId = allAgents[0].project_id;
-        console.log(`🤖 [AUTO PS] Using project_id from first available agent: ${projectId}`);
-      } else {
-        throw new Error('No agents found - cannot determine project_id for KB creation');
-      }
+      throw new Error('Agent does not have a project_id - cannot create knowledge base');
     }
     
     console.log(`🤖 [AUTO PS] Using project: ${projectId}`);
