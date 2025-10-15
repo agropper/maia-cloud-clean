@@ -8384,15 +8384,15 @@ async function ensureAllUserBuckets() {
       console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
       
       // Create new maia_agents database and populate with DO API data
-      console.log('🔄 [STARTUP] Creating new maia_agents database with DigitalOcean API data...');
+      console.log('🔄 [STARTUP] Ensuring maia_agents database exists...');
       
       // Ensure the maia_agents database exists
       try {
         await couchDBClient.createDatabase('maia_agents');
-        console.log('✅ [STARTUP] Created maia_agents database');
+        console.log('✅ [STARTUP] Created new maia_agents database');
       } catch (createError) {
         if (createError.message.includes('already exists')) {
-          console.log('✅ [STARTUP] maia_agents database already exists');
+          console.log('✅ [STARTUP] maia_agents database ready (already exists)');
         } else {
           console.warn('⚠️ [STARTUP] Failed to create maia_agents database:', createError.message);
         }
@@ -8501,15 +8501,15 @@ async function ensureAllUserBuckets() {
       const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
       // 1.5. Create new maia_kb database and populate with DO API data
-      console.log('🔄 [STARTUP] Creating new maia_kb database with DigitalOcean API data...');
+      console.log('🔄 [STARTUP] Ensuring maia_kb database exists...');
       
       // Ensure the maia_kb database exists
       try {
         await couchDBClient.createDatabase('maia_kb');
-        console.log('✅ [STARTUP] Created maia_kb database');
+        console.log('✅ [STARTUP] Created new maia_kb database');
       } catch (createError) {
         if (createError.message.includes('already exists')) {
-          console.log('✅ [STARTUP] maia_kb database already exists');
+          console.log('✅ [STARTUP] maia_kb database ready (already exists)');
         } else {
           console.warn('⚠️ [STARTUP] Failed to create maia_kb database:', createError.message);
         }
