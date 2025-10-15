@@ -8450,6 +8450,30 @@ async function ensureAllUserBuckets() {
       
       console.log(`✅ [STARTUP] Populated maia_agents database: ${agentDocsCreated} created, ${agentDocsUpdated} updated`);
       
+      // Cleanup: Remove agents that exist in Cloudant but not in DO API
+      try {
+        const existingAgents = await cacheManager.getAllDocuments(couchDBClient, 'maia_agents');
+        const doAgentNames = new Set(rawAgents.map(agent => agent.name));
+        const orphanedAgents = existingAgents.filter(doc => !doAgentNames.has(doc._id));
+        
+        if (orphanedAgents.length > 0) {
+          console.log(`🔄 [STARTUP] Cleaning up ${orphanedAgents.length} orphaned agents from maia_agents database...`);
+          for (const orphanedAgent of orphanedAgents) {
+            try {
+              await couchDBClient.deleteDocument('maia_agents', orphanedAgent._id);
+              console.log(`🟡 [STARTUP] Deleted orphaned agent: ${orphanedAgent._id}`);
+            } catch (deleteError) {
+              console.warn(`⚠️ [STARTUP] Failed to delete orphaned agent ${orphanedAgent._id}:`, deleteError.message);
+            }
+          }
+          console.log(`✅ [STARTUP] Cleanup completed: ${orphanedAgents.length} orphaned agents removed`);
+        } else {
+          console.log('✅ [STARTUP] No orphaned agents found in maia_agents database');
+        }
+      } catch (cleanupError) {
+        console.warn('⚠️ [STARTUP] Failed to cleanup orphaned agents:', cleanupError.message);
+      }
+      
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
@@ -8528,6 +8552,30 @@ async function ensureAllUserBuckets() {
       }
       
       console.log(`✅ [STARTUP] Populated maia_kb database: ${kbDocsCreated} created, ${kbDocsUpdated} updated`);
+      
+      // Cleanup: Remove knowledge bases that exist in Cloudant but not in DO API
+      try {
+        const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+        const doKBNames = new Set(doKBs.map(kb => kb.name));
+        const orphanedKBs = existingKBs.filter(doc => !doKBNames.has(doc._id));
+        
+        if (orphanedKBs.length > 0) {
+          console.log(`🔄 [STARTUP] Cleaning up ${orphanedKBs.length} orphaned knowledge bases from maia_kb database...`);
+          for (const orphanedKB of orphanedKBs) {
+            try {
+              await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
+              console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
+            } catch (deleteError) {
+              console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, deleteError.message);
+            }
+          }
+          console.log(`✅ [STARTUP] Cleanup completed: ${orphanedKBs.length} orphaned knowledge bases removed`);
+        } else {
+          console.log('✅ [STARTUP] No orphaned knowledge bases found in maia_kb database');
+        }
+      } catch (cleanupError) {
+        console.warn('⚠️ [STARTUP] Failed to cleanup orphaned knowledge bases:', cleanupError.message);
+      }
       
       // Continue with existing logic...
       
