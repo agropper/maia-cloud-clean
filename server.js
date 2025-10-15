@@ -7073,17 +7073,39 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 6: Get KB details to extract datasource UUID
+    // Step 6: Get KB details to extract datasource UUID (with retry for async creation)
     console.log(`🤖 [AUTO PS] Getting KB details for indexing`);
-    const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
-    const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
-    const kbFull = kbDetails.knowledge_base || kbDetails;
+    let kbFull = null;
+    let dataSourceUuid = null;
     
-    if (!kbFull.datasources || kbFull.datasources.length === 0) {
-      throw new Error('KB created but has no datasources - cannot start indexing');
+    // Wait a moment for DigitalOcean to finish creating datasources
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Try up to 3 times to get datasources (they might not be ready immediately)
+    for (let retryAttempt = 0; retryAttempt < 3; retryAttempt++) {
+      const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+      const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
+      kbFull = kbDetails.knowledge_base || kbDetails;
+      
+      console.log(`🤖 [AUTO PS] KB details attempt ${retryAttempt + 1}: datasources count = ${kbFull.datasources?.length || 0}`);
+      
+      if (kbFull.datasources && kbFull.datasources.length > 0) {
+        dataSourceUuid = kbFull.datasources[0].spaces_data_source.uuid;
+        console.log(`🤖 [AUTO PS] Found datasource UUID: ${dataSourceUuid}`);
+        break;
+      }
+      
+      if (retryAttempt < 2) {
+        console.log(`🤖 [AUTO PS] Datasources not ready yet, waiting 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
     
-    const dataSourceUuid = kbFull.datasources[0].spaces_data_source.uuid;
+    if (!dataSourceUuid) {
+      console.error(`🤖 [AUTO PS] ❌ KB details after retries:`, JSON.stringify(kbFull, null, 2));
+      throw new Error('KB created but datasources not available after 3 attempts (6 seconds)');
+    }
+    
     console.log(`🤖 [AUTO PS] Starting indexing with datasource: ${dataSourceUuid}`);
     
     // Step 7: Start indexing (MUST index before attaching to agent)
