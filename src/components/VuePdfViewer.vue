@@ -27,6 +27,29 @@
           :disable="currentPage >= totalPages"
           size="sm"
         />
+        
+        <!-- Page number input -->
+        <div class="page-input-container">
+          <q-input
+            v-model.number="pageInput"
+            type="number"
+            :min="1"
+            :max="totalPages"
+            dense
+            outlined
+            class="page-input"
+            @keyup.enter="goToPage"
+            @blur="goToPage"
+            placeholder="Page"
+          />
+          <q-btn 
+            icon="arrow_forward" 
+            @click="goToPage" 
+            size="sm"
+            flat
+            class="go-button"
+          />
+        </div>
         <q-btn 
           icon="zoom_out" 
           @click="zoomOut" 
@@ -76,6 +99,7 @@ const props = defineProps<Props>()
 const currentPage = ref(1)
 const totalPages = ref(0)
 const scale = ref(1.0)
+const pageInput = ref(1)
 const pdfDocument = ref(null)
 const isLoading = ref(false)
 
@@ -194,6 +218,20 @@ const zoomOut = () => {
   console.log('🔍 Vue PDF: Zoom out, scale now:', scale.value)
 }
 
+const goToPage = () => {
+  const targetPage = pageInput.value
+  console.log('📄 Vue PDF: Go to page clicked - target:', targetPage, 'current:', currentPage.value, 'total:', totalPages.value)
+  
+  if (targetPage >= 1 && targetPage <= totalPages.value) {
+    currentPage.value = targetPage
+    console.log('📄 Vue PDF: Navigated to page:', currentPage.value)
+  } else {
+    console.log('📄 Vue PDF: Invalid page number:', targetPage, ', must be between 1 and', totalPages.value)
+    // Reset input to current page
+    pageInput.value = currentPage.value
+  }
+}
+
 // Watch for file changes - this handles both initial load and file changes
 watch(() => props.file, (newFile, oldFile) => {
   console.log('📄 Vue PDF: File watcher triggered')
@@ -229,6 +267,12 @@ watch(scale, (newScale, oldScale) => {
 // Watch for totalPages changes to debug page count issues
 watch(totalPages, (newTotal, oldTotal) => {
   console.log('📄 Vue PDF: Total pages changed from', oldTotal, 'to', newTotal)
+})
+
+// Watch for currentPage changes to sync pageInput
+watch(currentPage, (newPage, oldPage) => {
+  console.log('📄 Vue PDF: Page changed from', oldPage, 'to', newPage)
+  pageInput.value = newPage
 })
 </script>
 
@@ -328,6 +372,33 @@ watch(totalPages, (newTotal, oldTotal) => {
   font-weight: 500;
   min-width: 60px;
   text-align: center;
+}
+
+.page-input-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-input {
+  width: 60px;
+}
+
+.page-input :deep(.q-field__control) {
+  min-height: 32px;
+  height: 32px;
+}
+
+.page-input :deep(.q-field__native) {
+  padding: 0 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.go-button {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
 }
 
 /* Responsive design */
