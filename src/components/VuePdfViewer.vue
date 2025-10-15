@@ -75,7 +75,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { VuePDF } from '@tato30/vue-pdf'
-import { QIcon, QBtn } from 'quasar'
+import { QIcon, QBtn, QInput } from 'quasar'
 import * as pdfjsLib from 'pdfjs-dist'
 
 // Configure PDF.js worker immediately when module loads
