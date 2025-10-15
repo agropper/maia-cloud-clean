@@ -8216,6 +8216,176 @@ async function ensureAllUserBuckets() {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
+    
+    const userIds = allUsers.map(user => user.userId || user._id);
+    const bucketChecks = [];
+    
+    for (const userId of userIds) {
+      // Include all users - deep link users also need bucket folders
+      bucketChecks.push(ensureUserBucket(userId));
+    }
+    
+    try {
+      await Promise.all(bucketChecks);
+      // Bucket checks completed - no logging needed
+    } catch (error) {
+      console.error('❌ [STARTUP] Error ensuring user buckets:', error);
+    }
+  }
+
+  // Helper function to ensure bucket folder for a specific user
+  async function ensureUserBucket(userId) {
+    try {
+      // Check if bucket exists first
+      const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+      if (!bucketUrl) {
+        console.log(`⚠️ [STARTUP] DIGITALOCEAN_BUCKET not configured, skipping bucket operations for ${userId}`);
+        return;
+      }
+
+      // Skip HTTP requests during startup to avoid ECONNREFUSED errors
+      // Bucket status checks will happen on-demand when users access the admin panel
+        // Skip bucket status check during startup - no logging needed
+    } catch (error) {
+      console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
+    }
+  }
+  
+  // UserStateManager removed - using direct database calls instead
+    
+    // Database consistency check - verify Public User document exists and is valid
+    try {
+      const publicUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
+      if (publicUserDoc) {
+        console.log(`✅ [Database] Consistency check passed - Public User document valid`);
+      } else {
+        console.log(`⚠️ [Database] Consistency check warning - Public User document not found`);
+      }
+    } catch (error) {
+      console.log(`❌ [Database] Consistency check failed: ${error.message}`);
+    }
+    
+    // Initialize admin alert system
+    initializeAlertSystem(cacheManager, couchDBClient, addUpdateToAllAdmins);
+    console.log(`✅ [STARTUP] Admin alert system initialized`);
+    
+    // Server ready for requests
+    console.log(`✅ [STARTUP] Server ready for authentication requests`);
+    
+    // Load saved chats into cache at startup
+    try {
+      const allChats = await couchDBClient.getAllChats();
+      setCache('chats', null, allChats);
+      console.log(`📚 [STARTUP] Loaded ${allChats.length} saved chats into cache`);
+    } catch (error) {
+      console.error('❌ [STARTUP] Failed to load saved chats into cache:', error.message);
+    }
+    
+    // REMOVED: Old bucket/cache initialization - replaced by new individual cache code below
+    // await ensureAllUserBuckets();
+    
+    // Session logs database will be created on first use (no need to read at startup)
+    
+    // Initialize users cache with bucket status during startup (throttled, safe)
+    console.log(`🔄 [STARTUP] Initializing users cache with bucket status...`);
+    try {
+      // Fetch all users from database
+      const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+      console.log(`📊 [STARTUP] Fetched ${allUsers.length} total documents from maia_users`);
+      
+      // Filter out non-user documents
+      const filteredUsers = allUsers.filter(user => {
+        // Handle database corruption: restore _id from userId if missing
+        if (!user._id && user.userId) {
+          user._id = user.userId;
+        }
+        
+        const userId = user._id || user.userId;
+        
+        if (!userId) {
+          console.log(`  ❌ Excluding (no userId): ${JSON.stringify(user)}`);
+          return false;
+        }
+        if (userId.startsWith('_design/')) return false;
+        if (userId === 'maia_config') return false;
+        if (userId === 'Public User') return true;
+        if (userId.startsWith('deep_link_')) return true;
+        if (user.isAdmin) return false;
+        return true;
+      });
+      
+      // Fetch bucket status for each user and cache individually (throttled to avoid rate limits)
+      for (let i = 0; i < filteredUsers.length; i++) {
+        const user = filteredUsers[i];
+        
+        // Step 1: Clean up temporary files and ensure archived/ folder exists
+        await cleanupUserBucket(user._id);
+        
+        // Step 2: Reconcile files in user document with actual bucket contents
+        await reconcileUserFiles(user._id);
+        
+        // Step 3: Fetch bucket status and cache the user
+        const bucketData = await getBucketStatusForUser(user._id);
+        
+        const bucketStatus = {
+          hasFolder: bucketData.hasFolder || false,
+          fileCount: bucketData.fileCount || 0,
+          totalSize: bucketData.totalSize || 0
+        };
+        
+        // Get fresh user doc after reconciliation
+        const freshUser = await cacheManager.getDocument(couchDBClient, 'maia_users', user._id) || user;
+        
+        // Store user with bucket status
+        const userWithBucket = {
+          ...freshUser,
+          bucketStatus: bucketStatus
+        };
+        
+        // Cache INDIVIDUAL user entry (not 'all' array - single source of truth!)
+        setCache('users', user._id, userWithBucket);
+        
+        // Throttle: 100ms delay between users to avoid overwhelming the system
+        if (i < filteredUsers.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      console.log(`✅ [STARTUP] Cached ${filteredUsers.length} individual user entries`);
+    } catch (error) {
+      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize users cache:`, error.message);
+      console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
+      process.exit(1);
+    }
+    
+    // Pre-cache agents for Admin2
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      console.log(`📊 [STARTUP] Fetched ${rawAgents.length} agents from DO API`);
+      
+      // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
+      const transformedAgents = rawAgents.map((agent) => {
+        return {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
+          endpoint: null,
+          description: null
+        };
+      });
+      
+      await cacheManager.cacheAgents(transformedAgents);
+      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
+    } catch (error) {
+      console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
+    }
+    
     // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
     try {
       console.log('🔄 [STARTUP] Syncing knowledge bases with DigitalOcean API source of truth...');
@@ -8402,181 +8572,13 @@ async function ensureAllUserBuckets() {
     
     // Pre-cache models for Admin2
     try {
+      console.log('🔄 [STARTUP] Fetching models from DigitalOcean API...');
       const modelsResponse = await doRequest('/v2/gen-ai/models');
       const models = modelsResponse.models || modelsResponse.data?.models || [];
       await cacheManager.cacheModels(models);
       console.log(`✅ [STARTUP] Cached ${models.length} models for Admin2`);
     } catch (error) {
       console.warn('⚠️ [STARTUP] Failed to pre-cache models:', error.message);
-    }
-    
-    const userIds = allUsers.map(user => user.userId || user._id);
-    const bucketChecks = [];
-    
-    for (const userId of userIds) {
-      // Include all users - deep link users also need bucket folders
-      bucketChecks.push(ensureUserBucket(userId));
-    }
-    
-    try {
-      await Promise.all(bucketChecks);
-      // Bucket checks completed - no logging needed
-    } catch (error) {
-      console.error('❌ [STARTUP] Error ensuring user buckets:', error);
-    }
-  }
-
-  // Helper function to ensure bucket folder for a specific user
-  async function ensureUserBucket(userId) {
-    try {
-      // Check if bucket exists first
-      const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-      if (!bucketUrl) {
-        console.log(`⚠️ [STARTUP] DIGITALOCEAN_BUCKET not configured, skipping bucket operations for ${userId}`);
-        return;
-      }
-
-      // Skip HTTP requests during startup to avoid ECONNREFUSED errors
-      // Bucket status checks will happen on-demand when users access the admin panel
-        // Skip bucket status check during startup - no logging needed
-    } catch (error) {
-      console.error(`❌ [STARTUP] Error ensuring bucket for ${userId}:`, error);
-    }
-  }
-  
-  // UserStateManager removed - using direct database calls instead
-    
-    // Database consistency check - verify Public User document exists and is valid
-    try {
-      const publicUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
-      if (publicUserDoc) {
-        console.log(`✅ [Database] Consistency check passed - Public User document valid`);
-      } else {
-        console.log(`⚠️ [Database] Consistency check warning - Public User document not found`);
-      }
-    } catch (error) {
-      console.log(`❌ [Database] Consistency check failed: ${error.message}`);
-    }
-    
-    // Initialize admin alert system
-    initializeAlertSystem(cacheManager, couchDBClient, addUpdateToAllAdmins);
-    console.log(`✅ [STARTUP] Admin alert system initialized`);
-    
-    // Server ready for requests
-    console.log(`✅ [STARTUP] Server ready for authentication requests`);
-    
-    // Load saved chats into cache at startup
-    try {
-      const allChats = await couchDBClient.getAllChats();
-      setCache('chats', null, allChats);
-      console.log(`📚 [STARTUP] Loaded ${allChats.length} saved chats into cache`);
-    } catch (error) {
-      console.error('❌ [STARTUP] Failed to load saved chats into cache:', error.message);
-    }
-    
-    // REMOVED: Old bucket/cache initialization - replaced by new individual cache code below
-    // await ensureAllUserBuckets();
-    
-    // Session logs database will be created on first use (no need to read at startup)
-    
-    // Initialize users cache with bucket status during startup (throttled, safe)
-    console.log(`🔄 [STARTUP] Initializing users cache with bucket status...`);
-    try {
-      // Fetch all users from database
-      const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-      console.log(`📊 [STARTUP] Fetched ${allUsers.length} total documents from maia_users`);
-      
-      // Filter out non-user documents
-      const filteredUsers = allUsers.filter(user => {
-        // Handle database corruption: restore _id from userId if missing
-        if (!user._id && user.userId) {
-          user._id = user.userId;
-        }
-        
-        const userId = user._id || user.userId;
-        
-        if (!userId) {
-          console.log(`  ❌ Excluding (no userId): ${JSON.stringify(user)}`);
-          return false;
-        }
-        if (userId.startsWith('_design/')) return false;
-        if (userId === 'maia_config') return false;
-        if (userId === 'Public User') return true;
-        if (userId.startsWith('deep_link_')) return true;
-        if (user.isAdmin) return false;
-        return true;
-      });
-      
-      // Fetch bucket status for each user and cache individually (throttled to avoid rate limits)
-      for (let i = 0; i < filteredUsers.length; i++) {
-        const user = filteredUsers[i];
-        
-        // Step 1: Clean up temporary files and ensure archived/ folder exists
-        await cleanupUserBucket(user._id);
-        
-        // Step 2: Reconcile files in user document with actual bucket contents
-        await reconcileUserFiles(user._id);
-        
-        // Step 3: Fetch bucket status and cache the user
-        const bucketData = await getBucketStatusForUser(user._id);
-        
-        const bucketStatus = {
-          hasFolder: bucketData.hasFolder || false,
-          fileCount: bucketData.fileCount || 0,
-          totalSize: bucketData.totalSize || 0
-        };
-        
-        // Get fresh user doc after reconciliation
-        const freshUser = await cacheManager.getDocument(couchDBClient, 'maia_users', user._id) || user;
-        
-        // Store user with bucket status
-        const userWithBucket = {
-          ...freshUser,
-          bucketStatus: bucketStatus
-        };
-        
-        // Cache INDIVIDUAL user entry (not 'all' array - single source of truth!)
-        setCache('users', user._id, userWithBucket);
-        
-        // Throttle: 100ms delay between users to avoid overwhelming the system
-        if (i < filteredUsers.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      console.log(`✅ [STARTUP] Cached ${filteredUsers.length} individual user entries`);
-    } catch (error) {
-      console.error(`❌ [STARTUP] CRITICAL: Failed to initialize users cache:`, error.message);
-      console.error(`❌ [STARTUP] Server will not start - cache initialization is required`);
-      process.exit(1);
-    }
-    
-    // Pre-cache agents for Admin2
-    try {
-      const agentsResponse = await doRequest('/v2/gen-ai/agents');
-      const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
-      
-      console.log(`📊 [STARTUP] Fetched ${rawAgents.length} agents from DO API`);
-      
-      // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
-      const transformedAgents = rawAgents.map((agent) => {
-        return {
-          id: agent.id,
-          name: agent.name,
-          status: agent.status || 'unknown',
-          model: agent.model || 'unknown',
-          createdAt: agent.created_at,
-          updatedAt: agent.updated_at,
-          knowledgeBases: agent.knowledge_bases || [], // Use knowledge_bases from DO API
-          endpoint: null,
-          description: null
-        };
-      });
-      
-      await cacheManager.cacheAgents(transformedAgents);
-      console.log(`✅ [STARTUP] Cached ${transformedAgents.length} agents with KB data for Admin2`);
-    } catch (error) {
-      console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
     // Deployment monitoring will be started automatically when agents are created
