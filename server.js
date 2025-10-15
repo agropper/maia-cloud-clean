@@ -6459,7 +6459,28 @@ app.post('/api/knowledge-bases', async (req, res) => {
     const kbName = username ? `${username}-${name}` : name;
     const itemPath = username ? `${username}/` : "shared/";
     
-    // Get available embedding models first
+    // Get project_id and database_id from existing agents
+    let projectId = null;
+    let databaseId = null;
+    
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      if (agents.length > 0) {
+        const firstAgent = agents[0];
+        projectId = firstAgent.project_id;
+        databaseId = firstAgent.database?.uuid || firstAgent.database_id;
+      }
+    } catch (agentError) {
+      console.error(`❌ Failed to get agents for project/database IDs:`, agentError.message);
+    }
+    
+    if (!projectId) {
+      throw new Error('No agents found - cannot determine project_id for KB creation');
+    }
+    
+    // Get available embedding models
     let embeddingModelId = null;
     
     try {
@@ -6492,8 +6513,8 @@ app.post('/api/knowledge-bases', async (req, res) => {
     const kbData = {
       name: kbName,
       description: `${kbName} description`,
-      project_id: '90179b7c-8a42-4a71-a036-b4c2bea2fe59',
-      database_id: '881761c6-e72d-4f35-a48e-b320cd1f46e4',
+      project_id: projectId,
+      database_id: databaseId,
       region: "tor1",
       datasources: [
         {
@@ -7382,7 +7403,28 @@ app.post('/api/test-large-file-indexing', async (req, res) => {
     
 //     console.log(`📚 Creating knowledge base: ${validName}`);
     
-    // Get available embedding models first
+    // Get project_id and database_id from existing agents
+    let projectId = null;
+    let databaseId = null;
+    
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const agents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      if (agents.length > 0) {
+        const firstAgent = agents[0];
+        projectId = firstAgent.project_id;
+        databaseId = firstAgent.database?.uuid || firstAgent.database_id;
+      }
+    } catch (agentError) {
+      console.error(`❌ [TEST] Failed to get agents for project/database IDs:`, agentError.message);
+    }
+    
+    if (!projectId) {
+      throw new Error('No agents found - cannot determine project_id for test KB creation');
+    }
+    
+    // Get available embedding models
     let embeddingModelId = null;
     
     try {
@@ -7417,8 +7459,8 @@ app.post('/api/test-large-file-indexing', async (req, res) => {
     const kbData = {
       name: validName,
       description: `${validName} - Test KB with large file from wed271 folder`,
-      project_id: '90179b7c-8a42-4a71-a036-b4c2bea2fe59',
-      database_id: '881761c6-e72d-4f35-a48e-b320cd1f46e4',
+      project_id: projectId,
+      database_id: databaseId,
       region: "tor1",
       datasources: [
         {
@@ -9233,11 +9275,14 @@ app.post('/api/test-create-kb', async (req, res) => {
 //         console.log(`🔍 Using project ID from existing agent: ${projectId}`);
       }
     } catch (agentError) {
-//       console.log(`⚠️ Failed to get agents, using default project ID`);
-      projectId = '90179b7c-8a42-4a71-a036-b4c2bea2fe59';
+      console.error(`❌ [TEST-KB] Failed to get agents for project ID:`, agentError.message);
     }
     
-    // Get database UUID from environment or use default
+    if (!projectId) {
+      throw new Error('No agents found - cannot determine project_id for test KB creation');
+    }
+    
+    // Get database UUID from databases
     let databaseUuid = null;
     try {
       const databasesResponse = await doRequest('/v2/gen-ai/databases');
@@ -9253,12 +9298,10 @@ app.post('/api/test-create-kb', async (req, res) => {
         databaseUuid = driftwoodDb.uuid;
 //         console.log(`📊 Found genai-driftwood database: ${driftwoodDb.name} (${databaseUuid})`);
       } else {
-//         console.log(`⚠️ genai-driftwood database not found, using default`);
-        databaseUuid = '881761c6-e72d-4f35-a48e-b320cd1f46e4';
+        console.warn(`⚠️ [TEST-KB] genai-driftwood database not found, proceeding without database_id`);
       }
     } catch (dbError) {
-//       console.log(`⚠️ Failed to get databases, using default database UUID`);
-      databaseUuid = '881761c6-e72d-4f35-a48e-b320cd1f46e4';
+      console.error(`❌ [TEST-KB] Failed to get databases:`, dbError.message);
     }
     
     // Test knowledge base creation with correct data source structure
