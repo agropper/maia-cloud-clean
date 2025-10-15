@@ -2408,9 +2408,19 @@ async function buildAgentManagementTemplate(userId) {
       }
     }
     
-    // Step 7: Cache the template
+    // Step 7: Check for patient summary
+    if (userDoc.patientSummary && userDoc.patientSummary.content) {
+      template.summaryStatus = {
+        hasSummary: true,
+        lastGenerated: userDoc.patientSummary.createdAt || null,
+        kbUsed: userDoc.patientSummary.kbUsed || null,
+        tokens: userDoc.patientSummary.tokens || 0
+      };
+    }
+    
+    // Step 8: Cache the template
     agentManagementTemplates.set(userId, template);
-    console.log(`[TEMPLATE] ✅ Template built for ${userId}: hasAgent=${template.agentStatus.hasAgent}, hasKB=${template.kbStatus.hasKB}, needsWarning=${template.kbStatus.needsWarning}`);
+    console.log(`[TEMPLATE] ✅ Template built for ${userId}: hasAgent=${template.agentStatus.hasAgent}, hasKB=${template.kbStatus.hasKB}, hasSummary=${template.summaryStatus.hasSummary}, needsWarning=${template.kbStatus.needsWarning}`);
     
     return template;
     
@@ -6900,6 +6910,198 @@ app.post('/api/auto-start-indexing', async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: `Failed to auto-start indexing: ${error.message}` 
+    });
+  }
+});
+
+// Automated KB Creation and Patient Summary Generation
+app.post('/api/automate-kb-and-summary', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { userId, fileName, bucketKey } = req.body;
+    
+    if (!userId || !fileName || !bucketKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId, fileName, and bucketKey are required'
+      });
+    }
+    
+    console.log(`🤖 [AUTO PS] Starting automation for user ${userId}, file: ${fileName}`);
+    
+    // Step 1: Get user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      throw new Error(`User ${userId} not found`);
+    }
+    
+    // Step 2: Get user's assigned agent
+    const agentId = userDoc.assignedAgentId;
+    if (!agentId) {
+      throw new Error(`User ${userId} has no assigned agent`);
+    }
+    
+    console.log(`🤖 [AUTO PS] User has agent: ${agentId}`);
+    
+    // Step 3: Create Knowledge Base
+    const kbName = `${userId}-kb-${Date.now()}`;
+    console.log(`🤖 [AUTO PS] Creating KB "${kbName}" from file ${fileName}`);
+    
+    // Extract user folder from bucketKey (e.g., "fri1/archived/file.pdf" -> "fri1/")
+    const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
+    
+    // Create KB with the user's folder as data source
+    const kbCreateResponse = await doRequest('/v2/gen-ai/knowledge_bases', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: kbName,
+        datasources: [{
+          spaces_data_source: {
+            name: `${kbName}-datasource`,
+            bucket_name: process.env.DIGITALOCEAN_SPACE_NAME,
+            bucket_region: process.env.DIGITALOCEAN_SPACE_REGION,
+            bucket_prefix: userFolder,
+            access_key_id: process.env.DIGITALOCEAN_SPACE_KEY,
+            secret_access_key: process.env.DIGITALOCEAN_SPACE_SECRET
+          }
+        }]
+      })
+    });
+    
+    const kbData = kbCreateResponse.data || kbCreateResponse;
+    const kb = kbData.knowledge_base || kbData;
+    const kbId = kb.uuid || kb.id;
+    
+    console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
+    
+    // Step 4: Attach KB to agent
+    console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
+    await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
+      method: 'POST'
+    });
+    
+    // Step 5: Start indexing
+    console.log(`🤖 [AUTO PS] Starting indexing for KB ${kbId}`);
+    const dataSourceUuid = kb.datasources[0].spaces_data_source.uuid;
+    const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
+      method: 'POST',
+      body: JSON.stringify({
+        data_source_uuid: dataSourceUuid
+      })
+    });
+    
+    const indexingJob = indexingResponse.data || indexingResponse;
+    const jobId = indexingJob.uuid || indexingJob.id;
+    
+    // Step 6: Poll for indexing completion
+    console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
+    let indexingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes max (5 seconds * 60)
+    let totalTokens = 0;
+    
+    while (!indexingComplete && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      attempts++;
+      
+      // Get indexing status
+      const statusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+      const statusData = statusResponse.data || statusResponse;
+      const statusKb = statusData.knowledge_base || statusData;
+      const lastJob = statusKb.last_indexing_job;
+      
+      if (lastJob) {
+        const status = lastJob.status || '';
+        const phase = lastJob.phase || '';
+        totalTokens = lastJob.tokens || 0;
+        
+        console.log(`🤖 [AUTO PS] Indexing status: ${status}, Phase: ${phase}, Tokens: ${totalTokens}, Attempt: ${attempts}/${maxAttempts}`);
+        
+        // Check for completion
+        if (status.includes('completed') || phase.includes('succeeded')) {
+          indexingComplete = true;
+          const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+          console.log(`🤖 [AUTO PS] Indexing complete in ${elapsedSeconds} seconds`);
+        } else if (status.includes('failed') || phase.includes('failed')) {
+          throw new Error(`Indexing failed: ${status} - ${phase}`);
+        }
+      }
+    }
+    
+    if (!indexingComplete) {
+      throw new Error('Indexing timeout after 5 minutes');
+    }
+    
+    // Step 7: Update maia_kb document with file and token info
+    console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
+    const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
+    if (kbDoc) {
+      kbDoc.files = [{
+        name: fileName,
+        bucketKey: bucketKey,
+        indexedAt: new Date().toISOString()
+      }];
+      kbDoc.totalTokens = totalTokens;
+      kbDoc.indexedAt = new Date().toISOString();
+      await cacheManager.saveDocument(couchDBClient, 'maia_kb', kbDoc);
+      console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
+    }
+    
+    // Step 8: Generate patient summary via Personal AI
+    console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
+    
+    // Make request to Personal AI with the patient summary prompt
+    const summaryResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [{
+          role: 'user',
+          content: 'Create a comprehensive patient summary according to your agent instructions'
+        }],
+        stream: false
+      })
+    });
+    
+    const summaryData = summaryResponse.data || summaryResponse;
+    const summary = summaryData.message?.content || summaryData.content || 'No summary generated';
+    
+    console.log(`🤖 [AUTO PS] Patient summary generated (${summary.length} characters)`);
+    
+    // Step 9: Save patient summary to user document
+    console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
+    userDoc.patientSummary = {
+      content: summary,
+      createdAt: new Date().toISOString(),
+      kbUsed: kbName,
+      kbId: kbId,
+      fileUsed: fileName,
+      tokens: totalTokens
+    };
+    userDoc.updatedAt = new Date().toISOString();
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+    
+    // Step 10: Rebuild agent template to update status icons
+    console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
+    await buildAgentManagementTemplate(userId);
+    
+    console.log(`🤖 [AUTO PS] ✅ Automation complete for ${userId}`);
+    
+    res.json({
+      success: true,
+      message: 'KB created and patient summary generated successfully',
+      kbId: kbId,
+      kbName: kbName,
+      summary: summary,
+      tokens: totalTokens,
+      elapsedSeconds: Math.round((Date.now() - startTime) / 1000)
+    });
+    
+  } catch (error) {
+    console.error(`🤖 [AUTO PS] ❌ Error:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Automation failed: ${error.message}`
     });
   }
 });

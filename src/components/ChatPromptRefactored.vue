@@ -367,10 +367,103 @@ export default defineComponent({
     };
 
     // Handle "DO IT" button from Create KB Action Modal
-    const handleDoItCreateKB = () => {
+    const handleDoItCreateKB = async () => {
       showCreateKBActionModal.value = false;
-      // Open Agent Management Dialog to create KB
-      showAgentManagementDialog.value = true;
+      
+      try {
+        // Start the automated KB creation and patient summary process
+        await automateKBCreationAndSummary();
+      } catch (error) {
+        console.error('[AUTO PS] ❌ Automation failed:', error);
+        $q.notify({
+          type: 'negative',
+          message: `Automation failed: ${error.message}`,
+          timeout: 5000
+        });
+      }
+    };
+    
+    // Automated KB Creation and Patient Summary Process
+    const automateKBCreationAndSummary = async () => {
+      const startTime = Date.now();
+      console.log('[AUTO PS] 🚀 Starting automated KB creation and patient summary process');
+      
+      // Step 1: Post "Requesting patient summary" message to chat
+      console.log('[AUTO PS] Step 1: Posting request message to chat');
+      const requestMessage = {
+        role: 'assistant',
+        content: 'Requesting a new patient summary...',
+        name: 'System'
+      };
+      appState.chatHistory.push(requestMessage);
+      
+      // Show loading indicator
+      appState.isLoading = true;
+      
+      try {
+        // Step 2: Get user info and most recent file
+        const userId = currentUser.value?.userId || currentUser.value?.displayName;
+        if (!userId || userId === 'Public User') {
+          throw new Error('User must be authenticated');
+        }
+        
+        if (!appState.uploadedFiles || appState.uploadedFiles.length === 0) {
+          throw new Error('No uploaded files found');
+        }
+        
+        const recentFile = appState.uploadedFiles[appState.uploadedFiles.length - 1];
+        console.log(`[AUTO PS] Step 2: Using file "${recentFile.name}" for user ${userId}`);
+        
+        // Step 3: Call backend automation endpoint
+        console.log(`[AUTO PS] Step 3: Calling backend automation endpoint`);
+        const response = await fetch('/api/automate-kb-and-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            fileName: recentFile.name,
+            bucketKey: recentFile.bucketKey
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[AUTO PS] ✅ Automation completed successfully:', result);
+        
+        // Step 4: Add patient summary to chat
+        if (result.summary) {
+          console.log('[AUTO PS] Step 4: Patient summary posted to chat area');
+          appState.chatHistory.push({
+            role: 'assistant',
+            content: result.summary,
+            name: 'Personal AI'
+          });
+        }
+        
+        // Step 5: Refresh agent data to update KB status
+        await refreshAgentData();
+        
+        $q.notify({
+          type: 'positive',
+          message: 'Knowledge base created and patient summary generated!',
+          timeout: 5000
+        });
+        
+      } catch (error) {
+        console.error('[AUTO PS] ❌ Error:', error);
+        appState.chatHistory.push({
+          role: 'assistant',
+          content: `❌ **Error**: ${error.message}`,
+          name: 'System Error'
+        });
+        throw error;
+      } finally {
+        appState.isLoading = false;
+      }
     };
 
     // Handle support request from New User Welcome Modal
