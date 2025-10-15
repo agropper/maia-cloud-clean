@@ -915,10 +915,10 @@ router.get('/users', requireAdminAuth, async (req, res) => {
         const bucketData = await getBucketStatusForUser(user._id);
         
         const bucketStatus = {
-          hasFolder: bucketData.hasFolder || false,
-          fileCount: bucketData.fileCount || 0,
-          totalSize: bucketData.totalSize || 0
-        };
+              hasFolder: bucketData.hasFolder || false,
+              fileCount: bucketData.fileCount || 0,
+              totalSize: bucketData.totalSize || 0
+            };
         
         const userWithBucket = {
           ...user,
@@ -1626,8 +1626,8 @@ router.post('/users/:userId/assign-agent', requireAdminAuth, async (req, res) =>
       // Start tracking deployment for this user
       addToDeploymentTracking(userId, agentId, agentName);
       
-        // Invalidate user cache to ensure fresh data
-        invalidateUserCache(userId);
+      // Invalidate user cache to ensure fresh data
+      invalidateUserCache(userId);
     
     res.json({ 
       message: 'Agent assigned successfully',
@@ -1750,6 +1750,7 @@ function processUserDataSync(user) {
   let assignedAgentId = user.assignedAgentId || null;
   let assignedAgentName = user.assignedAgentName || null;
   let agentAssignedAt = user.agentAssignedAt || null;
+  let workflowStage = user.workflowStage || 'no_passkey';
   
   // Validate agent exists in maia_agents cache (which is synced with DO API at startup)
   if (assignedAgentId) {
@@ -1759,10 +1760,15 @@ function processUserDataSync(user) {
     );
     
     if (!agentExists) {
-      // Agent was deleted from DO - clear from user display
+      // Agent was deleted from DO - clear from user display and reset workflow
       assignedAgentId = null;
       assignedAgentName = null;
       agentAssignedAt = null;
+      
+      // Reset workflow stage to request_email_sent so admin can re-approve
+      if (workflowStage === 'agent_assigned' || workflowStage === 'approved') {
+        workflowStage = 'request_email_sent';
+      }
     }
   }
   
@@ -1799,7 +1805,7 @@ function processUserDataSync(user) {
     transports: user.transports,
     domain: user.domain,
     type: user.type,
-    workflowStage: user.workflowStage || 'no_passkey',
+    workflowStage: workflowStage,  // Use validated/modified workflowStage
     adminNotes: user.adminNotes || '',
     approvalStatus: user.approvalStatus,
     assignedAgentId: assignedAgentId,
