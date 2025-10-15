@@ -7006,19 +7006,20 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     // Get bucket configuration from environment
     const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
-    const bucketRegion = 'tor1'; // Toronto region
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
     
-    // Create KB with the user's folder as data source
+    // Create KB with the user's folder as data source (matching working code at line 6492)
     const kbData = {
       name: kbName,
       embedding_model_uuid: embeddingModelId,
+      region: bucketRegion,
       datasources: [{
         spaces_data_source: {
           name: `${kbName}-datasource`,
           bucket_name: bucketName,
-          bucket_region: bucketRegion,
-          bucket_prefix: userFolder,
+          region: bucketRegion,
+          item_path: userFolder,
           access_key_id: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
           secret_access_key: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
         }
