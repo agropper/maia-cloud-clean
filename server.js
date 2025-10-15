@@ -8224,6 +8224,73 @@ async function ensureAllUserBuckets() {
       const doResponse = await doRequest('/v2/gen-ai/knowledge_bases?page=1&per_page=1000');
       const doKBs = (doResponse.knowledge_bases || doResponse.data?.knowledge_bases || doResponse.data || []);
       
+      // 1.5. Create new maia_kb database and populate with DO API data
+      console.log('🔄 [STARTUP] Creating new maia_kb database with DigitalOcean API data...');
+      
+      // Ensure the maia_kb database exists
+      try {
+        await couchDBClient.createDatabase('maia_kb');
+        console.log('✅ [STARTUP] Created maia_kb database');
+      } catch (createError) {
+        if (createError.message.includes('already exists')) {
+          console.log('✅ [STARTUP] maia_kb database already exists');
+        } else {
+          console.warn('⚠️ [STARTUP] Failed to create maia_kb database:', createError.message);
+        }
+      }
+      
+      // Populate maia_kb with DO API data using kbName as _id
+      let kbDocsCreated = 0;
+      let kbDocsUpdated = 0;
+      
+      for (const doKB of doKBs) {
+        try {
+          const kbDoc = {
+            _id: doKB.name, // Use kbName as _id since they're unique and start with user names
+            kbId: doKB.uuid,
+            kbName: doKB.name,
+            description: doKB.description || 'No description',
+            status: doKB.status || 'unknown',
+            createdAt: doKB.created_at || new Date().toISOString(),
+            updatedAt: doKB.updated_at || new Date().toISOString(),
+            // Add all other fields from DO API
+            ...doKB
+          };
+          
+          // Try to save the document
+          await couchDBClient.saveDocument('maia_kb', kbDoc);
+          kbDocsCreated++;
+          
+        } catch (saveError) {
+          if (saveError.message.includes('conflict')) {
+            // Document already exists, update it
+            try {
+              const existingDoc = await couchDBClient.getDocument('maia_kb', doKB.name);
+              const updatedDoc = {
+                ...existingDoc,
+                kbId: doKB.uuid,
+                kbName: doKB.name,
+                description: doKB.description || 'No description',
+                status: doKB.status || 'unknown',
+                updatedAt: doKB.updated_at || new Date().toISOString(),
+                // Update with latest DO API data
+                ...doKB
+              };
+              await couchDBClient.saveDocument('maia_kb', updatedDoc);
+              kbDocsUpdated++;
+            } catch (updateError) {
+              console.warn(`⚠️ [STARTUP] Failed to update KB ${doKB.name}:`, updateError.message);
+            }
+          } else {
+            console.warn(`⚠️ [STARTUP] Failed to save KB ${doKB.name}:`, saveError.message);
+          }
+        }
+      }
+      
+      console.log(`✅ [STARTUP] Populated maia_kb database: ${kbDocsCreated} created, ${kbDocsUpdated} updated`);
+      
+      // Continue with existing logic...
+      
       // 2. Get existing protection metadata from local database
       const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
       
