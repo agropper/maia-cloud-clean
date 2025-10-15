@@ -167,21 +167,35 @@
               <q-icon 
                 name="manage_accounts" 
                 size="sm" 
-                color="primary"
+                :color="hasAgent ? 'primary' : 'grey-5'"
                 class="status-icon"
+                :class="{ 'icon-disabled': !hasAgent }"
               />
-              <div class="tooltip-text">Manage your agent</div>
+              <div class="tooltip-text">{{ hasAgent ? 'Manage your agent' : 'No agent configured yet' }}</div>
             </div>
             
             <!-- Knowledge Base Icon -->
-            <div class="tooltip-wrapper">
+            <div class="tooltip-wrapper icon-with-badge">
               <q-icon 
                 name="library_books" 
                 size="sm" 
-                color="secondary"
+                :color="hasKnowledgeBase ? 'secondary' : 'grey-5'"
                 class="status-icon"
+                :class="{ 'icon-disabled': !hasKnowledgeBase }"
               />
-              <div class="tooltip-text">Manage your knowledge bases</div>
+              <q-badge 
+                v-if="hasUnattachedKB" 
+                floating 
+                color="warning" 
+                text-color="black"
+                class="warning-badge"
+              >
+                !
+              </q-badge>
+              <div class="tooltip-text">
+                {{ hasKnowledgeBase ? 'Manage your knowledge bases' : 'No knowledge base yet' }}
+                {{ hasUnattachedKB ? ' - Unattached KB available!' : '' }}
+              </div>
             </div>
             
             <!-- Patient Summary Icon -->
@@ -189,10 +203,11 @@
               <q-icon 
                 name="description" 
                 size="sm" 
-                color="accent"
+                :color="hasPatientSummary ? 'accent' : 'grey-5'"
                 class="status-icon patient-summary-icon"
+                :class="{ 'icon-disabled': !hasPatientSummary }"
               />
-              <div class="tooltip-text">Generate patient summary</div>
+              <div class="tooltip-text">{{ hasPatientSummary ? 'View patient summary' : 'No patient summary yet' }}</div>
             </div>
             
             <!-- Deep Link Icon - Right end of status line -->
@@ -367,7 +382,7 @@
 import { defineComponent, ref, computed, watch } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
-import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, QDialog, QCard, QCardSection, QCardActions, QForm, QSpace, useQuasar } from 'quasar'
+import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, QDialog, QCard, QCardSection, QCardActions, QForm, QSpace, QBadge, useQuasar } from 'quasar'
 import { GNAP } from 'vue3-gnap'
 import type { AppState } from '../types'
 import GroupManagementModal from './GroupManagementModal.vue'
@@ -400,6 +415,7 @@ export default defineComponent({
     QCardActions,
     QForm,
     QSpace,
+    QBadge,
     GNAP,
     GroupManagementModal,
     HelpPage,
@@ -448,6 +464,10 @@ export default defineComponent({
     },
 
     currentUser: {
+      type: Object as PropType<any>,
+      default: null
+    },
+    currentAgent: {
       type: Object as PropType<any>,
       default: null
     },
@@ -816,6 +836,28 @@ export default defineComponent({
       }
     }
 
+    // Computed properties for icon states
+    const hasAgent = computed(() => {
+      return !!(props.currentAgent && props.currentAgent.id)
+    })
+
+    const hasKnowledgeBase = computed(() => {
+      return !!(props.currentAgent && props.currentAgent.knowledgeBaseId)
+    })
+
+    const hasUnattachedKB = computed(() => {
+      // Check if there are KBs available but not attached to the agent
+      // This will need to be enhanced when we fetch all available KBs
+      // For now, return false as a placeholder
+      return false
+    })
+
+    const hasPatientSummary = computed(() => {
+      // Patient summary feature not yet implemented
+      // Will be enabled when user creates their first summary
+      return false
+    })
+
     return {
       isListening,
       isSpeechSupported,
@@ -843,7 +885,11 @@ export default defineComponent({
       handleInfoClick,
       handleHelpClose,
       handleSupportRequested,
-      sendContactMessage
+      sendContactMessage,
+      hasAgent,
+      hasKnowledgeBase,
+      hasUnattachedKB,
+      hasPatientSummary
     }
   }
 })
@@ -1115,6 +1161,30 @@ export default defineComponent({
 .status-icon:hover {
   transform: scale(1.15);
   opacity: 0.8;
+}
+
+.status-icon.icon-disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.status-icon.icon-disabled:hover {
+  transform: none;
+  opacity: 0.5;
+}
+
+/* Icon with badge container */
+.icon-with-badge {
+  position: relative;
+}
+
+/* Warning badge styling */
+.warning-badge {
+  font-size: 10px;
+  font-weight: bold;
+  min-width: 14px;
+  height: 14px;
+  padding: 2px;
 }
 
 /* Patient summary icon - for custom styling if needed */
