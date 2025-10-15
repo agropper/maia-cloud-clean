@@ -9068,16 +9068,19 @@ app.listen(PORT, async () => {
       console.warn('⚠️ [STARTUP] Failed to pre-cache agents:', error.message);
     }
     
-    // Get genai-driftwood database ID from existing agents (CRITICAL for KB creation)
+    // Get genai-driftwood database ID from cached agents (CRITICAL for KB creation)
     // Note: /v2/gen-ai/databases endpoint returns 404, so we get database_id from agents instead
     let genaiDriftwoodId = null;
     try {
       console.log(`🔄 [STARTUP] Getting genai-driftwood database ID from agents...`);
       
+      // Get agents from cache (just populated above)
+      const cachedAgents = cacheManager.getCachedAgentsSync();
+      
       // All agents in the same project share the same database
       // Get database_id from any agent
-      if (rawAgents && rawAgents.length > 0) {
-        const firstAgent = rawAgents[0];
+      if (cachedAgents && cachedAgents.length > 0) {
+        const firstAgent = cachedAgents[0];
         genaiDriftwoodId = firstAgent.database?.uuid || firstAgent.database_id;
         
         if (!genaiDriftwoodId) {
@@ -9086,12 +9089,12 @@ app.listen(PORT, async () => {
         
         // Verify all agents use the same database (validation)
         const databaseIds = new Set();
-        rawAgents.forEach(agent => {
+        cachedAgents.forEach(agent => {
           const dbId = agent.database?.uuid || agent.database_id;
           if (dbId) databaseIds.add(dbId);
         });
         
-        console.log(`📊 [STARTUP] Found ${databaseIds.size} unique database ID(s) across ${rawAgents.length} agents`);
+        console.log(`📊 [STARTUP] Found ${databaseIds.size} unique database ID(s) across ${cachedAgents.length} agents`);
         
         // REQUIREMENT: All agents must use exactly 1 database
         if (databaseIds.size !== 1) {
