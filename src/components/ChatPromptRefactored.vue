@@ -93,6 +93,7 @@ export default defineComponent({
     const { loadGroupChat } = useGroupChat();
     const localStorageKey = "noshuri";
     const popupRef = ref<InstanceType<typeof PopUp> | null>(null);
+    const bottomToolbarRef = ref<InstanceType<typeof BottomToolbar> | null>(null);
     const showSavedChatsDialog = ref(false);
     const showAgentManagementDialog = ref(false);
     const showPasskeyAuthDialog = ref(false);
@@ -350,6 +351,15 @@ export default defineComponent({
     const handleOpenKBManager = () => {
       showKnowledgeBaseWelcomeModal.value = false;
       showAgentManagementDialog.value = true;
+    };
+
+    // Handle import file from KB Welcome Modal
+    const handleImportFile = () => {
+      showKnowledgeBaseWelcomeModal.value = false;
+      // Trigger file picker using ref to BottomToolbar
+      if (bottomToolbarRef.value && bottomToolbarRef.value.pickFiles) {
+        bottomToolbarRef.value.pickFiles();
+      }
     };
 
     // Handle opening Agent Manager from Public User KB Welcome Modal
@@ -977,6 +987,7 @@ const triggerUploadFile = (file: File) => {
 
     <!-- Bottom Toolbar -->
     <BottomToolbar
+      ref="bottomToolbarRef"
       :appState="appState"
       :currentUser="currentUser"
       :currentAgent="currentAgent"
@@ -1042,6 +1053,7 @@ const triggerUploadFile = (file: File) => {
       v-model="showKnowledgeBaseWelcomeModal"
       :current-user="currentUser"
       @open-manager="handleOpenKBManager"
+      @import-file="handleImportFile"
     />
 
     <PublicUserKBWelcomeModal

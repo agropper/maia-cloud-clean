@@ -41,9 +41,9 @@
         />
         <q-btn
           color="primary"
-          label="Open My Private AI Manager"
-          @click="handleOpenManager"
-          icon="psychology"
+          label="IMPORT A FILE"
+          @click="handleImportFile"
+          icon="attach_file"
           class="q-px-lg"
         />
       </q-card-actions>
@@ -75,7 +75,7 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['update:modelValue', 'open-manager'])
+const emit = defineEmits(['update:modelValue', 'open-manager', 'import-file'])
 
 // Reactive state
 const isOpen = ref(props.modelValue)
@@ -96,6 +96,11 @@ const handleCancel = () => {
 
 const handleOpenManager = () => {
   emit('open-manager')
+  isOpen.value = false
+}
+
+const handleImportFile = () => {
+  emit('import-file')
   isOpen.value = false
 }
 </script>
