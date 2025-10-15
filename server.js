@@ -8458,15 +8458,22 @@ async function ensureAllUserBuckets() {
         
         if (orphanedAgents.length > 0) {
           console.log(`🔄 [STARTUP] Cleaning up ${orphanedAgents.length} orphaned agents from maia_agents database...`);
+          let deletedCount = 0;
           for (const orphanedAgent of orphanedAgents) {
+            // Skip agents with undefined or invalid IDs
+            if (!orphanedAgent._id || orphanedAgent._id === 'undefined') {
+              console.warn(`⚠️ [STARTUP] Skipping agent with invalid ID: ${orphanedAgent._id}`);
+              continue;
+            }
             try {
               await couchDBClient.deleteDocument('maia_agents', orphanedAgent._id);
               console.log(`🟡 [STARTUP] Deleted orphaned agent: ${orphanedAgent._id}`);
+              deletedCount++;
             } catch (deleteError) {
               console.warn(`⚠️ [STARTUP] Failed to delete orphaned agent ${orphanedAgent._id}:`, deleteError.message);
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${orphanedAgents.length} orphaned agents removed`);
+          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} orphaned agents removed`);
         } else {
           console.log('✅ [STARTUP] No orphaned agents found in maia_agents database');
         }
@@ -8561,15 +8568,30 @@ async function ensureAllUserBuckets() {
         
         if (orphanedKBs.length > 0) {
           console.log(`🔄 [STARTUP] Cleaning up ${orphanedKBs.length} orphaned knowledge bases from maia_kb database...`);
+          let deletedCount = 0;
           for (const orphanedKB of orphanedKBs) {
+            // Skip KBs with undefined or invalid IDs
+            if (!orphanedKB._id || orphanedKB._id === 'undefined') {
+              console.warn(`⚠️ [STARTUP] Skipping KB with invalid ID: ${orphanedKB._id}`);
+              continue;
+            }
             try {
-              await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
+              // Use bulk delete with _deleted flag instead of deleteDocument
+              await couchDBClient.bulkDelete('maia_kb', [{ _id: orphanedKB._id, _rev: orphanedKB._rev, _deleted: true }]);
               console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
+              deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, deleteError.message);
+              // If bulk delete fails, try direct delete as fallback
+              try {
+                await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
+                console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
+                deletedCount++;
+              } catch (fallbackError) {
+                console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, fallbackError.message);
+              }
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${orphanedKBs.length} orphaned knowledge bases removed`);
+          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} orphaned knowledge bases removed`);
         } else {
           console.log('✅ [STARTUP] No orphaned knowledge bases found in maia_kb database');
         }
