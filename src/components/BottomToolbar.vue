@@ -908,6 +908,7 @@ export default defineComponent({
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
+      console.log('[BT STATUS] ==== hasUnattachedKB computed property called ====')
       // Must have an agent first
       if (!props.currentAgent || !props.currentAgent.id) {
         console.log('[BT STATUS] hasUnattachedKB: false (no agent)')
@@ -916,7 +917,7 @@ export default defineComponent({
       
       // Check if there are available KBs
       if (availableKBs.value.length === 0) {
-        console.log('[BT STATUS] hasUnattachedKB: false (no available KBs)')
+        console.log('[BT STATUS] hasUnattachedKB: false (no available KBs, availableKBs.value.length =', availableKBs.value.length, ')')
         return false
       }
       
@@ -937,7 +938,7 @@ export default defineComponent({
       // Check if there are any available KBs not attached
       const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
       
-      console.log('[BT STATUS] hasUnattachedKB:', hasUnattached)
+      console.log('[BT STATUS] hasUnattachedKB RESULT:', hasUnattached, '(available:', availableKBs.value.length, 'attached:', attachedKBIds.size, ')')
       return hasUnattached
     })
 
