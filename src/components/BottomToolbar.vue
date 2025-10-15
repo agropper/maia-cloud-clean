@@ -170,6 +170,7 @@
                 :color="hasAgent ? 'primary' : 'grey-5'"
                 class="status-icon"
                 :class="{ 'icon-disabled': !hasAgent }"
+                @click="triggerAgentManagement"
               />
               <div class="tooltip-text">{{ hasAgent ? 'Manage your agent' : 'No agent configured yet' }}</div>
             </div>
@@ -182,6 +183,7 @@
                 :color="hasKnowledgeBase ? 'secondary' : 'grey-5'"
                 class="status-icon"
                 :class="{ 'icon-disabled': !hasKnowledgeBase }"
+                @click="triggerAgentManagement"
               />
               <q-badge 
                 v-if="hasUnattachedKB" 
@@ -838,19 +840,27 @@ export default defineComponent({
 
     // Computed properties for icon states
     const hasAgent = computed(() => {
-      return !!(props.currentAgent && props.currentAgent.id)
+      const result = !!(props.currentAgent && props.currentAgent.id)
+      console.log('[BT STATUS] hasAgent:', result, 'currentAgent:', props.currentAgent)
+      return result
     })
 
     const hasKnowledgeBase = computed(() => {
-      if (!props.currentAgent) return false
+      if (!props.currentAgent) {
+        console.log('[BT STATUS] hasKnowledgeBase: false (no agent)')
+        return false
+      }
       // Check for knowledge bases array (multiple KBs)
       if (props.currentAgent.knowledgeBases && props.currentAgent.knowledgeBases.length > 0) {
+        console.log('[BT STATUS] hasKnowledgeBase: true (knowledgeBases array)', props.currentAgent.knowledgeBases)
         return true
       }
       // Check for single knowledge base object
       if (props.currentAgent.knowledgeBase) {
+        console.log('[BT STATUS] hasKnowledgeBase: true (knowledgeBase object)', props.currentAgent.knowledgeBase)
         return true
       }
+      console.log('[BT STATUS] hasKnowledgeBase: false (no KB attached)')
       return false
     })
 
@@ -858,19 +868,24 @@ export default defineComponent({
     const availableKBs = ref<any[]>([])
     
     const fetchAvailableKBs = async () => {
-      if (!props.currentUser) return
+      if (!props.currentUser) {
+        console.log('[BT STATUS] fetchAvailableKBs: skipped (no user)')
+        return
+      }
       
       try {
         const userId = typeof props.currentUser === 'string' 
           ? props.currentUser 
           : props.currentUser.userId || props.currentUser.displayName
         
+        console.log('[BT STATUS] Fetching available KBs for user:', userId)
         const response = await fetch(`/api/knowledge-bases?user=${userId}`)
         if (response.ok) {
           availableKBs.value = await response.json()
+          console.log('[BT STATUS] Fetched available KBs:', availableKBs.value.length, availableKBs.value)
         }
       } catch (error) {
-        console.error('Failed to fetch available KBs:', error)
+        console.error('[BT STATUS] Failed to fetch available KBs:', error)
         availableKBs.value = []
       }
     }
@@ -882,10 +897,16 @@ export default defineComponent({
 
     const hasUnattachedKB = computed(() => {
       // Must have an agent first
-      if (!props.currentAgent || !props.currentAgent.id) return false
+      if (!props.currentAgent || !props.currentAgent.id) {
+        console.log('[BT STATUS] hasUnattachedKB: false (no agent)')
+        return false
+      }
       
       // Check if there are available KBs
-      if (availableKBs.value.length === 0) return false
+      if (availableKBs.value.length === 0) {
+        console.log('[BT STATUS] hasUnattachedKB: false (no available KBs)')
+        return false
+      }
       
       // Get attached KB IDs
       const attachedKBIds = new Set()
@@ -898,9 +919,13 @@ export default defineComponent({
         attachedKBIds.add(props.currentAgent.knowledgeBase.uuid || props.currentAgent.knowledgeBase.id)
       }
       
+      console.log('[BT STATUS] Attached KB IDs:', Array.from(attachedKBIds))
+      console.log('[BT STATUS] Available KB IDs:', availableKBs.value.map(kb => kb.uuid || kb.id))
+      
       // Check if there are any available KBs not attached
       const hasUnattached = availableKBs.value.some(kb => !attachedKBIds.has(kb.uuid || kb.id))
       
+      console.log('[BT STATUS] hasUnattachedKB:', hasUnattached)
       return hasUnattached
     })
 
