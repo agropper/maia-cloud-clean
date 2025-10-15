@@ -8454,31 +8454,35 @@ async function ensureAllUserBuckets() {
       try {
         const existingAgents = await cacheManager.getAllDocuments(couchDBClient, 'maia_agents');
         const doAgentNames = new Set(rawAgents.map(agent => agent.name));
-        const orphanedAgents = existingAgents.filter(doc => !doAgentNames.has(doc._id));
         
-        if (orphanedAgents.length > 0) {
-          console.log(`🔄 [STARTUP] Cleaning up ${orphanedAgents.length} orphaned agents from maia_agents database...`);
+        // Find agents in database that are NOT in DO API
+        const agentsToDelete = existingAgents.filter(doc => {
+          // Skip invalid documents
+          if (!doc._id || doc._id === 'undefined') {
+            return false;
+          }
+          // Check if this agent exists in DO API
+          return !doAgentNames.has(doc._id);
+        });
+        
+        if (agentsToDelete.length > 0) {
+          console.log(`🔄 [STARTUP] Found ${agentsToDelete.length} agents in database not in DO API - cleaning up...`);
           let deletedCount = 0;
-          for (const orphanedAgent of orphanedAgents) {
-            // Skip agents with undefined or invalid IDs
-            if (!orphanedAgent._id || orphanedAgent._id === 'undefined') {
-              console.warn(`⚠️ [STARTUP] Skipping agent with invalid ID: ${orphanedAgent._id}`);
-              continue;
-            }
+          for (const agentToDelete of agentsToDelete) {
             try {
-              await couchDBClient.deleteDocument('maia_agents', orphanedAgent._id);
-              console.log(`🟡 [STARTUP] Deleted orphaned agent: ${orphanedAgent._id}`);
+              await couchDBClient.deleteDocument('maia_agents', agentToDelete._id);
+              console.log(`🟡 [STARTUP] Deleted agent: ${agentToDelete._id}`);
               deletedCount++;
             } catch (deleteError) {
-              console.warn(`⚠️ [STARTUP] Failed to delete orphaned agent ${orphanedAgent._id}:`, deleteError.message);
+              console.warn(`⚠️ [STARTUP] Failed to delete agent ${agentToDelete._id}:`, deleteError.message);
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} orphaned agents removed`);
+          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} agents removed`);
         } else {
-          console.log('✅ [STARTUP] No orphaned agents found in maia_agents database');
+          console.log('✅ [STARTUP] All agents in database match DO API - no cleanup needed');
         }
       } catch (cleanupError) {
-        console.warn('⚠️ [STARTUP] Failed to cleanup orphaned agents:', cleanupError.message);
+        console.warn('⚠️ [STARTUP] Failed to cleanup agents:', cleanupError.message);
       }
       
     } catch (error) {
@@ -8564,48 +8568,35 @@ async function ensureAllUserBuckets() {
       try {
         const existingKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
         const doKBNames = new Set(doKBs.map(kb => kb.name));
-        const orphanedKBs = existingKBs.filter(doc => !doKBNames.has(doc._id));
         
-        if (orphanedKBs.length > 0) {
-          console.log(`🔄 [STARTUP] Cleaning up ${orphanedKBs.length} orphaned knowledge bases from maia_kb database...`);
+        // Find KBs in database that are NOT in DO API
+        const kbsToDelete = existingKBs.filter(doc => {
+          // Skip invalid documents
+          if (!doc._id || doc._id === 'undefined') {
+            return false;
+          }
+          // Check if this KB exists in DO API
+          return !doKBNames.has(doc._id);
+        });
+        
+        if (kbsToDelete.length > 0) {
+          console.log(`🔄 [STARTUP] Found ${kbsToDelete.length} knowledge bases in database not in DO API - cleaning up...`);
           let deletedCount = 0;
-          for (const orphanedKB of orphanedKBs) {
-            // Skip KBs with undefined or invalid IDs
-            if (!orphanedKB._id || orphanedKB._id === 'undefined') {
-              console.warn(`⚠️ [STARTUP] Skipping KB with invalid ID: ${orphanedKB._id}`);
-              continue;
-            }
-            
-            // Check if document actually exists before trying to delete
+          for (const kbToDelete of kbsToDelete) {
             try {
-              const docExists = await couchDBClient.getDocument('maia_kb', orphanedKB._id);
-              if (docExists) {
-                // Document exists, proceed with deletion
-                try {
-                  await couchDBClient.deleteDocument('maia_kb', orphanedKB._id);
-                  console.log(`🟡 [STARTUP] Deleted orphaned knowledge base: ${orphanedKB._id}`);
-                  deletedCount++;
-                } catch (deleteError) {
-                  console.warn(`⚠️ [STARTUP] Failed to delete orphaned KB ${orphanedKB._id}:`, deleteError.message);
-                }
-              } else {
-                console.log(`ℹ️ [STARTUP] KB ${orphanedKB._id} already deleted or doesn't exist`);
-              }
-            } catch (checkError) {
-              // Document doesn't exist (404 error), which is fine
-              if (checkError.statusCode === 404) {
-                console.log(`ℹ️ [STARTUP] KB ${orphanedKB._id} already deleted or doesn't exist`);
-              } else {
-                console.warn(`⚠️ [STARTUP] Error checking KB ${orphanedKB._id}:`, checkError.message);
-              }
+              await couchDBClient.deleteDocument('maia_kb', kbToDelete._id);
+              console.log(`🟡 [STARTUP] Deleted knowledge base: ${kbToDelete._id}`);
+              deletedCount++;
+            } catch (deleteError) {
+              console.warn(`⚠️ [STARTUP] Failed to delete KB ${kbToDelete._id}:`, deleteError.message);
             }
           }
-          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} orphaned knowledge bases removed`);
+          console.log(`✅ [STARTUP] Cleanup completed: ${deletedCount} knowledge bases removed`);
         } else {
-          console.log('✅ [STARTUP] No orphaned knowledge bases found in maia_kb database');
+          console.log('✅ [STARTUP] All knowledge bases in database match DO API - no cleanup needed');
         }
       } catch (cleanupError) {
-        console.warn('⚠️ [STARTUP] Failed to cleanup orphaned knowledge bases:', cleanupError.message);
+        console.warn('⚠️ [STARTUP] Failed to cleanup knowledge bases:', cleanupError.message);
       }
       
       // Continue with existing logic...
