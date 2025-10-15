@@ -7073,9 +7073,20 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 6: Start indexing (MUST index before attaching to agent)
-    console.log(`🤖 [AUTO PS] Starting indexing for KB ${kbId}`);
-    const dataSourceUuid = kb.datasources[0].spaces_data_source.uuid;
+    // Step 6: Get KB details to extract datasource UUID
+    console.log(`🤖 [AUTO PS] Getting KB details for indexing`);
+    const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+    const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
+    const kbFull = kbDetails.knowledge_base || kbDetails;
+    
+    if (!kbFull.datasources || kbFull.datasources.length === 0) {
+      throw new Error('KB created but has no datasources - cannot start indexing');
+    }
+    
+    const dataSourceUuid = kbFull.datasources[0].spaces_data_source.uuid;
+    console.log(`🤖 [AUTO PS] Starting indexing with datasource: ${dataSourceUuid}`);
+    
+    // Step 7: Start indexing (MUST index before attaching to agent)
     const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
       method: 'POST',
       body: JSON.stringify({
@@ -7086,7 +7097,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     const indexingJob = indexingResponse.data || indexingResponse;
     const jobId = indexingJob.uuid || indexingJob.id;
     
-    // Step 7: Poll for indexing completion
+    // Step 8: Poll for indexing completion
     console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
     let indexingComplete = false;
     let attempts = 0;
@@ -7125,14 +7136,14 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('Indexing timeout after 5 minutes');
     }
     
-    // Step 8: Attach KB to agent (AFTER indexing completes)
+    // Step 9: Attach KB to agent (AFTER indexing completes)
     console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
     await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
       method: 'POST'
     });
     console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
-    // Step 9: Update maia_kb document with file and token info
+    // Step 10: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
@@ -7147,7 +7158,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 10: Generate patient summary via Personal AI
+    // Step 11: Generate patient summary via Personal AI
     console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
     
     // Make request to Personal AI with the patient summary prompt
@@ -7167,7 +7178,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Patient summary generated (${summary.length} characters)`);
     
-    // Step 11: Save patient summary to user document
+    // Step 12: Save patient summary to user document
     console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
     userDoc.patientSummary = {
       content: summary,
@@ -7180,7 +7191,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     userDoc.updatedAt = new Date().toISOString();
     await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
-    // Step 12: Rebuild agent template to update status icons
+    // Step 13: Rebuild agent template to update status icons
     console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
     await buildAgentManagementTemplate(userId);
     
