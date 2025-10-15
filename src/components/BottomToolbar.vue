@@ -158,11 +158,9 @@
             </div>
             
             <div class="tooltip-wrapper">
-              <span class="status-text">saved chats</span>
+              <span class="status-text">saved chats and</span>
               <div class="tooltip-text">Choose a saved and shared chat.</div>
             </div>
-            
-            <span class="status-text">; &nbsp;</span>
             
             <!-- Agent Icon -->
             <div class="tooltip-wrapper">
