@@ -5091,6 +5091,9 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
       try {
         const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
         
+        const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+        const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+        
         const s3Client = new S3Client({
           endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
           region: process.env.DIGITALOCEAN_REGION || 'tor1',
