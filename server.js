@@ -325,26 +325,41 @@ const getOrCreatePublicUserSession = (req) => {
 };
 
 const trackPublicUserActivity = (req) => {
+  console.log(`[CLOUD D] trackPublicUserActivity called for path: ${req.path}`);
+  
   // Check if there's an authenticated user - if so, don't create Public User session
   const authCookie = req.cookies?.maia_auth;
+  console.log(`[CLOUD D]   - authCookie exists: ${!!authCookie}`);
+  
   if (authCookie) {
     try {
       const authData = JSON.parse(authCookie);
       const now = new Date();
       const expiresAt = new Date(authData.expiresAt);
       
+      console.log(`[CLOUD D]   - authData.userId: ${authData.userId}`);
+      console.log(`[CLOUD D]   - Cookie expired: ${now >= expiresAt}`);
+      
       // If there's a valid authenticated user, don't create Public User session
       if (now < expiresAt && authData.userId && authData.userId !== 'Public User') {
-        // console.log(`[SESSION] Skipping Public User session - authenticated as ${authData.userId}`);
+        console.log(`[CLOUD D]   - Authenticated user detected: ${authData.userId}, skipping Public User session`);
         return null;
       }
+      
+      console.log(`[CLOUD D]   - Cookie invalid or expired or is Public User, creating Public User session`);
     } catch (error) {
+      console.log(`[CLOUD D]   - Error parsing authCookie: ${error.message}, creating Public User session`);
       // Invalid cookie, proceed to create Public User session
     }
+  } else {
+    console.log(`[CLOUD D]   - No authCookie, creating Public User session`);
   }
   
   // No authenticated user - create/update Public User session
+  console.log(`[CLOUD D]   - Calling getOrCreatePublicUserSession`);
   const session = getOrCreatePublicUserSession(req);
+  console.log(`[CLOUD D]   - Session created/retrieved: ${session.sessionId}, userId: ${session.userId}`);
+  
   // Only log on initial page load, not on every polling request
   if (req.path === '/') {
     console.log(`[PAGE LOAD] Public User polling started`);
@@ -2208,6 +2223,20 @@ async function reconcileUserFiles(userId) {
 
 // Helper function to get bucket status (reusable for startup and API)
 async function getBucketStatusForUser(userId) {
+  console.log(`[CLOUD D] getBucketStatusForUser called with userId: "${userId}" (type: ${typeof userId})`);
+  
+  if (!userId || userId === 'undefined' || userId === undefined) {
+    console.error(`[CLOUD D] ❌ INVALID userId passed to getBucketStatusForUser: "${userId}"`);
+    console.error(`[CLOUD D] ❌ This will create an "undefined" folder in the bucket!`);
+    console.error(`[CLOUD D] ❌ Stack trace:`, new Error().stack);
+    return {
+      hasFolder: false,
+      fileCount: 0,
+      totalSize: 0,
+      files: []
+    };
+  }
+  
   try {
     const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
     
@@ -2758,33 +2787,46 @@ app.post('/api/personal-chat', async (req, res) => {
     // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
     let currentUser = 'Public User';
     
+    console.log(`[CLOUD D] /api/personal-chat - Identifying user`);
+    
     // Check authentication cookie first
     const authCookie = req.cookies?.maia_auth;
+    console.log(`[CLOUD D]   - authCookie exists: ${!!authCookie}`);
+    
     if (authCookie) {
       try {
         const authData = JSON.parse(authCookie);
         const now = new Date();
         const expiresAt = new Date(authData.expiresAt);
         
+        console.log(`[CLOUD D]   - authData.userId: ${authData.userId}`);
+        console.log(`[CLOUD D]   - Cookie expired: ${now >= expiresAt}`);
+        
         // If cookie is valid and not expired, use the authenticated user
         if (now < expiresAt && authData.userId) {
           currentUser = authData.userId;
-          // console.log(`🔐 [personal-chat] Using authenticated user from cookie: ${currentUser}`);
+          console.log(`[CLOUD D]   - Using user from cookie: ${currentUser}`);
         }
       } catch (error) {
+        console.log(`[CLOUD D]   - Error parsing cookie: ${error.message}`);
         // Invalid cookie, proceed with other methods
       }
     }
     
     // Fallback to request body (for deep link users who send currentUser explicitly)
     if (currentUser === 'Public User' && req.body.currentUser) {
-      currentUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || currentUser;
+      const bodyUser = req.body.currentUser?.userId || req.body.currentUser?.displayName || currentUser;
+      console.log(`[CLOUD D]   - Found currentUser in request body: ${bodyUser}`);
+      currentUser = bodyUser;
     }
     
     // Final fallback to session (legacy support)
     if (currentUser === 'Public User' && req.session?.userId) {
+      console.log(`[CLOUD D]   - Found userId in session: ${req.session.userId}`);
       currentUser = req.session.userId;
     }
+    
+    console.log(`[CLOUD D]   - FINAL currentUser: ${currentUser}`);
     
     // EARLY CHECK: If this is a "show page ###" request, return PDF file info
     if (isShowPageRequest && currentUser !== 'Public User') {

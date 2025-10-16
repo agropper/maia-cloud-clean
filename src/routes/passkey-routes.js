@@ -921,11 +921,14 @@ router.get("/auth-status", async (req, res) => {
         });
       } else {
         console.error(`❌ User document not found for userId: ${req.session.userId}`);
+        console.error(`[CLOUD D] Session userId is: "${req.session.userId}" (type: ${typeof req.session.userId})`);
+        console.error(`[CLOUD D] Session object:`, JSON.stringify(req.session, null, 2));
         // Session exists but user document not found, clear session
         req.session.destroy();
         res.json({ authenticated: false, message: "User not found" });
       }
     } else {
+      console.log(`[CLOUD D] /api/auth-status - No session.userId, treating as Public User`);
       // Public User - no authentication required
       res.json({ authenticated: false, message: "No active session" });
     }
