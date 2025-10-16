@@ -406,6 +406,7 @@ export default defineComponent({
         name: 'System'
       };
       appState.chatHistory.push(requestMessage);
+      console.log('[AUTO PS] ✅ Step 1 complete: Request message posted');
       
       // Show loading indicator
       appState.isLoading = true;
@@ -413,11 +414,13 @@ export default defineComponent({
       try {
         // Step 2: Get user info from backend
         const userId = currentUser.value?.userId || currentUser.value?.displayName;
+        console.log(`[AUTO PS] Step 2: Checking user authentication (userId: ${userId})`);
         if (!userId || userId === 'Public User') {
           throw new Error('User must be authenticated');
         }
+        console.log(`[AUTO PS] ✅ User authenticated: ${userId}`);
         
-        console.log(`[AUTO PS] Step 2: Fetching user document for ${userId}`);
+        console.log(`[AUTO PS] Step 3: Fetching user document from /api/users/${userId}`);
         
         // Get user document from backend to find files
         const userResponse = await fetch(`/api/users/${userId}`);
@@ -426,16 +429,20 @@ export default defineComponent({
         }
         
         const userData = await userResponse.json();
+        console.log(`[AUTO PS] ✅ User document fetched, files count: ${userData.files?.length || 0}`);
+        
         if (!userData.files || userData.files.length === 0) {
           throw new Error('No files found in user document');
         }
         
         // Get the most recent file (last in array)
         const recentFile = userData.files[userData.files.length - 1];
-        console.log(`[AUTO PS] Using file "${recentFile.fileName}" (bucketKey: ${recentFile.bucketKey})`);
+        console.log(`[AUTO PS] Step 4: Using most recent file "${recentFile.fileName}"`);
+        console.log(`[AUTO PS]   - bucketKey: ${recentFile.bucketKey}`);
+        console.log(`[AUTO PS]   - fileSize: ${recentFile.fileSize} bytes`);
         
-        // Step 3: Call backend automation endpoint
-        console.log(`[AUTO PS] Step 3: Calling backend automation endpoint`);
+        // Step 5: Call backend automation endpoint
+        console.log(`[AUTO PS] Step 5: Calling backend automation endpoint`);
         const response = await fetch('/api/automate-kb-and-summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -446,26 +453,38 @@ export default defineComponent({
           })
         });
         
+        console.log(`[AUTO PS] Step 6: Backend responded with status ${response.status}`);
+        
         if (!response.ok) {
           const error = await response.json();
+          console.error(`[AUTO PS] ❌ Backend error: ${error.message || 'Unknown error'}`);
           throw new Error(error.message || `HTTP ${response.status}`);
         }
         
         const result = await response.json();
-        console.log('[AUTO PS] ✅ Automation completed successfully:', result);
+        console.log('[AUTO PS] ✅ Step 6 complete: Backend automation finished');
+        console.log(`[AUTO PS]   - KB created: ${result.kbId || 'N/A'}`);
+        console.log(`[AUTO PS]   - Tokens indexed: ${result.tokensIndexed || 0}`);
+        console.log(`[AUTO PS]   - Summary generated: ${result.summary ? 'Yes' : 'No'}`);
         
-        // Step 4: Add patient summary to chat
+        // Step 7: Add patient summary to chat
         if (result.summary) {
-          console.log('[AUTO PS] Step 4: Patient summary posted to chat area');
+          console.log('[AUTO PS] Step 7: Adding patient summary to chat');
           appState.chatHistory.push({
             role: 'assistant',
             content: result.summary,
             name: 'Personal AI'
           });
+          console.log('[AUTO PS] ✅ Step 7 complete: Summary added to chat');
         }
         
-        // Step 5: Refresh agent data to update KB status
+        // Step 8: Refresh agent data to update KB status
+        console.log('[AUTO PS] Step 8: Refreshing agent data to update UI');
         await refreshAgentData();
+        console.log('[AUTO PS] ✅ Step 8 complete: Agent data refreshed');
+        
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[AUTO PS] ✅ AUTOMATION COMPLETE - Total time: ${totalTime}s`);
         
         $q.notify({
           type: 'positive',
@@ -474,7 +493,9 @@ export default defineComponent({
         });
         
       } catch (error) {
-        console.error('[AUTO PS] ❌ Error:', error);
+        console.error('[AUTO PS] ❌ AUTOMATION FAILED:', error);
+        console.error(`[AUTO PS] ❌ Error message: ${error.message}`);
+        console.error(`[AUTO PS] ❌ Error stack: ${error.stack}`);
         appState.chatHistory.push({
           role: 'assistant',
           content: `❌ **Error**: ${error.message}`,
@@ -483,6 +504,7 @@ export default defineComponent({
         throw error;
       } finally {
         appState.isLoading = false;
+        console.log('[AUTO PS] Loading indicator cleared');
       }
     };
 
@@ -676,6 +698,43 @@ export default defineComponent({
     // NOTE: checkForKnowledgeBaseWelcome() is ONLY called by @file-uploaded event
     // NOT by a watcher, because we only want to show CreateKBActionModal AFTER
     // a file is actually uploaded, not just because user has agent but no KB
+
+    // Check if user needs to be guided to upload a file for KB creation
+    const checkForNoKBWelcome = () => {
+      // Must have a current user (not null/undefined)
+      if (!currentUser.value) {
+        return;
+      }
+      
+      // Skip for deep link users
+      if (currentUser.value.userId?.startsWith('deep_link_')) {
+        return;
+      }
+      
+      // Skip for Public User (they have their own modal)
+      if (currentUser.value.userId === 'Public User') {
+        return;
+      }
+      
+      // Must have an agent (shown in Agent Badge)
+      if (!currentAgent.value) {
+        return;
+      }
+      
+      // Must NOT have a KB attached (from Agent Badge)
+      if (currentKnowledgeBase.value) {
+        return;
+      }
+
+      // ✅ User has agent but no KB - show KnowledgeBaseWelcomeModal to guide file upload
+      console.log(`[WM] KnowledgeBaseWelcomeModal triggered: user ${currentUser.value.userId} has agent but no KB`);
+      showKnowledgeBaseWelcomeModal.value = true;
+    };
+
+    // Watch for user, agent, and KB changes to show file upload guidance
+    watch([currentUser, currentAgent, currentKnowledgeBase], () => {
+      checkForNoKBWelcome();
+    }, { immediate: true });
 
     // Check if Public User needs KB attachment warning
     const checkForPublicUserNoKB = () => {
