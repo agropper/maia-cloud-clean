@@ -99,6 +99,9 @@ import {
 } from 'quasar'
 import HelpPage from './HelpPage.vue'
 
+// Module-level flag to prevent double-mount across ALL instances
+let globalHasChecked = false
+
 // Props for v-model support
 const props = defineProps({
   modelValue: {
@@ -113,7 +116,6 @@ const emit = defineEmits(['update:modelValue'])
 const showModal = ref(false)
 const showHelpPage = ref(false)
 const currentPage = ref(1)
-const hasChecked = ref(false) // Prevent double-mount issues
 
 // Watch for external modelValue changes
 watch(() => props.modelValue, (newValue) => {
@@ -168,12 +170,12 @@ const handleHelpClose = () => {
 }
 
 onMounted(() => {
-  // Prevent double-mount from showing modal twice
-  if (hasChecked.value) {
-    console.log(`[WM] WelcomeModal (3-page) skipped: already checked in this session`)
+  // Prevent double-mount from showing modal twice (use module-level variable)
+  if (globalHasChecked) {
+    console.log(`[WM] WelcomeModal (3-page) skipped: already checked by another instance`)
     return
   }
-  hasChecked.value = true
+  globalHasChecked = true
   
   // Check cookie (expires in 7 days)
   const welcomeCookie = getCookie('maia-welcome-seen')
