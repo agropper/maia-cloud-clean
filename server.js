@@ -2701,9 +2701,6 @@ app.post('/api/personal-chat', async (req, res) => {
     // Process personal chat request
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
     
-    console.log(`🔍 [USE STORED PS] Received personal chat request`);
-    console.log(`🔍 [USE STORED PS] User message: "${newValue}"`);
-    
     // Filter out any existing system messages since the GenAI agent has its own system prompt
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
@@ -2732,8 +2729,6 @@ app.post('/api/personal-chat', async (req, res) => {
                                    /patient\s+summary/i.test(newValue) || 
                                    /create.*summary/i.test(newValue) ||
                                    /generate.*summary/i.test(newValue);
-    
-    console.log(`🔍 [USE STORED PS] Is patient summary request? ${isPatientSummaryRequest}`);
 
     // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
     let currentUser = 'Public User';
@@ -2766,19 +2761,13 @@ app.post('/api/personal-chat', async (req, res) => {
       currentUser = req.session.userId;
     }
     
-    console.log(`🔍 [USE STORED PS] Current user identified: ${currentUser}`);
-    
     // EARLY CHECK: If this is a patient summary request, check for cached summary BEFORE any other processing
     if (isPatientSummaryRequest && currentUser !== 'Public User') {
       try {
-        console.log(`🔍 [USE STORED PS] Checking for cached summary (early check)...`);
         const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
-        console.log(`🔍 [USE STORED PS] Has patientSummary object? ${!!userDoc?.patientSummary}`);
-        console.log(`🔍 [USE STORED PS] Has content? ${!!userDoc?.patientSummary?.content}`);
         
         if (userDoc && userDoc.patientSummary && userDoc.patientSummary.content) {
-          console.log(`✅ [USE STORED PS] Found existing patient summary for ${currentUser}`);
-          console.log(`✅ [USE STORED PS] Summary length: ${userDoc.patientSummary.content.length} characters`);
+          console.log(`📋 [PATIENT SUMMARY] Using cached summary for ${currentUser}`);
           
           // Add the cached summary to chat history and return immediately
           const newChatHistory = [...chatHistory];
@@ -2788,17 +2777,13 @@ app.post('/api/personal-chat', async (req, res) => {
             name: 'Personal AI'
           });
           
-          console.log(`✅ [USE STORED PS] Returning cached summary in chat history format`);
-          
           // Update user activity
           updateUserActivity(currentUser);
           
           return res.json(newChatHistory);
-        } else {
-          console.log(`🔍 [USE STORED PS] No cached summary found - will generate new one`);
         }
       } catch (cacheCheckError) {
-        console.error(`❌ [USE STORED PS] Error checking cached summary:`, cacheCheckError.message);
+        console.error(`❌ Error checking cached summary:`, cacheCheckError.message);
         // Continue with normal flow if cache check fails
       }
     }
