@@ -210,6 +210,7 @@
                   :color="hasPatientSummary ? 'accent' : 'grey-5'"
                   class="status-icon patient-summary-icon"
                   :class="{ 'icon-disabled': !hasPatientSummary }"
+                  @click="handlePatientSummaryClick"
                 />
                 <div class="tooltip-text">{{ hasPatientSummary ? 'View patient summary' : 'No patient summary yet' }}</div>
               </div>
@@ -314,6 +315,19 @@
       @support-requested="handleSupportRequested"
     />
 
+    <!-- Patient Summary Modal -->
+    <PatientSummaryModal
+      v-model="showPatientSummaryModal"
+      @view="handleViewPatientSummary"
+      @redo="handleRedoPatientSummary"
+    />
+
+    <!-- Patient Summary View Modal -->
+    <PatientSummaryViewModal
+      v-model="showPatientSummaryViewModal"
+      :summary="patientSummaryData"
+    />
+
     <!-- Help Page Modal -->
     <HelpPage 
       v-if="showHelpModal" 
@@ -399,6 +413,8 @@ import GroupManagementModal from './GroupManagementModal.vue'
 import HelpPage from './HelpPage.vue'
 import WelcomeModal from './WelcomeModal.vue'
 import NewUserWelcomeModal from './NewUserWelcomeModal.vue'
+import PatientSummaryModal from './PatientSummaryModal.vue'
+import PatientSummaryViewModal from './PatientSummaryViewModal.vue'
 import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
@@ -430,7 +446,9 @@ export default defineComponent({
     GroupManagementModal,
     HelpPage,
     WelcomeModal,
-    NewUserWelcomeModal
+    NewUserWelcomeModal,
+    PatientSummaryModal,
+    PatientSummaryViewModal
   },
 
   props: {
@@ -509,6 +527,9 @@ export default defineComponent({
     const showHelpModal = ref(false)
     const showHelpWelcomeModal = ref(false)
     const showNewUserWelcomeModal = ref(false)
+    const showPatientSummaryModal = ref(false)
+    const showPatientSummaryViewModal = ref(false)
+    const patientSummaryData = ref(null)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
     
@@ -752,6 +773,47 @@ export default defineComponent({
       showHelpModal.value = false
     }
 
+    const handlePatientSummaryClick = () => {
+      // Only show modal if patient has a summary
+      if (hasPatientSummary.value) {
+        showPatientSummaryModal.value = true
+      }
+    }
+
+    const handleViewPatientSummary = async () => {
+      // Fetch the patient summary from the user document and display it in a modal
+      try {
+        const response = await fetch(`/api/users/${props.currentUser.userId}`)
+        const userData = await response.json()
+        
+        if (userData.patientSummary && userData.patientSummary.content) {
+          console.log('[*] Displaying cached patient summary')
+          patientSummaryData.value = userData.patientSummary
+          showPatientSummaryViewModal.value = true
+        } else {
+          $q.notify({
+            type: 'warning',
+            message: 'No patient summary found',
+            position: 'top'
+          })
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch patient summary:', error)
+        $q.notify({
+          type: 'negative',
+          message: 'Failed to retrieve patient summary',
+          position: 'top'
+        })
+      }
+    }
+
+    const handleRedoPatientSummary = () => {
+      // Clear the existing summary and trigger a new generation
+      console.log('[*] Requesting new patient summary generation')
+      // Emit to parent to send the patient summary request
+      emit('write-message', 'Create a comprehensive patient summary according to your agent instructions')
+    }
+
     // Function to check if we should show the new user welcome modal
     const shouldShowNewUserWelcomeModal = async (user) => {
       if (!user || !user.userId || user.userId === 'Public User') {
@@ -933,12 +995,18 @@ export default defineComponent({
       showHelpModal,
       showHelpWelcomeModal,
       showNewUserWelcomeModal,
+      showPatientSummaryModal,
+      showPatientSummaryViewModal,
+      patientSummaryData,
       isSendingContact,
       contactForm,
       contactMessageTypes,
       handleGroupDeleted,
       handleChatLoaded,
       handleIconClick,
+      handlePatientSummaryClick,
+      handleViewPatientSummary,
+      handleRedoPatientSummary,
       copyDeepLink,
       isUserUnknown,
       handleFileUpload,

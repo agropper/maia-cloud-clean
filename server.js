@@ -3170,6 +3170,10 @@ app.post('/api/personal-chat', async (req, res) => {
           userDoc.updatedAt = new Date().toISOString();
           await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
           console.log(`📋 [PATIENT SUMMARY] ✅ Patient summary saved successfully`);
+          
+          // Rebuild template to update patient summary icon immediately
+          await buildAgentManagementTemplate(currentUser);
+          console.log(`📋 [PATIENT SUMMARY] Template rebuilt for ${currentUser}`);
         }
       } catch (saveError) {
         console.error(`📋 [PATIENT SUMMARY] ❌ Failed to save patient summary:`, saveError.message);
