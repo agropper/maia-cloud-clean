@@ -79,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { QBtn, QIcon, QSpinnerDots } from 'quasar'
 import { VuePDF, usePDF } from '@tato30/vue-pdf'
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
@@ -133,6 +133,8 @@ const onPdfLoaded = (pdf) => {
   isLoading.value = false
 }
 
+const loadingTask = ref(null)
+
 const loadPdfDocument = async () => {
   try {
     isLoading.value = true
@@ -140,8 +142,8 @@ const loadPdfDocument = async () => {
     pdfErrorMessage.value = ''
     
     // Load the PDF document
-    const loadingTask = pdfjsLib.getDocument(pdfUrl.value)
-    pdfDocument.value = loadingTask
+    loadingTask.value = pdfjsLib.getDocument(pdfUrl.value)
+    pdfDocument.value = loadingTask.value
     
   } catch (error) {
     console.error('❌ Failed to load help PDF:', error)
@@ -162,6 +164,19 @@ onMounted(() => {
   if (props.isVisible) {
     loadPdfDocument()
   }
+})
+
+onUnmounted(() => {
+  // Clean up PDF loading task to prevent errors
+  if (loadingTask.value && loadingTask.value.destroy) {
+    try {
+      loadingTask.value.destroy()
+    } catch (error) {
+      // Silently ignore cleanup errors
+    }
+  }
+  pdfDocument.value = null
+  loadingTask.value = null
 })
 </script>
 
