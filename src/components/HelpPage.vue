@@ -154,9 +154,16 @@ const loadPdfDocument = async () => {
 }
 
 // Watch for visibility changes to load PDF
-watch(() => props.isVisible, (newVal) => {
+watch(() => props.isVisible, (newVal, oldVal) => {
   if (newVal && !pdfDocument.value) {
     loadPdfDocument()
+  } else if (!newVal && oldVal) {
+    // Component is being hidden - clean up PDF
+    pdfDocument.value = null
+    loadingTask.value = null
+    currentPage.value = 1
+    totalPages.value = 0
+    isLoading.value = false
   }
 }, { immediate: true })
 
@@ -167,14 +174,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Clean up PDF loading task to prevent errors
-  if (loadingTask.value && loadingTask.value.destroy) {
-    try {
-      loadingTask.value.destroy()
-    } catch (error) {
-      // Silently ignore cleanup errors
-    }
-  }
+  // Clean up when component is destroyed
   pdfDocument.value = null
   loadingTask.value = null
 })
