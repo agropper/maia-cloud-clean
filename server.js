@@ -8960,14 +8960,49 @@ app.listen(PORT, async () => {
       
       // Get current agents from cache (just populated above)
       const currentAgents = cacheManager.getCachedAgentsSync();
+      
+      // DEBUG: Show what we got from cache
+      console.log(`🔍 [STARTUP VALIDATION] Retrieved ${currentAgents.length} agents from cache`);
+      console.log(`🔍 [STARTUP VALIDATION] Cache type:`, Array.isArray(currentAgents) ? 'Array' : typeof currentAgents);
+      
+      if (currentAgents.length > 0) {
+        console.log(`🔍 [STARTUP VALIDATION] First agent structure:`, JSON.stringify(currentAgents[0], null, 2));
+        console.log(`🔍 [STARTUP VALIDATION] First agent has 'uuid'?`, currentAgents[0].uuid);
+        console.log(`🔍 [STARTUP VALIDATION] First agent has 'id'?`, currentAgents[0].id);
+      } else {
+        console.log(`⚠️ [STARTUP VALIDATION] WARNING: No agents in cache!`);
+      }
+      
       const agentIds = new Set(currentAgents.map(agent => agent.uuid || agent.id));
+      
+      console.log(`🔍 [STARTUP VALIDATION] Agent IDs extracted into Set:`);
+      console.log(`🔍 [STARTUP VALIDATION] Set size: ${agentIds.size}`);
+      console.log(`🔍 [STARTUP VALIDATION] Set contents:`, Array.from(agentIds));
       
       let cleanedCount = 0;
       
       for (const userDoc of allUserDocs) {
         if (userDoc.assignedAgentId && !agentIds.has(userDoc.assignedAgentId)) {
-          // Agent deleted from DO - clean up user document
-          console.log(`🟡 [STARTUP] Cleaning deleted agent from user ${userDoc.userId}: ${userDoc.assignedAgentName} (${userDoc.assignedAgentId})`);
+          // Agent appears to be missing - do thorough check before deleting
+          console.log(`🔍 [STARTUP VALIDATION] Checking user ${userDoc.userId} with potential missing agent:`);
+          console.log(`  - User's assignedAgentId: ${userDoc.assignedAgentId}`);
+          console.log(`  - User's assignedAgentName: ${userDoc.assignedAgentName}`);
+          console.log(`  - Set.has(assignedAgentId): ${agentIds.has(userDoc.assignedAgentId)}`);
+          
+          // Backup check: Find agent by name (in case of ID mismatch)
+          const agentByName = currentAgents.find(a => a.name === userDoc.assignedAgentName);
+          if (agentByName) {
+            console.log(`  - ⚠️ FOUND AGENT BY NAME! ID mismatch detected:`);
+            console.log(`    - User doc has ID: ${userDoc.assignedAgentId}`);
+            console.log(`    - DO API agent has uuid: ${agentByName.uuid}`);
+            console.log(`    - DO API agent has id: ${agentByName.id}`);
+            console.log(`  - 🛑 SKIPPING CLEANUP - This is an ID mismatch, not a deleted agent!`);
+            console.log(`  - 💡 Consider updating user doc to match DO API ID`);
+            continue; // Don't delete - just an ID format issue
+          }
+          
+          // Only delete if we're CERTAIN the agent doesn't exist
+          console.log(`🟡 [STARTUP] Confirmed agent deleted - cleaning up user ${userDoc.userId}: ${userDoc.assignedAgentName} (${userDoc.assignedAgentId})`);
           
           userDoc.assignedAgentId = null;
           userDoc.assignedAgentName = null;
