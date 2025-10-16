@@ -9036,6 +9036,63 @@ app.listen(PORT, async () => {
         console.log(`✅ [STARTUP] Cleaned ${cleanedCount} users with deleted agents`);
       }
       
+      // REVERSE VALIDATION: Find agents that exist in DO but are missing from user documents
+      // This restores consistency when users have been cleaned up but agents still exist
+      console.log(`🔄 [STARTUP] Checking for agents missing from user documents...`);
+      
+      let restoredCount = 0;
+      
+      // Build a map of agent names to agent details for quick lookup
+      const agentsByName = new Map();
+      for (const agent of currentAgents) {
+        agentsByName.set(agent.name, agent);
+      }
+      
+      // Check each user document
+      for (const userDoc of allUserDocs) {
+        // Skip Public User and deep link users
+        if (userDoc.userId === 'Public User' || userDoc.userId?.startsWith('deep_link_')) {
+          continue;
+        }
+        
+        // Look for agents that belong to this user (agent name starts with userId)
+        const userAgentPrefix = `${userDoc.userId}-agent-`;
+        let userAgent = null;
+        
+        for (const [agentName, agent] of agentsByName) {
+          if (agentName.startsWith(userAgentPrefix)) {
+            userAgent = agent;
+            break;
+          }
+        }
+        
+        // If we found an agent for this user but they don't have it assigned
+        if (userAgent && !userDoc.assignedAgentId) {
+          console.log(`🔧 [STARTUP] Restoring agent to user ${userDoc.userId}: ${userAgent.name} (${userAgent.id})`);
+          
+          userDoc.assignedAgentId = userAgent.id;
+          userDoc.assignedAgentName = userAgent.name;
+          userDoc.agentAssignedAt = userAgent.createdAt || new Date().toISOString();
+          userDoc.agentDeployedAt = userAgent.updatedAt || new Date().toISOString();
+          
+          // Update workflow stage to agent_assigned if it's at an earlier stage
+          if (userDoc.workflowStage === 'request_email_sent' || 
+              userDoc.workflowStage === 'approved' || 
+              userDoc.workflowStage === 'polling_for_deployment') {
+            userDoc.workflowStage = 'agent_assigned';
+          }
+          
+          userDoc.updatedAt = new Date().toISOString();
+          
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+          restoredCount++;
+        }
+      }
+      
+      if (restoredCount > 0) {
+        console.log(`✅ [STARTUP] Restored ${restoredCount} users with missing agent assignments`);
+      }
+      
     } catch (cleanupError) {
       console.warn('⚠️ [STARTUP] Failed to clean up user agent assignments:', cleanupError.message);
     }
