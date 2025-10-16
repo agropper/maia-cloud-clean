@@ -2721,7 +2721,12 @@ app.post('/api/personal-chat', async (req, res) => {
     }
     
     // Combine context with user message for AI, but keep original for chat history
-    const aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+    let aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
+    
+    // Check if this is a patient summary request
+    const isPatientSummaryRequest = /patient\s+summary/i.test(newValue) || 
+                                   /create.*summary/i.test(newValue) ||
+                                   /generate.*summary/i.test(newValue);
 
     // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
     let currentUser = 'Public User';
@@ -2954,6 +2959,23 @@ app.post('/api/personal-chat', async (req, res) => {
               if (agentData.knowledge_bases) {
                 knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
               }
+              
+              // If this is a patient summary request, check if we already have one
+              if (isPatientSummaryRequest && userDoc.patientSummary && userDoc.patientSummary.content) {
+                console.log(`📋 [PATIENT SUMMARY] Found existing patient summary for ${currentUser}`);
+                // Return the existing patient summary immediately
+                return res.json({
+                  response: userDoc.patientSummary.content,
+                  fromCache: true,
+                  createdAt: userDoc.patientSummary.createdAt,
+                  kbUsed: userDoc.patientSummary.kbUsed,
+                  tokens: userDoc.patientSummary.tokens
+                });
+              } else if (isPatientSummaryRequest) {
+                console.log(`📋 [PATIENT SUMMARY] No existing summary found, will generate new one`);
+                // Override the user message to use the standard prompt
+                aiUserMessage = 'Create a comprehensive patient summary according to your agent instructions';
+              }
             } else {
               // console.log(`🔍 [personal-chat] User's current agent ${userDoc.currentAgentName} has no deployment URL`);
             }
@@ -3059,30 +3081,20 @@ app.post('/api/personal-chat', async (req, res) => {
     }
 
     // Get agent-specific API key
-    console.log(`🔑 [PERSONAL CHAT] Looking up API key for agent: ${agentId}`);
-    console.log(`🔑 [PERSONAL CHAT] Current user: ${currentUser.userId}`);
-    console.log(`🔑 [PERSONAL CHAT] Assigned agent: ${currentUser.assignedAgentId}`);
-    console.log(`🔑 [PERSONAL CHAT] Assigned agent name: ${currentUser.assignedAgentName}`);
-    console.log(`🔑 [PERSONAL CHAT] API key stored in user doc: ${currentUser.agentApiKey ? currentUser.agentApiKey.substring(0, 10) + '...' : 'null'}`);
-    
     let agentApiKey;
     try {
       agentApiKey = await getAgentApiKey(agentId);
       
-      // API key retrieved successfully
-      console.log(`🔑 [PERSONAL CHAT] ✅ API key retrieved: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
-      
       // Check if we have a valid API key
       if (!agentApiKey) {
-        console.error(`❌ [PERSONAL CHAT] No API key available for agent: ${agentId}`);
+        console.error(`❌ No API key available for agent: ${agentId}`);
         return res.status(400).json({ 
           message: 'No API key available for the selected agent. Please contact support to configure agent authentication.',
           requiresAgentSelection: true
         });
       }
     } catch (error) {
-      console.error(`❌ [PERSONAL CHAT] Failed to get agent-specific API key:`, error.message);
-      console.error(`❌ [PERSONAL CHAT] Error stack:`, error.stack);
+      console.error(`❌ Failed to get agent-specific API key:`, error.message);
       return res.status(400).json({ 
         message: 'Failed to retrieve API key for the selected agent. Please contact support to configure agent authentication.',
         requiresAgentSelection: true
@@ -3141,6 +3153,29 @@ app.post('/api/personal-chat', async (req, res) => {
 //     console.log('🔍 [DEBUG] After adding AI response:');
     // console.log('  - new length:', newChatHistory.length);
     // console.log('  - last message:', newChatHistory[newChatHistory.length - 1]);
+
+    // If this was a patient summary request and we generated a new one, save it
+    if (isPatientSummaryRequest && response.choices[0].message.content && currentUser !== 'Public User') {
+      try {
+        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
+        if (userDoc) {
+          console.log(`📋 [PATIENT SUMMARY] Saving new patient summary for ${currentUser}`);
+          userDoc.patientSummary = {
+            content: response.choices[0].message.content,
+            createdAt: new Date().toISOString(),
+            kbUsed: agentName,
+            kbId: knowledgeBases[0] || null, // Use first KB if available
+            tokens: response.usage?.total_tokens || 0
+          };
+          userDoc.updatedAt = new Date().toISOString();
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+          console.log(`📋 [PATIENT SUMMARY] ✅ Patient summary saved successfully`);
+        }
+      } catch (saveError) {
+        console.error(`📋 [PATIENT SUMMARY] ❌ Failed to save patient summary:`, saveError.message);
+        // Don't fail the request, just log the error
+      }
+    }
 
     // Update user activity
     updateUserActivity(currentUser);
@@ -8842,18 +8877,10 @@ app.listen(PORT, async () => {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
       
-      // DEBUG: Show raw agent structure from DO API
-      if (rawAgents.length > 0) {
-        console.log(`🔍 [STARTUP] Raw agent from DO API (first agent):`, JSON.stringify(rawAgents[0], null, 2));
-        console.log(`🔍 [STARTUP] Raw agent fields:`, Object.keys(rawAgents[0]));
-        console.log(`🔍 [STARTUP] Raw agent.id:`, rawAgents[0].id);
-        console.log(`🔍 [STARTUP] Raw agent.uuid:`, rawAgents[0].uuid);
-      }
-      
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
         return {
-          id: agent.uuid || agent.id,  // FIX: Try uuid first (DO API uses 'uuid' field, not 'id')
+          id: agent.uuid || agent.id,  // Use uuid field from DO API (not 'id')
           name: agent.name,
           status: agent.status || 'unknown',
           model: agent.model || 'unknown',
@@ -8864,8 +8891,6 @@ app.listen(PORT, async () => {
           description: null
         };
       });
-      
-      console.log(`🔍 [STARTUP] Transformed agent (first):`, JSON.stringify(transformedAgents[0], null, 2));
       
       await cacheManager.cacheAgents(transformedAgents);
       
@@ -8970,49 +8995,23 @@ app.listen(PORT, async () => {
       
       // Get current agents from cache (just populated above)
       const currentAgents = cacheManager.getCachedAgentsSync();
-      
-      // DEBUG: Show what we got from cache
-      console.log(`🔍 [STARTUP VALIDATION] Retrieved ${currentAgents.length} agents from cache`);
-      console.log(`🔍 [STARTUP VALIDATION] Cache type:`, Array.isArray(currentAgents) ? 'Array' : typeof currentAgents);
-      
-      if (currentAgents.length > 0) {
-        console.log(`🔍 [STARTUP VALIDATION] First agent structure:`, JSON.stringify(currentAgents[0], null, 2));
-        console.log(`🔍 [STARTUP VALIDATION] First agent has 'uuid'?`, currentAgents[0].uuid);
-        console.log(`🔍 [STARTUP VALIDATION] First agent has 'id'?`, currentAgents[0].id);
-      } else {
-        console.log(`⚠️ [STARTUP VALIDATION] WARNING: No agents in cache!`);
-      }
-      
       const agentIds = new Set(currentAgents.map(agent => agent.uuid || agent.id));
-      
-      console.log(`🔍 [STARTUP VALIDATION] Agent IDs extracted into Set:`);
-      console.log(`🔍 [STARTUP VALIDATION] Set size: ${agentIds.size}`);
-      console.log(`🔍 [STARTUP VALIDATION] Set contents:`, Array.from(agentIds));
       
       let cleanedCount = 0;
       
       for (const userDoc of allUserDocs) {
         if (userDoc.assignedAgentId && !agentIds.has(userDoc.assignedAgentId)) {
-          // Agent appears to be missing - do thorough check before deleting
-          console.log(`🔍 [STARTUP VALIDATION] Checking user ${userDoc.userId} with potential missing agent:`);
-          console.log(`  - User's assignedAgentId: ${userDoc.assignedAgentId}`);
-          console.log(`  - User's assignedAgentName: ${userDoc.assignedAgentName}`);
-          console.log(`  - Set.has(assignedAgentId): ${agentIds.has(userDoc.assignedAgentId)}`);
-          
+          // Agent appears to be missing - do backup check before deleting
           // Backup check: Find agent by name (in case of ID mismatch)
           const agentByName = currentAgents.find(a => a.name === userDoc.assignedAgentName);
           if (agentByName) {
-            console.log(`  - ⚠️ FOUND AGENT BY NAME! ID mismatch detected:`);
-            console.log(`    - User doc has ID: ${userDoc.assignedAgentId}`);
-            console.log(`    - DO API agent has uuid: ${agentByName.uuid}`);
-            console.log(`    - DO API agent has id: ${agentByName.id}`);
-            console.log(`  - 🛑 SKIPPING CLEANUP - This is an ID mismatch, not a deleted agent!`);
-            console.log(`  - 💡 Consider updating user doc to match DO API ID`);
+            // ID mismatch - agent exists but with different ID format
+            console.log(`⚠️ [STARTUP] User ${userDoc.userId} has ID mismatch - skipping cleanup (agent exists by name)`);
             continue; // Don't delete - just an ID format issue
           }
           
           // Only delete if we're CERTAIN the agent doesn't exist
-          console.log(`🟡 [STARTUP] Confirmed agent deleted - cleaning up user ${userDoc.userId}: ${userDoc.assignedAgentName} (${userDoc.assignedAgentId})`);
+          console.log(`🟡 [STARTUP] Cleaning deleted agent from user ${userDoc.userId}: ${userDoc.assignedAgentName}`);
           
           userDoc.assignedAgentId = null;
           userDoc.assignedAgentName = null;
