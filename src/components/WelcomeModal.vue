@@ -99,9 +99,6 @@ import {
 } from 'quasar'
 import HelpPage from './HelpPage.vue'
 
-// Module-level flag to prevent double-mount across ALL instances
-let globalHasChecked = false
-
 // Props for v-model support
 const props = defineProps({
   modelValue: {
@@ -113,7 +110,7 @@ const props = defineProps({
 // Emits for v-model support
 const emit = defineEmits(['update:modelValue'])
 
-const showModal = ref(false)
+const showModal = ref(props.modelValue)
 const showHelpPage = ref(false)
 const currentPage = ref(1)
 
@@ -126,9 +123,6 @@ watch(() => props.modelValue, (newValue) => {
 watch(showModal, (newValue) => {
   emit('update:modelValue', newValue)
 })
-
-// Initialize showModal with prop value
-showModal.value = props.modelValue
 
 // Cookie helper functions
 const setCookie = (name, value, days) => {
@@ -169,32 +163,8 @@ const handleHelpClose = () => {
   currentPage.value = 1
 }
 
-onMounted(() => {
-  // Prevent double-mount from showing modal twice (use module-level variable)
-  if (globalHasChecked) {
-    console.log(`[WM] WelcomeModal (3-page) skipped: already checked by another instance`)
-    return
-  }
-  globalHasChecked = true
-  
-  // Check cookie (expires in 7 days)
-  const welcomeCookie = getCookie('maia-welcome-seen')
-  const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
-  
-  console.log(`[WM] WelcomeModal (3-page) cookie check:`)
-  console.log(`[WM]   - Cookie 'maia-welcome-seen': ${welcomeCookie ? `'${welcomeCookie}' (valid for 7 days from when set)` : 'not found'}`)
-  console.log(`[WM]   - isAdminRoute: ${isAdminRoute}`)
-  console.log(`[WM]   - pathname: ${window.location.pathname}`)
-  
-  if (!welcomeCookie && !isAdminRoute) {
-    console.log(`[WM] WelcomeModal (3-page) TRIGGERED: no cookie found, showing modal`)
-    showModal.value = true
-  } else if (welcomeCookie) {
-    console.log(`[WM] WelcomeModal (3-page) SKIPPED: cookie exists (modal was seen within last 7 days)`)
-  } else if (isAdminRoute) {
-    console.log(`[WM] WelcomeModal (3-page) SKIPPED: admin route`)
-  }
-})
+// No automatic showing - modal is controlled entirely by parent via v-model
+// Cookie is only checked and set, not used for automatic display
 </script>
 
 <style scoped>

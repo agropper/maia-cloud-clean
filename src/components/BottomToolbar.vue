@@ -403,7 +403,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch } from 'vue'
+import { defineComponent, ref, computed, watch, onMounted } from 'vue'
 import { uploadFile } from '../composables/useAuthHandling'
 import type { PropType } from 'vue'
 import { QBtn, QInput, QCircularProgress, QSelect, QItem, QItemSection, QItemLabel, QIcon, QTooltip, QDialog, QCard, QCardSection, QCardActions, QForm, QSpace, QBadge, useQuasar } from 'quasar'
@@ -532,6 +532,18 @@ export default defineComponent({
     const patientSummaryData = ref(null)
     const isSendingContact = ref(false)
     const fileInput = ref<HTMLInputElement | null>(null)
+    
+    // Cookie helper functions for Welcome Modal
+    const getCookie = (name: string) => {
+      const nameEQ = name + "="
+      const ca = document.cookie.split(';')
+      for (let i = 0; i < ca.length; i++) {
+        let c = ca[i]
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length)
+      }
+      return null
+    }
     
     // State initialization flag - block template until ready
     const isStatusReady = ref(false)
@@ -991,6 +1003,26 @@ export default defineComponent({
       if (newValue > 0) {
         console.log('[*] File import triggered from KB Welcome Modal')
         pickFiles()
+      }
+    })
+
+    // Check if Welcome Modal should be shown on mount
+    onMounted(() => {
+      const welcomeCookie = getCookie('maia-welcome-seen')
+      const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register' || 
+                          window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register'
+      
+      console.log(`[WM] BottomToolbar onMounted cookie check:`)
+      console.log(`[WM]   - Cookie 'maia-welcome-seen': ${welcomeCookie ? `'${welcomeCookie}' (valid for 7 days)` : 'not found'}`)
+      console.log(`[WM]   - isAdminRoute: ${isAdminRoute}`)
+      
+      if (!welcomeCookie && !isAdminRoute) {
+        console.log(`[WM] WelcomeModal (3-page) TRIGGERED: no cookie found, showing modal`)
+        showHelpWelcomeModal.value = true
+      } else if (welcomeCookie) {
+        console.log(`[WM] WelcomeModal (3-page) SKIPPED: cookie exists`)
+      } else {
+        console.log(`[WM] WelcomeModal (3-page) SKIPPED: admin route`)
       }
     })
 

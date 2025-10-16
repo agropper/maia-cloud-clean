@@ -248,8 +248,7 @@ const getLoadingProgress = () => {
       </div>
       <ChatPrompt v-else />
       
-      <!-- Welcome Modal - shown to all users on first visit -->
-      <WelcomeModal />
+      <!-- Welcome Modal controlled by BottomToolbar -->
     </div>
   </div>
 </template>
