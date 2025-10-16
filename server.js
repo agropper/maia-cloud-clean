@@ -2319,13 +2319,11 @@ async function getUserFromAgentId(agentId) {
 
 async function buildAgentManagementTemplate(userId) {
   const timestamp = new Date().toISOString();
-  console.log(`[TEMPLATE] Building agent management template for ${userId}`);
   
   try {
     // Step 1: Get user document from Cloudant
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
-      console.warn(`[TEMPLATE] User ${userId} not found in database`);
       return null;
     }
     
@@ -2443,12 +2441,11 @@ async function buildAgentManagementTemplate(userId) {
     
     // Step 8: Cache the template
     agentManagementTemplates.set(userId, template);
-    console.log(`[TEMPLATE] ✅ Template built for ${userId}: hasAgent=${template.agentStatus.hasAgent}, hasKB=${template.kbStatus.hasKB}, hasSummary=${template.summaryStatus.hasSummary}, needsWarning=${template.kbStatus.needsWarning}`);
     
     return template;
     
   } catch (error) {
-    console.error(`[TEMPLATE] ❌ Failed to build template for ${userId}:`, error.message);
+    console.error(`❌ Failed to build template for ${userId}:`, error.message);
     return null;
   }
 }
@@ -5129,7 +5126,6 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
     }
     
     // Always rebuild template to ensure fresh data
-    console.log(`[TEMPLATE] Rebuilding fresh template for ${userId}`);
     const template = await buildAgentManagementTemplate(userId);
     
     if (!template) {
@@ -5138,7 +5134,7 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
     
     res.json(template);
   } catch (error) {
-    console.error('[TEMPLATE] Error fetching template:', error);
+    console.error('❌ Error fetching template:', error);
     res.status(500).json({ error: 'Failed to get agent template' });
   }
 });
@@ -5853,9 +5849,8 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
         if (userId) {
           try {
             await buildAgentManagementTemplate(userId);
-            console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB attachment`);
           } catch (templateError) {
-            console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+            console.warn(`⚠️ Failed to rebuild template for ${userId}:`, templateError.message);
           }
         }
         
@@ -5983,9 +5978,8 @@ app.post('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       if (userId) {
         try {
           await buildAgentManagementTemplate(userId);
-          console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB attachment (verification path)`);
         } catch (templateError) {
-          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+          console.warn(`⚠️ Failed to rebuild template for ${userId}:`, templateError.message);
         }
       }
       
@@ -7828,9 +7822,8 @@ app.delete('/api/agents/:agentId/knowledge-bases/:kbId', async (req, res) => {
       if (userId) {
         try {
           await buildAgentManagementTemplate(userId);
-          console.log(`[TEMPLATE] ✅ Rebuilt template for ${userId} after KB detachment`);
         } catch (templateError) {
-          console.warn(`[TEMPLATE] Failed to rebuild template for ${userId}:`, templateError.message);
+          console.warn(`⚠️ Failed to rebuild template for ${userId}:`, templateError.message);
         }
       }
       
