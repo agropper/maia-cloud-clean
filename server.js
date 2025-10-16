@@ -2701,6 +2701,9 @@ app.post('/api/personal-chat', async (req, res) => {
     // Process personal chat request
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
     
+    console.log(`🔍 [USE STORED PS] Received personal chat request`);
+    console.log(`🔍 [USE STORED PS] User message: "${newValue}"`);
+    
     // Filter out any existing system messages since the GenAI agent has its own system prompt
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
@@ -2729,6 +2732,8 @@ app.post('/api/personal-chat', async (req, res) => {
                                    /patient\s+summary/i.test(newValue) || 
                                    /create.*summary/i.test(newValue) ||
                                    /generate.*summary/i.test(newValue);
+    
+    console.log(`🔍 [USE STORED PS] Is patient summary request? ${isPatientSummaryRequest}`);
 
     // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
     let currentUser = 'Public User';
@@ -2963,8 +2968,14 @@ app.post('/api/personal-chat', async (req, res) => {
               }
               
               // If this is a patient summary request, check if we already have one
+              console.log(`🔍 [USE STORED PS] Checking for cached summary...`);
+              console.log(`🔍 [USE STORED PS] Has patientSummary object? ${!!userDoc.patientSummary}`);
+              console.log(`🔍 [USE STORED PS] Has content? ${!!userDoc.patientSummary?.content}`);
+              
               if (isPatientSummaryRequest && userDoc.patientSummary && userDoc.patientSummary.content) {
-                console.log(`📋 [PATIENT SUMMARY] Found existing patient summary for ${currentUser}`);
+                console.log(`✅ [USE STORED PS] Found existing patient summary for ${currentUser}`);
+                console.log(`✅ [USE STORED PS] Summary length: ${userDoc.patientSummary.content.length} characters`);
+                
                 // Add the cached summary to chat history and return
                 const newChatHistory = [...chatHistory];
                 newChatHistory.push({
@@ -2972,6 +2983,8 @@ app.post('/api/personal-chat', async (req, res) => {
                   content: userDoc.patientSummary.content,
                   name: 'Personal AI'
                 });
+                
+                console.log(`✅ [USE STORED PS] Returning cached summary in chat history format`);
                 
                 // Update user activity
                 updateUserActivity(currentUser);

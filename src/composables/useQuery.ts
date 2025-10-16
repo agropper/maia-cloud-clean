@@ -87,6 +87,10 @@ export const sendQuery = async (
   }
   
   try {
+    console.log(`🔍 [USE STORED PS] Frontend sendQuery called`);
+    console.log(`🔍 [USE STORED PS] appState.currentQuery: "${appState.currentQuery}"`);
+    console.log(`🔍 [USE STORED PS] URI: ${uri}`);
+    
     // Add the user's message to chat history with correct display name
     const userDisplayName = currentUser?.displayName || currentUser?.userId || 'Public User'
     
@@ -150,6 +154,8 @@ export const sendQuery = async (
     const userInfo = currentUser?.displayName || currentUser?.userId || 'Public User'
     
     
+    console.log(`🔍 [USE STORED PS] Sending to backend: newValue="${appState.currentQuery}"`);
+    
     const response = await postData(uri, {
       chatHistory: chatHistoryToSend,
       newValue: appState.currentQuery || '',
@@ -162,6 +168,8 @@ export const sendQuery = async (
       }))
       // SECURITY: currentUser removed from request body - backend should get user from session
     });
+    
+    console.log(`🔍 [USE STORED PS] Response received from backend`);
     
 
     const responseTime = Date.now() - startTime
