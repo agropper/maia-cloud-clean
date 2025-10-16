@@ -2963,14 +2963,18 @@ app.post('/api/personal-chat', async (req, res) => {
               // If this is a patient summary request, check if we already have one
               if (isPatientSummaryRequest && userDoc.patientSummary && userDoc.patientSummary.content) {
                 console.log(`📋 [PATIENT SUMMARY] Found existing patient summary for ${currentUser}`);
-                // Return the existing patient summary immediately
-                return res.json({
-                  response: userDoc.patientSummary.content,
-                  fromCache: true,
-                  createdAt: userDoc.patientSummary.createdAt,
-                  kbUsed: userDoc.patientSummary.kbUsed,
-                  tokens: userDoc.patientSummary.tokens
+                // Add the cached summary to chat history and return
+                const newChatHistory = [...chatHistory];
+                newChatHistory.push({
+                  role: 'assistant',
+                  content: userDoc.patientSummary.content,
+                  name: 'Personal AI'
                 });
+                
+                // Update user activity
+                updateUserActivity(currentUser);
+                
+                return res.json(newChatHistory);
               } else if (isPatientSummaryRequest) {
                 console.log(`📋 [PATIENT SUMMARY] No existing summary found, will generate new one`);
                 // Override the user message to use the standard prompt
