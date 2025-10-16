@@ -113,6 +113,7 @@ const emit = defineEmits(['update:modelValue'])
 const showModal = ref(false)
 const showHelpPage = ref(false)
 const currentPage = ref(1)
+const hasChecked = ref(false) // Prevent double-mount issues
 
 // Watch for external modelValue changes
 watch(() => props.modelValue, (newValue) => {
@@ -166,6 +167,13 @@ const handleHelpClose = () => {
 }
 
 onMounted(() => {
+  // Prevent double-mount from showing modal twice
+  if (hasChecked.value) {
+    console.log(`[WM] WelcomeModal (3-page) skipped: already checked in this session`)
+    return
+  }
+  hasChecked.value = true
+  
   // Only show modal if user hasn't seen it before and not on admin routes
   const hasSeenWelcome = getCookie('maia-welcome-seen')
   const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
