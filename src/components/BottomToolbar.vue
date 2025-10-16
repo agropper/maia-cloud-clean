@@ -212,7 +212,7 @@
                   :class="{ 'icon-disabled': !hasPatientSummary }"
                   @click="handlePatientSummaryClick"
                 />
-                <div class="tooltip-text">{{ hasPatientSummary ? 'View patient summary' : 'No patient summary yet' }}</div>
+                <div class="tooltip-text">{{ patientSummaryTooltip }}</div>
               </div>
             </template>
             
@@ -977,6 +977,15 @@ export default defineComponent({
       return agentTemplate.value?.summaryStatus?.hasSummary || false
     })
 
+    const patientSummaryTooltip = computed(() => {
+      // Special tooltip for Public User
+      if (props.currentUser?.userId === 'Public User') {
+        return 'Patient summaries are not saved for the Public User.'
+      }
+      // Standard tooltip for other users
+      return hasPatientSummary.value ? 'View patient summary' : 'No patient summary yet'
+    })
+
     // Watch for file import trigger from KB Welcome Modal
     watch(() => props.triggerFileImport, (newValue) => {
       if (newValue > 0) {
@@ -1023,6 +1032,7 @@ export default defineComponent({
       hasKnowledgeBase,
       hasUnattachedKB,
       hasPatientSummary,
+      patientSummaryTooltip,
       isStatusReady
     }
   }
