@@ -7109,54 +7109,8 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Created KB: ${kbId}`);
     
-    // Step 7: Get KB details to extract datasource UUID (with retry for async creation)
-    console.log(`🤖 [AUTO PS] Getting KB details for indexing`);
-    let kbFull = null;
-    let dataSourceUuid = null;
-    
-    // Wait a moment for DigitalOcean to finish creating datasources
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Try up to 3 times to get datasources (they might not be ready immediately)
-    for (let retryAttempt = 0; retryAttempt < 3; retryAttempt++) {
-      const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
-      const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
-      kbFull = kbDetails.knowledge_base || kbDetails;
-      
-      console.log(`🤖 [AUTO PS] KB details attempt ${retryAttempt + 1}: datasources count = ${kbFull.datasources?.length || 0}`);
-      
-      if (kbFull.datasources && kbFull.datasources.length > 0) {
-        dataSourceUuid = kbFull.datasources[0].spaces_data_source.uuid;
-        console.log(`🤖 [AUTO PS] Found datasource UUID: ${dataSourceUuid}`);
-        break;
-      }
-      
-      if (retryAttempt < 2) {
-        console.log(`🤖 [AUTO PS] Datasources not ready yet, waiting 2 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-    
-    if (!dataSourceUuid) {
-      console.error(`🤖 [AUTO PS] ❌ KB details after retries:`, JSON.stringify(kbFull, null, 2));
-      throw new Error('KB created but datasources not available after 3 attempts (6 seconds)');
-    }
-    
-    console.log(`🤖 [AUTO PS] Starting indexing with datasource: ${dataSourceUuid}`);
-    
-    // Step 8: Start indexing (MUST index before attaching to agent)
-    const indexingResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
-      method: 'POST',
-      body: JSON.stringify({
-        data_source_uuid: dataSourceUuid
-      })
-    });
-    
-    const indexingJob = indexingResponse.data || indexingResponse;
-    const jobId = indexingJob.uuid || indexingJob.id;
-    
-    // Step 9: Poll for indexing completion
-    console.log(`🤖 [AUTO PS] Polling for indexing completion (job ${jobId})...`);
+    // Step 7: Poll for automatic indexing completion
+    console.log(`🤖 [AUTO PS] Indexing started automatically, polling for completion...`);
     let indexingComplete = false;
     let attempts = 0;
     const maxAttempts = 60; // 5 minutes max (5 seconds * 60)
@@ -7166,7 +7120,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
       attempts++;
       
-      // Get indexing status
+      // Get indexing status from KB details
       const statusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
       const statusData = statusResponse.data || statusResponse;
       const statusKb = statusData.knowledge_base || statusData;
@@ -7180,11 +7134,11 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         console.log(`🤖 [AUTO PS] Indexing status: ${status}, Phase: ${phase}, Tokens: ${totalTokens}, Attempt: ${attempts}/${maxAttempts}`);
         
         // Check for completion
-        if (status.includes('completed') || phase.includes('succeeded')) {
+        if (status.includes('COMPLETED') || phase.includes('SUCCEEDED')) {
           indexingComplete = true;
           const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
           console.log(`🤖 [AUTO PS] Indexing complete in ${elapsedSeconds} seconds`);
-        } else if (status.includes('failed') || phase.includes('failed')) {
+        } else if (status.includes('FAILED') || phase.includes('FAILED')) {
           throw new Error(`Indexing failed: ${status} - ${phase}`);
         }
       }
@@ -7194,14 +7148,14 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('Indexing timeout after 5 minutes');
     }
     
-    // Step 10: Attach KB to agent (AFTER indexing completes)
+    // Step 8: Attach KB to agent (AFTER indexing completes)
     console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
     await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
       method: 'POST'
     });
     console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
-    // Step 11: Clean up copied file from root folder
+    // Step 9: Clean up copied file from root folder
     console.log(`🤖 [AUTO PS] Cleaning up temp file from root folder`);
     const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
     
@@ -7213,7 +7167,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     await s3Client.send(deleteCommand);
     console.log(`🤖 [AUTO PS] Cleaned up temp file: ${destKey}`);
     
-    // Step 12: Update maia_kb document with file and token info
+    // Step 10: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
@@ -7228,7 +7182,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 13: Generate patient summary via Personal AI
+    // Step 11: Generate patient summary via Personal AI
     console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
     
     // Make request to Personal AI with the patient summary prompt
@@ -7248,7 +7202,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Patient summary generated (${summary.length} characters)`);
     
-    // Step 14: Save patient summary to user document
+    // Step 12: Save patient summary to user document
     console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
     userDoc.patientSummary = {
       content: summary,
@@ -7261,7 +7215,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     userDoc.updatedAt = new Date().toISOString();
     await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     
-    // Step 15: Rebuild agent template to update status icons
+    // Step 13: Rebuild agent template to update status icons
     console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
     await buildAgentManagementTemplate(userId);
     
