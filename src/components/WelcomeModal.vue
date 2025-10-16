@@ -155,6 +155,7 @@ const goToPage3 = () => {
   showModal.value = false
   // Store that user has seen the welcome modal (cookie expires in 7 days)
   setCookie('maia-welcome-seen', 'true', 7)
+  console.log(`[WM] Cookie 'maia-welcome-seen' SET: expires in 7 days`)
   
   // Show help page (PDF UI legend)
   showHelpPage.value = true
@@ -174,20 +175,22 @@ onMounted(() => {
   }
   hasChecked.value = true
   
-  // Only show modal if user hasn't seen it before and not on admin routes
-  const hasSeenWelcome = getCookie('maia-welcome-seen')
+  // Check cookie (expires in 7 days)
+  const welcomeCookie = getCookie('maia-welcome-seen')
   const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
   
-  console.log(`[WM] WelcomeModal (3-page) onMounted check:`)
-  console.log(`[WM]   - hasSeenWelcome: ${hasSeenWelcome}`)
+  console.log(`[WM] WelcomeModal (3-page) cookie check:`)
+  console.log(`[WM]   - Cookie 'maia-welcome-seen': ${welcomeCookie ? `'${welcomeCookie}' (valid for 7 days from when set)` : 'not found'}`)
   console.log(`[WM]   - isAdminRoute: ${isAdminRoute}`)
   console.log(`[WM]   - pathname: ${window.location.pathname}`)
   
-  if (!hasSeenWelcome && !isAdminRoute) {
-    console.log(`[WM] WelcomeModal (3-page) triggered: first time user, not admin route`)
+  if (!welcomeCookie && !isAdminRoute) {
+    console.log(`[WM] WelcomeModal (3-page) TRIGGERED: no cookie found, showing modal`)
     showModal.value = true
-  } else {
-    console.log(`[WM] WelcomeModal (3-page) NOT triggered: already seen or admin route`)
+  } else if (welcomeCookie) {
+    console.log(`[WM] WelcomeModal (3-page) SKIPPED: cookie exists (modal was seen within last 7 days)`)
+  } else if (isAdminRoute) {
+    console.log(`[WM] WelcomeModal (3-page) SKIPPED: admin route`)
   }
 })
 </script>
