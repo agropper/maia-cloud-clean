@@ -8670,7 +8670,7 @@ app.listen(PORT, async () => {
     await cacheManager.cacheUsers(processedUsers);
     console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users for Admin2`);
     
-    // Pre-cache agents for Admin2
+    // Pre-cache agents for Admin2 (early cache for Admin2 UI)
     try {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
@@ -8678,7 +8678,7 @@ app.listen(PORT, async () => {
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
         return {
-          id: agent.id,
+          id: agent.uuid || agent.id,  // FIX: Use uuid field from DO API
           name: agent.name,
           status: agent.status || 'unknown',
           model: agent.model || 'unknown',
@@ -8842,10 +8842,18 @@ app.listen(PORT, async () => {
       const agentsResponse = await doRequest('/v2/gen-ai/agents');
       const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
       
+      // DEBUG: Show raw agent structure from DO API
+      if (rawAgents.length > 0) {
+        console.log(`🔍 [STARTUP] Raw agent from DO API (first agent):`, JSON.stringify(rawAgents[0], null, 2));
+        console.log(`🔍 [STARTUP] Raw agent fields:`, Object.keys(rawAgents[0]));
+        console.log(`🔍 [STARTUP] Raw agent.id:`, rawAgents[0].id);
+        console.log(`🔍 [STARTUP] Raw agent.uuid:`, rawAgents[0].uuid);
+      }
+      
       // Transform agents to match frontend expectations (same as /api/admin-management/agents endpoint)
       const transformedAgents = rawAgents.map((agent) => {
         return {
-          id: agent.id,
+          id: agent.uuid || agent.id,  // FIX: Try uuid first (DO API uses 'uuid' field, not 'id')
           name: agent.name,
           status: agent.status || 'unknown',
           model: agent.model || 'unknown',
@@ -8856,6 +8864,8 @@ app.listen(PORT, async () => {
           description: null
         };
       });
+      
+      console.log(`🔍 [STARTUP] Transformed agent (first):`, JSON.stringify(transformedAgents[0], null, 2));
       
       await cacheManager.cacheAgents(transformedAgents);
       
@@ -8871,7 +8881,7 @@ app.listen(PORT, async () => {
         try {
           const agentDoc = {
             _id: agent.name, // Use agent name as _id since they're unique
-            agentId: agent.id,
+            agentId: agent.uuid || agent.id,  // FIX: Use uuid field from DO API
             agentName: agent.name,
             status: agent.status || 'unknown',
             model: agent.model || 'unknown',
@@ -8892,7 +8902,7 @@ app.listen(PORT, async () => {
               const existingDoc = await couchDBClient.getDocument('maia_agents', agent.name);
               const updatedDoc = {
                 ...existingDoc,
-                agentId: agent.id,
+                agentId: agent.uuid || agent.id,  // FIX: Use uuid field from DO API
                 agentName: agent.name,
                 status: agent.status || 'unknown',
                 model: agent.model || 'unknown',
