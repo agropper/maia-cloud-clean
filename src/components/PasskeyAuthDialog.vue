@@ -440,6 +440,16 @@ export default defineComponent({
         // Step 2: Create credentials using SimpleWebAuthn v13
         console.log(`[SIGN-IN] Step 2: Calling navigator.credentials.create() via SimpleWebAuthn`);
         console.log(`[SIGN-IN]   - This will show browser's passkey creation dialog`);
+        
+        // Ensure window is focused (WebAuthn requirement)
+        if (!document.hasFocus()) {
+          console.log(`[SIGN-IN]   - Document not focused, attempting to focus window...`);
+          window.focus();
+          // Give browser a moment to process the focus change
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.log(`[SIGN-IN]   - Document focused: ${document.hasFocus()}`);
+        
         const credential = await startRegistrationWebAuthn({ optionsJSON: options });
         console.log(`[SIGN-IN] ✅ Passkey created successfully by browser`);
 
@@ -511,6 +521,14 @@ export default defineComponent({
         const options = await optionsResponse.json();
 
         // Step 2: Use SimpleWebAuthn v13 for authentication
+        // Ensure window is focused (WebAuthn requirement)
+        if (!document.hasFocus()) {
+          console.log(`[SIGN-IN] Authentication: Document not focused, attempting to focus window...`);
+          window.focus();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.log(`[SIGN-IN] Authentication: Document focused: ${document.hasFocus()}`);
+        
         const credential = await startAuthentication({ optionsJSON: options });
 
         // Step 3: Verify authentication
