@@ -1412,6 +1412,16 @@ app.post('/api/user-file-metadata', async (req, res) => {
       });
     }
 
+    // SPECIAL CASE: Public User files are session-only (not saved to database)
+    if (userId === 'Public User') {
+      console.log(`📄 [PUBLIC FIX] File upload for Public User - session-only, not saving to database`);
+      return res.json({
+        success: true,
+        message: 'File uploaded successfully (session-only for Public User)',
+        sessionOnly: true
+      });
+    }
+
     // Initialize files array if it doesn't exist
     if (!userDoc.files) {
       userDoc.files = [];
@@ -1478,6 +1488,16 @@ app.post('/api/user-file-kb-association', async (req, res) => {
         success: false, 
         message: 'User not found',
         error: 'USER_NOT_FOUND'
+      });
+    }
+
+    // SPECIAL CASE: Public User files are session-only (not saved to database)
+    if (userId === 'Public User') {
+      console.log(`📄 [PUBLIC FIX] KB association for Public User - session-only, not saving to database`);
+      return res.json({
+        success: true,
+        message: 'KB association updated (session-only for Public User)',
+        sessionOnly: true
       });
     }
 
@@ -2117,6 +2137,12 @@ async function cleanupUserBucket(userId) {
 // Reconcile user document files with actual bucket contents
 async function reconcileUserFiles(userId) {
   try {
+    // SPECIAL CASE: Public User files are session-only (not saved to database)
+    if (userId === 'Public User') {
+      console.log(`📄 [PUBLIC FIX] Skipping bucket reconciliation for Public User (files are session-only)`);
+      return 0;
+    }
+    
     // Get user document
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
@@ -9190,6 +9216,121 @@ app.listen(PORT, async () => {
       
     } catch (cleanupError) {
       console.warn('⚠️ [STARTUP] Failed to clean up user agent assignments:', cleanupError.message);
+    }
+    
+    // SPECIAL VALIDATION: Fix Public User document structure and agent assignment
+    try {
+      console.log(`🔍 [PUBLIC FIX] Checking Public User document...`);
+      const publicUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
+      
+      if (publicUserDoc && publicUserDoc._id === 'Public User' && publicUserDoc.displayName === 'Public User') {
+        console.log(`✅ [PUBLIC FIX] Found Public User document`);
+        
+        let needsUpdate = false;
+        
+        // Find the public agent
+        const currentAgents = cacheManager.getCachedAgentsSync();
+        const publicAgent = currentAgents.find(agent => 
+          agent.name && agent.name.toLowerCase().startsWith('public')
+        );
+        
+        if (!publicAgent) {
+          console.log(`❌ [PUBLIC FIX] No public agent found in cache`);
+        } else {
+          console.log(`✅ [PUBLIC FIX] Found public agent: ${publicAgent.name} (${publicAgent.id})`);
+          
+          // Check if agent needs to be assigned
+          if (publicUserDoc.assignedAgentId !== publicAgent.id) {
+            console.log(`🔧 [PUBLIC FIX] Assigning public agent to Public User`);
+            publicUserDoc.assignedAgentId = publicAgent.id;
+            publicUserDoc.assignedAgentName = publicAgent.name;
+            publicUserDoc.agentAssignedAt = publicAgent.createdAt || new Date().toISOString();
+            publicUserDoc.agentDeployedAt = publicAgent.updatedAt || new Date().toISOString();
+            needsUpdate = true;
+          }
+          
+          // Ensure API key exists for public agent
+          if (!publicUserDoc.agentApiKey && publicAgent.id) {
+            try {
+              console.log(`🔑 [PUBLIC FIX] Creating API key for public agent`);
+              const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${publicAgent.id}/api_keys`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: `public-user-api-key-${Date.now()}`
+                })
+              });
+              
+              const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.api_key_info || apiKeyResponse.data || apiKeyResponse;
+              const apiKey = apiKeyData.key || apiKeyData.secret_key;
+              
+              if (apiKey) {
+                publicUserDoc.agentApiKey = apiKey;
+                console.log(`✅ [PUBLIC FIX] API key created for public agent`);
+                needsUpdate = true;
+              }
+            } catch (apiKeyError) {
+              console.error(`❌ [PUBLIC FIX] Failed to create API key:`, apiKeyError.message);
+            }
+          }
+        }
+        
+        // Fix workflow stage
+        if (publicUserDoc.workflowStage !== 'agent_assigned') {
+          console.log(`🔧 [PUBLIC FIX] Setting workflowStage to agent_assigned`);
+          publicUserDoc.workflowStage = 'agent_assigned';
+          needsUpdate = true;
+        }
+        
+        // Set patientSummary to null (not supported for Public User)
+        if (publicUserDoc.patientSummary !== null) {
+          console.log(`🔧 [PUBLIC FIX] Setting patientSummary to null`);
+          publicUserDoc.patientSummary = null;
+          needsUpdate = true;
+        }
+        
+        // Set files to null (not saved for Public User)
+        if (publicUserDoc.files !== null) {
+          console.log(`🔧 [PUBLIC FIX] Setting files to null`);
+          publicUserDoc.files = null;
+          needsUpdate = true;
+        }
+        
+        // Remove obsolete fields
+        const obsoleteFields = ['hasPasskey', 'hasValidPasskey'];
+        for (const field of obsoleteFields) {
+          if (publicUserDoc[field] !== undefined) {
+            console.log(`🔧 [PUBLIC FIX] Removing obsolete field: ${field}`);
+            delete publicUserDoc[field];
+            needsUpdate = true;
+          }
+        }
+        
+        // Add modern required fields if missing
+        if (!publicUserDoc.type) {
+          console.log(`🔧 [PUBLIC FIX] Adding type: user`);
+          publicUserDoc.type = 'user';
+          needsUpdate = true;
+        }
+        
+        if (!publicUserDoc.domain) {
+          console.log(`🔧 [PUBLIC FIX] Adding domain: public`);
+          publicUserDoc.domain = 'public';
+          needsUpdate = true;
+        }
+        
+        // Save if any updates were made
+        if (needsUpdate) {
+          publicUserDoc.updatedAt = new Date().toISOString();
+          await cacheManager.saveDocument(couchDBClient, 'maia_users', publicUserDoc);
+          console.log(`✅ [PUBLIC FIX] Public User document updated successfully`);
+        } else {
+          console.log(`✅ [PUBLIC FIX] Public User document is already correct`);
+        }
+      } else {
+        console.log(`⚠️ [PUBLIC FIX] Public User document not found or has wrong structure`);
+      }
+    } catch (publicUserError) {
+      console.error(`❌ [PUBLIC FIX] Error fixing Public User:`, publicUserError.message);
     }
     
     // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth
