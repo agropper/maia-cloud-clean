@@ -314,9 +314,12 @@ export class CacheManager {
         
         this.setCached(cacheType, documentId, updatedDocument);
         
-        // If it's a user document, invalidate related caches (chats, health)
+        // If it's a user document, invalidate related caches (chats, health, AND "all users" cache)
         if (databaseName === 'maia_users') {
           this.invalidateUserRelatedCaches(documentId);
+          // CRITICAL FIX: Invalidate the "all users" cache so getAllDocuments() will fetch fresh data
+          this.invalidateCache('users', 'all');
+          console.log(`🔄 [CACHE] Invalidated "all users" cache after saving user ${documentId}`);
         }
         
         // Log retry success if this wasn't the first attempt

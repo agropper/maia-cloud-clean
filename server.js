@@ -3059,23 +3059,30 @@ app.post('/api/personal-chat', async (req, res) => {
     }
 
     // Get agent-specific API key
+    console.log(`🔑 [PERSONAL CHAT] Looking up API key for agent: ${agentId}`);
+    console.log(`🔑 [PERSONAL CHAT] Current user: ${currentUser.userId}`);
+    console.log(`🔑 [PERSONAL CHAT] Assigned agent: ${currentUser.assignedAgentId}`);
+    console.log(`🔑 [PERSONAL CHAT] Assigned agent name: ${currentUser.assignedAgentName}`);
+    console.log(`🔑 [PERSONAL CHAT] API key stored in user doc: ${currentUser.agentApiKey ? currentUser.agentApiKey.substring(0, 10) + '...' : 'null'}`);
+    
     let agentApiKey;
     try {
       agentApiKey = await getAgentApiKey(agentId);
       
       // API key retrieved successfully
-      console.log(`🔑 Using API key: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
+      console.log(`🔑 [PERSONAL CHAT] ✅ API key retrieved: ${agentApiKey ? agentApiKey.substring(0, 10) + '...' : 'null'}`);
       
       // Check if we have a valid API key
       if (!agentApiKey) {
-        console.error(`❌ No API key available for agent: ${agentId}`);
+        console.error(`❌ [PERSONAL CHAT] No API key available for agent: ${agentId}`);
         return res.status(400).json({ 
           message: 'No API key available for the selected agent. Please contact support to configure agent authentication.',
           requiresAgentSelection: true
         });
       }
     } catch (error) {
-      console.error(`❌ Failed to get agent-specific API key:`, error.message);
+      console.error(`❌ [PERSONAL CHAT] Failed to get agent-specific API key:`, error.message);
+      console.error(`❌ [PERSONAL CHAT] Error stack:`, error.stack);
       return res.status(400).json({ 
         message: 'Failed to retrieve API key for the selected agent. Please contact support to configure agent authentication.',
         requiresAgentSelection: true
@@ -4412,16 +4419,16 @@ const getAgentApiKey = async (agentId) => {
   if (agentApiKeys[agentId]) {
     // Try to get agent name from cached users for better logging
     try {
-      const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-      let userList;
-      if (allUsers.rows) {
-        userList = allUsers.rows.map(row => row.doc);
-      } else if (Array.isArray(allUsers)) {
-        userList = allUsers;
-      } else {
-        userList = Object.values(allUsers);
-      }
-      const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
+    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
+    let userList;
+    if (allUsers.rows) {
+      userList = allUsers.rows.map(row => row.doc);
+    } else if (Array.isArray(allUsers)) {
+      userList = allUsers;
+    } else {
+      userList = Object.values(allUsers);
+    }
+    const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
       if (userWithAgent && userWithAgent.assignedAgentName) {
         agentName = userWithAgent.assignedAgentName;
       }
@@ -4433,118 +4440,32 @@ const getAgentApiKey = async (agentId) => {
   }
 
   // Check if we have the API key stored in the database
+  // Instead of scanning all users, check individual user cache entries (faster and always fresh)
   try {
-    // Find user with this agent assigned
-    const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
-    
-    // Handle different response structures from getAllDocuments
-    let userList;
-    if (allUsers.rows) {
-      // Standard CouchDB response with rows
-      userList = allUsers.rows.map(row => row.doc);
-    } else if (Array.isArray(allUsers)) {
-      // Direct array response
-      userList = allUsers;
-    } else {
-      // Object with numeric keys (array-like)
-      userList = Object.values(allUsers);
-    }
-    
-    const userWithAgent = userList.find(user => user.assignedAgentId === agentId);
+    // Get all individual user cache entries (these are updated on every save)
+    const userCacheEntries = Array.from(cacheManager.cache.users.values());
+    const userWithAgent = userCacheEntries.find(user => user.assignedAgentId === agentId);
     
     // Update agentName if we found the user
     if (userWithAgent) {
       agentName = userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown';
+      console.log(`🔑 [API KEY] Found user ${userWithAgent.userId} with agent ${agentId}`);
+          } else {
+      console.log(`🔑 [API KEY] No user found with assignedAgentId: ${agentId}`);
     }
-    // Agent API key lookup
     
     if (userWithAgent && userWithAgent.agentApiKey) {
       console.log(`🔑 Using database-stored API key for agent: ${agentName} (user: ${userWithAgent._id || userWithAgent.userId})`);
       
-      // Validate the stored API key by making a test request to the agent
-      try {
-        // Test the API key by making a simple request to the agent's health endpoint
-        const agentInfo = await doRequest(`/v2/gen-ai/agents/${agentId}`);
-        if (agentInfo && agentInfo.uuid) {
-          console.log(`🔑 ✅ Stored API key for agent ${agentId} is valid`);
-        }
-      } catch (validationError) {
-        console.warn(`🔑 ⚠️ Stored API key for agent ${agentId} (user: ${userWithAgent.userId}) appears invalid - creating new key`);
-        // Create a new API key instead of throwing an error
-        try {
-          const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
-            method: 'POST',
-            body: JSON.stringify({
-              name: `${userWithAgent.userId}-agent-${Date.now()}-api-key`
-            })
-          });
-          
-          const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
-          const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
-          
-          if (newApiKey) {
-            console.log(`🔑 ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
-            
-            // Update database with new API key
-            const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userWithAgent.userId);
-            if (userDoc) {
-              userDoc.agentApiKey = newApiKey;
-              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
-              agentApiKeys[agentId] = newApiKey;
-              console.log(`🔑 ✅ New API key saved to database for agent ${agentId}`);
-              return newApiKey;
-            }
-          } else {
-            console.error(`🔑 ❌ Failed to extract new API key from response:`, newApiKeyResponse);
-            throw new Error(`Failed to create new API key for agent ${agentId}`);
-          }
-        } catch (createError) {
-          console.error(`🔑 ❌ Failed to create new API key for agent ${agentId}:`, createError.message);
-          throw new Error(`Failed to create new API key for agent ${agentId}: ${createError.message}`);
-        }
-      }
-      
-      // TEMPORARY FIX: Create new API key for sat272 agent (old key is invalid)
-      if (agentId === '43c7473e-9bdd-11f0-b074-4e013e2ddde4') {
-        console.log(`🔑 [TEMPORARY FIX] Creating new API key for agent ${agentId} (old key invalid)`);
-        try {
-          // Create a new API key
-          const newApiKeyResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/api_keys`, {
-            method: 'POST',
-            body: JSON.stringify({
-              name: `sat272-agent-27092025-api-key-${Date.now()}`
-            })
-          });
-          
-          // API key created
-          
-          // Extract the new API key
-          const newApiKeyData = newApiKeyResponse.api_key || newApiKeyResponse.api_key_info || newApiKeyResponse.data || newApiKeyResponse;
-          const newApiKey = newApiKeyData.key || newApiKeyData.secret_key;
-          
-          if (newApiKey) {
-            console.log(`🔑 [TEMPORARY FIX] ✅ New API key created: ${newApiKey.substring(0, 10)}...`);
-            
-            // Update database with new API key
-            const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'sat272');
-            if (userDoc) {
-              userDoc.agentApiKey = newApiKey;
-              await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
-              agentApiKeys[agentId] = newApiKey;
-              console.log(`🔑 [TEMPORARY FIX] ✅ New API key saved to database for agent ${agentId}`);
-              return newApiKey;
-            }
-          } else {
-            console.error(`🔑 [TEMPORARY FIX] ❌ Failed to extract new API key from response:`, newApiKeyResponse);
-          }
-        } catch (fixError) {
-          console.error(`🔑 [TEMPORARY FIX] ❌ Failed to create new API key:`, fixError.message);
-        }
-      }
-      
-      // Also cache it in memory for faster access
+      // Cache the API key for faster subsequent lookups
       agentApiKeys[agentId] = userWithAgent.agentApiKey;
+      
+      // Return the key immediately - it's fresh from the database
+      console.log(`🔑 ✅ API key found: ${userWithAgent.agentApiKey.substring(0, 10)}...`);
       return userWithAgent.agentApiKey;
+    } else if (userWithAgent && !userWithAgent.agentApiKey) {
+      // User found but no API key stored - this shouldn't happen but handle gracefully
+      console.warn(`🔑 ⚠️ User ${userWithAgent.userId} has agent ${agentId} but no API key stored in database`);
     }
   } catch (dbError) {
     console.warn(`🔑 Could not check database for API key of agent ${agentId}:`, dbError.message);
