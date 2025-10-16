@@ -9075,6 +9075,29 @@ app.listen(PORT, async () => {
           userDoc.agentAssignedAt = userAgent.createdAt || new Date().toISOString();
           userDoc.agentDeployedAt = userAgent.updatedAt || new Date().toISOString();
           
+          // Create API key for the agent (required for chat functionality)
+          try {
+            console.log(`🔑 [STARTUP] Creating API key for restored agent ${userAgent.id}`);
+            const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${userAgent.id}/api_keys`, {
+              method: 'POST',
+              body: JSON.stringify({
+                name: `${userDoc.userId}-agent-api-key-${Date.now()}`
+              })
+            });
+            
+            const apiKeyData = apiKeyResponse.api_key || apiKeyResponse.api_key_info || apiKeyResponse.data || apiKeyResponse;
+            const apiKey = apiKeyData.key || apiKeyData.secret_key;
+            
+            if (apiKey) {
+              userDoc.agentApiKey = apiKey;
+              console.log(`🔑 [STARTUP] ✅ API key created: ${apiKey.substring(0, 10)}...`);
+            } else {
+              console.warn(`🔑 [STARTUP] ⚠️ Failed to extract API key from response for ${userDoc.userId}`);
+            }
+          } catch (apiKeyError) {
+            console.error(`🔑 [STARTUP] ❌ Failed to create API key for ${userDoc.userId}:`, apiKeyError.message);
+          }
+          
           // Update workflow stage to agent_assigned if it's at an earlier stage
           if (userDoc.workflowStage === 'request_email_sent' || 
               userDoc.workflowStage === 'approved' || 
