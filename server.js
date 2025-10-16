@@ -2766,6 +2766,43 @@ app.post('/api/personal-chat', async (req, res) => {
       currentUser = req.session.userId;
     }
     
+    console.log(`🔍 [USE STORED PS] Current user identified: ${currentUser}`);
+    
+    // EARLY CHECK: If this is a patient summary request, check for cached summary BEFORE any other processing
+    if (isPatientSummaryRequest && currentUser !== 'Public User') {
+      try {
+        console.log(`🔍 [USE STORED PS] Checking for cached summary (early check)...`);
+        const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
+        console.log(`🔍 [USE STORED PS] Has patientSummary object? ${!!userDoc?.patientSummary}`);
+        console.log(`🔍 [USE STORED PS] Has content? ${!!userDoc?.patientSummary?.content}`);
+        
+        if (userDoc && userDoc.patientSummary && userDoc.patientSummary.content) {
+          console.log(`✅ [USE STORED PS] Found existing patient summary for ${currentUser}`);
+          console.log(`✅ [USE STORED PS] Summary length: ${userDoc.patientSummary.content.length} characters`);
+          
+          // Add the cached summary to chat history and return immediately
+          const newChatHistory = [...chatHistory];
+          newChatHistory.push({
+            role: 'assistant',
+            content: userDoc.patientSummary.content,
+            name: 'Personal AI'
+          });
+          
+          console.log(`✅ [USE STORED PS] Returning cached summary in chat history format`);
+          
+          // Update user activity
+          updateUserActivity(currentUser);
+          
+          return res.json(newChatHistory);
+        } else {
+          console.log(`🔍 [USE STORED PS] No cached summary found - will generate new one`);
+        }
+      } catch (cacheCheckError) {
+        console.error(`❌ [USE STORED PS] Error checking cached summary:`, cacheCheckError.message);
+        // Continue with normal flow if cache check fails
+      }
+    }
+    
     // Frontend now adds the user's message to chat history, so we don't need to add it here
     // The chatHistory already contains the user's message with the correct display name
     
@@ -2967,31 +3004,9 @@ app.post('/api/personal-chat', async (req, res) => {
                 knowledgeBases = agentData.knowledge_bases.map(kb => kb.name || kb.uuid);
               }
               
-              // If this is a patient summary request, check if we already have one
-              console.log(`🔍 [USE STORED PS] Checking for cached summary...`);
-              console.log(`🔍 [USE STORED PS] Has patientSummary object? ${!!userDoc.patientSummary}`);
-              console.log(`🔍 [USE STORED PS] Has content? ${!!userDoc.patientSummary?.content}`);
-              
-              if (isPatientSummaryRequest && userDoc.patientSummary && userDoc.patientSummary.content) {
-                console.log(`✅ [USE STORED PS] Found existing patient summary for ${currentUser}`);
-                console.log(`✅ [USE STORED PS] Summary length: ${userDoc.patientSummary.content.length} characters`);
-                
-                // Add the cached summary to chat history and return
-                const newChatHistory = [...chatHistory];
-                newChatHistory.push({
-                  role: 'assistant',
-                  content: userDoc.patientSummary.content,
-                  name: 'Personal AI'
-                });
-                
-                console.log(`✅ [USE STORED PS] Returning cached summary in chat history format`);
-                
-                // Update user activity
-                updateUserActivity(currentUser);
-                
-                return res.json(newChatHistory);
-              } else if (isPatientSummaryRequest) {
-                console.log(`📋 [PATIENT SUMMARY] No existing summary found, will generate new one`);
+              // If this is a patient summary request, override the message with standard prompt
+              if (isPatientSummaryRequest) {
+                console.log(`📋 [PATIENT SUMMARY] Generating new patient summary (cache check already done earlier)`);
                 // Override the user message to use the standard prompt
                 aiUserMessage = 'Create a comprehensive patient summary according to your agent instructions';
               }
