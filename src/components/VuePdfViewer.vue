@@ -203,7 +203,13 @@ const goToPage = () => {
 // Watch for file changes - this handles both initial load and file changes
 watch(() => props.file, (newFile, oldFile) => {
   if (newFile && !isLoading.value) {
-    currentPage.value = 1
+    // Check if a specific start page was requested
+    if (newFile.startPage && typeof newFile.startPage === 'number') {
+      console.log(`📄 [PDF LINK] Starting at requested page: ${newFile.startPage}`)
+      currentPage.value = newFile.startPage
+    } else {
+      currentPage.value = 1
+    }
     totalPages.value = 0
     loadPdfDocument()
   }

@@ -528,8 +528,38 @@ export default defineComponent({
       }
     };
 
-    // Watch for chat history changes to update chat area height
+    // Watch for chat history changes to update chat area height and detect PDF viewer commands
     watch(() => appState.chatHistory, (newHistory, oldHistory) => {
+      // Check if a new PDF viewer command was added
+      if (newHistory && newHistory.length > 0) {
+        const lastMessage = newHistory[newHistory.length - 1];
+        
+        // Check for PDF viewer metadata
+        if (lastMessage.metadata && lastMessage.metadata.type === 'pdf_viewer') {
+          console.log(`📄 [PDF LINK] Detected PDF viewer command in chat`);
+          console.log(`📄 [PDF LINK] File: ${lastMessage.metadata.fileName}, Page: ${lastMessage.metadata.page}`);
+          
+          // Create a file object for the popup
+          const pdfFile = {
+            id: `pdf-link-${Date.now()}`,
+            name: lastMessage.metadata.fileName,
+            bucketKey: lastMessage.metadata.bucketKey,
+            fileSize: lastMessage.metadata.fileSize,
+            type: 'pdf',
+            content: '', // Will be loaded by PopUp component
+            startPage: lastMessage.metadata.page // Pass the requested page
+          };
+          
+          console.log(`📄 [PDF LINK] Opening PDF viewer to page ${lastMessage.metadata.page}`);
+          
+          // Set current viewing file and open popup
+          appState.currentViewingFile = pdfFile;
+          setTimeout(() => {
+            showPopup();
+          }, 100);
+        }
+      }
+      
       // Use nextTick to ensure DOM is updated before calculating height
       nextTick(() => {
         updateChatAreaMargin();
