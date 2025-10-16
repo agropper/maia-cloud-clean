@@ -153,8 +153,16 @@ onMounted(() => {
   const hasSeenWelcome = localStorage.getItem('maia-welcome-seen')
   const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
   
+  console.log(`[WM] WelcomeModal (3-page) onMounted check:`)
+  console.log(`[WM]   - hasSeenWelcome: ${hasSeenWelcome}`)
+  console.log(`[WM]   - isAdminRoute: ${isAdminRoute}`)
+  console.log(`[WM]   - pathname: ${window.location.pathname}`)
+  
   if (!hasSeenWelcome && !isAdminRoute) {
+    console.log(`[WM] WelcomeModal (3-page) triggered: first time user, not admin route`)
     showModal.value = true
+  } else {
+    console.log(`[WM] WelcomeModal (3-page) NOT triggered: already seen or admin route`)
   }
 })
 </script>
