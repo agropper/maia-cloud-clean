@@ -1414,7 +1414,6 @@ app.post('/api/user-file-metadata', async (req, res) => {
 
     // SPECIAL CASE: Public User files are session-only (not saved to database)
     if (userId === 'Public User') {
-      console.log(`📄 [PUBLIC FIX] File upload for Public User - session-only, not saving to database`);
       return res.json({
         success: true,
         message: 'File uploaded successfully (session-only for Public User)',
@@ -1493,7 +1492,6 @@ app.post('/api/user-file-kb-association', async (req, res) => {
 
     // SPECIAL CASE: Public User files are session-only (not saved to database)
     if (userId === 'Public User') {
-      console.log(`📄 [PUBLIC FIX] KB association for Public User - session-only, not saving to database`);
       return res.json({
         success: true,
         message: 'KB association updated (session-only for Public User)',
@@ -2139,7 +2137,6 @@ async function reconcileUserFiles(userId) {
   try {
     // SPECIAL CASE: Public User files are session-only (not saved to database)
     if (userId === 'Public User') {
-      console.log(`📄 [PUBLIC FIX] Skipping bucket reconciliation for Public User (files are session-only)`);
       return 0;
     }
     
@@ -5088,6 +5085,34 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/users/:userId/agent-template', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // SPECIAL CASE: Clean up Public User's archived folder on page load
+    if (userId === 'Public User') {
+      try {
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: 'Public User/archived/'
+        });
+        
+        const listResult = await s3Client.send(listCommand);
+        const filesToDelete = listResult.Contents || [];
+        
+        if (filesToDelete.length > 0) {
+          const deleteCommand = new DeleteObjectsCommand({
+            Bucket: bucketName,
+            Delete: {
+              Objects: filesToDelete.map(file => ({ Key: file.Key })),
+              Quiet: true
+            }
+          });
+          
+          await s3Client.send(deleteCommand);
+          console.log(`🗑️ Cleaned up ${filesToDelete.length} file(s) from Public User/archived/`);
+        }
+      } catch (cleanupError) {
+        console.error(`❌ Failed to cleanup Public User archived folder:`, cleanupError.message);
+      }
+    }
     
     // Always rebuild template to ensure fresh data
     console.log(`[TEMPLATE] Rebuilding fresh template for ${userId}`);
@@ -9220,12 +9245,9 @@ app.listen(PORT, async () => {
     
     // SPECIAL VALIDATION: Fix Public User document structure and agent assignment
     try {
-      console.log(`🔍 [PUBLIC FIX] Checking Public User document...`);
       const publicUserDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', 'Public User');
       
       if (publicUserDoc && publicUserDoc._id === 'Public User' && publicUserDoc.displayName === 'Public User') {
-        console.log(`✅ [PUBLIC FIX] Found Public User document`);
-        
         let needsUpdate = false;
         
         // Find the public agent
@@ -9234,14 +9256,9 @@ app.listen(PORT, async () => {
           agent.name && agent.name.toLowerCase().startsWith('public')
         );
         
-        if (!publicAgent) {
-          console.log(`❌ [PUBLIC FIX] No public agent found in cache`);
-        } else {
-          console.log(`✅ [PUBLIC FIX] Found public agent: ${publicAgent.name} (${publicAgent.id})`);
-          
+        if (publicAgent) {
           // Check if agent needs to be assigned
           if (publicUserDoc.assignedAgentId !== publicAgent.id) {
-            console.log(`🔧 [PUBLIC FIX] Assigning public agent to Public User`);
             publicUserDoc.assignedAgentId = publicAgent.id;
             publicUserDoc.assignedAgentName = publicAgent.name;
             publicUserDoc.agentAssignedAt = publicAgent.createdAt || new Date().toISOString();
@@ -9252,7 +9269,6 @@ app.listen(PORT, async () => {
           // Ensure API key exists for public agent
           if (!publicUserDoc.agentApiKey && publicAgent.id) {
             try {
-              console.log(`🔑 [PUBLIC FIX] Creating API key for public agent`);
               const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${publicAgent.id}/api_keys`, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -9265,32 +9281,28 @@ app.listen(PORT, async () => {
               
               if (apiKey) {
                 publicUserDoc.agentApiKey = apiKey;
-                console.log(`✅ [PUBLIC FIX] API key created for public agent`);
                 needsUpdate = true;
               }
             } catch (apiKeyError) {
-              console.error(`❌ [PUBLIC FIX] Failed to create API key:`, apiKeyError.message);
+              console.error(`❌ Failed to create API key for Public User:`, apiKeyError.message);
             }
           }
         }
         
         // Fix workflow stage
         if (publicUserDoc.workflowStage !== 'agent_assigned') {
-          console.log(`🔧 [PUBLIC FIX] Setting workflowStage to agent_assigned`);
           publicUserDoc.workflowStage = 'agent_assigned';
           needsUpdate = true;
         }
         
         // Set patientSummary to null (not supported for Public User)
         if (publicUserDoc.patientSummary !== null) {
-          console.log(`🔧 [PUBLIC FIX] Setting patientSummary to null`);
           publicUserDoc.patientSummary = null;
           needsUpdate = true;
         }
         
         // Set files to null (not saved for Public User)
         if (publicUserDoc.files !== null) {
-          console.log(`🔧 [PUBLIC FIX] Setting files to null`);
           publicUserDoc.files = null;
           needsUpdate = true;
         }
@@ -9299,7 +9311,6 @@ app.listen(PORT, async () => {
         const obsoleteFields = ['hasPasskey', 'hasValidPasskey'];
         for (const field of obsoleteFields) {
           if (publicUserDoc[field] !== undefined) {
-            console.log(`🔧 [PUBLIC FIX] Removing obsolete field: ${field}`);
             delete publicUserDoc[field];
             needsUpdate = true;
           }
@@ -9307,13 +9318,11 @@ app.listen(PORT, async () => {
         
         // Add modern required fields if missing
         if (!publicUserDoc.type) {
-          console.log(`🔧 [PUBLIC FIX] Adding type: user`);
           publicUserDoc.type = 'user';
           needsUpdate = true;
         }
         
         if (!publicUserDoc.domain) {
-          console.log(`🔧 [PUBLIC FIX] Adding domain: public`);
           publicUserDoc.domain = 'public';
           needsUpdate = true;
         }
@@ -9322,15 +9331,10 @@ app.listen(PORT, async () => {
         if (needsUpdate) {
           publicUserDoc.updatedAt = new Date().toISOString();
           await cacheManager.saveDocument(couchDBClient, 'maia_users', publicUserDoc);
-          console.log(`✅ [PUBLIC FIX] Public User document updated successfully`);
-        } else {
-          console.log(`✅ [PUBLIC FIX] Public User document is already correct`);
         }
-      } else {
-        console.log(`⚠️ [PUBLIC FIX] Public User document not found or has wrong structure`);
       }
     } catch (publicUserError) {
-      console.error(`❌ [PUBLIC FIX] Error fixing Public User:`, publicUserError.message);
+      console.error(`❌ Error fixing Public User:`, publicUserError.message);
     }
     
     // Pre-cache knowledge bases for Admin2 - sync with DigitalOcean API source of truth

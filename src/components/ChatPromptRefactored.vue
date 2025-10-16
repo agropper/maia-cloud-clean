@@ -28,6 +28,7 @@ import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
+import PublicUserNoKBModal from "./PublicUserNoKBModal.vue";
 import { WorkflowUtils } from "../utils/workflow-utils.js";
 import { appStateManager } from "../utils/AppStateManager.js";
 
@@ -55,6 +56,7 @@ export default defineComponent({
     NewUserWelcomeModal,
     KnowledgeBaseWelcomeModal,
     PublicUserKBWelcomeModal,
+    PublicUserNoKBModal,
     QDialog,
     QCard,
     QCardSection,
@@ -103,6 +105,7 @@ export default defineComponent({
     const showNewUserWelcomeModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
     const showPublicUserKBWelcomeModal = ref(false);
+    const showPublicUserNoKBModal = ref(false);
 
     // Get state from centralized state manager - use refs for reactivity
     const currentUser = ref(appStateManager.getStateProperty('currentUser'));
@@ -364,6 +367,12 @@ export default defineComponent({
     // Handle opening Agent Manager from Public User KB Welcome Modal
     const handleOpenPublicKBManager = () => {
       showPublicUserKBWelcomeModal.value = false;
+      showAgentManagementDialog.value = true;
+    };
+
+    // Handle opening Agent Manager from Public User No-KB Modal
+    const handleOpenAgentManagementFromNoKB = () => {
+      showPublicUserNoKBModal.value = false;
       showAgentManagementDialog.value = true;
     };
 
@@ -668,6 +677,32 @@ export default defineComponent({
     // Modal appears when agent is assigned, disappears when KB is attached
     watch([currentUser, currentAgent, currentKnowledgeBase], () => {
       checkForKnowledgeBaseWelcome();
+    }, { immediate: true });
+
+    // Check if Public User needs KB attachment warning
+    const checkForPublicUserNoKB = () => {
+      // Must be Public User
+      if (currentUser.value?.userId !== 'Public User') {
+        return;
+      }
+      
+      // Must have an agent assigned
+      if (!currentAgent.value) {
+        return;
+      }
+      
+      // Check if agent has no KB attached
+      const hasKB = currentAgent.value.knowledgeBases?.length > 0 || currentAgent.value.knowledgeBase;
+      
+      if (!hasKB) {
+        console.log(`[PUBLIC] Showing no-KB warning for Public User`);
+        showPublicUserNoKBModal.value = true;
+      }
+    };
+
+    // Watch for Public User's agent and KB changes
+    watch([currentUser, currentAgent, currentKnowledgeBase], () => {
+      checkForPublicUserNoKB();
     }, { immediate: true });
 
     watch(() => appStateManager.getStateProperty('showAgentSelectionModal'), (show) => {
@@ -1033,11 +1068,13 @@ const triggerUploadFile = (file: File) => {
       showNewUserWelcomeModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
+      showPublicUserNoKBModal,
       showCreateKBActionModal,
       triggerFileImport,
       handleOpenKBManager,
       handleImportFile,
       handleOpenPublicKBManager,
+      handleOpenAgentManagementFromNoKB,
       handleDoItCreateKB,
       handleSupportRequested,
       checkForKnowledgeBaseWelcome,
@@ -1211,6 +1248,11 @@ const triggerUploadFile = (file: File) => {
       v-model="showPublicUserKBWelcomeModal"
       :current-user="currentUser"
       @open-manager="handleOpenPublicKBManager"
+    />
+
+    <PublicUserNoKBModal
+      v-model="showPublicUserNoKBModal"
+      @open-agent-management="handleOpenAgentManagementFromNoKB"
     />
 
     <!-- Create KB and Summary Action Modal -->
