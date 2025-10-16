@@ -2822,7 +2822,10 @@ app.post('/api/personal-chat', async (req, res) => {
     }
     
     // EARLY CHECK: If this is a patient summary request, check for cached summary BEFORE any other processing
-    if (isPatientSummaryRequest && currentUser !== 'Public User') {
+    // BUT skip cache if forceRegenerate flag is set (for REDO requests)
+    const forceRegenerate = req.body.forceRegenerate === true;
+    
+    if (isPatientSummaryRequest && currentUser !== 'Public User' && !forceRegenerate) {
       try {
         const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
         
@@ -2846,6 +2849,8 @@ app.post('/api/personal-chat', async (req, res) => {
         console.error(`❌ Error checking cached summary:`, cacheCheckError.message);
         // Continue with normal flow if cache check fails
       }
+    } else if (forceRegenerate) {
+      console.log(`📋 [PATIENT SUMMARY] Bypassing cache - forceRegenerate flag set`);
     }
     
     // Frontend now adds the user's message to chat history, so we don't need to add it here
@@ -7260,27 +7265,50 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 11: Generate patient summary via Personal AI (using internal endpoint)
-    console.log(`🤖 [AUTO PS] Requesting patient summary from Personal AI`);
+    // Step 11: Generate patient summary via DigitalOcean Agent Chat API
+    console.log(`🤖 [AUTO PS] Requesting patient summary from agent ${agentId}`);
     
-    // Use internal personal-chat endpoint which handles agent authentication properly
-    const summaryPrompt = 'Create a comprehensive patient summary according to your agent instructions';
+    let summary = null;
     
-    // Call internal chat endpoint (this handles session, API keys, etc.)
-    const chatRequest = {
-      message: summaryPrompt,
-      chatHistory: [], // Empty history for fresh summary
-      selectedAI: 'personal', // Use personal AI
-      userId: userId
-    };
-    
-    console.log(`🤖 [AUTO PS] Sending patient summary request via internal chat endpoint`);
-    
-    // We need to make an internal call - simulate what the frontend does
-    // For now, just create a simple summary message since the agent/KB is set up
-    const summary = `Patient summary request queued. Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. The agent can now answer questions about the patient's health records.`;
-    
-    console.log(`🤖 [AUTO PS] Patient summary prepared (${summary.length} characters)`);
+    try {
+      const summaryPrompt = 'Create a comprehensive patient summary according to your agent instructions';
+      
+      console.log(`🤖 [AUTO PS] Calling DigitalOcean agent chat API`);
+      const chatResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/chat/completions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: summaryPrompt
+            }
+          ],
+          knowledge_base_ids: [kbId],
+          stream: false
+        }),
+        headers: {
+          'Authorization': `Bearer ${userDoc.agentApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // Extract summary from response
+      const summaryContent = chatResponse.choices?.[0]?.message?.content || 
+                            chatResponse.message?.content ||
+                            chatResponse.content;
+      
+      if (summaryContent) {
+        summary = summaryContent;
+        console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
+      } else {
+        console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response, using fallback`);
+        summary = `Patient summary request queued. Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. The agent can now answer questions about the patient's health records.`;
+      }
+    } catch (summaryError) {
+      console.error(`🤖 [AUTO PS] ❌ Failed to generate patient summary:`, summaryError.message);
+      // Use fallback message if summary generation fails
+      summary = `Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. Unable to generate patient summary automatically. Please try manually requesting a summary in the chat.`;
+    }
     
     // Step 12: Save patient summary to user document
     console.log(`🤖 [AUTO PS] Saving patient summary to user document`);

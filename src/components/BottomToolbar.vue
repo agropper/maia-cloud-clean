@@ -821,11 +821,53 @@ export default defineComponent({
       }
     }
 
-    const handleRedoPatientSummary = () => {
+    const handleRedoPatientSummary = async () => {
       // Clear the existing summary and trigger a new generation
-      console.log('[*] Requesting new patient summary generation')
-      // Emit to parent to send the patient summary request
-      emit('write-message', 'Create a comprehensive patient summary according to your agent instructions')
+      console.log('[*] Requesting new patient summary generation (force regenerate)')
+      
+      // Close the modal
+      showPatientSummaryModal.value = false
+      
+      // Directly call the AI with forceRegenerate flag
+      const userId = props.currentUser?.userId || 'Public User'
+      
+      // Add user message to chat
+      props.appState.chatHistory.push({
+        role: 'user',
+        content: 'Create a comprehensive patient summary according to your agent instructions',
+        name: props.currentUser?.displayName || userId
+      })
+      
+      // Show loading
+      props.appState.isLoading = true
+      
+      try {
+        const response = await fetch('/api/personal-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatHistory: props.appState.chatHistory,
+            newValue: 'Create a comprehensive patient summary according to your agent instructions',
+            forceRegenerate: true  // Flag to bypass cache
+          })
+        })
+        
+        if (response.ok) {
+          const newChatHistory = await response.json()
+          props.appState.chatHistory = newChatHistory
+        } else {
+          throw new Error(`HTTP ${response.status}`)
+        }
+      } catch (error) {
+        console.error('❌ Failed to regenerate patient summary:', error)
+        $q.notify({
+          type: 'negative',
+          message: 'Failed to regenerate patient summary',
+          position: 'top'
+        })
+      } finally {
+        props.appState.isLoading = false
+      }
     }
 
     // Function to check if we should show the new user welcome modal
