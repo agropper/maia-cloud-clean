@@ -673,11 +673,9 @@ export default defineComponent({
       checkForNoAgentWelcome();
     }, { immediate: true });
 
-    // Watch for user, agent, and KB changes to check if modal should be shown
-    // Modal appears when agent is assigned, disappears when KB is attached
-    watch([currentUser, currentAgent, currentKnowledgeBase], () => {
-      checkForKnowledgeBaseWelcome();
-    }, { immediate: true });
+    // NOTE: checkForKnowledgeBaseWelcome() is ONLY called by @file-uploaded event
+    // NOT by a watcher, because we only want to show CreateKBActionModal AFTER
+    // a file is actually uploaded, not just because user has agent but no KB
 
     // Check if Public User needs KB attachment warning
     const checkForPublicUserNoKB = () => {
