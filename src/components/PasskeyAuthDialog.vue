@@ -440,15 +440,33 @@ export default defineComponent({
         // Step 2: Create credentials using SimpleWebAuthn v13
         console.log(`[SIGN-IN] Step 2: Calling navigator.credentials.create() via SimpleWebAuthn`);
         console.log(`[SIGN-IN]   - This will show browser's passkey creation dialog`);
+        console.log(`[SIGN-IN]   - Document focused BEFORE focus attempt: ${document.hasFocus()}`);
         
-        // Ensure window is focused (WebAuthn requirement)
-        if (!document.hasFocus()) {
-          console.log(`[SIGN-IN]   - Document not focused, attempting to focus window...`);
-          window.focus();
-          // Give browser a moment to process the focus change
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Try multiple strategies to ensure focus
+        // Strategy 1: Focus the window
+        window.focus();
+        
+        // Strategy 2: Focus the active element (button)
+        if (document.activeElement) {
+          console.log(`[SIGN-IN]   - Active element: ${document.activeElement.tagName}`);
         }
-        console.log(`[SIGN-IN]   - Document focused: ${document.hasFocus()}`);
+        
+        // Strategy 3: Click on document to force user interaction
+        // This is a workaround for browser security restrictions
+        document.body.click();
+        
+        // Give browser time to process
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        console.log(`[SIGN-IN]   - Document focused AFTER focus attempt: ${document.hasFocus()}`);
+        
+        // If still not focused, show user a message
+        if (!document.hasFocus()) {
+          console.warn(`[SIGN-IN] ⚠️ Cannot focus window automatically`);
+          errorMessage.value = "Please click anywhere on this page first, then click 'Create Passkey' again.";
+          isRegistering.value = false;
+          return;
+        }
         
         const credential = await startRegistrationWebAuthn({ optionsJSON: options });
         console.log(`[SIGN-IN] ✅ Passkey created successfully by browser`);
