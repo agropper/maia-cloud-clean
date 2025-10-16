@@ -1786,15 +1786,35 @@ function processUserDataSync(user) {
   // Database cleanup happens at STARTUP only to prevent race conditions
   if (assignedAgentId) {
     const cachedAgents = cacheManager.getCachedAgentsSync();
+    
+    // DEBUG: Log cached agents structure to diagnose cloud warning triangle issue
+    console.log(`[ADMIN-USERS] Validating agent for user ${user.userId}`);
+    console.log(`[ADMIN-USERS] User's assignedAgentId: ${assignedAgentId}`);
+    console.log(`[ADMIN-USERS] Cached agents count: ${cachedAgents.length}`);
+    if (cachedAgents.length > 0) {
+      console.log(`[ADMIN-USERS] First cached agent structure:`, {
+        id: cachedAgents[0].id,
+        uuid: cachedAgents[0].uuid,
+        name: cachedAgents[0].name
+      });
+      console.log(`[ADMIN-USERS] First agent id field: ${cachedAgents[0].id}`);
+      console.log(`[ADMIN-USERS] First agent uuid field: ${cachedAgents[0].uuid}`);
+    }
+    
     const agentExists = cachedAgents.some(agent => 
       (agent.uuid || agent.id) === assignedAgentId
     );
     
+    console.log(`[ADMIN-USERS] Agent exists check result: ${agentExists}`);
+    
     if (!agentExists) {
       // Agent deleted from DO - show warning in display (database will be fixed at next startup)
+      console.log(`[ADMIN-USERS] ⚠️ Agent NOT found in cache - adding warning triangle`);
       assignedAgentId = assignedAgentId; // Keep original ID for debugging
       assignedAgentName = `⚠️ ${assignedAgentName || 'Deleted Agent'}`;
       // Don't modify workflowStage here - let database cleanup at startup handle it
+    } else {
+      console.log(`[ADMIN-USERS] ✅ Agent found in cache - no warning needed`);
     }
   }
   
