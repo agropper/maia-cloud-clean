@@ -5089,6 +5089,17 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
     // SPECIAL CASE: Clean up Public User's archived folder on page load
     if (userId === 'Public User') {
       try {
+        const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
+        
+        const s3Client = new S3Client({
+          endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+          region: process.env.DIGITALOCEAN_REGION || 'tor1',
+          credentials: {
+            accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+          }
+        });
+        
         const listCommand = new ListObjectsV2Command({
           Bucket: bucketName,
           Prefix: 'Public User/archived/'
