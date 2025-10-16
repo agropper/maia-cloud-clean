@@ -215,7 +215,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 20px;
 }
 
 .pdf-viewer-container {
@@ -224,14 +223,27 @@ onMounted(() => {
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  background-color: #f5f5f5;
-  border-radius: 4px;
+  background-color: white;
 }
 
 .pdf-page {
   flex: 1;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Style the VuePDF canvas to fill available space */
+.pdf-page :deep(canvas) {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain;
 }
 
 .pdf-loading-overlay,
@@ -287,10 +299,6 @@ onMounted(() => {
     max-width: 95%;
     max-height: 95%;
     width: 100%;
-  }
-  
-  .help-content {
-    padding: 10px;
   }
 }
 </style>
