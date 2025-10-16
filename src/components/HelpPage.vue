@@ -25,7 +25,7 @@
             v-if="pdfDocument"
             :pdf="pdfDocument"
             :page="currentPage"
-            :textLayer="true"
+            :textLayer="false"
             @loaded="onPdfLoaded"
             class="pdf-page"
           />
