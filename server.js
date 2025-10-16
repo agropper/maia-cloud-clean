@@ -9066,8 +9066,11 @@ app.listen(PORT, async () => {
           }
         }
         
-        // If we found an agent for this user but they don't have it assigned
-        if (userAgent && !userDoc.assignedAgentId) {
+        // Check if user needs agent info or API key restored
+        const needsAgentRestore = userAgent && !userDoc.assignedAgentId;
+        const needsApiKeyRestore = userAgent && userDoc.assignedAgentId === userAgent.id && !userDoc.agentApiKey;
+        
+        if (needsAgentRestore) {
           console.log(`🔧 [STARTUP] Restoring agent to user ${userDoc.userId}: ${userAgent.name} (${userAgent.id})`);
           
           userDoc.assignedAgentId = userAgent.id;
@@ -9075,9 +9078,23 @@ app.listen(PORT, async () => {
           userDoc.agentAssignedAt = userAgent.createdAt || new Date().toISOString();
           userDoc.agentDeployedAt = userAgent.updatedAt || new Date().toISOString();
           
-          // Create API key for the agent (required for chat functionality)
+          // Update workflow stage to agent_assigned if it's at an earlier stage
+          if (userDoc.workflowStage === 'request_email_sent' || 
+              userDoc.workflowStage === 'approved' || 
+              userDoc.workflowStage === 'polling_for_deployment') {
+            userDoc.workflowStage = 'agent_assigned';
+          }
+        }
+        
+        if (needsAgentRestore || needsApiKeyRestore) {
+          // Create/restore API key for the agent (required for chat functionality)
           try {
-            console.log(`🔑 [STARTUP] Creating API key for restored agent ${userAgent.id}`);
+            if (needsApiKeyRestore) {
+              console.log(`🔑 [STARTUP] Restoring missing API key for user ${userDoc.userId}, agent ${userAgent.id}`);
+            } else {
+              console.log(`🔑 [STARTUP] Creating API key for restored agent ${userAgent.id}`);
+            }
+            
             const apiKeyResponse = await doRequest(`/v2/gen-ai/agents/${userAgent.id}/api_keys`, {
               method: 'POST',
               body: JSON.stringify({
@@ -9096,13 +9113,6 @@ app.listen(PORT, async () => {
             }
           } catch (apiKeyError) {
             console.error(`🔑 [STARTUP] ❌ Failed to create API key for ${userDoc.userId}:`, apiKeyError.message);
-          }
-          
-          // Update workflow stage to agent_assigned if it's at an earlier stage
-          if (userDoc.workflowStage === 'request_email_sent' || 
-              userDoc.workflowStage === 'approved' || 
-              userDoc.workflowStage === 'polling_for_deployment') {
-            userDoc.workflowStage = 'agent_assigned';
           }
           
           userDoc.updatedAt = new Date().toISOString();
