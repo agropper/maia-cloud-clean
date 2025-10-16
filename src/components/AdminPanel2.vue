@@ -1225,13 +1225,12 @@ const modelColumns = [
 
 // Methods - Static implementations (no real logic)
 const resetWelcomeModal = () => {
-  // Clear the welcome modal flags from localStorage
-  localStorage.removeItem('maia-welcome-seen')
-  localStorage.removeItem('maia-welcome-seen-timestamp')
+  // Delete the welcome modal cookie by setting it to expire in the past
+  document.cookie = 'maia-welcome-seen=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax'
   
   $q.notify({
     type: 'positive',
-    message: 'Welcome modal reset - reload page to see it again',
+    message: 'Welcome modal cookie deleted - reload page to see it again',
     position: 'top'
   })
 }

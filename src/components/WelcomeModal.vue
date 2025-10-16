@@ -127,16 +127,33 @@ watch(showModal, (newValue) => {
 // Initialize showModal with prop value
 showModal.value = props.modelValue
 
+// Cookie helper functions
+const setCookie = (name, value, days) => {
+  const date = new Date()
+  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000))
+  const expires = `expires=${date.toUTCString()}`
+  document.cookie = `${name}=${value};${expires};path=/;SameSite=Lax`
+}
+
+const getCookie = (name) => {
+  const nameEQ = name + "="
+  const ca = document.cookie.split(';')
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i]
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length)
+  }
+  return null
+}
+
 const goToPage2 = () => {
   currentPage.value = 2
 }
 
 const goToPage3 = () => {
   showModal.value = false
-  // Store that user has seen the welcome modal
-  localStorage.setItem('maia-welcome-seen', 'true')
-  // Also store the timestamp for future reference
-  localStorage.setItem('maia-welcome-seen-timestamp', new Date().toISOString())
+  // Store that user has seen the welcome modal (cookie expires in 7 days)
+  setCookie('maia-welcome-seen', 'true', 7)
   
   // Show help page (PDF UI legend)
   showHelpPage.value = true
@@ -150,7 +167,7 @@ const handleHelpClose = () => {
 
 onMounted(() => {
   // Only show modal if user hasn't seen it before and not on admin routes
-  const hasSeenWelcome = localStorage.getItem('maia-welcome-seen')
+  const hasSeenWelcome = getCookie('maia-welcome-seen')
   const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register'
   
   console.log(`[WM] WelcomeModal (3-page) onMounted check:`)
