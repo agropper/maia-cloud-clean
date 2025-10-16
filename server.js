@@ -2734,10 +2734,6 @@ app.post('/api/personal-chat', async (req, res) => {
     const pageMatch = /show\s+page\s+(\d+)/i.exec(newValue);
     const isShowPageRequest = !!pageMatch;
     const requestedPage = pageMatch ? parseInt(pageMatch[1], 10) : null;
-    
-    if (isShowPageRequest) {
-      console.log(`📄 [PDF LINK] Detected "show page" request: page ${requestedPage}`);
-    }
 
     // Get current user from authentication cookie (primary), request body (deep link users), or fall back to Public User
     let currentUser = 'Public User';
@@ -2773,16 +2769,11 @@ app.post('/api/personal-chat', async (req, res) => {
     // EARLY CHECK: If this is a "show page ###" request, return PDF file info
     if (isShowPageRequest && currentUser !== 'Public User') {
       try {
-        console.log(`📄 [PDF LINK] Fetching user document for ${currentUser}`);
         const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', currentUser);
         
         if (userDoc && userDoc.files && userDoc.files.length > 0) {
-          // Find the file used for KB creation (most recent file or first file)
-          const kbFile = userDoc.files[userDoc.files.length - 1]; // Use most recent file
-          
-          console.log(`📄 [PDF LINK] Found KB source file: ${kbFile.fileName}`);
-          console.log(`📄 [PDF LINK] Bucket key: ${kbFile.bucketKey}`);
-          console.log(`📄 [PDF LINK] Requested page: ${requestedPage}`);
+          // Find the file used for KB creation (most recent file)
+          const kbFile = userDoc.files[userDoc.files.length - 1];
           
           // Return PDF file info with page number
           const newChatHistory = [...chatHistory];
@@ -2799,17 +2790,13 @@ app.post('/api/personal-chat', async (req, res) => {
             }
           });
           
-          console.log(`📄 [PDF LINK] Returning PDF viewer command for page ${requestedPage}`);
-          
           // Update user activity
           updateUserActivity(currentUser);
           
           return res.json(newChatHistory);
-        } else {
-          console.log(`📄 [PDF LINK] No files found for user ${currentUser}`);
         }
       } catch (pdfCheckError) {
-        console.error(`❌ [PDF LINK] Error checking for PDF file:`, pdfCheckError.message);
+        console.error(`❌ Error opening PDF page:`, pdfCheckError.message);
         // Continue with normal flow if check fails
       }
     }

@@ -536,9 +536,6 @@ export default defineComponent({
         
         // Check for PDF viewer metadata
         if (lastMessage.metadata && lastMessage.metadata.type === 'pdf_viewer') {
-          console.log(`📄 [PDF LINK] Detected PDF viewer command in chat`);
-          console.log(`📄 [PDF LINK] File: ${lastMessage.metadata.fileName}, Page: ${lastMessage.metadata.page}`);
-          
           // Create a file object for the popup
           const pdfFile = {
             id: `pdf-link-${Date.now()}`,
@@ -549,8 +546,6 @@ export default defineComponent({
             content: '', // Will be loaded by PopUp component
             startPage: lastMessage.metadata.page // Pass the requested page
           };
-          
-          console.log(`📄 [PDF LINK] Opening PDF viewer to page ${lastMessage.metadata.page}`);
           
           // Set current viewing file and open popup
           appState.currentViewingFile = pdfFile;
