@@ -34,6 +34,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import { QDialog, QCard, QCardSection, QCardActions, QBtn, QSpace } from 'quasar';
 
 const props = defineProps({
   modelValue: {

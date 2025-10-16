@@ -38,6 +38,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import { QDialog, QCard, QCardSection, QCardActions, QBtn, QSpace } from 'quasar';
 import VueMarkdown from 'vue-markdown-render';
 
 const props = defineProps({
