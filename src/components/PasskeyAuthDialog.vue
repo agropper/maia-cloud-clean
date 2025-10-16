@@ -403,9 +403,11 @@ export default defineComponent({
     };
 
     const registerPasskey = async () => {
+      console.log(`[SIGN-IN] registerPasskey called for userId: ${userId.value}`);
       isRegistering.value = true;
       try {
         // Step 1: Generate registration options
+        console.log(`[SIGN-IN] Step 1: Fetching registration options from server`);
         const optionsResponse = await fetch(
           `${API_BASE_URL}/passkey/register`,
           {
@@ -421,16 +423,28 @@ export default defineComponent({
           }
         );
 
+        console.log(`[SIGN-IN] Registration options response status: ${optionsResponse.status}`);
+
         if (!optionsResponse.ok) {
-          throw new Error("Failed to generate registration options");
+          const errorData = await optionsResponse.json();
+          console.error(`[SIGN-IN] ❌ Failed to get registration options:`, errorData);
+          throw new Error(errorData.error || "Failed to generate registration options");
         }
 
         const options = await optionsResponse.json();
+        console.log(`[SIGN-IN] ✅ Registration options received from server`);
+        console.log(`[SIGN-IN]   - Challenge length: ${options.challenge?.length || 0}`);
+        console.log(`[SIGN-IN]   - RP Name: ${options.rp?.name}`);
+        console.log(`[SIGN-IN]   - RP ID: ${options.rp?.id}`);
 
         // Step 2: Create credentials using SimpleWebAuthn v13
+        console.log(`[SIGN-IN] Step 2: Calling navigator.credentials.create() via SimpleWebAuthn`);
+        console.log(`[SIGN-IN]   - This will show browser's passkey creation dialog`);
         const credential = await startRegistrationWebAuthn({ optionsJSON: options });
+        console.log(`[SIGN-IN] ✅ Passkey created successfully by browser`);
 
         // Step 3: Verify registration
+        console.log(`[SIGN-IN] Step 3: Sending credential to server for verification`);
         const verifyResponse = await fetch(
           `${API_BASE_URL}/passkey/register-verify`,
           {
@@ -445,20 +459,29 @@ export default defineComponent({
           }
         );
 
+        console.log(`[SIGN-IN] Verification response status: ${verifyResponse.status}`);
         const result = await verifyResponse.json();
 
         if (result.success) {
+          console.log(`[SIGN-IN] ✅ Registration verified and completed successfully`);
+          console.log(`[SIGN-IN]   - User: ${result.user?.userId}`);
+          console.log(`[SIGN-IN]   - Workflow stage: ${result.user?.workflowStage}`);
           // Store the user data for later use
           registrationUserData.value = result.user;
           currentStep.value = "success";
         } else {
+          console.error(`[SIGN-IN] ❌ Registration verification failed:`, result.error);
           currentStep.value = "error";
           errorMessage.value = result.error || "Registration failed";
         }
       } catch (error) {
+        console.error(`[SIGN-IN] ❌ Registration error:`, error);
+        console.error(`[SIGN-IN]   - Error type: ${error.name}`);
+        console.error(`[SIGN-IN]   - Error message: ${error.message}`);
         currentStep.value = "error";
         errorMessage.value = "Registration failed. Please try again.";
       } finally {
+        console.log(`[SIGN-IN] Registration process completed (success or failure)`);
         isRegistering.value = false;
       }
     };
