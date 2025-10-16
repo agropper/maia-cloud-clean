@@ -2724,7 +2724,9 @@ app.post('/api/personal-chat', async (req, res) => {
     let aiUserMessage = aiContext ? `${aiContext}User query: ${newValue}` : newValue;
     
     // Check if this is a patient summary request
-    const isPatientSummaryRequest = /patient\s+summary/i.test(newValue) || 
+    // Match various forms: "Show patient summary", "Create patient summary", "patient summary", etc.
+    const isPatientSummaryRequest = /show\s+patient\s+summary/i.test(newValue) ||
+                                   /patient\s+summary/i.test(newValue) || 
                                    /create.*summary/i.test(newValue) ||
                                    /generate.*summary/i.test(newValue);
 
