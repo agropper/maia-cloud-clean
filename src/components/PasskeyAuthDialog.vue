@@ -105,6 +105,12 @@
             <strong>Domain:</strong> HIEofOne.org
           </div>
 
+          <!-- Safari-specific hint -->
+          <div v-if="isSafariBrowser" class="q-mb-md q-pa-sm bg-orange-1 text-orange-9 rounded-borders text-caption">
+            <q-icon name="info" size="xs" class="q-mr-xs" />
+            Safari users: Click anywhere on this dialog first, then click "Create Passkey"
+          </div>
+
           <q-btn
             label="Create Passkey"
             color="primary"
@@ -269,6 +275,11 @@ export default defineComponent({
     const errorMessage = ref("");
     const isCreatingNewUser = ref(false);
     const registrationUserData = ref(null);
+    
+    // Detect Safari browser
+    const isSafariBrowser = computed(() => {
+      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    });
 
     const startSignIn = () => {
       isCreatingNewUser.value = false;
@@ -405,6 +416,11 @@ export default defineComponent({
     const registerPasskey = async () => {
       console.log(`[SIGN-IN] registerPasskey called for userId: ${userId.value}`);
       isRegistering.value = true;
+      
+      // Detect Safari
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      console.log(`[SIGN-IN] Browser: ${isSafari ? 'Safari' : 'Other'}`);
+      
       try {
         // Step 1: Generate registration options
         console.log(`[SIGN-IN] Step 1: Fetching registration options from server`);
@@ -478,8 +494,20 @@ export default defineComponent({
         console.error(`[SIGN-IN] ❌ Registration error:`, error);
         console.error(`[SIGN-IN]   - Error type: ${error.name}`);
         console.error(`[SIGN-IN]   - Error message: ${error.message}`);
-        currentStep.value = "error";
-        errorMessage.value = "Registration failed. Please try again.";
+        
+        // Handle Safari-specific focus error
+        if (error.name === 'NotAllowedError' && error.message.includes('not focused')) {
+          if (isSafari) {
+            currentStep.value = "error";
+            errorMessage.value = "Safari Security Restriction: Please click directly on this dialog first, then click 'Create Passkey' again. Or use Chrome for easier registration.";
+          } else {
+            currentStep.value = "error";
+            errorMessage.value = "Please click on the browser window/tab first, then try again.";
+          }
+        } else {
+          currentStep.value = "error";
+          errorMessage.value = error.message || "Registration failed. Please try again.";
+        }
       } finally {
         console.log(`[SIGN-IN] Registration process completed (success or failure)`);
         isRegistering.value = false;
@@ -592,6 +620,7 @@ export default defineComponent({
       onSuccess,
       isCreatingNewUser,
       registrationUserData,
+      isSafariBrowser,
     };
   },
 });
