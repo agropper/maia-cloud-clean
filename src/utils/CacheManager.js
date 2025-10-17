@@ -24,14 +24,15 @@ export class CacheManager {
     };
     
     // Cache TTL (Time To Live) in milliseconds
-    // NOTE: Users cache has NO TTL - it's explicitly managed (invalidate on change)
+    // NOTE: All caches have NO TTL - they are explicitly managed (invalidate on change or refresh)
+    // TTL was causing cache to be randomly replaced, losing manually added entries
     this.ttl = {
       users: Infinity,             // NO TTL - explicitly invalidated on changes only
-      chats: 2 * 60 * 1000,        // 2 minutes
-      knowledgeBases: 30 * 60 * 1000,  // 30 minutes (admin data, changes rarely)
-      agents: 15 * 60 * 1000,      // 15 minutes (admin data)
-      models: 60 * 60 * 1000,      // 60 minutes (DigitalOcean models change rarely)
-      health: 30 * 1000            // 30 seconds
+      chats: Infinity,             // NO TTL - explicitly invalidated on changes only
+      knowledgeBases: Infinity,    // NO TTL - explicitly invalidated on changes only
+      agents: Infinity,            // NO TTL - explicitly invalidated on changes only
+      models: Infinity,            // NO TTL - explicitly invalidated on changes only
+      health: Infinity             // NO TTL - explicitly invalidated on changes only
     };
     
     // Rate limiting
