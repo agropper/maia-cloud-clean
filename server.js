@@ -7100,7 +7100,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     console.log(`🤖 [AUTO PS] Starting automation for user ${userId}, file: ${fileName}`);
     
     // Step 1: Get user document
-    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    let userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
       throw new Error(`User ${userId} not found`);
     }
