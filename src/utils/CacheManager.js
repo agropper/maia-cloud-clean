@@ -465,11 +465,9 @@ export class CacheManager {
    */
   getCachedAgentsSync() {
     const cached = this.getCached('agents', 'all');
-    // Ensure we always return an array
-    if (Array.isArray(cached)) {
-      return cached;
-    }
-    return [];
+    const result = Array.isArray(cached) ? cached : [];
+    console.log(`[CACHE DEBUG] getCachedAgentsSync() returning ${result.length} agents`);
+    return result;
   }
 
   /**
