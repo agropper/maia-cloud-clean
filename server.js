@@ -7308,7 +7308,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
-    // Step 11: Generate patient summary via DigitalOcean Agent Chat API
+    // Step 11: Generate patient summary via internal /api/personal-chat endpoint
     console.log(`🤖 [AUTO PS] Requesting patient summary from agent ${agentId}`);
     
     let summary = null;
@@ -7316,31 +7316,38 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     try {
       const summaryPrompt = 'Create a comprehensive patient summary according to your agent instructions';
       
-      console.log(`🤖 [AUTO PS] Calling DigitalOcean agent chat API`);
-      const chatResponse = await doRequest(`/v2/gen-ai/agents/${agentId}/chat/completions`, {
+      console.log(`🤖 [AUTO PS] Calling internal /api/personal-chat endpoint with forceRegenerate`);
+      
+      // Get the maia_auth cookie value to pass to the internal endpoint
+      const authData = {
+        userId: userDoc._id,
+        displayName: userDoc.displayName || userDoc._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      };
+      
+      const chatResponse = await fetch(`${getBaseUrl()}/api/personal-chat`, {
         method: 'POST',
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: summaryPrompt
-            }
-          ],
-          knowledge_base_ids: [kbId],
-          stream: false
-        }),
         headers: {
-          'Authorization': `Bearer ${userDoc.agentApiKey}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Cookie': `maia_auth=${JSON.stringify(authData)}`
+        },
+        body: JSON.stringify({
+          message: summaryPrompt,
+          forceRegenerate: true
+        })
       });
       
-      // Extract summary from response
-      const summaryContent = chatResponse.choices?.[0]?.message?.content || 
-                            chatResponse.message?.content ||
-                            chatResponse.content;
+      if (!chatResponse.ok) {
+        throw new Error(`Personal chat API returned ${chatResponse.status}`);
+      }
       
-      if (summaryContent) {
+      const chatData = await chatResponse.json();
+      
+      // Extract summary from response
+      const summaryContent = chatData.response;
+      
+      if (summaryContent && summaryContent.trim().length > 0) {
         summary = summaryContent;
         console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
       } else {
