@@ -2470,16 +2470,13 @@ const startPolling = async () => {
   stopPolling()
   
   // Start immediate poll
-  console.log('[WORKFLOW] Polling now (initial)')
   await pollForUpdates()
   
   // Set up polling interval (5 seconds for admin)
   pollingInterval.value = setInterval(async () => {
-    console.log('[WORKFLOW] Polling now (interval)')
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true
-  console.log('[WORKFLOW] Polling started, interval set to 5000ms')
 }
 
 const stopPolling = () => {
@@ -2504,9 +2501,7 @@ const pollForUpdates = async () => {
       url.searchParams.set('lastPoll', lastPollTimestamp.value)
     }
     
-    console.log('[WORKFLOW] Fetching:', url.toString())
     const response = await fetch(url)
-    console.log('[WORKFLOW] Poll response status:', response.status)
     if (!response.ok) {
       if (response.status === 410) {
         // Session expired - server restarted
@@ -2532,6 +2527,7 @@ const pollForUpdates = async () => {
     
     // Process updates
     if (data.updates && data.updates.length > 0) {
+      console.log('[WORKFLOW] Received', data.updates.length, 'update(s):', data.updates.map(u => u.type).join(', '))
       data.updates.forEach(update => {
         handlePollingUpdate(update)
       })
@@ -3030,25 +3026,18 @@ onMounted(async () => {
   // Debug after auth check
   
   // Only load data if admin is authenticated
-  console.log('[WORKFLOW] AdminPanel2 onMounted, isAdmin=', isAdmin.value)
   if (isAdmin.value) {
     try {
       // Force fresh data load on page refresh
-      console.log('[WORKFLOW] Loading all data...')
       await loadAllData()
-      console.log('[WORKFLOW] Loading current model...')
       await loadCurrentModel()
-      console.log('[WORKFLOW] Data loading complete')
       
     } catch (error) {
       console.error('[WORKFLOW] ❌ Error during initialization:', error)
     }
     
     // Start polling for updates after data is loaded
-    console.log('[WORKFLOW] About to call startPolling()')
     startPolling()
-  } else {
-    console.log('[WORKFLOW] isAdmin is false, skipping polling')
   }
 })
 
