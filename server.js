@@ -7312,7 +7312,7 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     console.log(`🤖 [AUTO PS] Indexing started automatically, polling for completion...`);
     let indexingComplete = false;
     let attempts = 0;
-    const maxAttempts = 60; // 5 minutes max (5 seconds * 60)
+    const maxAttempts = 500; // ~40 minutes max (5 seconds * 500)
     let totalTokens = 0;
     
     while (!indexingComplete && attempts < maxAttempts) {
@@ -7829,7 +7829,7 @@ app.post('/api/test-large-file-indexing', async (req, res) => {
 // Helper function to monitor indexing progress
 async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http://localhost:3001') {
   let checkCount = 0;
-  const maxChecks = 60; // Monitor for up to 60 minutes
+  const maxChecks = 500; // Monitor for up to ~40 minutes (5 sec * 500)
   
   const monitorInterval = setInterval(async () => {
     try {

@@ -414,8 +414,8 @@ export default defineComponent({
       appState.chatHistory.push(requestMessage);
       console.log('[AUTO PS] ✅ Step 1 complete: Request message posted');
       
-      // Show loading indicator
-      appState.isLoading = true;
+      // Show loading indicator with KB indexing message
+      appStateManager.setLoading(true, 'Knowledge base indexing takes about 200 PDF pages per minute...');
       
       try {
         // Step 2: Get user info from backend
@@ -524,7 +524,7 @@ export default defineComponent({
         });
         throw error;
       } finally {
-        appState.isLoading = false;
+        appStateManager.setLoading(false);
         console.log('[AUTO PS] Loading indicator cleared');
       }
     };
@@ -827,7 +827,7 @@ export default defineComponent({
       trackUserActivity('query_attempt');
 
       try {
-        appState.isLoading = true;
+        appStateManager.setLoading(true); // Use default AI query message
         const newChatHistory = await sendQuery(
           appState.selectedAI,
           appState.chatHistory,
@@ -840,7 +840,7 @@ export default defineComponent({
         
         appState.chatHistory = newChatHistory;
         appState.currentQuery = "";
-        appState.isLoading = false;
+        appStateManager.setLoading(false);
       } catch (error: any) {
         console.error("Query failed:", error);
         
@@ -871,7 +871,7 @@ export default defineComponent({
         writeMessage(errorMessage, "error");
         // Also set agent warning to show error in AgentStatusIndicator
         agentWarning.value = warningMessage;
-        appState.isLoading = false;
+        appStateManager.setLoading(false);
       }
 
       logMessage({

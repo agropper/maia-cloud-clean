@@ -24,6 +24,7 @@ export class AppStateManager {
       
       // UI state
       isLoading: false,
+      loadingMessage: 'AI responses typically take 5 to 30 seconds...',
       error: null,
       warnings: [],
       
@@ -124,8 +125,8 @@ export class AppStateManager {
   /**
    * Set loading state
    */
-  setLoading(isLoading) {
-    this.setState({ isLoading });
+  setLoading(isLoading, loadingMessage = 'AI responses typically take 5 to 30 seconds...') {
+    this.setState({ isLoading, loadingMessage });
   }
 
   /**

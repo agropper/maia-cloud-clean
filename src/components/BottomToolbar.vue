@@ -396,7 +396,7 @@
     <div v-if="appState.isLoading" class="ai-loading-indicator">
       <div class="loading-content">
         <q-icon name="hourglass_empty" size="24px" color="primary" class="loading-spinner hourglass-animation" />
-        <span class="loading-text">AI responses typically take 5 to 30 seconds...</span>
+        <span class="loading-text">{{ appState.loadingMessage }}</span>
       </div>
     </div>
   </div>
