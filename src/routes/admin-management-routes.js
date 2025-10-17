@@ -3079,6 +3079,7 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     
     // Check cache first
     const cachedAgents = cacheManager.getCachedAgents();
+    console.log(`[CACHE DEBUG] /agents endpoint: cachedAgents =`, cachedAgents ? `${cachedAgents.length} agents` : 'null');
     
     if (cachedAgents) {
       let processedAgents = [...cachedAgents];
@@ -3133,11 +3134,14 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     }
     
     
+    console.log(`[CACHE DEBUG] /agents endpoint: Cache miss or expired, fetching from DO API`);
+    
     // Add delay to prevent rate limiting
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Get agents from DigitalOcean API (same as /api/agents)
     const agents = await doRequest('/v2/gen-ai/agents');
+    console.log(`[CACHE DEBUG] /agents endpoint: DO API returned ${agents.agents?.length || 0} agents`);
     
     // Transform agents to match frontend expectations
     const allAgents = (agents.agents || []).map((agent) => {
@@ -3153,6 +3157,8 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
         description: null
       };
     });
+    
+    console.log(`[CACHE DEBUG] /agents endpoint: Caching ${allAgents.length} transformed agents, names:`, allAgents.map(a => a.name));
     
     // Cache the agents data
     await cacheManager.cacheAgents(allAgents);
