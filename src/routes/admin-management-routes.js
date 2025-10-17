@@ -1288,30 +1288,17 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
                   ...newAgent // Include all DO API fields
                 };
                 
-              await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
-              
-              // Also update the agents cache in memory
-              const currentAgentsCache = cacheManager.getCachedAgentsSync();
-              if (Array.isArray(currentAgentsCache)) {
-                // Transform newAgent to match startup format (consistent cache structure)
-                const transformedNewAgent = {
-                  id: newAgent.uuid || newAgent.id,  // Use uuid field from DO API
-                  name: newAgent.name,
-                  status: newAgent.status || 'unknown',
-                  model: newAgent.model || 'unknown',
-                  createdAt: newAgent.created_at,
-                  updatedAt: newAgent.updated_at,
-                  knowledgeBases: newAgent.knowledge_bases || [],
-                  endpoint: null,
-                  description: null
-                };
+                await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
                 
-                currentAgentsCache.push(transformedNewAgent);
-                cacheManager.setCached('agents', 'all', currentAgentsCache);
-                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
-              } else {
-                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
-              }
+                // Also update the agents cache in memory
+                const currentAgentsCache = cacheManager.getCachedAgentsSync();
+                if (Array.isArray(currentAgentsCache)) {
+                  currentAgentsCache.push(newAgent);
+                  cacheManager.setCached('agents', 'all', currentAgentsCache);
+                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
+                } else {
+                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
+                }
               } catch (saveAgentError) {
                 console.error(`❌ [AUTO-AGENT] Failed to save agent to maia_agents:`, saveAgentError.message);
               }
@@ -1359,37 +1346,6 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
               };
               
               console.log(`[*] Agent created and assigned to user ${userId}: ${newAgentId}`);
-              
-              // VALIDATION: Check cache consistency after agent creation
-              try {
-                const validationCache = cacheManager.getCachedAgentsSync();
-                console.log(`[*] Validating agents cache: ${validationCache.length} agents in cache - ${validationCache.map(a => a.name).join(', ')}`);
-                
-                // Check against maia_agents database
-                const allDocsResponse = await couchDBClient.db.use('maia_agents').list();
-                const dbAgentNames = allDocsResponse.rows
-                  .filter(row => !row.id.startsWith('_design/'))
-                  .map(row => row.id);
-                console.log(`[*] Validating maia_agents database: ${dbAgentNames.length} agents in database - ${dbAgentNames.join(', ')}`);
-                
-                // Check if cache and database match
-                const cacheNames = new Set(validationCache.map(a => a.name));
-                const dbNames = new Set(dbAgentNames);
-                const missingInCache = [...dbNames].filter(name => !cacheNames.has(name));
-                const missingInDB = [...cacheNames].filter(name => !dbNames.has(name));
-                
-                if (missingInCache.length > 0) {
-                  console.log(`⚠️ [*] Agents in database but not in cache: ${missingInCache.join(', ')}`);
-                }
-                if (missingInDB.length > 0) {
-                  console.log(`⚠️ [*] Agents in cache but not in database: ${missingInDB.join(', ')}`);
-                }
-                if (missingInCache.length === 0 && missingInDB.length === 0) {
-                  console.log(`✅ [*] Cache and database are consistent`);
-                }
-              } catch (validationError) {
-                console.error(`❌ [*] Failed to validate cache: ${validationError.message}`);
-              }
               
             } catch (agentError) {
               console.error(`❌ [AUTO-AGENT] Failed to create agent for user ${userId}:`, agentError.message);
