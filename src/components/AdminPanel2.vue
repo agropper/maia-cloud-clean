@@ -2493,6 +2493,7 @@ const stopPolling = () => {
 
 const pollForUpdates = async () => {
   if (!currentSessionId.value) {
+    console.log('[WORKFLOW] Poll skipped - no session ID')
     return
   }
   
@@ -2503,7 +2504,9 @@ const pollForUpdates = async () => {
       url.searchParams.set('lastPoll', lastPollTimestamp.value)
     }
     
+    console.log('[WORKFLOW] Fetching:', url.toString())
     const response = await fetch(url)
+    console.log('[WORKFLOW] Poll response status:', response.status)
     if (!response.ok) {
       if (response.status === 410) {
         // Session expired - server restarted
