@@ -103,6 +103,7 @@ export class CacheManager {
       this.cache.chats.set('all', data);
       this.lastUpdated.chats = now;
     } else if (cacheType === 'agents') {
+      console.log(`[CACHE DEBUG] setCached('agents', 'all', ...) called with ${Array.isArray(data) ? data.length : 'non-array'} agents`);
       this.cache.agents.set('all', data);
       this.lastUpdated.agents = now;
     } else if (this.cache[cacheType]) {
