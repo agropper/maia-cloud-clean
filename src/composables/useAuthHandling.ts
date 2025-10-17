@@ -375,67 +375,83 @@ const uploadPDFFile = async (
       }
       
       // Store PDF as binary (not base64) for proper text extraction and indexing
-      const fileReader = new FileReader()
-      fileReader.onload = async () => {
-        try {
-          const arrayBuffer = fileReader.result as ArrayBuffer
-          
-          // Convert ArrayBuffer to base64 for JSON transport (but will be decoded on server)
-          const uint8Array = new Uint8Array(arrayBuffer)
-          let binary = ''
-          for (let i = 0; i < uint8Array.byteLength; i++) {
-            binary += String.fromCharCode(uint8Array[i])
-          }
-          const base64Binary = btoa(binary)
-          
-          const uploadResponse = await fetch('/api/upload-to-bucket', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              fileName: file.name,
-              content: base64Binary,
-              fileType: 'application/pdf',
-              userFolder: userFolder,
-              isBinary: true  // Flag to indicate binary data
-            }),
-          })
-          
-          if (uploadResponse.ok) {
-            const uploadResult = await uploadResponse.json()
+      // Wrap FileReader in a Promise to ensure upload completes before continuing
+      await new Promise<void>((resolve, reject) => {
+        const fileReader = new FileReader()
+        
+        fileReader.onload = async () => {
+          try {
+            const arrayBuffer = fileReader.result as ArrayBuffer
             
-            // Update the uploaded file with bucket info
-            uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
-            uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+            // Convert ArrayBuffer to base64 for JSON transport (but will be decoded on server)
+            const uint8Array = new Uint8Array(arrayBuffer)
+            let binary = ''
+            for (let i = 0; i < uint8Array.byteLength; i++) {
+              binary += String.fromCharCode(uint8Array[i])
+            }
+            const base64Binary = btoa(binary)
             
-            // Update user record with file metadata
-            await updateUserFileMetadata(resolvedUserId, {
-              fileName: file.name,
-              bucketKey: uploadResult.fileInfo.bucketKey,
-              bucketPath: uploadResult.fileInfo.userFolder,
-              fileSize: file.size,
-              fileType: 'pdf',
-              uploadedAt: new Date().toISOString()
+            const uploadResponse = await fetch('/api/upload-to-bucket', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                fileName: file.name,
+                content: base64Binary,
+                fileType: 'application/pdf',
+                userFolder: userFolder,
+                isBinary: true  // Flag to indicate binary data
+              }),
             })
             
-            // Verify file was saved in correct location
-            if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
-              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`)
+            if (uploadResponse.ok) {
+              const uploadResult = await uploadResponse.json()
+              
+              // Update the uploaded file with bucket info
+              uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+              uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+              
+              // Update user record with file metadata
+              await updateUserFileMetadata(resolvedUserId, {
+                fileName: file.name,
+                bucketKey: uploadResult.fileInfo.bucketKey,
+                bucketPath: uploadResult.fileInfo.userFolder,
+                fileSize: file.size,
+                fileType: 'pdf',
+                uploadedAt: new Date().toISOString()
+              })
+              
+              // Verify file was saved in correct location
+              if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
+                reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`))
+                return
+              }
+              if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
+                reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`))
+                return
+              }
+              
+              resolve() // Upload and metadata save complete
+            } else {
+              console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
+              reject(new Error(`Failed to save PDF to bucket: ${file.name}`))
             }
-            if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
-              throw new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`)
-            }
-          } else {
-            console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
+          } catch (bucketError) {
+            console.error(`❌ Error saving PDF to bucket:`, bucketError)
+            reject(bucketError as Error)
           }
-        } catch (bucketError) {
-          console.error(`❌ Error saving PDF to bucket:`, bucketError)
         }
-      }
-      fileReader.readAsArrayBuffer(file)  // Read as binary, not base64 data URL
+        
+        fileReader.onerror = () => {
+          reject(new Error('Failed to read PDF file'))
+        }
+        
+        fileReader.readAsArrayBuffer(file)  // Read as binary, not base64 data URL
+      })
     } catch (error) {
       console.error(`❌ Error preparing PDF for bucket upload:`, error)
+      throw error // Re-throw to stop the upload process
     }
     
     // Don't add to chat history - just make available as context
