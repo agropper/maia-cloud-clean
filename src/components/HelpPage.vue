@@ -25,8 +25,7 @@
             v-if="pdfDocument"
             :pdf="pdfDocument"
             :page="currentPage"
-            :textLayer="false"
-            @loaded="onPdfLoaded"
+            :text-layer="false"
             class="pdf-page"
           />
           
@@ -79,13 +78,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { QBtn, QIcon, QSpinnerDots } from 'quasar'
 import { VuePDF, usePDF } from '@tato30/vue-pdf'
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
-
-// Configure PDF.js worker globally
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
 
 const emit = defineEmits(['close'])
 
@@ -97,20 +92,40 @@ const props = defineProps({
   }
 })
 
-const pdfUrl = ref('/Help_Drawing.pdf')
-const pdfDocument = ref(null)
+const pdfUrl = '/Help_Drawing.pdf'
 const currentPage = ref(1)
-const totalPages = ref(0)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pdfError = ref(false)
 const pdfErrorMessage = ref('')
+
+// Use the usePDF composable to handle PDF loading
+const { pdf: pdfDocument, pages: totalPages, info } = usePDF(pdfUrl)
+
+// Watch for PDF loading
+watch(pdfDocument, (newPdf) => {
+  console.log('📄 PDF document changed:', newPdf)
+  if (newPdf) {
+    console.log(`📄 Help PDF loaded: ${totalPages.value} pages`)
+    isLoading.value = false
+  }
+}, { immediate: true })
+
+// Watch for errors
+watch(() => info.value?.error, (error) => {
+  if (error) {
+    console.error('❌ PDF loading failed:', error)
+    pdfError.value = true
+    pdfErrorMessage.value = error?.message || 'Failed to load PDF'
+    isLoading.value = false
+  }
+})
 
 const handleClose = () => {
   emit('close')
 }
 
 const openPdf = () => {
-  window.open(pdfUrl.value, '_blank')
+  window.open(pdfUrl, '_blank')
 }
 
 const previousPage = () => {
@@ -124,60 +139,6 @@ const nextPage = () => {
     currentPage.value++
   }
 }
-
-const onPdfLoaded = (pdf) => {
-  if (totalPages.value === 0 && pdf.numPages && pdf.numPages > 0) {
-    totalPages.value = pdf.numPages
-    console.log(`📄 Help PDF loaded: ${totalPages.value} pages`)
-  }
-  isLoading.value = false
-}
-
-const loadingTask = ref(null)
-
-const loadPdfDocument = async () => {
-  try {
-    isLoading.value = true
-    pdfError.value = false
-    pdfErrorMessage.value = ''
-    
-    // Load the PDF document
-    loadingTask.value = pdfjsLib.getDocument(pdfUrl.value)
-    pdfDocument.value = loadingTask.value
-    
-  } catch (error) {
-    console.error('❌ Failed to load help PDF:', error)
-    pdfError.value = true
-    pdfErrorMessage.value = error.message || 'Unable to load the PDF document'
-    isLoading.value = false
-  }
-}
-
-// Watch for visibility changes to load PDF
-watch(() => props.isVisible, (newVal, oldVal) => {
-  if (newVal && !pdfDocument.value) {
-    loadPdfDocument()
-  } else if (!newVal && oldVal) {
-    // Component is being hidden - clean up PDF
-    pdfDocument.value = null
-    loadingTask.value = null
-    currentPage.value = 1
-    totalPages.value = 0
-    isLoading.value = false
-  }
-}, { immediate: true })
-
-onMounted(() => {
-  if (props.isVisible) {
-    loadPdfDocument()
-  }
-})
-
-onUnmounted(() => {
-  // Clean up when component is destroyed
-  pdfDocument.value = null
-  loadingTask.value = null
-})
 </script>
 
 <style scoped>
