@@ -1290,15 +1290,24 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
                 
                 await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
                 
-                // Also update the agents cache in memory
-                const currentAgentsCache = cacheManager.getCachedAgentsSync();
-                if (Array.isArray(currentAgentsCache)) {
-                  currentAgentsCache.push(newAgent);
-                  cacheManager.setCached('agents', 'all', currentAgentsCache);
-                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
-                } else {
-                  console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
-                }
+              // Also update the agents cache in memory
+              const currentAgentsCache = cacheManager.getCachedAgentsSync();
+              console.log(`[CACHE DEBUG] BEFORE push: cache has ${currentAgentsCache.length} agents:`, currentAgentsCache.map(a => a.name || a.agentName));
+              
+              if (Array.isArray(currentAgentsCache)) {
+                currentAgentsCache.push(newAgent);
+                console.log(`[CACHE DEBUG] AFTER push: cache has ${currentAgentsCache.length} agents:`, currentAgentsCache.map(a => a.name || a.agentName));
+                
+                cacheManager.setCached('agents', 'all', currentAgentsCache);
+                
+                // Verify cache was actually updated
+                const verifyCache = cacheManager.getCachedAgentsSync();
+                console.log(`[CACHE DEBUG] AFTER setCached: cache has ${verifyCache.length} agents:`, verifyCache.map(a => a.name || a.agentName));
+                
+                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
+              } else {
+                console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
+              }
               } catch (saveAgentError) {
                 console.error(`❌ [AUTO-AGENT] Failed to save agent to maia_agents:`, saveAgentError.message);
               }
@@ -1794,6 +1803,7 @@ function processUserDataSync(user) {
     if (!agentExists) {
       // Agent deleted from DO - show warning in display (database will be fixed at next startup)
       console.log(`⚠️ [ADMIN-USERS] Agent ${assignedAgentName} (${assignedAgentId}) for user ${user.userId} not found in maia_agents cache`);
+      console.log(`[CACHE DEBUG] Cache has ${cachedAgents.length} agents:`, cachedAgents.map(a => `${a.name}(${a.uuid || a.id})`));
       assignedAgentId = assignedAgentId; // Keep original ID for debugging
       assignedAgentName = `⚠️ ${assignedAgentName || 'Deleted Agent'}`;
       // Don't modify workflowStage here - let database cleanup at startup handle it
