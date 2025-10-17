@@ -3027,18 +3027,25 @@ onMounted(async () => {
   // Debug after auth check
   
   // Only load data if admin is authenticated
+  console.log('[WORKFLOW] AdminPanel2 onMounted, isAdmin=', isAdmin.value)
   if (isAdmin.value) {
     try {
       // Force fresh data load on page refresh
+      console.log('[WORKFLOW] Loading all data...')
       await loadAllData()
+      console.log('[WORKFLOW] Loading current model...')
       await loadCurrentModel()
+      console.log('[WORKFLOW] Data loading complete')
       
     } catch (error) {
-      console.error('❌ Error during initialization:', error)
+      console.error('[WORKFLOW] ❌ Error during initialization:', error)
     }
     
     // Start polling for updates after data is loaded
+    console.log('[WORKFLOW] About to call startPolling()')
     startPolling()
+  } else {
+    console.log('[WORKFLOW] isAdmin is false, skipping polling')
   }
 })
 
