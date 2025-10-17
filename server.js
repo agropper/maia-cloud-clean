@@ -5110,6 +5110,8 @@ app.put('/api/users/:userId', async (req, res) => {
     const { userId } = req.params;
     const updates = req.body;
     
+    console.log('[WORKFLOW] PUT /api/users/' + userId + ' received, updates=', updates);
+    
     // Get existing user document
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
@@ -5120,6 +5122,8 @@ app.put('/api/users/:userId', async (req, res) => {
     const oldWorkflowStage = userDoc.workflowStage;
     const hadEmail = !!userDoc.email;
     const oldApprovalStatus = userDoc.approvalStatus;
+    
+    console.log('[WORKFLOW] Old workflow stage:', oldWorkflowStage, '→ New:', updates.workflowStage);
     
     // Apply updates
     const updatedUser = {

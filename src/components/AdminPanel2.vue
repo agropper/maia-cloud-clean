@@ -2474,7 +2474,7 @@ const startPolling = async () => {
   
   // Set up polling interval (5 seconds for admin)
   pollingInterval.value = setInterval(async () => {
-    // Silent polling - no console spam
+    console.log('[WORKFLOW] Polling now')
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true

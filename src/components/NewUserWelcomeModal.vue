@@ -145,6 +145,8 @@ const sendSupportRequest = async () => {
     return
   }
 
+  console.log('[WORKFLOW] Sending support request: user=', props.currentUser.userId, 'email=', userEmail.value)
+  
   isSendingRequest.value = true
   try {
     // Send email notification to admin using the existing API
@@ -163,9 +165,11 @@ const sendSupportRequest = async () => {
 
     if (response.ok) {
       const result = await response.json()
+      console.log('[WORKFLOW] Email sent successfully, result=', result)
       
       // Update user document with email and workflow stage
       try {
+        console.log('[WORKFLOW] Updating user document: PUT /api/users/' + props.currentUser.userId)
         const updateResponse = await fetch(`/api/users/${props.currentUser.userId}`, {
           method: 'PUT',
           headers: {
@@ -178,10 +182,13 @@ const sendSupportRequest = async () => {
         })
         
         if (!updateResponse.ok) {
-          console.warn('Failed to update user workflow stage, but email was sent successfully')
+          const errorText = await updateResponse.text()
+          console.warn('[WORKFLOW] PUT request failed:', updateResponse.status, errorText)
+        } else {
+          console.log('[WORKFLOW] User document updated successfully')
         }
       } catch (updateError) {
-        console.error('Error updating user document:', updateError)
+        console.error('[WORKFLOW] Error in PUT request:', updateError)
       }
       
       // Notify parent component that support was requested
@@ -195,12 +202,12 @@ const sendSupportRequest = async () => {
       isOpen.value = false
       
       // Show success message (you might want to use a notification system here)
-      console.log('Support request sent successfully!')
+      console.log('[WORKFLOW] Support request flow completed')
     } else {
       throw new Error('Failed to send support request')
     }
   } catch (error) {
-    console.error('Error sending support request:', error)
+    console.error('[WORKFLOW] Error sending support request:', error)
     // You might want to show an error notification here
   } finally {
     isSendingRequest.value = false

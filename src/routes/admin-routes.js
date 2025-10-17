@@ -201,6 +201,8 @@ router.post('/request-approval', async (req, res) => {
   try {
     const { username, email, requestType, message } = req.body;
     
+    console.log('[WORKFLOW] Support request received: user=', username, 'email=', email);
+    
     if (!username || !requestType) {
       return res.status(400).json({
         success: false,
@@ -289,6 +291,8 @@ router.post('/request-approval', async (req, res) => {
     }
 
     const resendResult = await resendResponse.json();
+    
+    console.log('[WORKFLOW] Email sent successfully via Resend, emailId=', resendResult.id);
 
         // NOTE: Email and workflow stage update removed from here to avoid race condition
         // with passkey registration. The frontend will update these fields after registration
