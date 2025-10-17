@@ -497,25 +497,9 @@ export default defineComponent({
         }
         
         // Step 8: Refresh agent data to update KB status
-        console.log('[AUTO PS] Step 8: Refreshing agent and user data to update UI');
+        console.log('[AUTO PS] Step 8: Refreshing agent data to update UI');
         await refreshAgentData();
-        
-        // Also refresh user data to trigger template re-fetch and update PS icon
-        const currentUserId = currentUser.value?.userId;
-        if (currentUserId) {
-          console.log('[AUTO PS] Step 8a: Fetching updated user document');
-          const userResponse = await fetch(`${API_BASE_URL}/users/${currentUserId}`);
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            const normalizedUser = UserService.normalizeUserObject(userData);
-            currentUser.value = normalizedUser;
-            console.log('[AUTO PS] ✅ User data refreshed - template will re-fetch automatically');
-            console.log('[PS SAVE2] 🔄 Frontend currentUser updated with fresh data including patientSummary');
-          } else {
-            console.warn('[AUTO PS] ⚠️ Failed to refresh user data:', userResponse.status);
-          }
-        }
-        console.log('[AUTO PS] ✅ Step 8 complete: Agent and user data refreshed');
+        console.log('[AUTO PS] ✅ Step 8 complete: Agent data refreshed');
         
         const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`[AUTO PS] ✅ AUTOMATION COMPLETE - Total time: ${totalTime}s`);
