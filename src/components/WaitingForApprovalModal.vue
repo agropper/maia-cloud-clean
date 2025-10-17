@@ -12,7 +12,7 @@
         </div>
         
         <div class="text-body2 text-grey-7">
-          Once approved, your personal AI agent will be deployed and you can start using MAIA.
+          Once approved, your personal AI agent will be deployed and you can start using MAIA. Until then, you don't have a private AI and you can only chat with one of the other AIs in the dropdown menu.
         </div>
       </q-card-section>
 

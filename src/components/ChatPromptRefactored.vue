@@ -515,7 +515,8 @@ export default defineComponent({
     const handleSupportRequested = (data) => {
       console.log('✅ Support requested for new user:', data);
       showNewUserWelcomeModal.value = false;
-      // The NewUserWelcomeModal handles the actual support request internally
+      // Show the waiting for approval modal immediately
+      showWaitingForApprovalModal.value = true;
     };
 
 
