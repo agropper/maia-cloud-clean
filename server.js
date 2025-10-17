@@ -7354,14 +7354,17 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       
       const chatData = await chatResponse.json();
       
-      // Extract summary from response
-      const summaryContent = chatData.response;
+      // Extract summary from chat history response (array of messages)
+      // The response is an array with the assistant's message as the last item
+      const assistantMessage = Array.isArray(chatData) ? chatData.find(msg => msg.role === 'assistant') : null;
+      const summaryContent = assistantMessage?.content;
       
       if (summaryContent && summaryContent.trim().length > 0) {
         summary = summaryContent;
         console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
       } else {
         console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response, using fallback`);
+        console.warn(`🤖 [AUTO PS] Response data:`, JSON.stringify(chatData).substring(0, 200));
         summary = `Patient summary request queued. Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. The agent can now answer questions about the patient's health records.`;
       }
     } catch (summaryError) {
