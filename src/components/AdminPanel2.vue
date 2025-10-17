@@ -320,8 +320,8 @@
           <div class="q-pa-md">
             <div class="q-mb-md row items-center justify-between">
               <div>
-                <h4 class="q-ma-none">Private AI Users</h4>
-                <p class="text-grey-6 q-ma-none">Manage user approvals and workflow status</p>
+              <h4 class="q-ma-none">Private AI Users</h4>
+              <p class="text-grey-6 q-ma-none">Manage user approvals and workflow status</p>
               </div>
               <QBtn
                 color="primary"
@@ -2660,7 +2660,20 @@ const handlePollingUpdate = (update) => {
         handleSessionEnded(update.data)
         break
         
+      case 'support_requested':
+        handleSupportRequested(update.data)
+        break
+        
+      case 'user_email_added':
+        handleUserEmailAdded(update.data)
+        break
+        
+      case 'approval_status_changed':
+        handleApprovalStatusChanged(update.data)
+        break
+        
       default:
+        console.warn('[WORKFLOW] Unhandled polling message:', update.type)
         break
     }
   } catch (error) {
@@ -2871,6 +2884,43 @@ const handleSessionEnded = (data) => {
     message: `👋 Session ended: ${data.message}`,
     timeout: 3000,
     position: 'top'
+  })
+}
+
+const handleSupportRequested = (data) => {
+  console.log(`[*] Support requested: ${data.message}`)
+  
+  // Refresh users list to show updated workflow stage
+  loadUsers(true) // Force refresh from database
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `📧 ${data.displayName || data.userId} requested support`,
+    position: 'top',
+    timeout: 5000
+  })
+}
+
+const handleUserEmailAdded = (data) => {
+  console.log(`[*] User email added: ${data.message}`)
+  
+  // Refresh users list to show email
+  loadUsers(true) // Force refresh from database
+}
+
+const handleApprovalStatusChanged = (data) => {
+  console.log(`[*] Approval status changed: ${data.message}`)
+  
+  // Refresh users list to show updated status
+  loadUsers(true) // Force refresh from database
+  
+  // Show notification
+  $q.notify({
+    type: 'info',
+    message: `✓ ${data.displayName || data.userId}: ${data.oldStatus} → ${data.newStatus}`,
+    position: 'top',
+    timeout: 3000
   })
 }
 
