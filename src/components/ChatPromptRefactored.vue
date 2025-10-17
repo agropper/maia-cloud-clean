@@ -30,6 +30,7 @@ import WaitingForApprovalModal from "./WaitingForApprovalModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
 import PublicUserNoKBModal from "./PublicUserNoKBModal.vue";
+import SafariWarningModal from "./SafariWarningModal.vue";
 import { WorkflowUtils } from "../utils/workflow-utils.js";
 import { appStateManager } from "../utils/AppStateManager.js";
 
@@ -59,6 +60,7 @@ export default defineComponent({
     KnowledgeBaseWelcomeModal,
     PublicUserKBWelcomeModal,
     PublicUserNoKBModal,
+    SafariWarningModal,
     QDialog,
     QCard,
     QCardSection,
@@ -108,6 +110,7 @@ export default defineComponent({
     const showWaitingForApprovalModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
     const showPublicUserKBWelcomeModal = ref(false);
+    const showSafariWarningModal = ref(false);
     const showPublicUserNoKBModal = ref(false);
 
     // Get state from centralized state manager - use refs for reactivity
@@ -954,7 +957,19 @@ const triggerUploadFile = (file: File) => {
     const handleChatSelected = () => {};
     const handleAgentUpdated = () => {};
     const handleManageAgent = () => {};
+    
+    // Safari detection
+    const isSafari = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      return ua.indexOf('safari') !== -1 && ua.indexOf('chrome') === -1 && ua.indexOf('chromium') === -1;
+    };
+    
     const handleSignIn = () => {
+      // Check for Safari browser
+      if (isSafari()) {
+        showSafariWarningModal.value = true;
+        return;
+      }
       // Open the passkey authentication dialog
       showPasskeyAuthDialog.value = true;
     };
@@ -1142,6 +1157,8 @@ const triggerUploadFile = (file: File) => {
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
       showPublicUserNoKBModal,
+      showSafariWarningModal,
+      isSafari,
       showCreateKBActionModal,
       triggerFileImport,
       handleOpenKBManager,
@@ -1330,6 +1347,10 @@ const triggerUploadFile = (file: File) => {
     <PublicUserNoKBModal
       v-model="showPublicUserNoKBModal"
       @open-agent-management="handleOpenAgentManagementFromNoKB"
+    />
+
+    <SafariWarningModal
+      v-model="showSafariWarningModal"
     />
 
     <!-- Create KB and Summary Action Modal -->
