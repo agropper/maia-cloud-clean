@@ -773,12 +773,10 @@ export default defineComponent({
     const handleInfoClick = () => {
       // Skip for deep link users
       if (props.currentUser?.userId?.startsWith('deep_link_')) {
-        console.log(`[WM] WelcomeModal (3-page) NOT triggered: is deep link user`)
         return
       }
       
       // Handle info icon click - show help welcome modal first
-      console.log(`[WM] WelcomeModal (3-page) triggered: user clicked help icon`)
       showHelpWelcomeModal.value = true
     }
 
@@ -1054,17 +1052,8 @@ export default defineComponent({
       const isAdminRoute = window.location.pathname === '/admin' || window.location.pathname === '/admin/register' || 
                           window.location.pathname === '/admin2' || window.location.pathname === '/admin2/register'
       
-      console.log(`[WM] BottomToolbar onMounted cookie check:`)
-      console.log(`[WM]   - Cookie 'maia-welcome-seen': ${welcomeCookie ? `'${welcomeCookie}' (valid for 7 days)` : 'not found'}`)
-      console.log(`[WM]   - isAdminRoute: ${isAdminRoute}`)
-      
       if (!welcomeCookie && !isAdminRoute) {
-        console.log(`[WM] WelcomeModal (3-page) TRIGGERED: no cookie found, showing modal`)
         showHelpWelcomeModal.value = true
-      } else if (welcomeCookie) {
-        console.log(`[WM] WelcomeModal (3-page) SKIPPED: cookie exists`)
-      } else {
-        console.log(`[WM] WelcomeModal (3-page) SKIPPED: admin route`)
       }
     })
 

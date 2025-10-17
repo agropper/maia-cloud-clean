@@ -639,25 +639,21 @@ export default defineComponent({
       
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
-        console.log(`[WM] NewUserWelcomeModal NOT triggered: no currentUser`);
         return;
       }
       
       // Skip for Public User
       if (currentUser.value.userId === 'Public User') {
-        console.log(`[WM] NewUserWelcomeModal NOT triggered: is Public User`);
         return;
       }
       
       // Skip for deep link users
       if (currentUser.value.userId?.startsWith('deep_link_')) {
-        console.log(`[WM] NewUserWelcomeModal NOT triggered: is deep link user`);
         return;
       }
       
       // Check if user has an agent
       if (currentAgent.value) {
-        console.log(`[WM] NewUserWelcomeModal NOT triggered: user ${currentUser.value.userId} has agent ${currentAgent.value.name}`);
         return; // User already has agent
       }
 
@@ -666,11 +662,9 @@ export default defineComponent({
       
       if (workflowStage === 'request_email_sent' || workflowStage === 'awaiting_approval' || workflowStage === 'approved') {
         // User has requested support - show waiting modal
-        console.log(`[WM] WaitingForApprovalModal triggered: user ${currentUser.value.userId} is waiting for approval (stage: ${workflowStage})`);
         showWaitingForApprovalModal.value = true;
       } else {
         // User hasn't requested support yet - show new user welcome modal
-        console.log(`[WM] NewUserWelcomeModal triggered: user ${currentUser.value.userId} has no agent (stage: ${workflowStage})`);
         showNewUserWelcomeModal.value = true;
       }
     };
@@ -683,37 +677,31 @@ export default defineComponent({
       // After file upload, show the action modal instead of welcome modal
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
-        console.log(`[WM] CreateKBActionModal NOT triggered: no currentUser`);
         return;
       }
       
       // Skip for deep link users
       if (currentUser.value.userId?.startsWith('deep_link_')) {
-        console.log(`[WM] CreateKBActionModal NOT triggered: is deep link user`);
         return;
       }
       
       // Skip for Public User
       if (currentUser.value.userId === 'Public User') {
-        console.log(`[WM] CreateKBActionModal NOT triggered: is Public User`);
         return;
       }
       
       // Must have an agent (shown in Agent Badge)
       if (!currentAgent.value) {
-        console.log(`[WM] CreateKBActionModal NOT triggered: user ${currentUser.value.userId} has no agent`);
         return;
       }
       
       // Must NOT have a KB attached (from Agent Badge)
       if (currentKnowledgeBase.value) {
-        console.log(`[WM] CreateKBActionModal NOT triggered: user ${currentUser.value.userId} already has KB ${currentKnowledgeBase.value.name}`);
         return; // User already has KB attached
       }
 
       // ✅ User has agent but no KB and just uploaded a file
       // Show the Create KB Action modal
-      console.log(`[WM] CreateKBActionModal triggered: user ${currentUser.value.userId} uploaded file, has agent ${currentAgent.value.name}, no KB`);
       showCreateKBActionModal.value = true;
     };
 
@@ -755,7 +743,6 @@ export default defineComponent({
       }
 
       // ✅ User has agent but no KB - show KnowledgeBaseWelcomeModal to guide file upload
-      console.log(`[WM] KnowledgeBaseWelcomeModal triggered: user ${currentUser.value.userId} has agent but no KB`);
       showKnowledgeBaseWelcomeModal.value = true;
     };
 

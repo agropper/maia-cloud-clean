@@ -151,7 +151,6 @@ const goToPage3 = () => {
   showModal.value = false
   // Store that user has seen the welcome modal (cookie expires in 7 days)
   setCookie('maia-welcome-seen', 'true', 7)
-  console.log(`[WM] Cookie 'maia-welcome-seen' SET: expires in 7 days`)
   
   // Show help page (PDF UI legend)
   showHelpPage.value = true

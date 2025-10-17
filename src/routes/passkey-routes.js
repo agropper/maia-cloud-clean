@@ -915,12 +915,10 @@ router.get("/auth-status", async (req, res) => {
     }
     
     // Note: Removed session fallback - we now use cookie-based auth only
-    console.log(`[CLOUD D] /api/auth-status - userId from cookie: ${userId || 'none'}`);
     
     if (userId) {
       // Check if this is an admin user - they should not be authenticated as regular users on main app
       if (userId === 'admin') {
-        console.log(`[CLOUD D] Admin user detected, returning unauthenticated for main app`);
         // Admin users should access main app as Public User, not as authenticated admin
         res.json({ 
           authenticated: false, 
@@ -932,7 +930,6 @@ router.get("/auth-status", async (req, res) => {
       
       // Check if this is a deep link user - they should not be authenticated on main app
       if (userId.startsWith('deep_link_')) {
-        console.log(`[CLOUD D] Deep link user detected, returning unauthenticated for main app`);
         // Store deepLinkId before destroying session
         const deepLinkId = req.session?.deepLinkId;
         
@@ -948,7 +945,6 @@ router.get("/auth-status", async (req, res) => {
         return;
       }
       
-      console.log(`[CLOUD D] Regular user detected: ${userId}, fetching user document`);
       
       // Only authenticate passkey users (not deep link users)
       let userDoc = null;
@@ -965,7 +961,6 @@ router.get("/auth-status", async (req, res) => {
       }
       
       if (userDoc) {
-        console.log(`[CLOUD D] User document found for ${userId}`);
         
         // Echo current user to backend console (only log once per startup)
         if (!global.loggedUsers || !global.loggedUsers.has(userDoc._id)) {
@@ -999,13 +994,11 @@ router.get("/auth-status", async (req, res) => {
         });
       } else {
         console.error(`❌ User document not found for userId from cookie: ${userId}`);
-        console.error(`[CLOUD D] This means the cookie has a userId that doesn't exist in database`);
         // Clear the invalid cookie
         res.clearCookie('maia_auth');
         res.json({ authenticated: false, message: "User not found - cookie cleared" });
       }
     } else {
-      console.log(`[CLOUD D] /api/auth-status - No userId from cookie, treating as Public User`);
       // Public User - no authentication required
       res.json({ authenticated: false, message: "No active session" });
     }

@@ -124,10 +124,6 @@ const isSendingRequest = ref(false)
 
 // Watch for prop changes
 watch(() => props.modelValue, (newValue) => {
-  if (newValue) {
-    console.log(`[WM] NewUserWelcomeModal opened via v-model`);
-    console.log(`[WM]   - currentUser: ${props.currentUser?.userId || 'none'}`);
-  }
   isOpen.value = newValue
 })
 
