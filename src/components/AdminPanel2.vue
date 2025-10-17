@@ -2470,18 +2470,21 @@ const startPolling = async () => {
   stopPolling()
   
   // Start immediate poll
+  console.log('[WORKFLOW] Polling now (initial)')
   await pollForUpdates()
   
   // Set up polling interval (5 seconds for admin)
   pollingInterval.value = setInterval(async () => {
-    console.log('[WORKFLOW] Polling now')
+    console.log('[WORKFLOW] Polling now (interval)')
     await pollForUpdates()
   }, 5000)
   isPollingConnected.value = true
+  console.log('[WORKFLOW] Polling started, interval set to 5000ms')
 }
 
 const stopPolling = () => {
   if (pollingInterval.value) {
+    console.log('[WORKFLOW] Stopping polling')
     clearInterval(pollingInterval.value)
     pollingInterval.value = null
   }
