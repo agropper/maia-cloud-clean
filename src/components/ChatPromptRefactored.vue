@@ -55,6 +55,7 @@ export default defineComponent({
     PasskeyAuthDialog,
     DeepLinkUserModal,
     NewUserWelcomeModal,
+    WaitingForApprovalModal,
     KnowledgeBaseWelcomeModal,
     PublicUserKBWelcomeModal,
     PublicUserNoKBModal,

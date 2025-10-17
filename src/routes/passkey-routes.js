@@ -539,6 +539,29 @@ router.post("/register-verify", async (req, res) => {
         console.error(`❌ [POLLING] [*] Error adding user registration notification:`, pollingError.message);
       }
 
+      // Set authentication cookie (same as authenticate-verify)
+      const authData = {
+        userId: updatedUser._id,
+        displayName: updatedUser.displayName || updatedUser._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      };
+      
+      const cookieOptions = {
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      };
+      
+      console.log(`[SIGN-IN] Setting maia_auth cookie for ${updatedUser._id} (registration)`);
+      console.log(`[SIGN-IN]   - Cookie data:`, authData);
+      console.log(`[SIGN-IN]   - Cookie options:`, cookieOptions);
+      
+      res.cookie('maia_auth', JSON.stringify(authData), cookieOptions);
+      console.log(`[SIGN-IN] ✅ Cookie set command executed`);
+
       res.json({
         success: true,
         message: "Passkey registration successful",
@@ -731,13 +754,20 @@ router.post("/authenticate-verify", async (req, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       };
       
-      res.cookie('maia_auth', JSON.stringify(authData), {
+      const cookieOptions = {
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax', // Same-origin cookies work in both dev and production
         path: '/'
-      });
+      };
+      
+      console.log(`[SIGN-IN] Setting maia_auth cookie for ${updatedUser._id}`);
+      console.log(`[SIGN-IN]   - Cookie data:`, authData);
+      console.log(`[SIGN-IN]   - Cookie options:`, cookieOptions);
+      
+      res.cookie('maia_auth', JSON.stringify(authData), cookieOptions);
+      console.log(`[SIGN-IN] ✅ Cookie set command executed`);
       
       // Set the user's assigned agent as current when they sign in
       try {
