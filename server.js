@@ -2751,6 +2751,11 @@ app.post('/api/personal-chat', async (req, res) => {
     // Process personal chat request
     let { chatHistory, newValue, timeline, uploadedFiles } = req.body;
     
+    // Initialize chatHistory as empty array if not provided (e.g., from automation)
+    if (!chatHistory || !Array.isArray(chatHistory)) {
+      chatHistory = [];
+    }
+    
     // Filter out any existing system messages since the GenAI agent has its own system prompt
     chatHistory = chatHistory.filter(msg => msg.role !== 'system');
 
@@ -7337,7 +7342,8 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
           'Cookie': `maia_auth=${JSON.stringify(authData)}`
         },
         body: JSON.stringify({
-          message: summaryPrompt,
+          newValue: summaryPrompt,
+          chatHistory: [],
           forceRegenerate: true
         })
       });
