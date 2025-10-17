@@ -7363,28 +7363,29 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         summary = summaryContent;
         console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
       } else {
-        console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response, using fallback`);
+        console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response`);
         console.warn(`🤖 [AUTO PS] Response data:`, JSON.stringify(chatData).substring(0, 200));
-        summary = `Patient summary request queued. Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. The agent can now answer questions about the patient's health records.`;
+        throw new Error('No summary content in /api/personal-chat response');
       }
     } catch (summaryError) {
       console.error(`🤖 [AUTO PS] ❌ Failed to generate patient summary:`, summaryError.message);
-      // Use fallback message if summary generation fails
-      summary = `Knowledge base "${kbName}" has been created and indexed with ${totalTokens} tokens. Unable to generate patient summary automatically. Please try manually requesting a summary in the chat.`;
+      // Don't save a fallback - let the /api/personal-chat endpoint's save stand
+      // The real summary was already saved, we just couldn't extract it from the response
+      summary = null;
     }
     
-    // Step 12: Save patient summary to user document
-    console.log(`🤖 [AUTO PS] Saving patient summary to user document`);
-    userDoc.patientSummary = {
-      content: summary,
-      createdAt: new Date().toISOString(),
-      kbUsed: kbName,
-      kbId: kbId,
-      fileUsed: fileName,
-      tokens: totalTokens
-    };
-    userDoc.updatedAt = new Date().toISOString();
-    await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
+    // Step 12: Patient summary was already saved by /api/personal-chat endpoint
+    // Only update KB metadata here, don't overwrite the summary
+    console.log(`🤖 [AUTO PS] Patient summary already saved by /api/personal-chat endpoint`);
+    
+    // Fetch fresh user doc to avoid overwriting the summary
+    userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    
+    // Only update if we successfully extracted the summary from the response
+    // (This ensures we don't overwrite with null if extraction failed)
+    if (!summary) {
+      console.log(`🤖 [AUTO PS] Skipping summary update - using summary already saved by /api/personal-chat`);
+    }
     
     // Step 13: Rebuild agent template to update status icons
     console.log(`🤖 [AUTO PS] Rebuilding agent template for ${userId}`);
