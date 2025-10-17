@@ -103,11 +103,6 @@ export class CacheManager {
       this.cache.chats.set('all', data);
       this.lastUpdated.chats = now;
     } else if (cacheType === 'agents') {
-      console.log(`[CACHE DEBUG] setCached('agents', 'all', ...) called with ${Array.isArray(data) ? data.length : 'non-array'} agents`);
-      if (!Array.isArray(data)) {
-        console.error(`❌ [CACHE BUG] Attempted to set agents cache with non-array:`, typeof data, data);
-        console.error(`❌ [CACHE BUG] Stack trace:`, new Error().stack);
-      }
       this.cache.agents.set('all', data);
       this.lastUpdated.agents = now;
     } else if (this.cache[cacheType]) {
@@ -318,12 +313,17 @@ export class CacheManager {
           }
         }
         
-        this.setCached(cacheType, documentId, updatedDocument);
+        // CRITICAL FIX: Do NOT cache maia_agents or maia_kb documents
+        // These databases use collection-level caches (agents.all, knowledgeBases.all)
+        // Caching individual documents corrupts the collection cache
+        if (databaseName !== 'maia_agents' && databaseName !== 'maia_kb') {
+          this.setCached(cacheType, documentId, updatedDocument);
+        }
         
-        // If it's a user document, invalidate related caches (chats, health, AND "all users" cache)
+        // If it's a user document, invalidate related caches
         if (databaseName === 'maia_users') {
-          this.invalidateUserRelatedCaches(documentId);
-          // CRITICAL FIX: Invalidate the "all users" cache so getAllDocuments() will fetch fresh data
+          // Only invalidate caches that are actually used
+          this.invalidateCache('chats');
           this.invalidateCache('users', 'all');
           console.log(`🔄 [CACHE] Invalidated "all users" cache after saving user ${documentId}`);
         }
@@ -470,9 +470,11 @@ export class CacheManager {
    */
   getCachedAgentsSync() {
     const cached = this.getCached('agents', 'all');
-    const result = Array.isArray(cached) ? cached : [];
-    console.log(`[CACHE DEBUG] getCachedAgentsSync() returning ${result.length} agents`);
-    return result;
+    // Ensure we always return an array
+    if (Array.isArray(cached)) {
+      return cached;
+    }
+    return [];
   }
 
   /**

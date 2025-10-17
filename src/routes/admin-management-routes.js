@@ -1288,22 +1288,26 @@ router.post('/users/:userId/approve', requireAdminAuth, async (req, res) => {
                   ...newAgent // Include all DO API fields
                 };
                 
-                await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
-                
+              await cacheManager.saveDocument(couchDBClient, 'maia_agents', agentDoc);
+              
               // Also update the agents cache in memory
               const currentAgentsCache = cacheManager.getCachedAgentsSync();
-              console.log(`[CACHE DEBUG] BEFORE push: cache has ${currentAgentsCache.length} agents:`, currentAgentsCache.map(a => a.name || a.agentName));
-              
               if (Array.isArray(currentAgentsCache)) {
-                currentAgentsCache.push(newAgent);
-                console.log(`[CACHE DEBUG] AFTER push: cache has ${currentAgentsCache.length} agents:`, currentAgentsCache.map(a => a.name || a.agentName));
+                // Transform newAgent to match startup format (consistent cache structure)
+                const transformedNewAgent = {
+                  id: newAgent.uuid || newAgent.id,
+                  name: newAgent.name,
+                  status: newAgent.status || 'unknown',
+                  model: newAgent.model || 'unknown',
+                  createdAt: newAgent.created_at,
+                  updatedAt: newAgent.updated_at,
+                  knowledgeBases: newAgent.knowledge_bases || [],
+                  endpoint: null,
+                  description: null
+                };
                 
+                currentAgentsCache.push(transformedNewAgent);
                 cacheManager.setCached('agents', 'all', currentAgentsCache);
-                
-                // Verify cache was actually updated
-                const verifyCache = cacheManager.getCachedAgentsSync();
-                console.log(`[CACHE DEBUG] AFTER setCached: cache has ${verifyCache.length} agents:`, verifyCache.map(a => a.name || a.agentName));
-                
                 console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database and cache: ${agentName}`);
               } else {
                 console.log(`✅ [AUTO-AGENT] Saved agent to maia_agents database: ${agentName} (cache not array, will refresh at next startup)`);
@@ -1803,7 +1807,6 @@ function processUserDataSync(user) {
     if (!agentExists) {
       // Agent deleted from DO - show warning in display (database will be fixed at next startup)
       console.log(`⚠️ [ADMIN-USERS] Agent ${assignedAgentName} (${assignedAgentId}) for user ${user.userId} not found in maia_agents cache`);
-      console.log(`[CACHE DEBUG] Cache has ${cachedAgents.length} agents:`, cachedAgents.map(a => `${a.name}(${a.uuid || a.id})`));
       assignedAgentId = assignedAgentId; // Keep original ID for debugging
       assignedAgentName = `⚠️ ${assignedAgentName || 'Deleted Agent'}`;
       // Don't modify workflowStage here - let database cleanup at startup handle it
@@ -3079,7 +3082,6 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     
     // Check cache first
     const cachedAgents = cacheManager.getCachedAgents();
-    console.log(`[CACHE DEBUG] /agents endpoint: cachedAgents =`, cachedAgents ? `${cachedAgents.length} agents` : 'null');
     
     if (cachedAgents) {
       let processedAgents = [...cachedAgents];
@@ -3134,14 +3136,11 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
     }
     
     
-    console.log(`[CACHE DEBUG] /agents endpoint: Cache miss or expired, fetching from DO API`);
-    
     // Add delay to prevent rate limiting
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Get agents from DigitalOcean API (same as /api/agents)
     const agents = await doRequest('/v2/gen-ai/agents');
-    console.log(`[CACHE DEBUG] /agents endpoint: DO API returned ${agents.agents?.length || 0} agents`);
     
     // Transform agents to match frontend expectations
     const allAgents = (agents.agents || []).map((agent) => {
@@ -3157,8 +3156,6 @@ router.get('/agents', requireAdminAuth, async (req, res) => {
         description: null
       };
     });
-    
-    console.log(`[CACHE DEBUG] /agents endpoint: Caching ${allAgents.length} transformed agents, names:`, allAgents.map(a => a.name));
     
     // Cache the agents data
     await cacheManager.cacheAgents(allAgents);
