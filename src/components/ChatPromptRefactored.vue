@@ -26,6 +26,7 @@ import AgentManagementDialog from "./AgentManagementDialog.vue";
 import PasskeyAuthDialog from "./PasskeyAuthDialog.vue";
 import DeepLinkUserModal from "./DeepLinkUserModal.vue";
 import NewUserWelcomeModal from "./NewUserWelcomeModal.vue";
+import WaitingForApprovalModal from "./WaitingForApprovalModal.vue";
 import KnowledgeBaseWelcomeModal from "./KnowledgeBaseWelcomeModal.vue";
 import PublicUserKBWelcomeModal from "./PublicUserKBWelcomeModal.vue";
 import PublicUserNoKBModal from "./PublicUserNoKBModal.vue";
@@ -103,6 +104,7 @@ export default defineComponent({
     const showDeepLinkUserModal = ref(false);
     const showAgentSelectionModal = ref(false);
     const showNewUserWelcomeModal = ref(false);
+    const showWaitingForApprovalModal = ref(false);
     const showKnowledgeBaseWelcomeModal = ref(false);
     const showPublicUserKBWelcomeModal = ref(false);
     const showPublicUserNoKBModal = ref(false);
@@ -616,7 +618,7 @@ export default defineComponent({
 
     // Check if No Agent Welcome Modal should be shown
     const checkForNoAgentWelcome = () => {
-      // Simple logic: Show if user is authenticated but has no agent
+      // Simple logic: Show appropriate modal based on workflow stage
       
       // Must have a current user (not null/undefined)
       if (!currentUser.value) {
@@ -636,15 +638,24 @@ export default defineComponent({
         return;
       }
       
-      // Must NOT have an agent (shown in Agent Badge)
+      // Check if user has an agent
       if (currentAgent.value) {
         console.log(`[WM] NewUserWelcomeModal NOT triggered: user ${currentUser.value.userId} has agent ${currentAgent.value.name}`);
         return; // User already has agent
       }
 
-      // ✅ User is authenticated but has no agent - show NewUserWelcomeModal
-      console.log(`[WM] NewUserWelcomeModal triggered: user ${currentUser.value.userId} has no agent`);
-      showNewUserWelcomeModal.value = true;
+      // User has no agent - check workflow stage to determine which modal to show
+      const workflowStage = currentUser.value.workflowStage;
+      
+      if (workflowStage === 'request_email_sent' || workflowStage === 'awaiting_approval' || workflowStage === 'approved') {
+        // User has requested support - show waiting modal
+        console.log(`[WM] WaitingForApprovalModal triggered: user ${currentUser.value.userId} is waiting for approval (stage: ${workflowStage})`);
+        showWaitingForApprovalModal.value = true;
+      } else {
+        // User hasn't requested support yet - show new user welcome modal
+        console.log(`[WM] NewUserWelcomeModal triggered: user ${currentUser.value.userId} has no agent (stage: ${workflowStage})`);
+        showNewUserWelcomeModal.value = true;
+      }
     };
 
     // New modal state for KB creation action after file upload
@@ -1123,6 +1134,7 @@ const triggerUploadFile = (file: File) => {
       showDeepLinkUserModal,
       showAgentSelectionModal,
       showNewUserWelcomeModal,
+      showWaitingForApprovalModal,
       showKnowledgeBaseWelcomeModal,
       showPublicUserKBWelcomeModal,
       showPublicUserNoKBModal,
@@ -1292,6 +1304,10 @@ const triggerUploadFile = (file: File) => {
       v-model="showNewUserWelcomeModal"
       :currentUser="currentUser"
       @support-requested="handleSupportRequested"
+    />
+
+    <WaitingForApprovalModal
+      v-model="showWaitingForApprovalModal"
     />
 
     <KnowledgeBaseWelcomeModal
