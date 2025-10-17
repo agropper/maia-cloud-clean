@@ -2152,13 +2152,13 @@ async function reconcileUserFiles(userId) {
   try {
     // SPECIAL CASE: Public User files are session-only (not saved to database)
     if (userId === 'Public User') {
-      return 0;
+      return { fileCount: 0, bucketData: null };
     }
     
     // Get user document
     const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
     if (!userDoc) {
-      return 0;
+      return { fileCount: 0, bucketData: null };
     }
     
     // Get actual files from bucket (only archived/ folder)
@@ -2214,10 +2214,11 @@ async function reconcileUserFiles(userId) {
       await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
     }
     
-    return validFiles.length;
+    // Return both file count AND bucket data to avoid redundant API calls
+    return { fileCount: validFiles.length, bucketData: bucketData };
   } catch (error) {
     console.error(`❌ [RECONCILE] Error for user ${userId}:`, error.message);
-    return 0;
+    return { fileCount: 0, bucketData: null };
   }
 }
 
@@ -9027,10 +9028,11 @@ app.listen(PORT, async () => {
         await cleanupUserBucket(user._id);
         
         // Step 2: Reconcile files in user document with actual bucket contents
-        await reconcileUserFiles(user._id);
+        // This also fetches bucket data to avoid redundant API calls
+        const reconcileResult = await reconcileUserFiles(user._id);
         
-        // Step 3: Fetch bucket status and cache the user
-        const bucketData = await getBucketStatusForUser(user._id);
+        // Step 3: Use the bucket data from reconciliation (no second API call needed!)
+        const bucketData = reconcileResult.bucketData || { hasFolder: false, fileCount: 0, totalSize: 0 };
         
         const bucketStatus = {
           hasFolder: bucketData.hasFolder || false,
