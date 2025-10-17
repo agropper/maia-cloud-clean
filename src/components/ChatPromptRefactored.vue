@@ -471,14 +471,29 @@ export default defineComponent({
         console.log(`[AUTO PS]   - Summary generated: ${result.summary ? 'Yes' : 'No'}`);
         
         // Step 7: Add patient summary to chat
+        console.log('[PS SAVE2] 🖥️ Frontend received backend response');
+        console.log('[PS SAVE2]   - Has summary: ', !!result.summary);
+        if (result.summary) {
+          console.log('[PS SAVE2]   - Summary length from backend: ', result.summary.length);
+          console.log('[PS SAVE2]   - Summary preview: ', result.summary.substring(0, 100));
+        }
+        
         if (result.summary) {
           console.log('[AUTO PS] Step 7: Adding patient summary to chat');
+          console.log('[PS SAVE2] 📝 Adding summary to appState.chatHistory');
+          console.log('[PS SAVE2]   - Current chat history length: ', appState.chatHistory.length);
+          
           appState.chatHistory.push({
             role: 'assistant',
             content: result.summary,
             name: 'Personal AI'
           });
+          
+          console.log('[PS SAVE2]   - New chat history length: ', appState.chatHistory.length);
           console.log('[AUTO PS] ✅ Step 7 complete: Summary added to chat');
+          console.log('[PS SAVE2] ✅ Summary should now be visible in chat area');
+        } else {
+          console.warn('[PS SAVE2] ⚠️ No summary in backend response - chat will not show summary');
         }
         
         // Step 8: Refresh agent data to update KB status

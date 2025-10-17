@@ -7315,6 +7315,10 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     // Step 11: Generate patient summary via internal /api/personal-chat endpoint
     console.log(`🤖 [AUTO PS] Requesting patient summary from agent ${agentId}`);
+    console.log(`[PS SAVE2] 🚀 Starting patient summary generation`);
+    console.log(`[PS SAVE2]   - User: ${userId}`);
+    console.log(`[PS SAVE2]   - Agent: ${agentId}`);
+    console.log(`[PS SAVE2]   - KB: ${kbId}`);
     
     let summary = null;
     
@@ -7322,6 +7326,9 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       const summaryPrompt = 'Create a comprehensive patient summary according to your agent instructions';
       
       console.log(`🤖 [AUTO PS] Calling internal /api/personal-chat endpoint with forceRegenerate`);
+      console.log(`[PS SAVE2] 📤 Sending request to /api/personal-chat`);
+      console.log(`[PS SAVE2]   - Prompt: "${summaryPrompt}"`);
+      console.log(`[PS SAVE2]   - forceRegenerate: true`);
       
       // Get the maia_auth cookie value to pass to the internal endpoint
       const authData = {
@@ -7348,27 +7355,41 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         })
       });
       
+      console.log(`[PS SAVE2] 📥 Response received from /api/personal-chat`);
+      console.log(`[PS SAVE2]   - Status: ${chatResponse.status}`);
+      
       if (!chatResponse.ok) {
         throw new Error(`Personal chat API returned ${chatResponse.status}`);
       }
       
       const chatData = await chatResponse.json();
+      console.log(`[PS SAVE2] 📋 Response data type: ${Array.isArray(chatData) ? 'Array' : typeof chatData}`);
+      console.log(`[PS SAVE2]   - Array length: ${Array.isArray(chatData) ? chatData.length : 'N/A'}`);
       
       // Extract summary from chat history response (array of messages)
       // The response is an array with the assistant's message as the last item
       const assistantMessage = Array.isArray(chatData) ? chatData.find(msg => msg.role === 'assistant') : null;
+      console.log(`[PS SAVE2] 🔍 Assistant message found: ${!!assistantMessage}`);
+      if (assistantMessage) {
+        console.log(`[PS SAVE2]   - Content length: ${assistantMessage.content?.length || 0}`);
+        console.log(`[PS SAVE2]   - Content preview: ${assistantMessage.content?.substring(0, 100)}...`);
+      }
+      
       const summaryContent = assistantMessage?.content;
       
       if (summaryContent && summaryContent.trim().length > 0) {
         summary = summaryContent;
         console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
+        console.log(`[PS SAVE2] ✅ Successfully extracted summary from response`);
       } else {
         console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response`);
         console.warn(`🤖 [AUTO PS] Response data:`, JSON.stringify(chatData).substring(0, 200));
+        console.warn(`[PS SAVE2] ❌ Failed to extract summary from response`);
         throw new Error('No summary content in /api/personal-chat response');
       }
     } catch (summaryError) {
       console.error(`🤖 [AUTO PS] ❌ Failed to generate patient summary:`, summaryError.message);
+      console.error(`[PS SAVE2] ❌ Error during summary generation:`, summaryError.message);
       // Don't save a fallback - let the /api/personal-chat endpoint's save stand
       // The real summary was already saved, we just couldn't extract it from the response
       summary = null;
@@ -7377,14 +7398,22 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     // Step 12: Patient summary was already saved by /api/personal-chat endpoint
     // Only update KB metadata here, don't overwrite the summary
     console.log(`🤖 [AUTO PS] Patient summary already saved by /api/personal-chat endpoint`);
+    console.log(`[PS SAVE2] 📊 Summary extraction result: ${summary ? `${summary.length} chars` : 'null (using endpoint save)'}`);
     
-    // Fetch fresh user doc to avoid overwriting the summary
+    // Fetch fresh user doc to verify the summary was saved
     userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    console.log(`[PS SAVE2] 🔄 Fetched fresh user document`);
+    console.log(`[PS SAVE2]   - Has patientSummary: ${!!userDoc.patientSummary}`);
+    if (userDoc.patientSummary) {
+      console.log(`[PS SAVE2]   - Summary length in DB: ${userDoc.patientSummary.content?.length || 0}`);
+      console.log(`[PS SAVE2]   - Summary preview: ${userDoc.patientSummary.content?.substring(0, 100)}...`);
+    }
     
     // Only update if we successfully extracted the summary from the response
     // (This ensures we don't overwrite with null if extraction failed)
     if (!summary) {
       console.log(`🤖 [AUTO PS] Skipping summary update - using summary already saved by /api/personal-chat`);
+      console.log(`[PS SAVE2] ℹ️ Not overwriting database - keeping /api/personal-chat save`);
     }
     
     // Step 13: Rebuild agent template to update status icons
