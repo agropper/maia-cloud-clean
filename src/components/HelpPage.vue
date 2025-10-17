@@ -153,42 +153,17 @@ const loadPdfDocument = async () => {
   }
 }
 
-// Helper function to properly clean up PDF.js resources
-const cleanupPdf = async () => {
-  try {
-    // If there's an active loading task, destroy it properly
-    if (loadingTask.value) {
-      // Cancel the loading if it's still in progress
-      if (loadingTask.value.destroy) {
-        await loadingTask.value.destroy()
-      }
-      loadingTask.value = null
-    }
-    
-    // If there's a loaded PDF document, destroy it
-    if (pdfDocument.value && pdfDocument.value !== loadingTask.value) {
-      if (pdfDocument.value.destroy) {
-        await pdfDocument.value.destroy()
-      }
-    }
-    
-    pdfDocument.value = null
-    currentPage.value = 1
-    totalPages.value = 0
-    isLoading.value = false
-  } catch (error) {
-    // Silently catch cleanup errors - already being destroyed
-    console.log('📄 PDF cleanup completed (with minor warnings)')
-  }
-}
-
 // Watch for visibility changes to load PDF
-watch(() => props.isVisible, async (newVal, oldVal) => {
+watch(() => props.isVisible, (newVal, oldVal) => {
   if (newVal && !pdfDocument.value) {
     loadPdfDocument()
   } else if (!newVal && oldVal) {
-    // Component is being hidden - clean up PDF properly
-    await cleanupPdf()
+    // Component is being hidden - clean up PDF
+    pdfDocument.value = null
+    loadingTask.value = null
+    currentPage.value = 1
+    totalPages.value = 0
+    isLoading.value = false
   }
 }, { immediate: true })
 
@@ -198,9 +173,10 @@ onMounted(() => {
   }
 })
 
-onUnmounted(async () => {
+onUnmounted(() => {
   // Clean up when component is destroyed
-  await cleanupPdf()
+  pdfDocument.value = null
+  loadingTask.value = null
 })
 </script>
 
