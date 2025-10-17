@@ -162,6 +162,28 @@ const sendSupportRequest = async () => {
     })
 
     if (response.ok) {
+      const result = await response.json()
+      
+      // Update user document with email and workflow stage
+      try {
+        const updateResponse = await fetch(`/api/users/${props.currentUser.userId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: result.email,
+            workflowStage: 'request_email_sent'
+          })
+        })
+        
+        if (!updateResponse.ok) {
+          console.warn('Failed to update user workflow stage, but email was sent successfully')
+        }
+      } catch (updateError) {
+        console.error('Error updating user document:', updateError)
+      }
+      
       // Notify parent component that support was requested
       emit('support-requested', {
         userId: props.currentUser.userId,

@@ -290,28 +290,17 @@ router.post('/request-approval', async (req, res) => {
 
     const resendResult = await resendResponse.json();
 
-        // Update user document with email and workflow stage if provided
-        if (email && email.trim()) {
-          try {
-            if (couchDBClient) {
-              const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', username);
-              if (userDoc) {
-                userDoc.email = email.trim();
-                userDoc.workflowStage = 'request_email_sent'; // Update workflow stage to show email was sent
-                await cacheManager.saveDocument(couchDBClient, 'maia_users', userDoc);
-              }
-            }
-          } catch (userUpdateError) {
-            console.error(`❌ Failed to update user ${username} workflow stage:`, userUpdateError.message);
-          }
-        }
+        // NOTE: Email and workflow stage update removed from here to avoid race condition
+        // with passkey registration. The frontend will update these fields after registration
+        // is fully complete.
 
         // Note: Approval request logging removed - email notification is sufficient
 
         res.json({
           success: true,
           message: 'Approval request sent successfully',
-          emailId: resendResult.id
+          emailId: resendResult.id,
+          email: email.trim() // Return email so frontend can update user document
         });
 
   } catch (error) {

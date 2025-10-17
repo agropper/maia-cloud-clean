@@ -5104,6 +5104,39 @@ app.get('/api/users/:userId', async (req, res) => {
   }
 });
 
+// Update user document (partial update)
+app.put('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const updates = req.body;
+    
+    // Get existing user document
+    const userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Apply updates
+    const updatedUser = {
+      ...userDoc,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save updated document
+    await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    res.json({
+      success: true,
+      message: 'User updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating user document:', error);
+    res.status(500).json({ error: 'Failed to update user document' });
+  }
+});
+
 app.get('/api/users/:userId/agent-template', async (req, res) => {
   try {
     const { userId } = req.params;
