@@ -5116,6 +5116,11 @@ app.put('/api/users/:userId', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    // Track what changed for smart notifications
+    const oldWorkflowStage = userDoc.workflowStage;
+    const hadEmail = !!userDoc.email;
+    const oldApprovalStatus = userDoc.approvalStatus;
+    
     // Apply updates
     const updatedUser = {
       ...userDoc,
@@ -5125,6 +5130,60 @@ app.put('/api/users/:userId', async (req, res) => {
     
     // Save updated document
     await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
+    
+    // SMART NOTIFICATIONS: Detect what changed and notify admins accordingly
+    try {
+      // Workflow stage changed
+      if (updates.workflowStage && updates.workflowStage !== oldWorkflowStage) {
+        if (updates.workflowStage === 'request_email_sent' && updates.email && !hadEmail) {
+          // User just requested support for the first time
+          addUpdateToAllAdmins('support_requested', {
+            userId: userId,
+            displayName: updatedUser.displayName || userId,
+            email: updatedUser.email,
+            workflowStage: updates.workflowStage,
+            message: `User ${updatedUser.displayName || userId} (${updatedUser.email}) requested support`
+          });
+          console.log(`📡 [POLLING] [*] Sent support_requested notification for user ${userId}`);
+        } else {
+          // Generic workflow stage change
+          addUpdateToAllAdmins('workflow_stage_changed', {
+            userId: userId,
+            displayName: updatedUser.displayName || userId,
+            oldStage: oldWorkflowStage,
+            newStage: updates.workflowStage,
+            message: `User ${userId} workflow stage: ${oldWorkflowStage} → ${updates.workflowStage}`
+          });
+          console.log(`📡 [POLLING] [*] Sent workflow_stage_changed notification for user ${userId}`);
+        }
+      }
+      
+      // Approval status changed
+      if (updates.approvalStatus && updates.approvalStatus !== oldApprovalStatus) {
+        addUpdateToAllAdmins('approval_status_changed', {
+          userId: userId,
+          displayName: updatedUser.displayName || userId,
+          oldStatus: oldApprovalStatus,
+          newStatus: updates.approvalStatus,
+          message: `User ${userId} approval status: ${oldApprovalStatus} → ${updates.approvalStatus}`
+        });
+        console.log(`📡 [POLLING] [*] Sent approval_status_changed notification for user ${userId}`);
+      }
+      
+      // Email added
+      if (updates.email && !hadEmail) {
+        addUpdateToAllAdmins('user_email_added', {
+          userId: userId,
+          displayName: updatedUser.displayName || userId,
+          email: updates.email,
+          message: `User ${userId} added email: ${updates.email}`
+        });
+        console.log(`📡 [POLLING] [*] Sent user_email_added notification for user ${userId}`);
+      }
+    } catch (notificationError) {
+      // Don't fail the update if notification fails
+      console.error(`⚠️ Failed to send admin notification for user ${userId}:`, notificationError.message);
+    }
     
     res.json({
       success: true,
