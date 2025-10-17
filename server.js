@@ -7326,7 +7326,11 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       };
       
-      const chatResponse = await fetch(`${getBaseUrl()}/api/personal-chat`, {
+      // Use localhost for internal server-to-server calls
+      const port = process.env.PORT || 3001;
+      const baseUrl = `http://localhost:${port}`;
+      
+      const chatResponse = await fetch(`${baseUrl}/api/personal-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
