@@ -3577,6 +3577,53 @@ router.post('/refresh-cache', requireAdminAuth, async (req, res) => {
       console.log(`✅ [ADMIN] Cleared agents, KBs, and models caches`);
     }
     
+    // Rebuild agents cache from DigitalOcean API
+    try {
+      const agentsResponse = await doRequest('/v2/gen-ai/agents');
+      const rawAgents = agentsResponse.agents || agentsResponse.data?.agents || [];
+      
+      const transformedAgents = rawAgents.map((agent) => {
+        return {
+          id: agent.uuid || agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          model: agent.model || 'unknown',
+          createdAt: agent.created_at,
+          updatedAt: agent.updated_at,
+          knowledgeBases: agent.knowledge_bases || [],
+          endpoint: null,
+          description: null
+        };
+      });
+      
+      await cacheManager.cacheAgents(transformedAgents);
+      console.log(`✅ [ADMIN] Rebuilt agents cache with ${transformedAgents.length} agents from DigitalOcean API`);
+    } catch (agentError) {
+      console.error(`❌ [ADMIN] Failed to rebuild agents cache:`, agentError.message);
+    }
+    
+    // Rebuild knowledge bases cache from DigitalOcean API
+    try {
+      const kbsResponse = await doRequest('/v2/gen-ai/knowledge-bases');
+      const rawKBs = kbsResponse.knowledge_bases || kbsResponse.data?.knowledge_bases || [];
+      
+      await cacheManager.cacheKnowledgeBases(rawKBs);
+      console.log(`✅ [ADMIN] Rebuilt KBs cache with ${rawKBs.length} knowledge bases from DigitalOcean API`);
+    } catch (kbError) {
+      console.error(`❌ [ADMIN] Failed to rebuild KBs cache:`, kbError.message);
+    }
+    
+    // Rebuild models cache from DigitalOcean API
+    try {
+      const modelsResponse = await doRequest('/v2/gen-ai/models');
+      const rawModels = modelsResponse.models || modelsResponse.data?.models || [];
+      
+      await cacheManager.cacheModels(rawModels);
+      console.log(`✅ [ADMIN] Rebuilt models cache with ${rawModels.length} models from DigitalOcean API`);
+    } catch (modelError) {
+      console.error(`❌ [ADMIN] Failed to rebuild models cache:`, modelError.message);
+    }
+    
     // Rebuild user cache from database with fresh bucket status
     const { getBucketStatusForUser } = await import('../../server.js');
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -3620,7 +3667,7 @@ router.post('/refresh-cache', requireAdminAuth, async (req, res) => {
       }
     }
     
-    console.log(`✅ [ADMIN] Rebuilt cache with ${rebuiltCount} users from database and DigitalOcean API`);
+    console.log(`✅ [ADMIN] Rebuilt users cache with ${rebuiltCount} users from database`);
     
     res.json({
       success: true,
