@@ -104,6 +104,10 @@ export class CacheManager {
       this.lastUpdated.chats = now;
     } else if (cacheType === 'agents') {
       console.log(`[CACHE DEBUG] setCached('agents', 'all', ...) called with ${Array.isArray(data) ? data.length : 'non-array'} agents`);
+      if (!Array.isArray(data)) {
+        console.error(`❌ [CACHE BUG] Attempted to set agents cache with non-array:`, typeof data, data);
+        console.error(`❌ [CACHE BUG] Stack trace:`, new Error().stack);
+      }
       this.cache.agents.set('all', data);
       this.lastUpdated.agents = now;
     } else if (this.cache[cacheType]) {
