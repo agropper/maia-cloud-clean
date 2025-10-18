@@ -1,6 +1,77 @@
 # Cache Refactoring Plan - Complete Redesign
 
-## Current Problems
+## ⚠️ CRITICAL: Dual State Management System Issue
+
+**Date Added**: 2025-10-18
+
+### Problem: Two Competing State Management Systems
+
+The application currently has **TWO SEPARATE state management systems** that do NOT communicate:
+
+1. **Legacy System**: `useChatState` composable (`src/composables/useChatState.ts`)
+   - Creates reactive `appState` object
+   - Used throughout the UI (BottomToolbar, ChatArea, etc.)
+   - Has its own `isLoading`, `chatHistory`, `uploadedFiles`, etc.
+
+2. **New Centralized System**: `AppStateManager` (`src/utils/AppStateManager.js`)
+   - Created to centralize user/agent/workflow state
+   - Has its own `isLoading`, `loadingMessage`, `currentUser`, etc.
+   - Added recently for better state management
+
+### Recent Spinner Regression (Fixed)
+
+When we added dynamic loading messages (for KB indexing vs AI queries), we updated all code to use `appStateManager.setLoading()`. However, the UI was still reading from `useChatState.appState.isLoading`, causing spinners to stop working entirely.
+
+**Fix Applied**: Added reactive bridge in BottomToolbar that subscribes to AppStateManager changes and syncs them to the UI.
+
+### TODO: Complete Migration to Centralized State
+
+**High Priority Task**: Remove the dual state system by migrating all components to use AppStateManager exclusively.
+
+**Migration Steps**:
+
+1. **Audit all components** using `useChatState`:
+   - ChatPromptRefactored.vue
+   - BottomToolbar.vue
+   - ChatArea.vue
+   - Any other components importing from `useChatState`
+
+2. **Move all state to AppStateManager**:
+   - `chatHistory` → AppStateManager (with reactive sync)
+   - `uploadedFiles` → AppStateManager
+   - `currentQuery` → AppStateManager
+   - `selectedAI` → AppStateManager
+   - `timeline` → AppStateManager
+   - `isLoading` → Already in AppStateManager ✅
+   - `loadingMessage` → Already in AppStateManager ✅
+
+3. **Create reactive bridge** (similar to what we did for loading state):
+   ```javascript
+   // In components that need reactive state
+   const chatHistory = ref(appStateManager.getStateProperty('chatHistory'))
+   appStateManager.subscribe('chatHistory', (value) => {
+     chatHistory.value = value
+   })
+   ```
+
+4. **Remove `useChatState` composable** entirely once migration is complete
+
+5. **Update all imports** to use AppStateManager
+
+**Benefits of Migration**:
+- Single source of truth for all application state
+- No more state sync issues
+- Better debugging (one place to inspect state)
+- Consistent state management patterns
+- Easier testing and state inspection
+
+**Estimated Effort**: 2-3 hours (touch ~10 components)
+
+**Risk**: Medium (requires careful testing of all UI interactions)
+
+---
+
+## Current Cache Problems
 
 1. **Mixed Cache Patterns**: Some caches use Map-of-items (users), others use single-array (agents)
 2. **`saveDocument` Corruption**: Saving to `maia_agents` corrupts the agents cache by treating it as Map-of-items

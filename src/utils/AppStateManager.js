@@ -305,6 +305,19 @@ export class AppStateManager {
   }
 
   /**
+   * Subscribe to specific state property changes
+   */
+  subscribe(property, callback) {
+    const listenerId = this.addListener((state) => {
+      // Only call callback if the specific property changed
+      if (state.hasOwnProperty(property)) {
+        callback(state[property]);
+      }
+    });
+    return listenerId;
+  }
+
+  /**
    * Notify listeners of state changes
    */
   notifyStateChange(oldState, newState) {

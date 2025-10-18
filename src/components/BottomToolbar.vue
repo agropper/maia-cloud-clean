@@ -393,10 +393,10 @@
     </q-dialog>
 
     <!-- AI Loading Indicator -->
-    <div v-if="appState.isLoading" class="ai-loading-indicator">
+    <div v-if="centralizedIsLoading || appState.isLoading" class="ai-loading-indicator">
       <div class="loading-content">
         <q-icon name="hourglass_empty" size="24px" color="primary" class="loading-spinner hourglass-animation" />
-        <span class="loading-text">{{ appState.loadingMessage }}</span>
+        <span class="loading-text">{{ centralizedLoadingMessage || appState.loadingMessage || 'AI responses typically take 5 to 30 seconds...' }}</span>
       </div>
     </div>
   </div>
@@ -419,6 +419,7 @@ import {
   initSpeechRecognition,
   PAUSE_THRESHOLD
 } from '../utils'
+import { appStateManager } from '../utils/AppStateManager.js'
 
 export default defineComponent({
   name: 'BottomToolbar',
@@ -521,6 +522,18 @@ export default defineComponent({
     const pauseTimer = ref<number | null>(null)
     const finalTranscript = ref('')
     const interimTranscript = ref('')
+
+    // Sync loading state from centralized AppStateManager
+    const centralizedIsLoading = ref(appStateManager.getStateProperty('isLoading'))
+    const centralizedLoadingMessage = ref(appStateManager.getStateProperty('loadingMessage'))
+    
+    // Subscribe to AppStateManager state changes
+    appStateManager.subscribe('isLoading', (value) => {
+      centralizedIsLoading.value = value
+    })
+    appStateManager.subscribe('loadingMessage', (value) => {
+      centralizedLoadingMessage.value = value
+    })
 
     const showGroupModal = ref(false)
     const showContactModal = ref(false)
@@ -1096,7 +1109,9 @@ export default defineComponent({
       hasUnattachedKB,
       hasPatientSummary,
       patientSummaryTooltip,
-      isStatusReady
+      isStatusReady,
+      centralizedIsLoading,
+      centralizedLoadingMessage
     }
   }
 })
