@@ -24,10 +24,11 @@ export class CacheManager {
     };
     
     // Cache TTL (Time To Live) in milliseconds
-    // NOTE: All caches have NO TTL - they are explicitly managed (invalidate on change or refresh)
+    // NOTE: Most caches have NO TTL - they are explicitly managed (invalidate on change or refresh)
     // TTL was causing cache to be randomly replaced, losing manually added entries
+    // OPTION 2: User cache has short TTL (60 sec) as safety net for workflow state changes
     this.ttl = {
-      users: Infinity,             // NO TTL - explicitly invalidated on changes only
+      users: 60 * 1000,            // 60 seconds - safety net for workflow state updates
       chats: Infinity,             // NO TTL - explicitly invalidated on changes only
       knowledgeBases: Infinity,    // NO TTL - explicitly invalidated on changes only
       agents: Infinity,            // NO TTL - explicitly invalidated on changes only

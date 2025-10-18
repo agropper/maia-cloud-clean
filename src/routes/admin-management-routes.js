@@ -206,7 +206,10 @@ const checkAgentDeployments = async () => {
               
               await cacheManager.saveDocument(couchDBClient, 'maia_users', updatedUser);
               
-              // Note: invalidateUserCache removed - saveDocument now updates cache automatically
+              // OPTION 1: Explicitly invalidate user cache to force fresh fetch on next reload
+              // This ensures the user's browser gets updated workflowStage immediately
+              cacheManager.invalidateCache('users', userId);
+              console.log(`🔄 [CACHE] Invalidated cache for user ${userId} after agent assignment`);
               
               console.log(`🎉 Successfully updated workflow stage to 'agent_assigned' for user ${userId}`);
               break;
