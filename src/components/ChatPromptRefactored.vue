@@ -965,11 +965,12 @@ const triggerUploadFile = (file: File) => {
     };
     
     const handleSignIn = () => {
+      // DISABLED 2025-10-18: Passkeys are working in Safari again
       // Check for Safari browser
-      if (isSafari()) {
-        showSafariWarningModal.value = true;
-        return;
-      }
+      // if (isSafari()) {
+      //   showSafariWarningModal.value = true;
+      //   return;
+      // }
       // Open the passkey authentication dialog
       showPasskeyAuthDialog.value = true;
     };
