@@ -973,6 +973,12 @@ const triggerUploadFile = (file: File) => {
       // Open the passkey authentication dialog
       showPasskeyAuthDialog.value = true;
     };
+
+    const handleSignInAnyway = () => {
+      // User clicked "Try Anyway" on Safari warning - proceed with passkey auth
+      console.log('[Safari Warning] User chose to try passkey authentication anyway');
+      showPasskeyAuthDialog.value = true;
+    };
     
     const handleSignInCancelled = () => {
       // Close the passkey authentication dialog
@@ -1214,6 +1220,7 @@ const triggerUploadFile = (file: File) => {
       handleAgentUpdated,
       handleManageAgent,
       handleSignIn,
+      handleSignInAnyway,
       handleSignInCancelled,
       groupCount,
       updateGroupCount,
@@ -1351,6 +1358,7 @@ const triggerUploadFile = (file: File) => {
 
     <SafariWarningModal
       v-model="showSafariWarningModal"
+      @try-anyway="handleSignInAnyway"
     />
 
     <!-- Create KB and Summary Action Modal -->

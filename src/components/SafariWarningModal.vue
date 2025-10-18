@@ -16,6 +16,12 @@
 
       <QCardActions align="right">
         <QBtn
+          label="Try Anyway"
+          color="grey-7"
+          flat
+          @click="handleTryAnyway"
+        />
+        <QBtn
           label="Got it"
           color="primary"
           @click="handleClose"
@@ -36,6 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
+  (e: 'try-anyway'): void
 }>()
 
 const isOpen = ref(props.modelValue)
@@ -49,6 +56,11 @@ watch(isOpen, (newValue) => {
 })
 
 const handleClose = () => {
+  isOpen.value = false
+}
+
+const handleTryAnyway = () => {
+  emit('try-anyway')
   isOpen.value = false
 }
 </script>
