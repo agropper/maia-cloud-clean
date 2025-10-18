@@ -33,3 +33,12 @@ Then, find the DO API command that changes the instruction string and update it 
 
 
 Then, verify that the Agent Management Dialog is displaying the updated string 
+
+Public Knowledge Bases = 
+
+devon-viaapp-kb-06162025
+casandra-timeline-mpnet-kb-06162025
+waylon-timeline-kb-05262025
+cgm-kb-05122025
+
+//

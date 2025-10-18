@@ -50,6 +50,15 @@ import { createCouchDBClient } from './src/utils/couchdb-client.js';
 
 const couchDBClient = createCouchDBClient();
 
+// Public Knowledge Base Whitelist (sourced from Documents/SystemPrompt.txt)
+// SECURITY: Only these KBs are visible to unauthenticated Public User
+const PUBLIC_KNOWLEDGE_BASES = [
+  'devon-viaapp-kb-06162025',
+  'casandra-timeline-mpnet-kb-06162025',
+  'waylon-timeline-kb-05262025',
+  'cgm-kb-05122025'
+];
+
 // Global session tracking
 const activeSessions = [];
 const serverStartTime = Date.now(); // Track when this server instance started
@@ -6385,7 +6394,7 @@ app.delete('/api/agents/:agentId', async (req, res) => {
 
 // List knowledge bases (replaced by unified endpoint below)
 
-// Unified KB list with protection status
+// Unified KB list with whitelist-based security
 app.get('/api/knowledge-bases', async (req, res) => {
   try {
     // Get the current authenticated user from the request
@@ -6398,81 +6407,30 @@ app.get('/api/knowledge-bases', async (req, res) => {
       id: kb.uuid || kb.id // normalize id field
     }));
 
-    // 2. Fetch protection metadata from Cloudant
-    let protectionDocs = [];
-    try {
-      protectionDocs = await cacheManager.getAllDocuments(couchDBClient, 'maia_knowledge_bases');
-    } catch (err) {
-      console.warn('Could not fetch KB protection metadata from Cloudant:', err.message);
-    }
-    const protectionMap = {};
-    for (const doc of protectionDocs) {
-      if (doc.kbId || doc.id || doc._id) {
-        protectionMap[doc.kbId || doc.id || doc._id] = doc;
-      }
-    }
-
-    // 3. Merge protection info into DO KBs
-    const mergedKBs = doKBs.map(kb => {
-      const protection = protectionMap[kb.id] || {};
-      return {
-        ...kb,
-        isProtected: !!protection.isProtected,
-        owner: protection.owner || null
-      };
-    });
-
-    // 4. Filter KBs by user ownership if a user is specified
-    let filteredKBs = mergedKBs;
+    // 2. Filter KBs by user authentication status
+    let filteredKBs = doKBs;
     if (currentUser) {
-//       console.log(`🔐 Filtering KBs for user: ${currentUser}`);
-//       console.log(`🔐 Total KBs before filtering: ${mergedKBs.length}`);
-      
-      // For authenticated users, show ONLY their own KBs (no shared KBs)
-      filteredKBs = mergedKBs.filter(kb => {
-        const hasOwner = kb.owner === currentUser;
+      // For authenticated users, show ONLY their own KBs (username prefix match)
+      filteredKBs = doKBs.filter(kb => {
         const hasNamePrefix = kb.name && kb.name.startsWith(`${currentUser}-`);
-        const matches = hasOwner || hasNamePrefix;
-        
-        if (matches) {
-//           console.log(`🔐 KB ${kb.name} (${kb.uuid}) matches user ${currentUser} - Owner: ${kb.owner || 'user-prefixed'}`);
-        }
-        
-        return matches;
+        return hasNamePrefix;
       });
       
-//       console.log(`🔐 Filtered KBs for user ${currentUser}: ${filteredKBs.length} of ${mergedKBs.length} total`);
+      console.log(`🔐 [KB SECURITY] Authenticated user ${currentUser}: ${filteredKBs.length} of ${doKBs.length} KBs shown`);
     } else {
-      // For unauthenticated users, filter out protected KBs (those with username prefixes or explicit owners)
-//       console.log(`🔐 Filtering KBs for unauthenticated user - hiding protected KBs`);
-//       console.log(`🔐 Total KBs before filtering: ${mergedKBs.length}`);
-      
-      filteredKBs = mergedKBs.filter(kb => {
-        // Check if KB has a username prefix (e.g., "wed271-kb1", "agropper-kb1")
-        // Only consider it a username prefix if it's a short alphanumeric string followed by a dash
-        // This excludes names like "casandra-fhir-download-json-06162025" which are descriptive names
-        const hasUsernamePrefix = kb.name && /^[a-zA-Z0-9]{3,8}-[a-zA-Z0-9]+$/.test(kb.name);
-        // Check if KB has an explicit owner
-        const hasExplicitOwner = kb.owner && kb.owner !== null;
-        // Check if KB is marked as protected
-        const isProtected = kb.isProtected === true;
-        
-        // Show KB only if it's NOT protected (no username prefix, no explicit owner, not marked protected)
-        const shouldShow = !hasUsernamePrefix && !hasExplicitOwner && !isProtected;
-        
-        if (!shouldShow) {
-//           console.log(`🔐 KB ${kb.name} (${kb.uuid}) is PROTECTED - Owner: ${kb.owner || 'username-prefixed'}, Protected: ${isProtected}`);
-        }
-        
-        return shouldShow;
+      // For Public User: ONLY show KBs explicitly on the whitelist
+      // SECURITY: Positive filter prevents accidental exposure of private KBs
+      filteredKBs = doKBs.filter(kb => {
+        const isOnWhitelist = PUBLIC_KNOWLEDGE_BASES.includes(kb.name);
+        return isOnWhitelist;
       });
       
-//       console.log(`🔐 Filtered KBs for unauthenticated user: ${filteredKBs.length} of ${mergedKBs.length} total (protected KBs hidden)`);
+      console.log(`🔐 [KB SECURITY] Public User: ${filteredKBs.length} whitelisted KBs shown, ${doKBs.length - filteredKBs.length} private KBs hidden`);
     }
 
     res.json(filteredKBs);
   } catch (error) {
-    console.error('❌ Failed to fetch merged knowledge bases:', error);
+    console.error('❌ Failed to fetch knowledge bases:', error);
     res.status(500).json({ error: 'Failed to fetch knowledge bases' });
   }
 });
@@ -9092,6 +9050,10 @@ app.listen(PORT, async () => {
     // Initialize admin alert system
     initializeAlertSystem(cacheManager, couchDBClient, addUpdateToAllAdmins);
     console.log(`✅ [STARTUP] Admin alert system initialized`);
+    
+    // Log public KB whitelist for security audit
+    console.log(`🔐 [STARTUP] Public KB whitelist loaded: ${PUBLIC_KNOWLEDGE_BASES.length} KBs`);
+    PUBLIC_KNOWLEDGE_BASES.forEach(kb => console.log(`🔐 [STARTUP]   - ${kb}`));
     
     // Server ready for requests
     console.log(`✅ [STARTUP] Server ready for authentication requests`);
