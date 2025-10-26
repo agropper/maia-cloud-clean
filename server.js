@@ -7419,6 +7419,23 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         
         console.log(`🤖 [AUTO PS] Indexing status: ${status}, Phase: ${phase}, Tokens: ${totalTokens}, Attempt: ${attempts}/${maxAttempts}`);
         
+        // Call new indexing jobs endpoint to get detailed token counts
+        try {
+          const jobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
+          const jobsData = jobsResponse.data || jobsResponse;
+          const jobs = jobsData.jobs || jobsData;
+          
+          if (Array.isArray(jobs) && jobs.length > 0) {
+            // Get the most recent job
+            const mostRecentJob = jobs[0];
+            const tokenCount = mostRecentJob.tokens || mostRecentJob.token_count || 0;
+            console.log(`📊 [INDEXING JOBS API] Token count from jobs endpoint: ${tokenCount}`);
+          }
+        } catch (jobsError) {
+          // Don't fail the polling if the new endpoint fails
+          console.warn(`⚠️ [INDEXING JOBS API] Failed to fetch jobs: ${jobsError.message}`);
+        }
+        
         // Check for completion
         if (status.includes('COMPLETED') || phase.includes('SUCCEEDED')) {
           indexingComplete = true;
@@ -7939,6 +7956,21 @@ async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http:
 //           console.log(`📊 Phase: ${job.phase}`);
 //           console.log(`📊 Tokens: ${job.tokens || 'N/A'}`);
 //           console.log(`📊 Progress: ${job.progress || 'N/A'}`);
+          
+          // Call new indexing jobs endpoint to get detailed token counts
+          try {
+            const jobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
+            const jobsData = jobsResponse.data || jobsResponse;
+            const jobs = jobsData.jobs || jobsData;
+            
+            if (Array.isArray(jobs) && jobs.length > 0) {
+              const mostRecentJob = jobs[0];
+              const tokenCount = mostRecentJob.tokens || mostRecentJob.token_count || 0;
+              console.log(`📊 [INDEXING JOBS API] Token count from jobs endpoint: ${tokenCount}`);
+            }
+          } catch (jobsError) {
+            console.warn(`⚠️ [INDEXING JOBS API] Failed to fetch jobs: ${jobsError.message}`);
+          }
           
           if (job.status === 'INDEX_JOB_STATUS_COMPLETED') {
             const totalTime = Math.round((currentTime - startTime) / 1000);
