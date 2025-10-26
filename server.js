@@ -9098,9 +9098,9 @@ app.listen(PORT, async () => {
       };
     }));
     
-    // Cache the processed users (not raw database documents)
-    await cacheManager.cacheUsers(processedUsers);
-    console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users for Admin2`);
+    // Cache individual user entries (no longer using 'users', 'all' key)
+    // Individual users are already cached above during bucket status fetching
+    console.log(`✅ [STARTUP] Cached ${processedUsers.length} individual user entries for Admin2`);
     
     // Pre-cache agents for Admin2 (early cache for Admin2 UI)
     try {
