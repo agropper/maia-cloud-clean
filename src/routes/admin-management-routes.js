@@ -3620,7 +3620,7 @@ router.post('/refresh-cache', requireAdminAuth, async (req, res) => {
     
     // Rebuild knowledge bases cache from DigitalOcean API
     try {
-      const kbsResponse = await doRequest('/v2/gen-ai/knowledge-bases');
+      const kbsResponse = await doRequest('/v2/gen-ai/knowledge_bases');
       const rawKBs = kbsResponse.knowledge_bases || kbsResponse.data?.knowledge_bases || [];
       
       await cacheManager.cacheKnowledgeBases(rawKBs);
