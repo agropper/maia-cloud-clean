@@ -216,9 +216,18 @@ router.post('/request-approval', async (req, res) => {
     const baseUrl = `${protocol}://${host}`;
 
     // Send email notification to admin using Resend
+    if (!process.env.RESEND_FROM_EMAIL || !process.env.RESEND_ADMIN_EMAIL) {
+      console.error('RESEND email configuration incomplete');
+      return res.status(500).json({
+        success: false,
+        message: 'Email service not configured',
+        error: 'RESEND_EMAIL_NOT_CONFIGURED'
+      });
+    }
+
     const emailData = {
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-      to: process.env.RESEND_ADMIN_EMAIL || 'agropper@healthurl.com',
+      from: process.env.RESEND_FROM_EMAIL,
+      to: process.env.RESEND_ADMIN_EMAIL,
       subject: `MAIA2 Admin Approval Request: ${requestType}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -275,10 +284,19 @@ router.post('/request-approval', async (req, res) => {
     };
 
     // Send email using Resend
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Email service not configured',
+        error: 'RESEND_API_KEY_NOT_SET'
+      });
+    }
+
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY || 're_GpLZHw5L_BcL5NLwWV4WJrmoN6qWzTjiF'}`,
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(emailData),
@@ -335,9 +353,18 @@ router.post('/contact-support', async (req, res) => {
     const baseUrl = `${protocol}://${host}`;
 
     // Send email notification to admin using Resend
+    if (!process.env.RESEND_FROM_EMAIL || !process.env.RESEND_ADMIN_EMAIL) {
+      console.error('RESEND email configuration incomplete');
+      return res.status(500).json({
+        success: false,
+        message: 'Email service not configured',
+        error: 'RESEND_EMAIL_NOT_CONFIGURED'
+      });
+    }
+
     const emailData = {
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-      to: process.env.RESEND_ADMIN_EMAIL || 'agropper@healthurl.com',
+      from: process.env.RESEND_FROM_EMAIL,
+      to: process.env.RESEND_ADMIN_EMAIL,
       subject: `MAIA2 Contact Form: ${subject}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -391,10 +418,19 @@ router.post('/contact-support', async (req, res) => {
     };
 
     // Send email using Resend
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Email service not configured',
+        error: 'RESEND_API_KEY_NOT_SET'
+      });
+    }
+
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY || 're_GpLZHw5L_BcL5NLwWV4WJrmoN6qWzTjiF'}`,
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(emailData),
