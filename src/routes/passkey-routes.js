@@ -220,19 +220,10 @@ router.post("/register", async (req, res) => {
 
 
     // Check if user already exists
-    console.log(`[SIGN-IN] Checking if user "${userId}" already exists in database`);
     let existingUser;
     try {
       existingUser = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
-      console.log(`[SIGN-IN] User found in database: ${!!existingUser}`);
-      if (existingUser) {
-        console.log(`[SIGN-IN]   - Has credentialID: ${!!existingUser.credentialID}`);
-        console.log(`[SIGN-IN]   - Current _rev: ${existingUser._rev}`);
-        console.log(`[SIGN-IN]   - workflowStage: ${existingUser.workflowStage}`);
-        console.log(`[SIGN-IN]   - createdAt: ${existingUser.createdAt}`);
-      }
     } catch (error) {
-      console.log(`[SIGN-IN] Error fetching user: ${error.message}`);
       // If database doesn't exist, that's fine - user can register
       if (error.message.includes("error happened in your connection")) {
         existingUser = null;
@@ -242,29 +233,18 @@ router.post("/register", async (req, res) => {
     }
 
     if (existingUser) {
-      console.log(`[SIGN-IN] Existing user found, checking passkey status`);
-      
       // If user already has a valid passkey, check for admin replacement or reset flag
       const hasValidPasskey = !!(existingUser.credentialID && 
         existingUser.credentialPublicKey && 
         existingUser.counter !== undefined);
       
-      console.log(`[SIGN-IN]   - hasValidPasskey: ${hasValidPasskey}`);
-      
       if (hasValidPasskey) {
-        console.log(`[SIGN-IN] User has valid passkey, checking reset flag`);
         // Check if user has an active passkey reset flag
         if (existingUser.passkeyResetFlag && existingUser.passkeyResetExpiry) {
           const resetExpiry = new Date(existingUser.passkeyResetExpiry);
           const now = new Date();
-          const minutesRemaining = Math.round((resetExpiry - now) / 1000 / 60);
-          
-          console.log(`[SIGN-IN]   - passkeyResetFlag: ${existingUser.passkeyResetFlag}`);
-          console.log(`[SIGN-IN]   - Reset expires: ${resetExpiry.toISOString()}`);
-          console.log(`[SIGN-IN]   - Minutes remaining: ${minutesRemaining}`);
           
           if (now < resetExpiry) {
-            console.log(`✅ [SIGN-IN] User has active passkey reset flag (${minutesRemaining} min left), allowing registration`);
             // Continue with registration (replace existing passkey)
           } else {
             // Reset flag has expired, clear it and deny registration
@@ -286,11 +266,9 @@ router.post("/register", async (req, res) => {
         }
         // Special case: Allow admin to replace passkey (admin has already been verified in admin panel)
         else if (userId === 'admin') {
-          console.log("✅ Admin passkey replacement allowed (admin already verified)");
           // Continue with registration (replace existing passkey)
         } else if (adminSecret && adminSecret === process.env.ADMIN_SECRET) {
           // SECURITY: Admin override removed - use proper reset endpoint instead
-          console.log("❌ SECURITY: Admin override not allowed in registration endpoint");
           return res.status(400).json({ 
             error: "Admin passkey reset must use proper admin endpoint. Contact admin to reset your passkey.",
             hasExistingPasskey: true,
@@ -298,23 +276,17 @@ router.post("/register", async (req, res) => {
             securityNote: "Use /admin-management/users/:userId/reset-passkey endpoint"
           });
         } else {
-          console.log("❌ User already has a passkey:", userId);
           return res.status(400).json({ 
             error: "User already has a registered passkey. Contact admin to reset it.",
             hasExistingPasskey: true,
             userId: userId
           });
         }
-      } else {
-        // If user exists but doesn't have a valid passkey, allow registration
-        console.log(`✅ [SIGN-IN] User exists but no valid passkey, allowing registration: ${userId}`);
-        console.log(`[SIGN-IN]   - This is RE-REGISTRATION within 1 hour window`);
       }
     }
 
 
     // Generate registration options
-    console.log(`[SIGN-IN] Generating WebAuthn registration options for ${userId}`);
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
@@ -328,20 +300,13 @@ router.post("/register", async (req, res) => {
         authenticatorAttachment: "platform",
       },
     });
-    console.log(`[SIGN-IN] ✅ Registration options generated, challenge: ${options.challenge.substring(0, 20)}...`);
 
 
     // Store challenge in session or temporary storage
     // For re-registration: fetch FRESH document to get latest _rev
     let freshExistingUser = null;
     if (existingUser) {
-      console.log(`[SIGN-IN] Re-registration: fetching fresh document to get latest _rev`);
       freshExistingUser = await cacheManager.getDocument(couchDBClient, "maia_users", userId);
-      if (freshExistingUser) {
-        console.log(`[SIGN-IN] Fresh document fetched, _rev: ${freshExistingUser._rev}`);
-      } else {
-        console.log(`[SIGN-IN] ⚠️ Fresh fetch returned null, will create new document`);
-      }
     }
     
     const userDoc = (existingUser && freshExistingUser) ? {
@@ -362,17 +327,10 @@ router.post("/register", async (req, res) => {
 
 
     // Store user document with challenge for verification
-    console.log(`[SIGN-IN] Saving user document for ${userId}`);
-    console.log(`[SIGN-IN]   - Has _rev: ${!!userDoc._rev} ${userDoc._rev ? `(${userDoc._rev})` : ''}`);
-    console.log(`[SIGN-IN]   - Is new user: ${!existingUser}`);
-    console.log(`[SIGN-IN]   - Is re-registration: ${!!existingUser}`);
-    
     try {
       await cacheManager.saveDocument(couchDBClient, "maia_users", userDoc);
-      console.log(`✅ [SIGN-IN] User document saved successfully`);
     } catch (error) {
-      console.error(`❌ [SIGN-IN] Failed to save user document:`, error.message);
-      console.error(`[SIGN-IN] Error details:`, error);
+      console.error(`Failed to save user document:`, error.message);
       // If database doesn't exist, create it first
       if (error.message.includes("error happened in your connection")) {
         try {
@@ -555,12 +513,7 @@ router.post("/register-verify", async (req, res) => {
         path: '/'
       };
       
-      console.log(`[SIGN-IN] Setting maia_auth cookie for ${updatedUser._id} (registration)`);
-      console.log(`[SIGN-IN]   - Cookie data:`, authData);
-      console.log(`[SIGN-IN]   - Cookie options:`, cookieOptions);
-      
       res.cookie('maia_auth', JSON.stringify(authData), cookieOptions);
-      console.log(`[SIGN-IN] ✅ Cookie set command executed`);
 
       res.json({
         success: true,
@@ -723,7 +676,7 @@ router.post("/authenticate-verify", async (req, res) => {
         const { buildAgentManagementTemplate } = await import('../../server.js');
         await buildAgentManagementTemplate(updatedUser._id);
       } catch (templateError) {
-        console.warn(`⚠️ [TEMPLATE] Failed to build template for ${updatedUser._id}:`, templateError.message);
+        console.warn(`Failed to build template for ${updatedUser._id}:`, templateError.message);
       }
       
       // Ensure user has a bucket folder
@@ -762,12 +715,7 @@ router.post("/authenticate-verify", async (req, res) => {
         path: '/'
       };
       
-      console.log(`[SIGN-IN] Setting maia_auth cookie for ${updatedUser._id}`);
-      console.log(`[SIGN-IN]   - Cookie data:`, authData);
-      console.log(`[SIGN-IN]   - Cookie options:`, cookieOptions);
-      
       res.cookie('maia_auth', JSON.stringify(authData), cookieOptions);
-      console.log(`[SIGN-IN] ✅ Cookie set command executed`);
       
       // Set the user's assigned agent as current when they sign in
       try {

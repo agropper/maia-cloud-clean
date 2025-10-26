@@ -1034,6 +1034,123 @@ const uploadRTF = multer({
   }
 });
 
+// Binary file upload endpoint for PDFs (no base64, no JSON limit issues)
+app.post('/api/upload-to-bucket-binary', upload.single('pdfFile'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No PDF file provided',
+        error: 'MISSING_FILE'
+      });
+    }
+
+    if (!req.body.userFolder) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User folder required',
+        error: 'MISSING_USER_FOLDER'
+      });
+    }
+
+    const fileName = req.body.fileName || req.file.originalname;
+    const userFolder = req.body.userFolder;
+
+    // Generate a unique key for the file in the bucket
+    const cleanName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const bucketKey = `${userFolder}${cleanName}`;
+
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    // Extract bucket name from the full URL environment variable
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    // Check if bucket is configured
+    if (!bucketUrl) {
+      console.warn(`⚠️ DIGITALOCEAN_BUCKET not configured, skipping bucket operation`);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DigitalOcean bucket not configured',
+        error: 'BUCKET_NOT_CONFIGURED'
+      });
+    }
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+
+    // Upload PDF as binary buffer (no base64 encoding)
+    const uploadCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: bucketKey,
+      Body: req.file.buffer, // Binary buffer directly from multer
+      ContentType: 'application/pdf',
+      Metadata: {
+        'original-filename': fileName,
+        'upload-timestamp': Date.now().toString(),
+        'user-folder': userFolder
+      }
+    });
+
+    await s3Client.send(uploadCommand);
+    
+    // Update cache and send notifications
+    if (userFolder && userFolder !== 'root') {
+      // Extract userId from folder path (e.g., "sun26/archived/" -> "sun26")
+      const userId = userFolder.split('/')[0];
+      await updateUserBucketCache(userId);
+      
+      // Send admin notification
+      try {
+        const updateData = {
+          userId: userId,
+          fileName: fileName,
+          bucketKey: bucketKey,
+          fileSize: req.file.size,
+          message: `User ${userId} uploaded file ${fileName} to their bucket`
+        };
+        
+        addUpdateToAllAdmins('user_file_uploaded', updateData);
+        console.log(`[*] User ${userId} uploaded file ${fileName} to bucket`);
+        
+        // Update session activity for the user who uploaded the file
+        if (req.sessionID) {
+          updateSessionActivity(req.sessionID, 'file_upload');
+        }
+      } catch (notificationError) {
+        console.error(`❌ Error sending file upload notification:`, notificationError.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      fileInfo: {
+        bucketKey,
+        fileName,
+        fileType: 'application/pdf',
+        size: req.file.size,
+        uploadedAt: new Date().toISOString(),
+        userFolder: userFolder
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error uploading file to bucket:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Failed to upload file to bucket: ${error.message}`,
+      error: 'UPLOAD_FAILED'
+    });
+  }
+});
+
 // PDF parsing endpoint with enhanced security
 app.post('/api/parse-pdf', upload.single('pdfFile'), async (req, res) => {
   try {
@@ -4564,11 +4681,14 @@ const agentApiKeys = {};
 
 // Helper function to get agent-specific API key
 const getAgentApiKey = async (agentId) => {
+  console.log(`🔍 [API KEY LOOKUP] Starting lookup for agent: ${agentId}`);
+  
   // Declare agentName at function scope so it's available in error handling
   let agentName = agentId; // fallback to ID
   
   // Check if we have a cached key for this agent
   if (agentApiKeys[agentId]) {
+    console.log(`🔍 [API KEY LOOKUP] Found in agentApiKeys cache: ${agentId}`);
     // Try to get agent name from cached users for better logging
     try {
     const allUsers = await cacheManager.getAllDocuments(couchDBClient, 'maia_users');
@@ -4591,18 +4711,26 @@ const getAgentApiKey = async (agentId) => {
     return agentApiKeys[agentId];
   }
 
+  console.log(`🔍 [API KEY LOOKUP] Not in agentApiKeys cache, checking user cache...`);
+  
   // Check if we have the API key stored in the database
   // Instead of scanning all users, check individual user cache entries (faster and always fresh)
   try {
     // Get all individual user cache entries (these are updated on every save)
     const userCacheEntries = Array.from(cacheManager.cache.users.values());
+    console.log(`🔍 [API KEY LOOKUP] User cache has ${userCacheEntries.length} entries`);
+    
     const userWithAgent = userCacheEntries.find(user => user.assignedAgentId === agentId);
     
     // Update agentName if we found the user
     if (userWithAgent) {
       agentName = userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown';
       console.log(`🔑 [API KEY] Found user ${userWithAgent.userId} with agent ${agentId}`);
-          } else {
+      console.log(`🔍 [API KEY LOOKUP] User has agentApiKey: ${!!userWithAgent.agentApiKey}`);
+      if (userWithAgent.agentApiKey) {
+        console.log(`🔍 [API KEY LOOKUP] API key value: ${userWithAgent.agentApiKey.substring(0, 10)}...`);
+      }
+    } else {
       console.log(`🔑 [API KEY] No user found with assignedAgentId: ${agentId}`);
     }
     
@@ -4618,6 +4746,7 @@ const getAgentApiKey = async (agentId) => {
     } else if (userWithAgent && !userWithAgent.agentApiKey) {
       // User found but no API key stored - this shouldn't happen but handle gracefully
       console.warn(`🔑 ⚠️ User ${userWithAgent.userId} has agent ${agentId} but no API key stored in database`);
+      console.warn(`🔍 [API KEY LOOKUP] User document keys:`, Object.keys(userWithAgent));
     }
   } catch (dbError) {
     console.warn(`🔑 Could not check database for API key of agent ${agentId}:`, dbError.message);

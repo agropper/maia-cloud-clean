@@ -1009,13 +1009,10 @@ export default defineComponent({
         
         if (response.ok) {
           agentTemplate.value = await response.json()
-          console.log(`[TEMPLATE] Fetched template for ${userId}: hasAgent=${agentTemplate.value.agentStatus.hasAgent}, hasKB=${agentTemplate.value.kbStatus.hasKB}, needsWarning=${agentTemplate.value.kbStatus.needsWarning}`)
         } else {
-          console.warn(`[TEMPLATE] Failed to fetch template for ${userId}: ${response.status}`)
           agentTemplate.value = null
         }
       } catch (error) {
-        console.error(`[TEMPLATE] Error fetching template for ${userId}:`, error)
         agentTemplate.value = null
       }
       
@@ -1025,16 +1022,12 @@ export default defineComponent({
     
     // Watch for user or agent changes to re-fetch template
     watch(() => [props.currentUser, props.currentAgent], async () => {
-      console.log(`[TEMPLATE] Props changed - re-fetching template`)
       isStatusReady.value = false  // Block UI during refetch
       await initializeStatusIcons()
     }, { immediate: true, deep: true })
 
     const hasUnattachedKB = computed(() => {
       const result = agentTemplate.value?.kbStatus?.needsWarning || false
-      if (agentTemplate.value) {
-        console.log(`[TEMPLATE] Yellow badge (needsWarning): ${result} [Agent:${agentTemplate.value.agentStatus.hasAgent}, Attached:${agentTemplate.value.kbStatus.attachedCount}, Available:${agentTemplate.value.kbStatus.availableCount}]`)
-      }
       return result
     })
 
