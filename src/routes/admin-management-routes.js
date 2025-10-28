@@ -1009,6 +1009,48 @@ router.get('/users', requireAdminAuth, async (req, res) => {
   }
 });
 
+// Helper function to get KB associations for a file using new dataSources structure
+const getKBAssociationsForFile = async (bucketKey) => {
+  try {
+    // Get all KB documents
+    const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+    const associations = [];
+    
+    for (const kbDoc of allKBs) {
+      // Check new dataSources structure first
+      if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
+        for (const dataSource of kbDoc.dataSources) {
+          if (dataSource.files && dataSource.files.some(file => 
+            file.bucketKey === bucketKey || file.originalKey === bucketKey
+          )) {
+            associations.push({
+              id: kbDoc.kbId,
+              name: kbDoc.kbName,
+              addedAt: dataSource.indexedAt,
+              dataSourceUuid: dataSource.uuid
+            });
+            break; // Found in this KB, no need to check other data sources
+          }
+        }
+      }
+      // Fallback to legacy files structure
+      else if (kbDoc.files && kbDoc.files.some(file => file.bucketKey === bucketKey)) {
+        associations.push({
+          id: kbDoc.kbId,
+          name: kbDoc.kbName,
+          addedAt: kbDoc.indexedAt,
+          isLegacy: true
+        });
+      }
+    }
+    
+    return associations;
+  } catch (error) {
+    console.error(`❌ Error getting KB associations for ${bucketKey}:`, error.message);
+    return [];
+  }
+};
+
 // Get detailed user information and workflow status
 router.get('/users/:userId', requireAdminAuth, async (req, res) => {
   try {
@@ -1068,14 +1110,21 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
       }
       
       // Transform bucket files and merge KB associations
-      bucketFiles = bucketData.files.map(file => {
+      bucketFiles = await Promise.all(bucketData.files.map(async (file) => {
         // Extract filename from key (remove user folder prefix)
         const fileName = file.key.replace(`${userId}/archived/`, '').replace(`${userId}/`, '');
         // Extract file type from filename extension
         const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
         
-        // Get KB associations from user document
-        const metadata = fileMetadataMap.get(file.key);
+        // Get KB associations from user document (legacy)
+        const userMetadata = fileMetadataMap.get(file.key);
+        const userKBs = userMetadata?.knowledgeBases || [];
+        
+        // Get KB associations from new dataSources structure
+        const kbAssociations = await getKBAssociationsForFile(file.key);
+        
+        // Merge both sources, preferring the new structure
+        const allKBs = kbAssociations.length > 0 ? kbAssociations : userKBs;
         
         return {
           bucketKey: file.key,
@@ -1085,9 +1134,9 @@ router.get('/users/:userId', requireAdminAuth, async (req, res) => {
           uploadedAt: file.lastModified,
           lastModified: file.lastModified,
           etag: file.etag,
-          knowledgeBases: metadata?.knowledgeBases || []
+          knowledgeBases: allKBs
         };
-      });
+      }));
     }
     
     // Add additional fields specific to user details view

@@ -4729,8 +4729,8 @@ const getAgentApiKey = async (agentId) => {
       console.log(`🔍 [API KEY LOOKUP] User has agentApiKey: ${!!userWithAgent.agentApiKey}`);
       if (userWithAgent.agentApiKey) {
         console.log(`🔍 [API KEY LOOKUP] API key value: ${userWithAgent.agentApiKey.substring(0, 10)}...`);
-      }
-    } else {
+            }
+          } else {
       console.log(`🔑 [API KEY] No user found with assignedAgentId: ${agentId}`);
     }
     
@@ -7238,6 +7238,115 @@ app.post('/api/auto-start-indexing', async (req, res) => {
   }
 });
 
+// Helper functions for KB subfolder management
+const createKBSubfolderPath = (userId, kbName, subfolderNumber = 1) => {
+  return `${userId}/archived/${kbName}/subfolder-${subfolderNumber}/`;
+};
+
+const getNextSubfolderNumber = (kbDoc) => {
+  if (!kbDoc.dataSources || kbDoc.dataSources.length === 0) {
+    return 1;
+  }
+  
+  // Find the highest subfolder number
+  let maxNumber = 0;
+  for (const dataSource of kbDoc.dataSources) {
+    const match = dataSource.itemPath.match(/subfolder-(\d+)\//);
+    if (match) {
+      const number = parseInt(match[1]);
+      if (number > maxNumber) {
+        maxNumber = number;
+      }
+    }
+  }
+  
+  return maxNumber + 1;
+};
+
+const organizeFilesIntoSubfolder = async (userId, kbName, files, subfolderNumber) => {
+  const { S3Client, CopyObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+  
+  const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+  const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+  
+  const s3Client = new S3Client({
+    endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+    region: 'us-east-1',
+    forcePathStyle: false,
+    credentials: {
+      accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+      secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+    }
+  });
+  
+  const subfolderPath = createKBSubfolderPath(userId, kbName, subfolderNumber);
+  const organizedFiles = [];
+  
+  for (const file of files) {
+    const sourceKey = file.bucketKey || file.key;
+    const fileName = file.fileName || file.name || sourceKey.split('/').pop();
+    const destKey = `${subfolderPath}${fileName}`;
+    
+    try {
+      // Copy file to subfolder
+      const copyCommand = new CopyObjectCommand({
+        Bucket: bucketName,
+        CopySource: `${bucketName}/${sourceKey}`,
+        Key: destKey,
+        MetadataDirective: 'COPY'
+      });
+      
+      await s3Client.send(copyCommand);
+      console.log(`📁 [KB ORGANIZE] Copied ${sourceKey} → ${destKey}`);
+      
+      organizedFiles.push({
+        name: fileName,
+        bucketKey: destKey,
+        originalKey: sourceKey,
+        movedAt: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error(`❌ [KB ORGANIZE] Failed to copy ${sourceKey} to ${destKey}:`, error.message);
+      throw error;
+    }
+  }
+  
+  return {
+    subfolderPath,
+    files: organizedFiles
+  };
+};
+
+const migrateKBToNewStructure = async (kbDoc) => {
+  // Check if KB is already using new structure
+  if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
+    return kbDoc; // Already migrated
+  }
+  
+  console.log(`🔄 [KB MIGRATE] Migrating KB ${kbDoc.kbName} to new dataSources structure`);
+  
+  // Initialize dataSources array
+  kbDoc.dataSources = [];
+  
+  // If KB has legacy files, create a legacy data source entry
+  if (kbDoc.files && kbDoc.files.length > 0) {
+    const legacyDataSource = {
+      uuid: kbDoc.dataSourceUuid || 'legacy-root-folder',
+      itemPath: `${kbDoc.owner || 'unknown'}/`, // Legacy root folder
+      files: kbDoc.files,
+      tokens: kbDoc.totalTokens || 0,
+      indexedAt: kbDoc.indexedAt || kbDoc.createdAt,
+      isLegacy: true
+    };
+    
+    kbDoc.dataSources.push(legacyDataSource);
+  }
+  
+  console.log(`✅ [KB MIGRATE] Migrated KB ${kbDoc.kbName} with ${kbDoc.dataSources.length} data sources`);
+  return kbDoc;
+};
+
 // Automated KB Creation and Patient Summary Generation
 app.post('/api/automate-kb-and-summary', async (req, res) => {
   const startTime = Date.now();
@@ -7288,35 +7397,23 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
     
-    // Step 4: Copy file from archived/ to root folder for indexing
-    console.log(`🤖 [AUTO PS] Copying file from archived/ to root for indexing`);
-    const { S3Client, CopyObjectCommand } = await import('@aws-sdk/client-s3');
+    // Step 4: Organize file into KB subfolder structure (NEW APPROACH)
+    console.log(`🤖 [AUTO PS] Organizing file into KB subfolder structure`);
     
-    const s3Client = new S3Client({
-      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
-      region: 'us-east-1',
-      forcePathStyle: false,
-      credentials: {
-        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
-      }
-    });
+    // Generate KB name first
+    const kbName = `${userId}-kb-${Date.now()}`;
     
-    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    // Organize the file into a subfolder for this KB
+    const fileToOrganize = {
+      bucketKey: bucketKey,
+      fileName: fileName
+    };
     
-    // Copy from archived/ to root (e.g., wed15/archived/file.pdf -> wed15/file.pdf)
-    const sourceKey = bucketKey; // e.g., "wed15/archived/file.pdf"
-    const destKey = sourceKey.replace('/archived/', '/'); // e.g., "wed15/file.pdf"
+    const organizationResult = await organizeFilesIntoSubfolder(userId, kbName, [fileToOrganize], 1);
+    const subfolderPath = organizationResult.subfolderPath;
+    const organizedFiles = organizationResult.files;
     
-    const copyCommand = new CopyObjectCommand({
-      Bucket: bucketName,
-      CopySource: `${bucketName}/${sourceKey}`,
-      Key: destKey
-    });
-    
-    await s3Client.send(copyCommand);
-    console.log(`🤖 [AUTO PS] Copied file to root: ${sourceKey} -> ${destKey}`);
+    console.log(`🤖 [AUTO PS] File organized into subfolder: ${subfolderPath}`);
     
     // Step 5: Get embedding model ID (required for KB creation)
     let embeddingModelId = null;
@@ -7354,30 +7451,28 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('No embedding model available - cannot create knowledge base');
     }
     
-    // Step 6: Create Knowledge Base
-    const kbName = `${userId}-kb-${Date.now()}`;
-    console.log(`🤖 [AUTO PS] Creating KB "${kbName}" from file ${fileName}`);
+    // Step 6: Create Knowledge Base with subfolder-specific data source
+    console.log(`🤖 [AUTO PS] Creating KB "${kbName}" with subfolder data source`);
     
-    // Extract user folder from bucketKey (e.g., "fri1/archived/file.pdf" -> "fri1/")
-    const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
-    
-    // Get bucket region from URL (bucketUrl and bucketName already declared above)
+    // Get bucket info
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
     const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
     
-    // Create KB with the user's folder as data source (matching working code at line 6492)
+    // Create KB with the subfolder as data source (NEW APPROACH)
     const kbData = {
       name: kbName,
-      description: `${kbName} - Auto-created from ${fileName}`,
+      description: `${kbName} - Auto-created from ${fileName} using subfolder structure`,
       project_id: projectId,
       database_id: databaseId,
       embedding_model_uuid: embeddingModelId,
       region: bucketRegion,
       datasources: [{
         spaces_data_source: {
-          name: `${kbName}-datasource`,
+          name: `${kbName}-datasource-1`,
           bucket_name: bucketName,
           region: bucketRegion,
-          item_path: userFolder,
+          item_path: subfolderPath, // Use the specific subfolder path
           access_key_id: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
           secret_access_key: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
         }
@@ -7458,31 +7553,62 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     });
     console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
-    // Step 9: Clean up copied file from root folder
-    console.log(`🤖 [AUTO PS] Cleaning up temp file from root folder`);
-    const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    // Step 9: File organization complete (no cleanup needed)
+    console.log(`🤖 [AUTO PS] File organization complete - no temp files to clean up`);
+    // Note: Files are now organized in their permanent subfolder locations
     
-    const deleteCommand = new DeleteObjectCommand({
-      Bucket: bucketName,
-      Key: destKey
-    });
-    
-    await s3Client.send(deleteCommand);
-    console.log(`🤖 [AUTO PS] Cleaned up temp file: ${destKey}`);
-    
-    // Step 10: Update maia_kb document with file and token info
+    // Step 10: Update maia_kb document with file and token info using new dataSources structure
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
-      kbDoc.files = [{
-        name: fileName,
-        bucketKey: bucketKey,
+      // Initialize dataSources array if it doesn't exist (new schema)
+      if (!kbDoc.dataSources) {
+        kbDoc.dataSources = [];
+      }
+      
+      // Get the data_source_uuid from the KB response
+      const kbResponseData = kbCreateResponse.data || kbCreateResponse;
+      const kb = kbResponseData.knowledge_base || kbResponseData;
+      const dataSourceUuid = kb.datasources?.[0]?.spaces_data_source?.uuid || 'unknown';
+      
+      // Use new subfolder structure
+      const dataSourceEntry = {
+        uuid: dataSourceUuid,
+        itemPath: subfolderPath,
+        files: organizedFiles.map(file => ({
+          name: file.name,
+          bucketKey: file.bucketKey,
+          originalKey: file.originalKey,
+          indexedAt: new Date().toISOString(),
+          movedAt: file.movedAt
+        })),
+        tokens: totalTokens,
+        indexedAt: new Date().toISOString(),
+        isLegacy: false // This is the new structure
+      };
+      
+      // Add or update the data source entry
+      const existingIndex = kbDoc.dataSources.findIndex(ds => ds.uuid === dataSourceEntry.uuid);
+      if (existingIndex >= 0) {
+        kbDoc.dataSources[existingIndex] = dataSourceEntry;
+      } else {
+        kbDoc.dataSources.push(dataSourceEntry);
+      }
+      
+      // Keep legacy fields for backward compatibility
+      kbDoc.files = organizedFiles.map(file => ({
+        name: file.name,
+        bucketKey: file.bucketKey,
         indexedAt: new Date().toISOString()
-      }];
+      }));
       kbDoc.totalTokens = totalTokens;
       kbDoc.indexedAt = new Date().toISOString();
+      
+      // Store the data source UUID for future reference
+      kbDoc.dataSourceUuid = dataSourceUuid;
+      
       await cacheManager.saveDocument(couchDBClient, 'maia_kb', kbDoc);
-      console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
+      console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens using new dataSources structure`);
     }
     
     // Step 11: Generate patient summary via internal /api/personal-chat endpoint
@@ -7609,6 +7735,111 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     res.status(500).json({
       success: false,
       message: `Automation failed: ${error.message}`
+    });
+  }
+});
+
+// Migrate existing KB to new dataSources structure
+app.post('/api/admin/migrate-kb-structure/:kbName', async (req, res) => {
+  try {
+    const { kbName } = req.params;
+    
+    console.log(`🔄 [KB MIGRATE] Starting migration for KB: ${kbName}`);
+    
+    // Get the existing KB document
+    const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
+    if (!kbDoc) {
+      return res.status(404).json({
+        success: false,
+        message: `KB ${kbName} not found`
+      });
+    }
+    
+    // Check if already migrated
+    if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
+      return res.json({
+        success: true,
+        message: `KB ${kbName} already migrated`,
+        dataSources: kbDoc.dataSources.length
+      });
+    }
+    
+    // Perform migration
+    const migratedKB = await migrateKBToNewStructure(kbDoc);
+    
+    // Save the migrated KB
+    await cacheManager.saveDocument(couchDBClient, 'maia_kb', migratedKB);
+    
+    console.log(`✅ [KB MIGRATE] Successfully migrated KB: ${kbName}`);
+    
+    res.json({
+      success: true,
+      message: `KB ${kbName} migrated successfully`,
+      dataSources: migratedKB.dataSources.length,
+      migratedFiles: migratedKB.dataSources.reduce((total, ds) => total + (ds.files?.length || 0), 0)
+    });
+    
+  } catch (error) {
+    console.error(`❌ [KB MIGRATE] Error migrating KB ${req.params.kbName}:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to migrate KB: ${error.message}`
+    });
+  }
+});
+
+// Migrate all existing KBs to new structure
+app.post('/api/admin/migrate-all-kbs', async (req, res) => {
+  try {
+    console.log(`🔄 [KB MIGRATE] Starting migration for all KBs`);
+    
+    // Get all KB documents
+    const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+    let migratedCount = 0;
+    let alreadyMigratedCount = 0;
+    let errorCount = 0;
+    
+    for (const kbDoc of allKBs) {
+      try {
+        // Skip if already migrated
+        if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
+          alreadyMigratedCount++;
+          continue;
+        }
+        
+        // Perform migration
+        const migratedKB = await migrateKBToNewStructure(kbDoc);
+        
+        // Save the migrated KB
+        await cacheManager.saveDocument(couchDBClient, 'maia_kb', migratedKB);
+        
+        migratedCount++;
+        console.log(`✅ [KB MIGRATE] Migrated KB: ${kbDoc.kbName}`);
+        
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ [KB MIGRATE] Error migrating KB ${kbDoc.kbName}:`, error.message);
+      }
+    }
+    
+    console.log(`🎉 [KB MIGRATE] Migration complete: ${migratedCount} migrated, ${alreadyMigratedCount} already migrated, ${errorCount} errors`);
+    
+    res.json({
+      success: true,
+      message: 'KB migration completed',
+      results: {
+        total: allKBs.length,
+        migrated: migratedCount,
+        alreadyMigrated: alreadyMigratedCount,
+        errors: errorCount
+      }
+    });
+    
+  } catch (error) {
+    console.error(`❌ [KB MIGRATE] Error during bulk migration:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to migrate KBs: ${error.message}`
     });
   }
 });
@@ -9684,6 +9915,11 @@ app.listen(PORT, async () => {
             // Add all other fields from DO API
             ...doKB
           };
+          
+          // Initialize dataSources array for new schema
+          if (!kbDoc.dataSources) {
+            kbDoc.dataSources = [];
+          }
           
           // Try to save the document
           await couchDBClient.saveDocument('maia_kb', kbDoc);
