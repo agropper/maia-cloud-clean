@@ -492,11 +492,24 @@ export default defineComponent({
           console.log(`✅ [KB STEP] KB validation passed - API and database are consistent`);
         }
 
-        // Fetch file locations organized by KB subfolders (new approach)
+        // Reconcile maia_kb from DO API truth, then fetch file locations
         console.log(`🔍 [KB STEP] Fetching file locations for user: ${userId}`);
+        try {
+          const recon = await fetch(`/api/admin/reconcile-kb-indexed-files/${encodeURIComponent(userId)}`, { method: 'POST' });
+          if (recon.ok) {
+            const r = await recon.json();
+            console.log(`🔁 [KBM STEP] Reconciled maia_kb from DO API truth: ${r.reconciled} KBs`);
+          } else {
+            console.warn(`⚠️ [KBM STEP] Reconcile call failed: ${recon.status}`);
+          }
+        } catch (e:any) {
+          console.warn(`⚠️ [KBM STEP] Reconcile call error: ${e?.message || e}`);
+        }
+
         const locationResponse = await fetch(`/api/users/${userId}/kb-file-locations`);
         if (locationResponse.ok) {
           const locationData = await locationResponse.json();
+          console.log(`📦 [KBM STEP] Raw file locations payload:`, JSON.stringify(locationData, null, 2));
           kbInfo.value = locationData.kbs || [];
           kbFileLocations.value = (locationData.files || []).map(file => ({
             ...file,
@@ -521,6 +534,7 @@ export default defineComponent({
             if (file.locations?.available && !file.locations?.preKBA && !file.locations?.inKBA) {
               file.selectedLocations.preKBA = true;
               file.selectedLocations.available = false;
+              console.log(`🟦 [KBM STEP] Defaulted to Pre KBA: ${file.fileName}`);
             }
           });
 
@@ -540,6 +554,7 @@ export default defineComponent({
             // Append preview KB to kbInfo for table rendering if not already present
             if (!kbInfo.value.some((k: any) => !k.exists && k.kbName === newName)) {
               kbInfo.value.push({ kbName: newName, exists: false, label: nextLabel });
+              console.log(`🆕 [KBM STEP] Preview KB added: ${newName} as label ${nextLabel}`);
             }
           } else {
             previewKB.value = null;
@@ -1577,8 +1592,8 @@ const triggerUploadFile = (file: File) => {
         { name: 'fileName', label: 'File', field: 'fileName', align: 'left', style: 'max-width: 200px; overflow: hidden; text-overflow: ellipsis;' }
       ];
       
-      // Add Available column
-      cols.push({ name: 'available', label: 'Available', field: 'available', align: 'center' });
+      // Replace Available with View column (eye icon)
+      cols.push({ name: 'view', label: 'View', field: 'view', align: 'center' });
       
       // Add columns for each KB
       kbInfo.value.forEach(kb => {
@@ -1687,8 +1702,10 @@ const triggerUploadFile = (file: File) => {
             // Update location flags based on new bucket key
             if (targetLocation === 'available') {
               file.locations.available = true;
-              file.locations.preKBA = false;
-              file.locations.preKBB = false;
+              // Clear any preKB flags so those columns remain enabled
+              Object.keys(file.locations).forEach((k: string) => {
+                if (k.startsWith('preKB')) delete (file.locations as any)[k];
+              });
             } else if (targetLocation.startsWith('preKB')) {
               file.locations.available = false;
               // Set the specific preKB location to true
@@ -1735,8 +1752,10 @@ const triggerUploadFile = (file: File) => {
             // Update file's locations
             file.locations = file.locations || {};
             file.locations.available = true;
-            file.locations.preKBA = false;
-            file.locations.preKBB = false;
+            // Clear preKB flags to re-enable choices
+            Object.keys(file.locations).forEach((k: string) => {
+              if (k.startsWith('preKB')) delete (file.locations as any)[k];
+            });
           } else {
             console.error(`❌ [KB STEP] Failed to move file back: ${result.message}`);
           }
@@ -1752,16 +1771,38 @@ const triggerUploadFile = (file: File) => {
       console.log(`📊 [KB STEP] Files in subfolder after checkbox: ${filesInSubfolder}`);
     };
 
+    // Action button labels based on KB labels
+    const existingKB = computed(() => kbInfo.value.find((k: any) => k.exists));
+    const previewKBInfo = computed(() => kbInfo.value.find((k: any) => !k.exists));
+    const addToKBLabel = computed(() => `ADD TO KB ${existingKB.value?.label || 'A'}`);
+    const createNewKBLabel = computed(() => `CREATE NEW KB ${previewKBInfo.value?.label || previewKB.value?.label || 'B'}`);
+
     // Actions for buttons
     const handleAddToExistingKB = async () => {
       // Placeholder: existing KB update flow (add datasource + index) to be implemented
       console.log('🟣 [KB STEP] ADD TO KNOWLEDGE BASE clicked - will update existing KB with selected files');
+      // Ensure we do not create a new KB in this path
+      previewKB.value = null;
       // For now, reuse organized-files automation (backend should detect existing KB and attach datasource accordingly)
       await handleCreateKB();
     };
     const handleCreateNewKBAction = async () => {
       console.log('🟢 [KB STEP] CREATE A NEW KNOWLEDGE BASE clicked');
       await handleCreateKB();
+    };
+
+    // Open viewer for a file using the same modal code used in chat area
+    const openKBFile = (file: any) => {
+      const pdfFile = {
+        id: `kb-view-${Date.now()}`,
+        name: file.fileName,
+        bucketKey: file.bucketKey,
+        fileSize: file.fileSize,
+        type: 'pdf',
+        content: '',
+        startPage: 1
+      };
+      viewFile(pdfFile as any);
     };
 
     return {
@@ -1807,6 +1848,9 @@ const triggerUploadFile = (file: File) => {
       toggleLocation,
       handleAddToExistingKB,
       handleCreateNewKBAction,
+      addToKBLabel,
+      createNewKBLabel,
+      openKBFile,
       fetchUserKBs,
       prepareFolder,
       handleCreateKB,
@@ -2012,7 +2056,7 @@ const triggerUploadFile = (file: File) => {
 
     <!-- Enhanced KB Management Modal -->
     <QDialog v-model="showCreateKBActionModal" persistent>
-      <QCard style="min-width: 500px; max-width: 600px">
+      <QCard style="width: 80vw; max-width: 80vw">
         <QCardSection class="text-center q-pt-lg">
           <div class="text-h5 q-mb-md">📚 Knowledge Base Management</div>
         </QCardSection>
@@ -2064,13 +2108,9 @@ const triggerUploadFile = (file: File) => {
                     </div>
                   </td>
                   
-                  <!-- Available Column -->
+                  <!-- View Column -->
                   <td style="padding: 8px; text-align: center;">
-                    <QCheckbox
-                      :model-value="file.selectedLocations?.available || false"
-                      @update:model-value="toggleLocation(file, 'available')"
-                      :disable="file.locations?.available === false"
-                    />
+                    <QIcon name="visibility" size="20px" class="cursor-pointer" @click="openKBFile(file)" />
                   </td>
                   
                   <!-- KB Columns (dynamic) -->
@@ -2084,12 +2124,12 @@ const triggerUploadFile = (file: File) => {
                       />
                     </td>
                     
-                    <!-- In KB Column -->
+                    <!-- In KB Column (read-only), show solid blue when indexed -->
                     <td style="padding: 8px; text-align: center;">
                       <QCheckbox
-                        :model-value="file.selectedLocations?.[`inKB${kb.label}`] || false"
-                        @update:model-value="toggleLocation(file, `inKB${kb.label}`)"
-                        :disable="file.locations?.[`inKB${kb.label}`] === false"
+                        :model-value="file.locations?.[`inKB${kb.label}`] === true"
+                        color="primary"
+                        :disable="true"
                       />
                     </td>
                   </template>
@@ -2124,7 +2164,7 @@ const triggerUploadFile = (file: File) => {
           <!-- CREATE A NEW KNOWLEDGE BASE (enabled when files marked for preview KB) -->
           <QBtn
             :color="hasPreKBForNew ? 'primary' : 'grey-6'"
-            label="CREATE A NEW KNOWLEDGE BASE"
+            :label="createNewKBLabel"
             @click="handleCreateNewKBAction"
             class="q-px-md q-ml-sm"
             unelevated
@@ -2134,7 +2174,7 @@ const triggerUploadFile = (file: File) => {
           <!-- ADD TO KNOWLEDGE BASE (enabled when files marked for existing KBs) -->
           <QBtn
             :color="hasPreKBForExisting ? 'primary' : 'grey-6'"
-            label="ADD TO KNOWLEDGE BASE"
+            :label="addToKBLabel"
             @click="handleAddToExistingKB"
             class="q-px-md q-ml-sm"
             unelevated

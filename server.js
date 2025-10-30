@@ -1755,6 +1755,8 @@ app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
       .map(p => p.Prefix)
       .filter(prefix => prefix.includes(`${userId}/archived/${userId}-kb-`));
 
+    console.log(`📂 [KBM STEP] KB Roots discovered (${kbRoots.length}):`, kbRoots);
+
     for (const kbRoot of kbRoots) {
       const kbName = kbRoot.split('/').slice(-2, -1)[0];
       const kbExists = existingKBNames.includes(kbName);
@@ -1953,6 +1955,8 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
       label: index === 0 ? 'A' : index === 1 ? 'B' : String.fromCharCode(67 + index - 2) // A, B, C, D...
     }));
 
+    console.log(`📋 [KBM STEP] KB Info (exists/labels):`, kbInfo);
+
     // Get all files from archived folder (direct files, not in subfolders)
     const listAvailable = new ListObjectsV2Command({
       Bucket: bucketName,
@@ -1969,6 +1973,8 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
         location: 'available'
       }));
 
+    console.log(`📁 [KBM STEP] Level 1 (archived/) files: ${availableFiles.length}`);
+
     // Get files from each KB subfolder
     const allFilesMap = new Map(); // fileName -> file info
 
@@ -1982,7 +1988,7 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
       });
     });
 
-    // Process each KB folder
+    // Process each KB folder (Level 2 and Level 3)
     for (const kbRoot of kbRoots) {
       const kbName = kbRoot.split('/').slice(-2, -1)[0];
       const kbInfoItem = kbInfo.find(k => k.kbName === kbName);
@@ -1996,8 +2002,9 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
       });
       const subsResp = await s3Client.send(listSubfolders);
       const subfolders = (subsResp.CommonPrefixes || []).map(p => p.Prefix).filter(p => p.includes('/subfolder-'));
+      console.log(`📁 [KBM STEP] KB ${kbName} (${kbInfoItem.exists ? 'exists' : 'pre-KB'}) subfolders: ${subfolders.length}`);
 
-      // Get files from each subfolder
+      // Get files from each subfolder (Level 3)
       for (const sub of subfolders) {
         const listFiles = new ListObjectsV2Command({
           Bucket: bucketName,
@@ -2029,7 +2036,38 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
           if (f.Key.includes('/subfolder-')) {
             file.bucketKey = f.Key;
           }
+          console.log(`📄 [KBM STEP] Seen in ${kbInfoItem.exists ? 'Level 3 (inKB via subfolder)' : 'Level 3 (preKB)'}: ${f.Key}`);
         });
+      }
+
+      // Level 2 files (post-indexing) under kb root (exclude subfolders)
+      try {
+        const listLevel2 = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: `${userId}/archived/${kbName}/`,
+          Delimiter: '/'
+        });
+        const level2Resp = await s3Client.send(listLevel2);
+        const level2Files = (level2Resp.Contents || []).filter(obj => !obj.Key.endsWith('/') && !obj.Key.includes('/subfolder-') && !obj.Key.endsWith('.folder-marker'));
+        console.log(`📁 [KBM STEP] KB ${kbName} Level 2 files: ${level2Files.length}`);
+        level2Files.forEach(f => {
+          const fileName = f.Key.split('/').pop();
+          if (!allFilesMap.has(fileName)) {
+            allFilesMap.set(fileName, {
+              fileName,
+              bucketKey: f.Key,
+              fileSize: f.Size,
+              locations: {}
+            });
+          }
+          const file = allFilesMap.get(fileName);
+          file.locations[`inKB${kbInfoItem.label}`] = true;
+          // Prefer Level 2 path for viewing
+          file.bucketKey = f.Key;
+          console.log(`📄 [KBM STEP] Seen in Level 2 (inKB): ${f.Key}`);
+        });
+      } catch (e) {
+        console.warn(`⚠️ [KBM STEP] Level 2 list failed for ${kbName}: ${e.message || e}`);
       }
     }
 
@@ -2039,6 +2077,10 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
       locations: f.locations || { available: false }
     }));
 
+    allFiles.forEach(f => {
+      console.log(`📄 [KBM STEP] File summary: ${f.fileName} | bucketKey=${f.bucketKey} | locations=${JSON.stringify(f.locations)}`);
+    });
+
     res.json({ 
       files: allFiles,
       kbs: kbInfo
@@ -2046,6 +2088,105 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
   } catch (error) {
     console.error('❌ Error getting KB file locations:', error);
     res.status(500).json({ files: [], kbs: [] });
+  }
+});
+
+// Reconcile maia_kb.indexedFiles from DO API (truth) + Spaces listings
+app.post('/api/admin/reconcile-kb-indexed-files/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || userId === 'Public User') {
+      return res.json({ success: true, reconciled: 0 });
+    }
+
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    // List KBs from DO API for this user
+    let existingKBs = [];
+    try {
+      const apiKBsResp = await doRequest('/v2/gen-ai/knowledge_bases');
+      const allKBs = apiKBsResp.knowledge_bases || apiKBsResp.data || [];
+      existingKBs = allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+    } catch (e) {
+      console.error('❌ [KBM STEP] DO KB list failed during reconcile:', e);
+      return res.status(502).json({ success: false, message: 'DO API unavailable' });
+    }
+
+    let reconciled = 0;
+    for (const doKB of existingKBs) {
+      const kbName = doKB.name;
+      const kbUuid = doKB.uuid || doKB.id;
+      let status = 'indexing';
+      let totalTokens = 0;
+      try {
+        const kbResp = await doRequest(`/v2/gen-ai/knowledge_bases/${kbUuid}`);
+        const kbData = kbResp.knowledge_base || kbResp.data?.knowledge_base || kbResp.data || kbResp;
+        const lastJob = kbData.last_indexing_job;
+        const jobStatus = lastJob?.status || '';
+        const jobPhase = lastJob?.phase || '';
+        if (jobStatus === 'INDEX_JOB_STATUS_COMPLETED' || jobPhase === 'BATCH_JOB_PHASE_SUCCEEDED') {
+          status = 'ready';
+        }
+        totalTokens = kbData.total_token_count || 0;
+      } catch (e) {
+        console.warn(`⚠️ [KBM STEP] Failed to fetch DO KB detail for ${kbName}: ${e.message || e}`);
+      }
+
+      // Level 2 files
+      const listLevel2 = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: `${userId}/archived/${kbName}/`,
+        Delimiter: '/'
+      });
+      const level2Resp = await s3Client.send(listLevel2);
+      const level2Files = (level2Resp.Contents || []).filter(obj => !obj.Key.endsWith('/') && !obj.Key.includes('/subfolder-'));
+      const indexedFiles = level2Files.map(f => ({
+        fileName: f.Key.split('/').pop(),
+        bucketKey: f.Key,
+        fileSize: f.Size,
+        indexedAt: new Date().toISOString()
+      }));
+
+      // Upsert maia_kb
+      try {
+        let kbDoc;
+        try {
+          kbDoc = await couchDBClient.getDocument('maia_kb', kbName);
+        } catch {
+          kbDoc = { _id: kbName };
+        }
+        kbDoc.kbId = kbUuid;
+        kbDoc.kbName = kbName;
+        kbDoc.status = status;
+        kbDoc.totalDocuments = indexedFiles.length;
+        kbDoc.totalTokens = totalTokens;
+        kbDoc.indexedFiles = indexedFiles;
+        kbDoc.updatedAt = new Date().toISOString();
+        if (!kbDoc.createdAt) kbDoc.createdAt = kbDoc.updatedAt;
+        await couchDBClient.saveDocument('maia_kb', kbDoc);
+        reconciled++;
+        console.log(`📝 [KBM STEP] Reconciled maia_kb for ${kbName}: ${indexedFiles.length} files, status=${kbDoc.status}`);
+      } catch (saveErr) {
+        console.error(`❌ [KBM STEP] Failed saving maia_kb for ${kbName}:`, saveErr.message || saveErr);
+      }
+    }
+
+    res.json({ success: true, reconciled });
+  } catch (error) {
+    console.error('❌ [KBM STEP] Reconcile error:', error);
+    res.status(500).json({ success: false, message: 'Reconcile failed' });
   }
 });
 
