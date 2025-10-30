@@ -212,6 +212,10 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
+    const triggerKBWelcome = () => {
+      showKnowledgeBaseWelcomeModal.value = true;
+    };
+
     // Handle deep link loading - only for actual deep link URLs
     const handleDeepLink = async () => {
       const path = window.location.pathname;
@@ -409,6 +413,7 @@ export default defineComponent({
     // Table-based file location state
     const kbFileLocations = ref([]); // Array of files with location checkboxes
     const kbInfo = ref([]); // Array of { kbName, exists, label }
+    const previewKB = ref<{ kbName: string; label: string } | null>(null);
 
     // Fetch user's KBs from both DO API and database
     const fetchUserKBs = async () => {
@@ -422,16 +427,47 @@ export default defineComponent({
       try {
         const userId = currentUser.value.userId;
         
-        // Fetch from DO API
+        // Fetch from DO API (authoritative): prefer agent-attached KB IDs if available
         console.log(`🔍 [KB STEP] Fetching user KBs from DO API`);
-        const apiResponse = await fetch('/api/knowledge-bases');
-        if (!apiResponse.ok) {
-          throw new Error(`Failed to fetch KBs from API: ${apiResponse.status}`);
+        let userAPIKBs = [] as any[];
+        try {
+          // Attempt 1: get list (may fail due to upstream/cache issues)
+          const apiResponse = await fetch('/api/knowledge-bases');
+          if (apiResponse.ok) {
+            const allKBs = await apiResponse.json();
+            if (Array.isArray(allKBs)) {
+              userAPIKBs = allKBs.filter((kb: any) => kb.name && kb.name.startsWith(userId));
+            }
+          } else {
+            console.warn(`⚠️ [KB STEP] KB list API failed: ${apiResponse.status}`);
+          }
+        } catch (e: any) {
+          console.warn(`⚠️ [KB STEP] KB list API error: ${e?.message || e}`);
         }
-        const allKBs = await apiResponse.json();
-        const userAPIKBs = allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+
+        // Fallback: verify KBs attached to the agent (single-KB lookups)
+        if ((!userAPIKBs || userAPIKBs.length === 0) && currentAgent.value) {
+          const attached = ([] as any[])
+            .concat(currentAgent.value.knowledgeBases || [])
+            .concat(currentAgent.value.knowledgeBase ? [currentAgent.value.knowledgeBase] : []);
+          const uniqueIds = Array.from(new Set(attached.map((k: any) => k.uuid || k.id).filter(Boolean)));
+          const verified: any[] = [];
+          for (const id of uniqueIds) {
+            try {
+              const kbResp = await fetch(`/api/knowledge-bases/${encodeURIComponent(id)}`);
+              if (kbResp.ok) {
+                const kb = await kbResp.json();
+                verified.push(kb);
+              }
+            } catch (e: any) {
+              console.warn(`⚠️ [KB STEP] Single-KB verify failed for ${id}: ${e?.message || e}`);
+            }
+          }
+          userAPIKBs = verified;
+        }
+
         userKBsFromAPI.value = userAPIKBs;
-        console.log(`📚 [KB STEP] Found ${userAPIKBs.length} KBs in DO API:`, userAPIKBs.map(kb => kb.name));
+        console.log(`📚 [KB STEP] Found ${userAPIKBs.length} KBs in DO API (final):`, userAPIKBs.map((kb: any) => kb.name || kb.uuid));
 
         // Fetch from database
         console.log(`🔍 [KB STEP] Fetching user KBs from database`);
@@ -443,15 +479,15 @@ export default defineComponent({
         userKBsFromDB.value = dbKBs;
         console.log(`📚 [KB STEP] Found ${dbKBs.length} KBs in database:`, dbKBs.map(kb => kb.kbName));
 
-        // Validate consistency
-        const apiKBNames = userAPIKBs.map(kb => kb.name).sort();
+        // Validate consistency (DO is source of truth)
+        const apiKBNames = userAPIKBs.map((kb: any) => kb.name).filter(Boolean).sort();
         const dbKBNames = dbKBs.map(kb => kb.kbName).sort();
         
         if (JSON.stringify(apiKBNames) !== JSON.stringify(dbKBNames)) {
           const errorMsg = `[*] KB Database Inconsistency Detected!\nDO API KBs: [${apiKBNames.join(', ')}]\nDatabase KBs: [${dbKBNames.join(', ')}]`;
           kbValidationError.value = errorMsg;
-          console.error(errorMsg);
-          console.log(`❌ [KB STEP] Database inconsistency - stopping automation`);
+          console.warn(errorMsg);
+          console.log(`⚠️ [KB STEP] Proceeding with DO as source of truth`);
         } else {
           console.log(`✅ [KB STEP] KB validation passed - API and database are consistent`);
         }
@@ -487,6 +523,27 @@ export default defineComponent({
               file.selectedLocations.available = false;
             }
           });
+
+          // If there are available files, add a Preview KB (new KB) column as the next label
+          const hasAvailable = kbFileLocations.value.some(f => f.locations?.available);
+          const existingLabels = kbInfo.value.map((k: any) => k.label);
+          const nextLabel = (() => {
+            // Determine next label after existing ones (A,B,C...)
+            if (existingLabels.length === 0) return 'A';
+            const last = existingLabels[existingLabels.length - 1];
+            const code = last.charCodeAt(0);
+            return String.fromCharCode(code + 1);
+          })();
+          if (hasAvailable) {
+            const newName = `${userId}-kb-${Date.now()}`;
+            previewKB.value = { kbName: newName, label: nextLabel };
+            // Append preview KB to kbInfo for table rendering if not already present
+            if (!kbInfo.value.some((k: any) => !k.exists && k.kbName === newName)) {
+              kbInfo.value.push({ kbName: newName, exists: false, label: nextLabel });
+            }
+          } else {
+            previewKB.value = null;
+          }
           
           console.log(`📚 [KB STEP] Found ${kbFileLocations.value.length} files across ${kbInfo.value.length} KB folders`);
         } else {
@@ -1504,13 +1561,14 @@ const triggerUploadFile = (file: File) => {
       return `${mb.toFixed(2)} MB`;
     };
 
-    // Computed: check if any files are marked as Pre KB
-    const hasPreKBFiles = computed(() => {
-      return kbFileLocations.value.some(file => {
-        return Object.keys(file.selectedLocations || {}).some(key => 
-          key.startsWith('preKB') && file.selectedLocations[key]
-        );
-      });
+    // Computed: check selections for existing vs new KB candidates
+    const hasPreKBForExisting = computed(() => {
+      const labelsExisting = new Set(kbInfo.value.filter((k: any) => k.exists).map((k: any) => `preKB${k.label}`));
+      return kbFileLocations.value.some((file: any) => Object.keys(file.selectedLocations || {}).some(key => labelsExisting.has(key) && file.selectedLocations[key]));
+    });
+    const hasPreKBForNew = computed(() => {
+      const labelsNew = new Set(kbInfo.value.filter((k: any) => !k.exists).map((k: any) => `preKB${k.label}`));
+      return kbFileLocations.value.some((file: any) => Object.keys(file.selectedLocations || {}).some(key => labelsNew.has(key) && file.selectedLocations[key]));
     });
 
     // Computed: table columns based on KB info
@@ -1531,20 +1589,179 @@ const triggerUploadFile = (file: File) => {
       return cols;
     });
 
-    // Handle checkbox toggle
-    const toggleLocation = (file, locationKey) => {
+    // Handle checkbox toggle - moves files immediately
+    const toggleLocation = async (file, locationKey) => {
       if (!file.selectedLocations) file.selectedLocations = {};
       
-      // If checking a location, uncheck others (only one location per file)
-      if (!file.selectedLocations[locationKey]) {
-        Object.keys(file.selectedLocations).forEach(key => {
-          file.selectedLocations[key] = false;
-        });
-        file.selectedLocations[locationKey] = true;
-      } else {
-        // Unchecking: allow it (for re-selection)
-        file.selectedLocations[locationKey] = false;
+      const wasChecked = file.selectedLocations[locationKey] || false;
+      const currentLocation = Object.keys(file.selectedLocations).find(key => file.selectedLocations[key]);
+      const userId = currentUser.value?.userId;
+      
+      if (!userId) {
+        console.error(`❌ [KB STEP] No user ID available for file move`);
+        return;
       }
+      
+      // Determine target location and KB name if needed
+      let targetLocation = locationKey;
+      let kbName = null;
+      
+      if (locationKey.startsWith('preKB')) {
+        // Extract KB label (A, B, etc.) and find corresponding KB name
+        const kbLabel = locationKey.replace('preKB', '');
+        const matchingKB = kbInfo.value.find((kb: any) => kb.label === kbLabel);
+        if (matchingKB) {
+          kbName = matchingKB.kbName;
+        }
+      }
+      
+      // If checking a location, uncheck others (only one location per file)
+      if (!wasChecked) {
+        const fromLocation = currentLocation ? `(${currentLocation})` : '';
+        console.log(`🔘 [KB STEP] CHECKBOX: Checking ${file.fileName} for location '${locationKey}' ${fromLocation}`);
+        
+        // If selecting a preview (new KB), unselect and move out any other files previously assumed for existing KBs
+        const isSelectingPreview = locationKey.startsWith('preKB') && kbInfo.value.some((k: any) => !k.exists && `preKB${k.label}` === locationKey);
+        if (isSelectingPreview) {
+          const labelsExisting = new Set(kbInfo.value.filter((k: any) => k.exists).map((k: any) => `preKB${k.label}`));
+          for (const other of kbFileLocations.value) {
+            if (other === file) continue;
+            const selKey = Object.keys(other.selectedLocations || {}).find(k => other.selectedLocations[k]);
+            if (selKey && labelsExisting.has(selKey)) {
+              try {
+                const resp = await fetch('/api/kb-move-file', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId,
+                    fileName: other.fileName,
+                    currentBucketKey: other.bucketKey,
+                    targetLocation: 'available',
+                    kbName: null
+                  })
+                });
+                const rj = await resp.json();
+                if (rj.success) {
+                  other.bucketKey = rj.newBucketKey;
+                  Object.keys(other.selectedLocations).forEach(k => other.selectedLocations[k] = false);
+                  other.selectedLocations.available = true;
+                  other.locations = other.locations || {};
+                  other.locations.available = true;
+                }
+              } catch {}
+            }
+          }
+        }
+
+        // Call API to move file immediately
+        try {
+          const response = await fetch('/api/kb-move-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: userId,
+              fileName: file.fileName,
+              currentBucketKey: file.bucketKey,
+              targetLocation: targetLocation,
+              kbName: kbName
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log(`✅ [KB STEP] MOVED file: ${file.fileName} from ${file.bucketKey} to ${result.newBucketKey}`);
+            console.log(`📊 [KB STEP] Files in subfolder after move: ${result.filesInSubfolder || 0}`);
+            
+            // Update file's bucket key
+            file.bucketKey = result.newBucketKey;
+            
+            // Update selected locations in UI
+            Object.keys(file.selectedLocations).forEach(key => {
+              file.selectedLocations[key] = false;
+            });
+            file.selectedLocations[locationKey] = true;
+            
+            // Update file's locations to reflect new state
+            file.locations = file.locations || {};
+            // Update location flags based on new bucket key
+            if (targetLocation === 'available') {
+              file.locations.available = true;
+              file.locations.preKBA = false;
+              file.locations.preKBB = false;
+            } else if (targetLocation.startsWith('preKB')) {
+              file.locations.available = false;
+              // Set the specific preKB location to true
+              file.locations[targetLocation] = true;
+            }
+          } else {
+            console.error(`❌ [KB STEP] Failed to move file: ${result.message}`);
+            // Revert checkbox state on error
+            return;
+          }
+        } catch (error) {
+          console.error(`❌ [KB STEP] Error moving file:`, error);
+          // Revert checkbox state on error
+          return;
+        }
+      } else {
+        // Unchecking: move back to available
+        console.log(`🔘 [KB STEP] CHECKBOX: Unchecking ${file.fileName} from location '${locationKey}' - moving to available`);
+        
+        try {
+          const response = await fetch('/api/kb-move-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: userId,
+              fileName: file.fileName,
+              currentBucketKey: file.bucketKey,
+              targetLocation: 'available',
+              kbName: null
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log(`✅ [KB STEP] MOVED file back to available: ${file.fileName} from ${file.bucketKey} to ${result.newBucketKey}`);
+            
+            // Update file's bucket key
+            file.bucketKey = result.newBucketKey;
+            
+            // Update selected locations in UI
+            file.selectedLocations[locationKey] = false;
+            
+            // Update file's locations
+            file.locations = file.locations || {};
+            file.locations.available = true;
+            file.locations.preKBA = false;
+            file.locations.preKBB = false;
+          } else {
+            console.error(`❌ [KB STEP] Failed to move file back: ${result.message}`);
+          }
+        } catch (error) {
+          console.error(`❌ [KB STEP] Error moving file back:`, error);
+        }
+      }
+      
+      // Count files in subfolder after change
+      const filesInSubfolder = kbFileLocations.value.filter(f => 
+        Object.keys(f.selectedLocations || {}).some(key => key.startsWith('preKB') && f.selectedLocations[key])
+      ).length;
+      console.log(`📊 [KB STEP] Files in subfolder after checkbox: ${filesInSubfolder}`);
+    };
+
+    // Actions for buttons
+    const handleAddToExistingKB = async () => {
+      // Placeholder: existing KB update flow (add datasource + index) to be implemented
+      console.log('🟣 [KB STEP] ADD TO KNOWLEDGE BASE clicked - will update existing KB with selected files');
+      // For now, reuse organized-files automation (backend should detect existing KB and attach datasource accordingly)
+      await handleCreateKB();
+    };
+    const handleCreateNewKBAction = async () => {
+      console.log('🟢 [KB STEP] CREATE A NEW KNOWLEDGE BASE clicked');
+      await handleCreateKB();
     };
 
     return {
@@ -1622,6 +1839,7 @@ const triggerUploadFile = (file: File) => {
       refreshAgentData,
       showPopup,
       triggerAgentManagement,
+      triggerKBWelcome,
       handleDeepLink,
       handleDeepLinkUserIdentified,
       handleUserAuthenticated,
@@ -1710,6 +1928,7 @@ const triggerUploadFile = (file: File) => {
       :triggerJWT="showJWT"
       :triggerLoadSavedChats="() => { showSavedChatsDialog = true; }"
       :triggerAgentManagement="triggerAgentManagement"
+      :triggerKBWelcome="triggerKBWelcome"
       :triggerFileImport="triggerFileImport"
       :clearLocalStorageKeys="clearLocalStorageKeys"
       @write-message="writeMessage"
@@ -1899,14 +2118,24 @@ const triggerUploadFile = (file: File) => {
           
           <QSpace />
           
-          <!-- CREATE KNOWLEDGE BASE Button -->
+          <!-- CREATE A NEW KNOWLEDGE BASE (enabled when files marked for preview KB) -->
           <QBtn
-            color="primary"
-            label="CREATE KNOWLEDGE BASE"
-            @click="handleCreateKB"
-            class="q-px-xl q-ml-sm"
+            :color="hasPreKBForNew ? 'primary' : 'grey-6'"
+            label="CREATE A NEW KNOWLEDGE BASE"
+            @click="handleCreateNewKBAction"
+            class="q-px-md q-ml-sm"
             unelevated
-            :disable="!hasPreKBFiles || isLoadingKBData"
+            :disable="!hasPreKBForNew || isLoadingKBData"
+          />
+
+          <!-- ADD TO KNOWLEDGE BASE (enabled when files marked for existing KBs) -->
+          <QBtn
+            :color="hasPreKBForExisting ? 'primary' : 'grey-6'"
+            label="ADD TO KNOWLEDGE BASE"
+            @click="handleAddToExistingKB"
+            class="q-px-md q-ml-sm"
+            unelevated
+            :disable="!hasPreKBForExisting || isLoadingKBData"
           />
         </QCardActions>
       </QCard>

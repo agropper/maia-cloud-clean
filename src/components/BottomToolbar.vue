@@ -185,7 +185,7 @@
                   :color="hasKnowledgeBase ? 'secondary' : 'grey-5'"
                   class="status-icon"
                   :class="{ 'icon-disabled': !hasKnowledgeBase }"
-                  @click="triggerAgentManagement"
+                  @click="triggerKBWelcome"
                 />
                 <q-badge 
                   v-if="hasUnattachedKB" 
@@ -475,6 +475,10 @@ export default defineComponent({
       required: true
     },
     triggerAgentManagement: {
+      type: Function as PropType<() => void>,
+      required: true
+    },
+    triggerKBWelcome: {
       type: Function as PropType<() => void>,
       required: true
     },
