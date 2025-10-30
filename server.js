@@ -1515,6 +1515,501 @@ app.post('/api/admin-alert', async (req, res) => {
   }
 });
 
+// Organize files into KB subfolder structure
+app.post('/api/organize-files-for-kb', async (req, res) => {
+  try {
+    const { userId, files, chatFileKeys } = req.body;
+    
+    if (!userId || !files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId and files array are required'
+      });
+    }
+    
+    console.log(`📁 [KB STEP] Organizing ${files.length} files for user: ${userId}`);
+    
+    const { S3Client, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+    
+    // Generate KB name for subfolder first
+    const kbName = `${userId}-kb-${Date.now()}`;
+    const subfolderNumber = 1; // Start with subfolder-1
+    const subfolderPath = `${userId}/archived/${kbName}/subfolder-${subfolderNumber}/`;
+    
+    console.log(`📂 [KB STEP] Target subfolder path: ${subfolderPath}`);
+    
+    // Step 1: FIRST organize files into subfolder (before cleanup)
+    const organizedFiles = [];
+    
+    // Organize each file into the subfolder
+    for (const file of files) {
+      const sourceKey = file.bucketKey;
+      const fileName = file.fileName;
+      const destKey = `${subfolderPath}${fileName}`;
+      
+      console.log(`📄 [KB STEP] Moving file: ${sourceKey} → ${destKey}`);
+      
+      try {
+        // Copy file to subfolder
+        const copyCommand = new CopyObjectCommand({
+          Bucket: bucketName,
+          CopySource: `${bucketName}/${sourceKey}`,
+          Key: destKey,
+          MetadataDirective: 'COPY'
+        });
+        
+        await s3Client.send(copyCommand);
+        console.log(`✅ [KB STEP] File moved successfully: ${fileName}`);
+        
+        organizedFiles.push({
+          name: fileName,
+          bucketKey: destKey,
+          originalKey: sourceKey,
+          movedAt: new Date().toISOString()
+        });
+        
+      } catch (error) {
+        console.error(`❌ [KB STEP] Failed to move file ${fileName}:`, error.message);
+        throw new Error(`Failed to move file ${fileName}: ${error.message}`);
+      }
+    }
+    
+    // Step 2: THEN clean up files from archived folder that are NOT in chat area
+    if (chatFileKeys && Array.isArray(chatFileKeys) && chatFileKeys.length > 0) {
+      console.log(`🧹 [KB STEP] Cleaning up archived folder - keeping ${chatFileKeys.length} files from chat area`);
+      const archivedPrefix = `${userId}/archived/`;
+      
+      try {
+        // List all files in archived folder (excluding subfolders)
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: archivedPrefix,
+          Delimiter: '/' // Exclude subfolders
+        });
+        
+        const listedObjects = await s3Client.send(listCommand);
+        
+        if (listedObjects.Contents) {
+          // Normalize chat file keys for comparison (remove bucket prefix if present)
+          const normalizedChatKeys = chatFileKeys.map(key => {
+            // Remove bucket/prefix if present, keep just the key path
+            if (key.includes('/')) {
+              const parts = key.split('/');
+              const userPartIndex = parts.indexOf(userId);
+              if (userPartIndex >= 0) {
+                return parts.slice(userPartIndex).join('/');
+              }
+            }
+            return key;
+          });
+          
+          // Get list of files being organized (to exclude from cleanup)
+          const organizedFileKeys = organizedFiles.map(f => f.originalKey);
+          
+          // Find files to delete (in archived but not in chat area, not being organized, and not in a subfolder)
+          const filesToDelete = listedObjects.Contents.filter(obj => {
+            const fileKey = obj.Key;
+            // Skip if it's in a KB subfolder
+            if (fileKey.includes('/subfolder-')) return false;
+            // Skip if this file is being organized
+            if (organizedFileKeys.includes(fileKey)) return false;
+            // Extract just the filename for comparison
+            const fileName = fileKey.split('/').pop();
+            // Check if this file is NOT in the chat area files
+            return !normalizedChatKeys.some(chatKey => {
+              const chatFileName = chatKey.split('/').pop();
+              return fileKey.endsWith(chatKey) || fileKey.includes(chatKey) || fileName === chatFileName;
+            });
+          });
+          
+          console.log(`🗑️ [KB STEP] Found ${filesToDelete.length} files to remove from archived folder`);
+          
+          // Delete files not in chat area
+          for (const obj of filesToDelete) {
+            try {
+              const deleteCommand = new DeleteObjectCommand({
+                Bucket: bucketName,
+                Key: obj.Key
+              });
+              await s3Client.send(deleteCommand);
+              console.log(`🗑️ [KB STEP] Deleted file: ${obj.Key}`);
+            } catch (deleteError) {
+              console.error(`❌ [KB STEP] Failed to delete ${obj.Key}:`, deleteError.message);
+            }
+          }
+        }
+      } catch (cleanupError) {
+        console.error(`⚠️ [KB STEP] Cleanup warning: ${cleanupError.message}`);
+        // Don't fail the whole operation if cleanup fails
+      }
+    }
+    
+    console.log(`✅ [KB STEP] Successfully organized ${organizedFiles.length} files into ${subfolderPath}`);
+    
+    res.json({
+      success: true,
+      message: `Files organized successfully`,
+      kbName: kbName,
+      subfolderPath: subfolderPath,
+      organizedFiles: organizedFiles,
+      fileCount: organizedFiles.length
+    });
+    
+  } catch (error) {
+    console.error(`❌ [KB STEP] File organization error:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to organize files: ${error.message}`
+    });
+  }
+});
+
+// Detect unindexed files in KB subfolders for a user
+app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || userId === 'Public User') {
+      return res.json({ hasUnindexedFiles: false, folders: [] });
+    }
+
+    // List KB subfolders under archived
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    // Get list of KB folders like user/archived/<kbName>/
+    const listKBRoots = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/archived/`,
+      Delimiter: '/'
+    });
+    const rootsResp = await s3Client.send(listKBRoots);
+    const kbRoots = (rootsResp.CommonPrefixes || [])
+      .map(p => p.Prefix)
+      .filter(prefix => prefix.includes(`${userId}/archived/${userId}-kb-`));
+
+    // Fetch DO API KBs to know which kbNames already exist
+    let existingKBNames = [];
+    try {
+      const apiKBsResp = await doRequest('/v2/gen-ai/knowledge_bases');
+      const allKBs = apiKBsResp.knowledge_bases || apiKBsResp.data || [];
+      existingKBNames = allKBs.filter(kb => kb.name && kb.name.startsWith(userId)).map(kb => kb.name);
+    } catch (e) {
+      existingKBNames = [];
+    }
+
+    const resultFolders = [];
+    for (const kbRoot of kbRoots) {
+      const kbName = kbRoot.split('/').slice(-2, -1)[0];
+      const kbExists = existingKBNames.includes(kbName);
+
+      // For each kbRoot, check subfolder-* contents
+      const listSubfolders = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: kbRoot,
+        Delimiter: '/'
+      });
+      const subsResp = await s3Client.send(listSubfolders);
+      const subfolders = (subsResp.CommonPrefixes || []).map(p => p.Prefix).filter(p => p.includes('/subfolder-'));
+
+      // Count files inside subfolders
+      let totalFiles = 0;
+      for (const sub of subfolders) {
+        const listFiles = new ListObjectsV2Command({ Bucket: bucketName, Prefix: sub });
+        const filesResp = await s3Client.send(listFiles);
+        const files = (filesResp.Contents || []).filter(f => !f.Key.endsWith('/') && !f.Key.endsWith('.folder-marker'));
+        if (files.length > 0) {
+          resultFolders.push({ kbName, kbExists, subfolderPath: sub, fileCount: files.length });
+        }
+        totalFiles += files.length;
+      }
+
+      // If any files exist and kb not exists, it's unindexed content
+    }
+
+    const hasUnindexedFiles = resultFolders.some(f => f.fileCount > 0 && !f.kbExists);
+    res.json({ hasUnindexedFiles, folders: resultFolders });
+  } catch (error) {
+    console.error('❌ Error checking unindexed subfolder files:', error);
+    res.json({ hasUnindexedFiles: false, folders: [] });
+  }
+});
+
+// Check for unindexed files in KB subfolders
+app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId || userId === 'Public User') {
+      return res.json({ hasUnindexedFiles: false, kbFolders: [] });
+    }
+    
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
+      }
+    });
+    
+    // List all KB folders in archived directory
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/archived/`,
+      Delimiter: '/'
+    });
+    
+    const listResponse = await s3Client.send(listCommand);
+    const kbFolders = listResponse.CommonPrefixes?.filter(prefix => 
+      prefix.Prefix.includes(`${userId}-kb-`)
+    ) || [];
+    
+    // Get all KBs from DO API for this user
+    const allKBs = await cacheManager.getCachedKnowledgeBases();
+    const safeAllKBs = Array.isArray(allKBs) ? allKBs : [];
+    const userAPIKBs = safeAllKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+    const existingKBNames = new Set(userAPIKBs.map(kb => kb.name));
+    
+    // Check each KB folder for files and whether KB exists
+    const kbFoldersWithFiles = [];
+    for (const folder of kbFolders) {
+      const folderPrefix = folder.Prefix;
+      // Extract KB name from folder path (e.g., "sun26/archived/sun26-kb-123456/subfolder-1/" -> "sun26-kb-123456")
+      const kbNameMatch = folderPrefix.match(/([^/]+-kb-\d+)/);
+      if (!kbNameMatch) continue;
+      
+      const kbName = kbNameMatch[1];
+      
+      // List files in this subfolder
+      const subfolderListCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: folderPrefix
+      });
+      
+      const subfolderResponse = await s3Client.send(subfolderListCommand);
+      const filesInSubfolder = (subfolderResponse.Contents || []).filter(obj => 
+        !obj.Key.endsWith('/') && !obj.Key.endsWith('.folder-marker')
+      );
+      
+      if (filesInSubfolder.length > 0) {
+        // Check if KB exists in DO API
+        const kbExists = existingKBNames.has(kbName);
+        
+        kbFoldersWithFiles.push({
+          kbName: kbName,
+          folderPath: folderPrefix,
+          fileCount: filesInSubfolder.length,
+          files: filesInSubfolder.map(f => ({
+            name: f.Key.split('/').pop(),
+            key: f.Key,
+            size: f.Size,
+            lastModified: f.LastModified
+          })),
+          kbExists: kbExists
+        });
+      }
+    }
+    
+    // Check if there are any folders with files where KB doesn't exist
+    const hasUnindexedFiles = kbFoldersWithFiles.some(folder => !folder.kbExists);
+    
+    res.json({
+      hasUnindexedFiles: hasUnindexedFiles,
+      kbFolders: kbFoldersWithFiles
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error checking unindexed subfolder files:`, error);
+    res.status(500).json({
+      hasUnindexedFiles: false,
+      kbFolders: [],
+      error: error.message
+    });
+  }
+});
+
+// Get all user files organized by location for KB management dialog
+app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || userId === 'Public User') {
+      return res.json({ files: [], kbs: [] });
+    }
+
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    // Get all KBs from DO API
+    let existingKBs = [];
+    try {
+      const apiKBsResp = await doRequest('/v2/gen-ai/knowledge_bases');
+      const allKBs = apiKBsResp.knowledge_bases || apiKBsResp.data || [];
+      existingKBs = allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+    } catch (e) {
+      console.error('Error fetching KBs:', e);
+    }
+
+    // Get KB folders from bucket
+    const listKBRoots = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/archived/`,
+      Delimiter: '/'
+    });
+    const rootsResp = await s3Client.send(listKBRoots);
+    const kbRoots = (rootsResp.CommonPrefixes || [])
+      .map(p => p.Prefix)
+      .filter(prefix => prefix.includes(`${userId}/archived/${userId}-kb-`));
+
+    // Extract KB names from folder paths
+    const kbNames = kbRoots.map(root => root.split('/').slice(-2, -1)[0]);
+    // Remove duplicates and sort
+    const uniqueKBNames = [...new Set(kbNames)].sort();
+
+    // Organize KBs into A and B (or more)
+    const kbInfo = uniqueKBNames.map((kbName, index) => ({
+      kbName,
+      exists: existingKBs.some(kb => kb.name === kbName),
+      label: index === 0 ? 'A' : index === 1 ? 'B' : String.fromCharCode(67 + index - 2) // A, B, C, D...
+    }));
+
+    // Get all files from archived folder (direct files, not in subfolders)
+    const listAvailable = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/archived/`,
+      Delimiter: '/' // This excludes subfolders
+    });
+    const availableResp = await s3Client.send(listAvailable);
+    const availableFiles = (availableResp.Contents || [])
+      .filter(f => !f.Key.endsWith('/') && !f.Key.endsWith('.folder-marker'))
+      .map(f => ({
+        fileName: f.Key.split('/').pop(),
+        bucketKey: f.Key,
+        fileSize: f.Size,
+        location: 'available'
+      }));
+
+    // Get files from each KB subfolder
+    const allFilesMap = new Map(); // fileName -> file info
+
+    // Add available files
+    availableFiles.forEach(f => {
+      allFilesMap.set(f.fileName, {
+        fileName: f.fileName,
+        bucketKey: f.bucketKey,
+        fileSize: f.fileSize,
+        locations: { available: true }
+      });
+    });
+
+    // Process each KB folder
+    for (const kbRoot of kbRoots) {
+      const kbName = kbRoot.split('/').slice(-2, -1)[0];
+      const kbInfoItem = kbInfo.find(k => k.kbName === kbName);
+      if (!kbInfoItem) continue;
+
+      // List subfolders in this KB
+      const listSubfolders = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: kbRoot,
+        Delimiter: '/'
+      });
+      const subsResp = await s3Client.send(listSubfolders);
+      const subfolders = (subsResp.CommonPrefixes || []).map(p => p.Prefix).filter(p => p.includes('/subfolder-'));
+
+      // Get files from each subfolder
+      for (const sub of subfolders) {
+        const listFiles = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: sub
+        });
+        const filesResp = await s3Client.send(listFiles);
+        const files = (filesResp.Contents || []).filter(f => 
+          !f.Key.endsWith('/') && !f.Key.endsWith('.folder-marker')
+        );
+
+        files.forEach(f => {
+          const fileName = f.Key.split('/').pop();
+          if (!allFilesMap.has(fileName)) {
+            allFilesMap.set(fileName, {
+              fileName,
+              bucketKey: f.Key,
+              fileSize: f.Size,
+              locations: {}
+            });
+          }
+          const file = allFilesMap.get(fileName);
+          // Determine location key
+          if (kbInfoItem.exists) {
+            file.locations[`inKB${kbInfoItem.label}`] = true;
+          } else {
+            file.locations[`preKB${kbInfoItem.label}`] = true;
+          }
+          // Keep the most specific bucketKey (subfolder location)
+          if (f.Key.includes('/subfolder-')) {
+            file.bucketKey = f.Key;
+          }
+        });
+      }
+    }
+
+    // Convert map to array
+    const allFiles = Array.from(allFilesMap.values()).map(f => ({
+      ...f,
+      locations: f.locations || { available: false }
+    }));
+
+    res.json({ 
+      files: allFiles,
+      kbs: kbInfo
+    });
+  } catch (error) {
+    console.error('❌ Error getting KB file locations:', error);
+    res.status(500).json({ files: [], kbs: [] });
+  }
+});
+
 // Update user file metadata in user record
 app.post('/api/user-file-metadata', async (req, res) => {
   try {
@@ -2529,10 +3024,12 @@ async function buildAgentManagementTemplate(userId) {
       
       // Get all available KBs for this user (from cache)
       const allKBs = await cacheManager.getCachedKnowledgeBases();
+      // Handle null/undefined case - default to empty array
+      const safeAllKBs = Array.isArray(allKBs) ? allKBs : [];
       // For Public User, show all KBs; for others, only their own
       const userKBs = userId === 'Public User' 
-        ? allKBs 
-        : allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+        ? safeAllKBs 
+        : safeAllKBs.filter(kb => kb.name && kb.name.startsWith(userId));
       
       template.kbStatus = {
         hasKB: attachedKBs.length > 0,
@@ -4729,8 +5226,8 @@ const getAgentApiKey = async (agentId) => {
       console.log(`🔍 [API KEY LOOKUP] User has agentApiKey: ${!!userWithAgent.agentApiKey}`);
       if (userWithAgent.agentApiKey) {
         console.log(`🔍 [API KEY LOOKUP] API key value: ${userWithAgent.agentApiKey.substring(0, 10)}...`);
-            }
-          } else {
+      }
+    } else {
       console.log(`🔑 [API KEY] No user found with assignedAgentId: ${agentId}`);
     }
     
@@ -5223,6 +5720,32 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'API routes are working' });
 });
 
+// Get user's knowledge bases from database
+app.get('/api/users/:userId/knowledge-bases', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`🔍 [KB STEP] Fetching KBs from database for user: ${userId}`);
+    
+    // Get all KB documents from database
+    const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+    
+    // Filter KBs that belong to this user
+    const userKBs = allKBs.filter(kb => kb.kbName && kb.kbName.startsWith(userId));
+    
+    console.log(`📚 [KB STEP] Found ${userKBs.length} KBs in database for user ${userId}`);
+    
+    res.json(userKBs);
+    
+  } catch (error) {
+    console.error(`❌ [KB STEP] Error fetching user KBs from database:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to fetch user KBs: ${error.message}`
+    });
+  }
+});
+
 // Get current agent
 // Get Agent Management Template for a user
 // Get user document
@@ -5388,7 +5911,38 @@ app.get('/api/users/:userId/agent-template', async (req, res) => {
     const template = await buildAgentManagementTemplate(userId);
     
     if (!template) {
-      return res.status(404).json({ error: 'User not found or template build failed' });
+      // Return a default template instead of 404 to prevent frontend errors
+      // This can happen during startup before caches are initialized
+      const defaultTemplate = {
+        userId: userId,
+        timestamp: new Date().toISOString(),
+        agentStatus: {
+          hasAgent: false,
+          agentName: null,
+          agentId: null,
+          agentModel: null,
+          agentStatus: null
+        },
+        kbStatus: {
+          hasKB: false,
+          attachedCount: 0,
+          attachedKBs: [],
+          availableCount: 0,
+          availableKBs: [],
+          needsWarning: false
+        },
+        warning: {
+          hasWarning: false,
+          warningMessage: '',
+          warningType: null
+        },
+        summaryStatus: {
+          hasSummary: false,
+          lastGenerated: null
+        },
+        agentBadgeText: ''
+      };
+      return res.json(defaultTemplate);
     }
     
     res.json(template);
@@ -7238,116 +7792,455 @@ app.post('/api/auto-start-indexing', async (req, res) => {
   }
 });
 
-// Helper functions for KB subfolder management
-const createKBSubfolderPath = (userId, kbName, subfolderNumber = 1) => {
-  return `${userId}/archived/${kbName}/subfolder-${subfolderNumber}/`;
-};
-
-const getNextSubfolderNumber = (kbDoc) => {
-  if (!kbDoc.dataSources || kbDoc.dataSources.length === 0) {
-    return 1;
-  }
+// Automated KB Creation with Organized Files (NEW SUBFOLDER APPROACH)
+app.post('/api/automate-kb-with-organized-files', async (req, res) => {
+  const startTime = Date.now();
   
-  // Find the highest subfolder number
-  let maxNumber = 0;
-  for (const dataSource of kbDoc.dataSources) {
-    const match = dataSource.itemPath.match(/subfolder-(\d+)\//);
-    if (match) {
-      const number = parseInt(match[1]);
-      if (number > maxNumber) {
-        maxNumber = number;
+  try {
+    const { userId, useOrganizedFiles } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId is required'
+      });
+    }
+    
+    console.log(`🤖 [AUTO PS] Starting organized files automation for user ${userId}`);
+    console.log(`📁 [KB STEP] Using organized subfolder structure`);
+    
+    // Step 1: Get S3 client and organize files into KB subfolder
+    const { S3Client, ListObjectsV2Command, CopyObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+    
+    // Step 1a: Look for existing files in archived/ folder (not in subfolders)
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${userId}/archived/`,
+      Delimiter: '/'
+    });
+    
+    const listResponse = await s3Client.send(listCommand);
+    
+    // Get all files in archived/ that are NOT in subfolders
+    const archivedFiles = listResponse.Contents?.filter(obj => 
+      !obj.Key.endsWith('/') && 
+      !obj.Key.includes('/subfolder-') &&
+      obj.Key.startsWith(`${userId}/archived/`) &&
+      !obj.Key.startsWith(`${userId}/archived/${userId}-kb-`)
+    ) || [];
+    
+    console.log(`📄 [KB STEP] Found ${archivedFiles.length} files in archived/ folder to organize`);
+    
+    // Declare variables outside the if/else blocks
+    let kbName, subfolderPath, fileName, bucketKey;
+    const movedFiles = [];
+    
+    // Get all KB folders first to check for existing pre-KB folders
+    const kbFolders = listResponse.CommonPrefixes?.filter(prefix => 
+      prefix.Prefix.includes(`${userId}/archived/${userId}-kb-`)
+    ) || [];
+    
+    // Check if any KB folders exist and if they have actual KBs
+    let hasExistingPreKBFolder = false;
+    let existingPreKBFolder = null;
+    
+    if (kbFolders.length > 0) {
+      // Get all KBs from database to check which folders have actual KBs
+      const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb') || [];
+      const kbNames = allKBs.map(kb => kb.kbName || kb._id).filter(Boolean);
+      
+      // Find KB folders that DON'T have a corresponding KB in the database (pre-KB folders)
+      for (const kbFolder of kbFolders) {
+        const folderName = kbFolder.Prefix.split('/').slice(-2, -1)[0];
+        if (!kbNames.includes(folderName)) {
+          // This is a pre-KB folder (no actual KB exists)
+          hasExistingPreKBFolder = true;
+          existingPreKBFolder = kbFolder.Prefix;
+          console.log(`📂 [KB STEP] Found existing pre-KB folder: ${existingPreKBFolder}`);
+          break; // Use the first pre-KB folder found
+        }
       }
     }
-  }
-  
-  return maxNumber + 1;
-};
-
-const organizeFilesIntoSubfolder = async (userId, kbName, files, subfolderNumber) => {
-  const { S3Client, CopyObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-  
-  const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-  const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
-  
-  const s3Client = new S3Client({
-    endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
-    region: 'us-east-1',
-    forcePathStyle: false,
-    credentials: {
-      accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID || 'DO00EZW8AB23ECHG3AQF',
-      secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY || 'f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs'
-    }
-  });
-  
-  const subfolderPath = createKBSubfolderPath(userId, kbName, subfolderNumber);
-  const organizedFiles = [];
-  
-  for (const file of files) {
-    const sourceKey = file.bucketKey || file.key;
-    const fileName = file.fileName || file.name || sourceKey.split('/').pop();
-    const destKey = `${subfolderPath}${fileName}`;
     
-    try {
-      // Copy file to subfolder
-      const copyCommand = new CopyObjectCommand({
+    if (archivedFiles.length === 0) {
+      // No files in archived folder - check if there's an existing pre-KB folder
+      if (hasExistingPreKBFolder && existingPreKBFolder) {
+        // Use existing pre-KB folder
+        kbName = existingPreKBFolder.split('/').slice(-2, -1)[0];
+        subfolderPath = existingPreKBFolder;
+      
+      console.log(`📂 [KB STEP] Using existing pre-KB folder: ${existingPreKBFolder}`);
+      console.log(`📊 [KB STEP] KB Name: ${kbName}`);
+      
+      const subfolderListCommand = new ListObjectsV2Command({
         Bucket: bucketName,
-        CopySource: `${bucketName}/${sourceKey}`,
-        Key: destKey,
-        MetadataDirective: 'COPY'
-      });
+          Prefix: existingPreKBFolder
+        });
+        
+        const subfolderResponse = await s3Client.send(subfolderListCommand);
+        const organizedFiles = subfolderResponse.Contents?.filter(obj => !obj.Key.endsWith('/')) || [];
+        
+        if (organizedFiles.length === 0) {
+          throw new Error('No files found in existing KB folder');
+        }
+        
+        fileName = organizedFiles[0].Key.split('/').pop();
+        bucketKey = organizedFiles[0].Key;
+        
+        // Add organized files to movedFiles for debug response
+        movedFiles.push(...organizedFiles.map(f => ({
+          Key: f.Key,
+          Size: f.Size,
+          LastModified: f.LastModified
+        })));
+      } else {
+        throw new Error('No files found to organize. Please import files first.');
+      }
+    } else if (hasExistingPreKBFolder && existingPreKBFolder) {
+      // Files in archived folder, but pre-KB folder exists - use existing pre-KB folder
+      kbName = existingPreKBFolder.split('/').slice(-2, -1)[0];
       
-      await s3Client.send(copyCommand);
-      console.log(`📁 [KB ORGANIZE] Copied ${sourceKey} → ${destKey}`);
+      // Use subfolder-1 within the KB folder as the target
+      subfolderPath = `${existingPreKBFolder}subfolder-1/`;
       
-      organizedFiles.push({
-        name: fileName,
-        bucketKey: destKey,
-        originalKey: sourceKey,
-        movedAt: new Date().toISOString()
-      });
+      console.log(`📂 [KB STEP] Using existing pre-KB folder: ${existingPreKBFolder}`);
+      console.log(`📊 [KB STEP] KB Name: ${kbName}`);
+      console.log(`📄 [KB STEP] Will add ${archivedFiles.length} files to existing pre-KB subfolder: ${subfolderPath}`);
       
-    } catch (error) {
-      console.error(`❌ [KB ORGANIZE] Failed to copy ${sourceKey} to ${destKey}:`, error.message);
-      throw error;
+      // Move files to existing pre-KB subfolder
+      for (const file of archivedFiles) {
+        const sourceKey = file.Key;
+        const fileName = file.Key.split('/').pop();
+        const destKey = `${subfolderPath}${fileName}`;
+        
+        console.log(`📦 [KB STEP] MOVING ${sourceKey} to ${destKey}`);
+        
+        try {
+          const copyCommand = new CopyObjectCommand({
+            Bucket: bucketName,
+            CopySource: `${bucketName}/${sourceKey}`,
+            Key: destKey,
+            MetadataDirective: 'COPY'
+          });
+          
+          await s3Client.send(copyCommand);
+          console.log(`✅ [KB STEP] MOVED ${fileName} to ${destKey}`);
+          
+          movedFiles.push({
+            Key: destKey,
+            Size: file.Size,
+            LastModified: file.LastModified
+          });
+        } catch (error) {
+          console.error(`❌ [KB STEP] Failed to move ${fileName}:`, error.message);
+          throw new Error(`Failed to move file ${fileName}: ${error.message}`);
+        }
+      }
+      
+      fileName = archivedFiles[0].Key.split('/').pop();
+      bucketKey = `${subfolderPath}${fileName}`;
+      
+      console.log(`📄 [KB STEP] Added ${archivedFiles.length} files to existing pre-KB folder`);
+      
+    } else {
+      // No pre-KB folder exists - create a new one
+      kbName = `${userId}-kb-${Date.now()}`;
+      subfolderPath = `${userId}/archived/${kbName}/subfolder-1/`;
+      
+      console.log(`📂 [KB STEP] Creating new KB subfolder: ${subfolderPath}`);
+      console.log(`📊 [KB STEP] KB Name: ${kbName}`);
+      
+      // Move each file to the subfolder
+      for (const file of archivedFiles) {
+        const sourceKey = file.Key;
+        const fileName = file.Key.split('/').pop();
+        const destKey = `${subfolderPath}${fileName}`;
+        
+        console.log(`📦 [KB STEP] MOVING ${sourceKey} to ${destKey}`);
+        
+        try {
+          const copyCommand = new CopyObjectCommand({
+            Bucket: bucketName,
+            CopySource: `${bucketName}/${sourceKey}`,
+            Key: destKey,
+            MetadataDirective: 'COPY'
+          });
+          
+          await s3Client.send(copyCommand);
+          console.log(`✅ [KB STEP] MOVED ${fileName} to ${destKey}`);
+          
+          // Track moved file for debug response
+          movedFiles.push({
+            Key: destKey,
+            Size: file.Size,
+            LastModified: file.LastModified
+          });
+        } catch (error) {
+          console.error(`❌ [KB STEP] Failed to move ${fileName}:`, error.message);
+          throw new Error(`Failed to move file ${fileName}: ${error.message}`);
+        }
+      }
+      
+      fileName = archivedFiles[0].Key.split('/').pop();
+      bucketKey = `${subfolderPath}${fileName}`;
+      
+      console.log(`📄 [KB STEP] Organized ${archivedFiles.length} files into KB subfolder`);
+      console.log(`📂 [KB STEP] Subfolder path: ${subfolderPath}`);
     }
-  }
-  
-  return {
-    subfolderPath,
-    files: organizedFiles
-  };
-};
-
-const migrateKBToNewStructure = async (kbDoc) => {
-  // Check if KB is already using new structure
-  if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
-    return kbDoc; // Already migrated
-  }
-  
-  console.log(`🔄 [KB MIGRATE] Migrating KB ${kbDoc.kbName} to new dataSources structure`);
-  
-  // Initialize dataSources array
-  kbDoc.dataSources = [];
-  
-  // If KB has legacy files, create a legacy data source entry
-  if (kbDoc.files && kbDoc.files.length > 0) {
-    const legacyDataSource = {
-      uuid: kbDoc.dataSourceUuid || 'legacy-root-folder',
-      itemPath: `${kbDoc.owner || 'unknown'}/`, // Legacy root folder
-      files: kbDoc.files,
-      tokens: kbDoc.totalTokens || 0,
-      indexedAt: kbDoc.indexedAt || kbDoc.createdAt,
-      isLegacy: true
+    
+    console.log(`📄 [KB STEP] Using file: ${fileName}`);
+    console.log(`🔗 [KB STEP] File bucket key: ${bucketKey}`);
+    console.log(`📂 [KB STEP] Subfolder path: ${subfolderPath}`);
+    
+    // Step 2: Get user's assigned agent
+    let userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
+    if (!userDoc) {
+      throw new Error(`User ${userId} not found`);
+    }
+    
+    const agentId = userDoc.assignedAgentId;
+    if (!agentId) {
+      throw new Error(`User ${userId} has no assigned agent`);
+    }
+    
+    console.log(`🤖 [AUTO PS] User has agent: ${agentId}`);
+    
+    // Step 3: Get agent details and project info
+    const agentResponse = await doRequest(`/v2/gen-ai/agents/${agentId}`);
+    const agentData = agentResponse.agent || agentResponse.data?.agent || agentResponse.data;
+    const projectId = agentData.project_id;
+    
+    if (!projectId) {
+      throw new Error('Agent does not have a project_id - cannot create knowledge base');
+    }
+    
+    console.log(`🤖 [AUTO PS] Using project: ${projectId}`);
+    
+    // Get database_id from global cache (note: variable name is genaiDriftwoodId, not genaiDriftwoodDatabaseId)
+    const databaseId = global.genaiDriftwoodId || global.genaiDriftwoodDatabaseId;
+    if (!databaseId) {
+      throw new Error('genai-driftwood database ID not available - server startup may have failed');
+    }
+    console.log(`🔍 [DEBUG] Using database ID from global: ${databaseId}`);
+    
+    console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
+    
+    // Step 4: Create Knowledge Base using subfolder as data source
+    console.log(`🚀 [KB STEP] Creating KB with subfolder data source`);
+    
+    const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
+    
+    // Get embedding model
+    let embeddingModelId = null;
+    try {
+      const modelsResponse = await doRequest('/v2/gen-ai/models');
+      const models = modelsResponse.models || modelsResponse.data?.models || [];
+      
+      // Find embedding models that can be used for knowledge bases
+      const embeddingModels = models.filter(model => 
+        model.name && (
+          model.name.toLowerCase().includes('embedding') ||
+          model.name.toLowerCase().includes('gte') ||
+          model.name.toLowerCase().includes('mini') ||
+          model.name.toLowerCase().includes('mpnet')
+        )
+      );
+      
+      if (embeddingModels.length > 0) {
+        // Prefer GTE Large as it's the high-quality embedding model
+        const preferredModel = embeddingModels.find(model => 
+          model.name.toLowerCase().includes('gte large')
+        ) || embeddingModels[0];
+        
+        embeddingModelId = preferredModel.uuid;
+        console.log(`🤖 [AUTO PS] Using embedding model: ${preferredModel.name} (${embeddingModelId})`);
+      } else {
+        console.warn(`🤖 [AUTO PS] ⚠️ No embedding models found`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ [AUTO PS] Could not fetch embedding models: ${error.message}`);
+    }
+    
+    if (!embeddingModelId) {
+      throw new Error('No embedding model available - cannot create knowledge base');
+    }
+    
+    // Create KB with subfolder as data source
+    const kbData = {
+      name: kbName,
+      description: `${kbName} - Auto-created with subfolder structure from ${fileName}`,
+      project_id: projectId,
+      database_id: databaseId,
+      embedding_model_uuid: embeddingModelId,
+      region: bucketRegion,
+      datasources: [{
+        spaces_data_source: {
+          name: `${kbName}-datasource-1`,
+          bucket_name: bucketName,
+          region: bucketRegion,
+          item_path: subfolderPath,
+          access_key_id: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+          secret_access_key: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+        }
+      }]
     };
     
-    kbDoc.dataSources.push(legacyDataSource);
+    console.log(`🚀 [KB STEP] Creating KB with data:`, JSON.stringify(kbData, null, 2));
+    
+    // Create the KB
+    const kbCreateResponse = await doRequest('/v2/gen-ai/knowledge_bases', {
+      method: 'POST',
+      body: JSON.stringify(kbData)
+    });
+    
+    console.log(`✅ [KB STEP] KB created - DO API response:`, JSON.stringify(kbCreateResponse, null, 2));
+    
+    const kbResponseData = kbCreateResponse.data || kbCreateResponse;
+    const kb = kbResponseData.knowledge_base || kbResponseData;
+    const kbId = kb.uuid || kb.id;
+    
+    console.log(`🆔 [KB STEP] KB ID: ${kbId}`);
+    
+    // Poll for indexing completion
+    console.log(`🤖 [AUTO PS] Indexing started automatically, polling for completion...`);
+    let indexingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 500; // ~40 minutes max (5 seconds * 500)
+    let totalTokens = 0;
+    
+    while (!indexingComplete && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+      
+      try {
+        const kbStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+        const statusData = kbStatusResponse.knowledge_base || kbStatusResponse.data?.knowledge_base || kbStatusResponse.data || kbStatusResponse;
+        
+        const status = statusData.status || 'unknown';
+        const totalDocumentCount = statusData.total_document_count || 0;
+        const indexedCount = statusData.indexed_document_count || 0;
+        
+        console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, ${indexedCount}/${totalDocumentCount} documents`);
+        
+        if (status === 'error') {
+          throw new Error('KB indexing failed');
+        }
+        
+        if (status === 'ready') {
+          indexingComplete = true;
+          totalTokens = statusData.total_token_count || 0;
+          console.log(`✅ [KB STEP] Indexing complete! ${indexedCount} documents indexed, ${totalTokens} tokens`);
+        }
+      } catch (pollError) {
+        console.warn(`⚠️ [KB STEP] Polling error: ${pollError.message}`);
+      }
+    }
+    
+    if (!indexingComplete) {
+      throw new Error('KB indexing timed out');
+    }
+    
+    // After indexing completes, move files from subfolder-1/ to KB folder (level 2)
+    console.log(`📦 [KB STEP] Indexing complete - moving files from subfolder to KB folder level`);
+    const kbFolderPath = `${userId}/archived/${kbName}/`;
+    const filesInSubfolder = await s3Client.send(new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: subfolderPath
+    }));
+    
+    const filesToMove = (filesInSubfolder.Contents || []).filter(obj => !obj.Key.endsWith('/'));
+    const indexedFiles = [];
+    
+    for (const file of filesToMove) {
+      const sourceKey = file.Key;
+      const fileName = file.Key.split('/').pop();
+      const destKey = `${kbFolderPath}${fileName}`;
+      
+      console.log(`📦 [KB STEP] MOVING indexed file: ${sourceKey} to ${destKey}`);
+      
+      try {
+        const copyCommand = new CopyObjectCommand({
+          Bucket: bucketName,
+          CopySource: `${bucketName}/${sourceKey}`,
+          Key: destKey,
+          MetadataDirective: 'COPY'
+        });
+        
+        await s3Client.send(copyCommand);
+        
+        // Delete source file from subfolder
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: sourceKey
+        });
+        await s3Client.send(deleteCommand);
+        
+        console.log(`✅ [KB STEP] MOVED indexed file: ${fileName}`);
+        
+        indexedFiles.push({
+          fileName: fileName,
+          bucketKey: destKey,
+          indexedAt: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error(`❌ [KB STEP] Failed to move indexed file ${fileName}:`, error.message);
+      }
+    }
+    
+    // Update maia_kb document with indexed file list
+    const kbDoc = {
+      _id: kbName,
+      kbId: kbId,
+      kbName: kbName,
+      description: kb.description || 'No description',
+      status: 'ready',
+      totalDocuments: filesToMove.length,
+      totalTokens: totalTokens,
+      indexedFiles: indexedFiles,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    try {
+      await couchDBClient.saveDocument('maia_kb', kbDoc);
+      console.log(`✅ [KB STEP] Updated maia_kb document with ${indexedFiles.length} indexed files`);
+    } catch (saveError) {
+      console.error(`❌ [KB STEP] Failed to update maia_kb document:`, saveError.message);
+    }
+    
+    res.json({
+      success: true,
+      message: 'KB created and indexed successfully with organized files',
+      kbId: kbId,
+      kbName: kbName,
+      tokensIndexed: totalTokens,
+      indexedFiles: indexedFiles.length,
+      summary: null // Will be generated after indexing if needed
+    });
+    
+  } catch (error) {
+    console.error(`❌ [AUTO PS] Organized files automation failed:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Automation failed: ${error.message}`
+    });
   }
-  
-  console.log(`✅ [KB MIGRATE] Migrated KB ${kbDoc.kbName} with ${kbDoc.dataSources.length} data sources`);
-  return kbDoc;
-};
+});
 
-// Automated KB Creation and Patient Summary Generation
+// Automated KB Creation and Patient Summary Generation (LEGACY)
 app.post('/api/automate-kb-and-summary', async (req, res) => {
   const startTime = Date.now();
   
@@ -7397,23 +8290,58 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
     
-    // Step 4: Organize file into KB subfolder structure (NEW APPROACH)
-    console.log(`🤖 [AUTO PS] Organizing file into KB subfolder structure`);
+    // Check user's existing KBs before creating new one
+    console.log(`🔍 [KB STEP] Checking user's existing knowledge bases`);
+    try {
+      const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
+      const userKBs = allKBs.filter(kb => kb.kbName && kb.kbName.startsWith(userId));
+      const kbNames = userKBs.map(kb => kb.kbName);
+      console.log(`📚 [KB STEP] User KBs: ${kbNames.length > 0 ? kbNames.join(', ') : 'None'}`);
+      
+      if (userKBs.length === 0) {
+        console.log(`🆕 [KB STEP] User has no KB yet`);
+      } else {
+        // Check if existing KBs have files
+        const kbsWithFiles = userKBs.filter(kb => kb.files && kb.files.length > 0);
+        if (kbsWithFiles.length === 0) {
+          console.log(`📄 [KB STEP] User has KB but no files in KB - just adding files`);
+        } else {
+          console.log(`📚 [KB STEP] User has ${kbsWithFiles.length} KB(s) with files, creating additional KB`);
+        }
+      }
+    } catch (kbError) {
+      console.log(`⚠️ [KB STEP] Could not check user KBs: ${kbError.message}`);
+    }
     
-    // Generate KB name first
-    const kbName = `${userId}-kb-${Date.now()}`;
+    // Step 4: Copy file from archived/ to root folder for indexing
+    console.log(`🤖 [AUTO PS] Copying file from archived/ to root for indexing`);
+    const { S3Client, CopyObjectCommand } = await import('@aws-sdk/client-s3');
     
-    // Organize the file into a subfolder for this KB
-    const fileToOrganize = {
-      bucketKey: bucketKey,
-      fileName: fileName
-    };
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
     
-    const organizationResult = await organizeFilesIntoSubfolder(userId, kbName, [fileToOrganize], 1);
-    const subfolderPath = organizationResult.subfolderPath;
-    const organizedFiles = organizationResult.files;
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
     
-    console.log(`🤖 [AUTO PS] File organized into subfolder: ${subfolderPath}`);
+    // Copy from archived/ to root (e.g., wed15/archived/file.pdf -> wed15/file.pdf)
+    const sourceKey = bucketKey; // e.g., "wed15/archived/file.pdf"
+    const destKey = sourceKey.replace('/archived/', '/'); // e.g., "wed15/file.pdf"
+    
+    const copyCommand = new CopyObjectCommand({
+      Bucket: bucketName,
+      CopySource: `${bucketName}/${sourceKey}`,
+      Key: destKey
+    });
+    
+    await s3Client.send(copyCommand);
+    console.log(`🤖 [AUTO PS] Copied file to root: ${sourceKey} -> ${destKey}`);
     
     // Step 5: Get embedding model ID (required for KB creation)
     let embeddingModelId = null;
@@ -7451,28 +8379,30 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
       throw new Error('No embedding model available - cannot create knowledge base');
     }
     
-    // Step 6: Create Knowledge Base with subfolder-specific data source
-    console.log(`🤖 [AUTO PS] Creating KB "${kbName}" with subfolder data source`);
+    // Step 6: Create Knowledge Base
+    const kbName = `${userId}-kb-${Date.now()}`;
+    console.log(`🤖 [AUTO PS] Creating KB "${kbName}" from file ${fileName}`);
     
-    // Get bucket info
-    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
-    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia';
+    // Extract user folder from bucketKey (e.g., "fri1/archived/file.pdf" -> "fri1/")
+    const userFolder = bucketKey.split('/').slice(0, 1).join('/') + '/';
+    
+    // Get bucket region from URL (bucketUrl and bucketName already declared above)
     const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
     
-    // Create KB with the subfolder as data source (NEW APPROACH)
+    // Create KB with the user's folder as data source (matching working code at line 6492)
     const kbData = {
       name: kbName,
-      description: `${kbName} - Auto-created from ${fileName} using subfolder structure`,
+      description: `${kbName} - Auto-created from ${fileName}`,
       project_id: projectId,
       database_id: databaseId,
       embedding_model_uuid: embeddingModelId,
       region: bucketRegion,
       datasources: [{
         spaces_data_source: {
-          name: `${kbName}-datasource-1`,
+          name: `${kbName}-datasource`,
           bucket_name: bucketName,
           region: bucketRegion,
-          item_path: subfolderPath, // Use the specific subfolder path
+          item_path: userFolder,
           access_key_id: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
           secret_access_key: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
         }
@@ -7514,23 +8444,6 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
         
         console.log(`🤖 [AUTO PS] Indexing status: ${status}, Phase: ${phase}, Tokens: ${totalTokens}, Attempt: ${attempts}/${maxAttempts}`);
         
-        // Call new indexing jobs endpoint to get detailed token counts
-        try {
-          const jobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
-          const jobsData = jobsResponse.data || jobsResponse;
-          const jobs = jobsData.jobs || jobsData;
-          
-          if (Array.isArray(jobs) && jobs.length > 0) {
-            // Get the most recent job
-            const mostRecentJob = jobs[0];
-            const tokenCount = mostRecentJob.tokens || mostRecentJob.token_count || 0;
-            console.log(`📊 [INDEXING JOBS API] Token count from jobs endpoint: ${tokenCount}`);
-          }
-        } catch (jobsError) {
-          // Don't fail the polling if the new endpoint fails
-          console.warn(`⚠️ [INDEXING JOBS API] Failed to fetch jobs: ${jobsError.message}`);
-        }
-        
         // Check for completion
         if (status.includes('COMPLETED') || phase.includes('SUCCEEDED')) {
           indexingComplete = true;
@@ -7553,62 +8466,31 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     });
     console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
     
-    // Step 9: File organization complete (no cleanup needed)
-    console.log(`🤖 [AUTO PS] File organization complete - no temp files to clean up`);
-    // Note: Files are now organized in their permanent subfolder locations
+    // Step 9: Clean up copied file from root folder
+    console.log(`🤖 [AUTO PS] Cleaning up temp file from root folder`);
+    const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
     
-    // Step 10: Update maia_kb document with file and token info using new dataSources structure
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: destKey
+    });
+    
+    await s3Client.send(deleteCommand);
+    console.log(`🤖 [AUTO PS] Cleaned up temp file: ${destKey}`);
+    
+    // Step 10: Update maia_kb document with file and token info
     console.log(`🤖 [AUTO PS] Updating maia_kb document for ${kbName}`);
     const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
     if (kbDoc) {
-      // Initialize dataSources array if it doesn't exist (new schema)
-      if (!kbDoc.dataSources) {
-        kbDoc.dataSources = [];
-      }
-      
-      // Get the data_source_uuid from the KB response
-      const kbResponseData = kbCreateResponse.data || kbCreateResponse;
-      const kb = kbResponseData.knowledge_base || kbResponseData;
-      const dataSourceUuid = kb.datasources?.[0]?.spaces_data_source?.uuid || 'unknown';
-      
-      // Use new subfolder structure
-      const dataSourceEntry = {
-        uuid: dataSourceUuid,
-        itemPath: subfolderPath,
-        files: organizedFiles.map(file => ({
-          name: file.name,
-          bucketKey: file.bucketKey,
-          originalKey: file.originalKey,
-          indexedAt: new Date().toISOString(),
-          movedAt: file.movedAt
-        })),
-        tokens: totalTokens,
-        indexedAt: new Date().toISOString(),
-        isLegacy: false // This is the new structure
-      };
-      
-      // Add or update the data source entry
-      const existingIndex = kbDoc.dataSources.findIndex(ds => ds.uuid === dataSourceEntry.uuid);
-      if (existingIndex >= 0) {
-        kbDoc.dataSources[existingIndex] = dataSourceEntry;
-      } else {
-        kbDoc.dataSources.push(dataSourceEntry);
-      }
-      
-      // Keep legacy fields for backward compatibility
-      kbDoc.files = organizedFiles.map(file => ({
-        name: file.name,
-        bucketKey: file.bucketKey,
+      kbDoc.files = [{
+        name: fileName,
+        bucketKey: bucketKey,
         indexedAt: new Date().toISOString()
-      }));
+      }];
       kbDoc.totalTokens = totalTokens;
       kbDoc.indexedAt = new Date().toISOString();
-      
-      // Store the data source UUID for future reference
-      kbDoc.dataSourceUuid = dataSourceUuid;
-      
       await cacheManager.saveDocument(couchDBClient, 'maia_kb', kbDoc);
-      console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens using new dataSources structure`);
+      console.log(`🤖 [AUTO PS] Updated maia_kb document with ${totalTokens} tokens`);
     }
     
     // Step 11: Generate patient summary via internal /api/personal-chat endpoint
@@ -7735,111 +8617,6 @@ app.post('/api/automate-kb-and-summary', async (req, res) => {
     res.status(500).json({
       success: false,
       message: `Automation failed: ${error.message}`
-    });
-  }
-});
-
-// Migrate existing KB to new dataSources structure
-app.post('/api/admin/migrate-kb-structure/:kbName', async (req, res) => {
-  try {
-    const { kbName } = req.params;
-    
-    console.log(`🔄 [KB MIGRATE] Starting migration for KB: ${kbName}`);
-    
-    // Get the existing KB document
-    const kbDoc = await cacheManager.getDocument(couchDBClient, 'maia_kb', kbName);
-    if (!kbDoc) {
-      return res.status(404).json({
-        success: false,
-        message: `KB ${kbName} not found`
-      });
-    }
-    
-    // Check if already migrated
-    if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
-      return res.json({
-        success: true,
-        message: `KB ${kbName} already migrated`,
-        dataSources: kbDoc.dataSources.length
-      });
-    }
-    
-    // Perform migration
-    const migratedKB = await migrateKBToNewStructure(kbDoc);
-    
-    // Save the migrated KB
-    await cacheManager.saveDocument(couchDBClient, 'maia_kb', migratedKB);
-    
-    console.log(`✅ [KB MIGRATE] Successfully migrated KB: ${kbName}`);
-    
-    res.json({
-      success: true,
-      message: `KB ${kbName} migrated successfully`,
-      dataSources: migratedKB.dataSources.length,
-      migratedFiles: migratedKB.dataSources.reduce((total, ds) => total + (ds.files?.length || 0), 0)
-    });
-    
-  } catch (error) {
-    console.error(`❌ [KB MIGRATE] Error migrating KB ${req.params.kbName}:`, error);
-    res.status(500).json({
-      success: false,
-      message: `Failed to migrate KB: ${error.message}`
-    });
-  }
-});
-
-// Migrate all existing KBs to new structure
-app.post('/api/admin/migrate-all-kbs', async (req, res) => {
-  try {
-    console.log(`🔄 [KB MIGRATE] Starting migration for all KBs`);
-    
-    // Get all KB documents
-    const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb');
-    let migratedCount = 0;
-    let alreadyMigratedCount = 0;
-    let errorCount = 0;
-    
-    for (const kbDoc of allKBs) {
-      try {
-        // Skip if already migrated
-        if (kbDoc.dataSources && kbDoc.dataSources.length > 0) {
-          alreadyMigratedCount++;
-          continue;
-        }
-        
-        // Perform migration
-        const migratedKB = await migrateKBToNewStructure(kbDoc);
-        
-        // Save the migrated KB
-        await cacheManager.saveDocument(couchDBClient, 'maia_kb', migratedKB);
-        
-        migratedCount++;
-        console.log(`✅ [KB MIGRATE] Migrated KB: ${kbDoc.kbName}`);
-        
-      } catch (error) {
-        errorCount++;
-        console.error(`❌ [KB MIGRATE] Error migrating KB ${kbDoc.kbName}:`, error.message);
-      }
-    }
-    
-    console.log(`🎉 [KB MIGRATE] Migration complete: ${migratedCount} migrated, ${alreadyMigratedCount} already migrated, ${errorCount} errors`);
-    
-    res.json({
-      success: true,
-      message: 'KB migration completed',
-      results: {
-        total: allKBs.length,
-        migrated: migratedCount,
-        alreadyMigrated: alreadyMigratedCount,
-        errors: errorCount
-      }
-    });
-    
-  } catch (error) {
-    console.error(`❌ [KB MIGRATE] Error during bulk migration:`, error);
-    res.status(500).json({
-      success: false,
-      message: `Failed to migrate KBs: ${error.message}`
     });
   }
 });
@@ -8187,21 +8964,6 @@ async function monitorIndexingProgress(kbId, kbName, startTime, baseUrl = 'http:
 //           console.log(`📊 Phase: ${job.phase}`);
 //           console.log(`📊 Tokens: ${job.tokens || 'N/A'}`);
 //           console.log(`📊 Progress: ${job.progress || 'N/A'}`);
-          
-          // Call new indexing jobs endpoint to get detailed token counts
-          try {
-            const jobsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
-            const jobsData = jobsResponse.data || jobsResponse;
-            const jobs = jobsData.jobs || jobsData;
-            
-            if (Array.isArray(jobs) && jobs.length > 0) {
-              const mostRecentJob = jobs[0];
-              const tokenCount = mostRecentJob.tokens || mostRecentJob.token_count || 0;
-              console.log(`📊 [INDEXING JOBS API] Token count from jobs endpoint: ${tokenCount}`);
-            }
-          } catch (jobsError) {
-            console.warn(`⚠️ [INDEXING JOBS API] Failed to fetch jobs: ${jobsError.message}`);
-          }
           
           if (job.status === 'INDEX_JOB_STATUS_COMPLETED') {
             const totalTime = Math.round((currentTime - startTime) / 1000);
@@ -9361,9 +10123,9 @@ app.listen(PORT, async () => {
       };
     }));
     
-    // Cache individual user entries (no longer using 'users', 'all' key)
-    // Individual users are already cached above during bucket status fetching
-    console.log(`✅ [STARTUP] Cached ${processedUsers.length} individual user entries for Admin2`);
+    // Cache the processed users (not raw database documents)
+    await cacheManager.cacheUsers(processedUsers);
+    console.log(`✅ [STARTUP] Cached ${processedUsers.length} processed users for Admin2`);
     
     // Pre-cache agents for Admin2 (early cache for Admin2 UI)
     try {
@@ -9915,11 +10677,6 @@ app.listen(PORT, async () => {
             // Add all other fields from DO API
             ...doKB
           };
-          
-          // Initialize dataSources array for new schema
-          if (!kbDoc.dataSources) {
-            kbDoc.dataSources = [];
-          }
           
           // Try to save the document
           await couchDBClient.saveDocument('maia_kb', kbDoc);

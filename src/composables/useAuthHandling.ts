@@ -145,6 +145,9 @@ const updateUserFileMetadata = async (userId: string, fileMetadata: {
   uploadedAt: string
 }) => {
   try {
+    console.log(`💾 [KB STEP] Updating user file metadata for user: ${userId}`);
+    console.log(`📄 [KB STEP] File metadata:`, JSON.stringify(fileMetadata, null, 2));
+    
     const response = await fetch('/api/user-file-metadata', {
       method: 'POST',
       headers: {
@@ -157,10 +160,14 @@ const updateUserFileMetadata = async (userId: string, fileMetadata: {
     })
     
     if (!response.ok) {
-      console.error(`❌ Failed to update user file metadata for ${userId}`)
+      console.error(`❌ Failed to update user file metadata for ${userId}`);
+      console.error(`❌ [KB STEP] User file metadata update failed - Status: ${response.status}`);
+    } else {
+      console.log(`✅ [KB STEP] User file metadata updated successfully for ${userId}`);
     }
   } catch (error) {
-    console.error(`❌ Error updating user file metadata:`, error)
+    console.error(`❌ Error updating user file metadata:`, error);
+    console.error(`❌ [KB STEP] User file metadata update error:`, error);
   }
 }
 
@@ -321,6 +328,10 @@ const uploadPDFFile = async (
     
     // Save file to user's bucket folder immediately upon import
     try {
+      console.log(`📤 [KB STEP] Starting PDF file upload to bucket`);
+      console.log(`👤 [KB STEP] Checking authentication for PDF upload`);
+      console.log(`🔍 [KB STEP] Current user object:`, JSON.stringify(currentUser, null, 2));
+      
       // CRITICAL: Must have authenticated user for file upload
       if (!currentUser || !currentUser.userId) {
         const errorMsg = 'CRITICAL: PDF upload attempted without authenticated user';
@@ -329,6 +340,7 @@ const uploadPDFFile = async (
           fileName: file.name,
           timestamp: new Date().toISOString()
         });
+        console.error(`❌ [KB STEP] Authentication failed - no current user or userId`);
         
         // Send alert to admin (backend will handle this)
         await fetch('/api/admin-alert', {
@@ -351,6 +363,10 @@ const uploadPDFFile = async (
       
       const resolvedUserId = currentUser.userId;
       const userFolder = `${resolvedUserId}/archived/`;  // Save to archived subfolder
+      
+      console.log(`✅ [KB STEP] Authentication verified for PDF upload`);
+      console.log(`👤 [KB STEP] Resolved user ID: ${resolvedUserId}`);
+      console.log(`📁 [KB STEP] Target user folder: ${userFolder}`);
       
       // Ensure user has a bucket folder if they're authenticated (not Public User)
       if (resolvedUserId !== 'Public User' && currentUser?.isAuthenticated) {
@@ -379,22 +395,36 @@ const uploadPDFFile = async (
       await new Promise<void>((resolve, reject) => {
         try {
           // Use FormData for binary file upload (no base64 encoding needed)
+          console.log(`📦 [KB STEP] Creating FormData for binary upload`);
+          console.log(`📄 [KB STEP] File name: ${file.name}`);
+          console.log(`📁 [KB STEP] User folder: ${userFolder}`);
+          console.log(`📏 [KB STEP] File size: ${file.size} bytes`);
+          
           const formData = new FormData()
           formData.append('pdfFile', file)
           formData.append('fileName', file.name)
           formData.append('userFolder', userFolder)
+          
+          console.log(`🚀 [KB STEP] Sending binary upload request to /api/upload-to-bucket-binary`);
           
           fetch('/api/upload-to-bucket-binary', {
             method: 'POST',
             body: formData
           })
           .then(async (uploadResponse) => {
+            console.log(`📥 [KB STEP] Upload response status: ${uploadResponse.status}`);
+            
             if (uploadResponse.ok) {
               const uploadResult = await uploadResponse.json()
+              console.log(`✅ [KB STEP] Upload successful - Response:`, JSON.stringify(uploadResult, null, 2));
               
               // Update the uploaded file with bucket info
               uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
               uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+              
+              console.log(`📄 [KB STEP] Updated uploadedFile with bucket info:`);
+              console.log(`🔗 [KB STEP] Bucket key: ${uploadResult.fileInfo.bucketKey}`);
+              console.log(`📁 [KB STEP] Bucket path: ${uploadResult.fileInfo.userFolder}`);
               
               // Update user record with file metadata
               await updateUserFileMetadata(resolvedUserId, {

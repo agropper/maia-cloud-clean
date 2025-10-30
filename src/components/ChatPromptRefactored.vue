@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, ref, watch, nextTick, onMounted, onUnmounted, computed } from "vue";
-import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions, useQuasar } from "quasar";
+import { QFile, QIcon, QBtnToggle, QDialog, QCard, QCardSection, QAvatar, QBtn, QCardActions, QSpinner, QChip, QTable, QCheckbox, QSpace, useQuasar } from "quasar";
 import { getSystemMessageType, pickFiles } from "../utils";
 import { useChatState } from "../composables/useChatState";
 import { useChatLogger } from "../composables/useChatLogger";
@@ -67,6 +67,11 @@ export default defineComponent({
     QAvatar,
     QBtn,
     QCardActions,
+    QSpinner,
+    QChip,
+    QTable,
+    QCheckbox,
+    QSpace,
   },
   computed: {
     placeholderText() {
@@ -370,6 +375,15 @@ export default defineComponent({
       triggerFileImport.value++;
     };
 
+    // Handle continue from KB Welcome Modal - opens KB management modal
+    const handleContinueFromWelcome = () => {
+      // Reset state when opening modal
+      filesOrganized.value = false;
+      organizedKBs.value = [];
+      showCreateKBActionModal.value = true;
+      fetchUserKBs();
+    };
+
     // Handle opening Agent Manager from Public User KB Welcome Modal
     const handleOpenPublicKBManager = () => {
       showPublicUserKBWelcomeModal.value = false;
@@ -382,13 +396,213 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
-    // Handle "DO IT" button from Create KB Action Modal
-    const handleDoItCreateKB = async () => {
+    // New KB Management Modal State
+    const userKBsFromAPI = ref([]);
+    const userKBsFromDB = ref([]);
+    const kbValidationError = ref('');
+    const filesOrganized = ref(false);
+    const isPreparingFolder = ref(false);
+    const isLoadingKBData = ref(false);
+    const availableFiles = ref([]);
+    const organizedKBs = ref([]); // Array of { kbName, files: [], exists: boolean, subfolderPath }
+    
+    // Table-based file location state
+    const kbFileLocations = ref([]); // Array of files with location checkboxes
+    const kbInfo = ref([]); // Array of { kbName, exists, label }
+
+    // Fetch user's KBs from both DO API and database
+    const fetchUserKBs = async () => {
+      if (!currentUser.value?.userId || currentUser.value.userId === 'Public User') {
+        return;
+      }
+
+      isLoadingKBData.value = true;
+      kbValidationError.value = '';
+      
+      try {
+        const userId = currentUser.value.userId;
+        
+        // Fetch from DO API
+        console.log(`🔍 [KB STEP] Fetching user KBs from DO API`);
+        const apiResponse = await fetch('/api/knowledge-bases');
+        if (!apiResponse.ok) {
+          throw new Error(`Failed to fetch KBs from API: ${apiResponse.status}`);
+        }
+        const allKBs = await apiResponse.json();
+        const userAPIKBs = allKBs.filter(kb => kb.name && kb.name.startsWith(userId));
+        userKBsFromAPI.value = userAPIKBs;
+        console.log(`📚 [KB STEP] Found ${userAPIKBs.length} KBs in DO API:`, userAPIKBs.map(kb => kb.name));
+
+        // Fetch from database
+        console.log(`🔍 [KB STEP] Fetching user KBs from database`);
+        const dbResponse = await fetch(`/api/users/${userId}/knowledge-bases`);
+        if (!dbResponse.ok) {
+          throw new Error(`Failed to fetch KBs from database: ${dbResponse.status}`);
+        }
+        const dbKBs = await dbResponse.json();
+        userKBsFromDB.value = dbKBs;
+        console.log(`📚 [KB STEP] Found ${dbKBs.length} KBs in database:`, dbKBs.map(kb => kb.kbName));
+
+        // Validate consistency
+        const apiKBNames = userAPIKBs.map(kb => kb.name).sort();
+        const dbKBNames = dbKBs.map(kb => kb.kbName).sort();
+        
+        if (JSON.stringify(apiKBNames) !== JSON.stringify(dbKBNames)) {
+          const errorMsg = `[*] KB Database Inconsistency Detected!\nDO API KBs: [${apiKBNames.join(', ')}]\nDatabase KBs: [${dbKBNames.join(', ')}]`;
+          kbValidationError.value = errorMsg;
+          console.error(errorMsg);
+          console.log(`❌ [KB STEP] Database inconsistency - stopping automation`);
+        } else {
+          console.log(`✅ [KB STEP] KB validation passed - API and database are consistent`);
+        }
+
+        // Fetch file locations organized by KB subfolders (new approach)
+        console.log(`🔍 [KB STEP] Fetching file locations for user: ${userId}`);
+        const locationResponse = await fetch(`/api/users/${userId}/kb-file-locations`);
+        if (locationResponse.ok) {
+          const locationData = await locationResponse.json();
+          kbInfo.value = locationData.kbs || [];
+          kbFileLocations.value = (locationData.files || []).map(file => ({
+            ...file,
+            selectedLocations: {
+              available: file.locations?.available || false,
+              // Initialize checkbox state: default available files to preKB A
+              preKBA: file.locations?.available || file.locations?.preKBA || false,
+              inKBA: file.locations?.inKBA || false,
+              preKBB: file.locations?.preKBB || false,
+              inKBB: file.locations?.inKBB || false,
+              ...Object.keys(file.locations || {}).reduce((acc, key) => {
+                if (key.startsWith('preKB') || key.startsWith('inKB')) {
+                  acc[key] = file.locations[key] || false;
+                }
+                return acc;
+              }, {})
+            }
+          }));
+          
+          // Set default: mark all available files in Pre KB A
+          kbFileLocations.value.forEach(file => {
+            if (file.locations?.available && !file.locations?.preKBA && !file.locations?.inKBA) {
+              file.selectedLocations.preKBA = true;
+              file.selectedLocations.available = false;
+            }
+          });
+          
+          console.log(`📚 [KB STEP] Found ${kbFileLocations.value.length} files across ${kbInfo.value.length} KB folders`);
+        } else {
+          console.log(`⚠️ [KB STEP] Could not fetch file locations: ${locationResponse.status}`);
+        }
+
+      } catch (error) {
+        const errorMsg = `[*] Failed to fetch file locations: ${error.message}`;
+        kbValidationError.value = errorMsg;
+        console.error(errorMsg);
+        console.log(`❌ [KB STEP] Failed to fetch file locations`);
+      } finally {
+        isLoadingKBData.value = false;
+      }
+    };
+
+    // Prepare folder by organizing files into KB subfolder
+    const prepareFolder = async () => {
+      if (!currentUser.value?.userId) return;
+
+      isPreparingFolder.value = true;
+      
+      try {
+        const userId = currentUser.value.userId;
+        console.log(`📁 [KB STEP] Starting file organization for user: ${userId}`);
+        
+        // Get files from chat area (uploadedFiles) - these are the files available for viewing
+        const chatFiles = appState.uploadedFiles || [];
+        console.log(`📄 [KB STEP] Found ${chatFiles.length} files in chat area`);
+        
+        // Get user's uploaded files from database
+        const userResponse = await fetch(`/api/users/${userId}`);
+        if (!userResponse.ok) {
+          throw new Error(`Failed to fetch user document: ${userResponse.status}`);
+        }
+        
+        const userData = await userResponse.json();
+        if (!userData.files || userData.files.length === 0) {
+          throw new Error('No files found to organize');
+        }
+
+        console.log(`📄 [KB STEP] Found ${userData.files.length} files in user document`);
+        
+        // Map chat files to have bucketKey format for backend comparison
+        const chatFileKeys = chatFiles.map(f => f.bucketKey || f.fileUrl).filter(Boolean);
+        
+        // Call backend to organize files into subfolder (with cleanup)
+        const organizeResponse = await fetch('/api/organize-files-for-kb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            files: userData.files,
+            chatFileKeys: chatFileKeys // Files that should be kept (in chat area)
+          })
+        });
+
+        if (!organizeResponse.ok) {
+          const error = await organizeResponse.json();
+          throw new Error(error.message || `File organization failed: ${organizeResponse.status}`);
+        }
+
+        const result = await organizeResponse.json();
+        console.log(`✅ [KB STEP] Files organized successfully:`, result);
+        
+        // Store organized KB info
+        organizedKBs.value = [{
+          kbName: result.kbName,
+          files: result.organizedFiles || [],
+          exists: false, // Will be updated after refresh
+          subfolderPath: result.subfolderPath
+        }];
+        
+        filesOrganized.value = true;
+        
+        // Refresh KB list
+        await fetchUserKBs();
+        
+        // Update organized KB existence status after refresh
+        const kbExists = userKBsFromAPI.value.some(kb => kb.name === result.kbName);
+        if (organizedKBs.value.length > 0) {
+          organizedKBs.value[0].exists = kbExists;
+        }
+        
+        $q.notify({
+          type: 'positive',
+          message: `Files organized into KB folder: ${result.kbName}`,
+          timeout: 3000
+        });
+
+      } catch (error) {
+        console.error(`❌ [KB STEP] File organization failed:`, error);
+        $q.notify({
+          type: 'negative',
+          message: `Failed to organize files: ${error.message}`,
+          timeout: 5000
+        });
+      } finally {
+        isPreparingFolder.value = false;
+      }
+    };
+
+    // Handle Create KB button (after files are organized)
+    const handleCreateKB = async () => {
       showCreateKBActionModal.value = false;
       
       try {
-        // Start the automated KB creation and patient summary process
-        await automateKBCreationAndSummary();
+        console.log(`🚀 [KB STEP] Starting KB creation with organized files`);
+        
+        // Get the organized file information from the prepare folder result
+        // We'll use the subfolder structure for KB creation
+        const userId = currentUser.value.userId;
+        
+        // Call the automation with organized file structure
+        await automateKBCreationWithOrganizedFiles(userId);
+        
       } catch (error) {
         console.error('[AUTO PS] ❌ Automation failed:', error);
         $q.notify({
@@ -398,14 +612,113 @@ export default defineComponent({
         });
       }
     };
+
+    // New automation function that works with organized files
+    const automateKBCreationWithOrganizedFiles = async (userId) => {
+      const startTime = Date.now();
+      console.log('[AUTO PS] 🚀 Starting automated KB creation with organized files');
+      console.log('🚀 [KB STEP] Frontend automation started with subfolder structure');
+      
+      // Step 1: Post "Requesting patient summary" message to chat
+      console.log('[AUTO PS] Step 1: Posting request message to chat');
+      console.log('💬 [KB STEP] Adding request message to chat history');
+      const requestMessage = {
+        role: 'assistant',
+        content: 'Creating knowledge base from organized files...',
+        name: 'System'
+      };
+      appState.chatHistory.push(requestMessage);
+      console.log('[AUTO PS] ✅ Step 1 complete: Request message posted');
+      console.log('✅ [KB STEP] Request message posted to chat');
+      
+      // Show loading indicator with KB indexing message
+      appStateManager.setLoading(true, 'Creating knowledge base from organized files...');
+      
+      try {
+        // Step 2: Call backend automation with organized files flag
+        console.log(`[AUTO PS] Step 2: Calling backend automation for organized files`);
+        console.log(`🔄 [KB STEP] Calling backend automation API with organized files`);
+        
+        const response = await fetch('/api/automate-kb-with-organized-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            useOrganizedFiles: true
+          })
+        });
+        
+        console.log(`📥 [KB STEP] Backend response status: ${response.status}`);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          console.error(`[AUTO PS] ❌ Backend error: ${error.message || 'Unknown error'}`);
+          throw new Error(error.message || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('[AUTO PS] ✅ Backend automation finished');
+        console.log(`✅ [KB STEP] Backend automation completed successfully`);
+        console.log(`🆔 [KB STEP] KB ID: ${result.kbId || 'N/A'}`);
+        console.log(`📊 [KB STEP] Tokens indexed: ${result.tokensIndexed || 0}`);
+        console.log(`📝 [KB STEP] Summary generated: ${result.summary ? 'Yes' : 'No'}`);
+        console.log(`📥 [KB STEP] Full backend response:`, JSON.stringify(result, null, 2));
+        
+        // Step 3: Add patient summary to chat if available
+        if (result.summary) {
+          console.log('[AUTO PS] Step 3: Adding patient summary to chat');
+          
+          appState.chatHistory.push({
+            role: 'assistant',
+            content: result.summary,
+            name: 'AI Assistant'
+          });
+          
+          console.log('[AUTO PS] ✅ Patient summary added to chat');
+        }
+        
+        // Clear loading state
+        appStateManager.setLoading(false);
+        
+        // Show success notification
+        $q.notify({
+          type: 'positive',
+          message: 'Knowledge base created and patient summary generated successfully!',
+          timeout: 5000
+        });
+        
+        // Refresh agent data to show new KB
+        await refreshAgentData();
+        
+      } catch (error) {
+        console.error('[AUTO PS] ❌ Automation failed:', error);
+        appStateManager.setLoading(false);
+        throw error;
+      }
+    };
+
+    // Handle modal cancellation
+    const handleCancelKBCreation = () => {
+      showCreateKBActionModal.value = false;
+      filesOrganized.value = false;
+      kbValidationError.value = '';
+      userKBsFromAPI.value = [];
+      userKBsFromDB.value = [];
+      
+      // Enable KB status icon with yellow warning to indicate files available for indexing
+      // This would need to be implemented in BottomToolbar or wherever the KB status icon is
+      console.log('[*] KB Management cancelled - files available for indexing');
+    };
     
     // Automated KB Creation and Patient Summary Process
     const automateKBCreationAndSummary = async () => {
       const startTime = Date.now();
       console.log('[AUTO PS] 🚀 Starting automated KB creation and patient summary process');
+      console.log('🚀 [KB STEP] Frontend automation started');
       
       // Step 1: Post "Requesting patient summary" message to chat
       console.log('[AUTO PS] Step 1: Posting request message to chat');
+      console.log('💬 [KB STEP] Adding request message to chat history');
       const requestMessage = {
         role: 'assistant',
         content: 'Requesting a new patient summary...',
@@ -413,6 +726,7 @@ export default defineComponent({
       };
       appState.chatHistory.push(requestMessage);
       console.log('[AUTO PS] ✅ Step 1 complete: Request message posted');
+      console.log('✅ [KB STEP] Request message posted to chat');
       
       // Show loading indicator with KB indexing message
       appStateManager.setLoading(true, 'Knowledge base indexing takes about 200 PDF pages per minute...');
@@ -421,12 +735,32 @@ export default defineComponent({
         // Step 2: Get user info from backend
         const userId = currentUser.value?.userId || currentUser.value?.displayName;
         console.log(`[AUTO PS] Step 2: Checking user authentication (userId: ${userId})`);
+        console.log(`👤 [KB STEP] Current user: ${userId}`);
+        console.log(`📁 [KB STEP] Expected user folder: ${userId}/archived/`);
+        
         if (!userId || userId === 'Public User') {
+          console.log('❌ [KB STEP] Authentication failed - Public User cannot create KBs');
           throw new Error('User must be authenticated');
         }
         console.log(`[AUTO PS] ✅ User authenticated: ${userId}`);
+        console.log(`✅ [KB STEP] User authentication verified: ${userId}`);
+        
+        // Check user's existing KBs before proceeding
+        console.log(`🔍 [KB STEP] Checking user's existing knowledge bases`);
+        try {
+          const kbResponse = await fetch(`/api/knowledge-bases`);
+          if (kbResponse.ok) {
+            const kbData = await kbResponse.json();
+            const userKBs = kbData.filter(kb => kb.name && kb.name.startsWith(userId));
+            const kbNames = userKBs.map(kb => kb.name);
+            console.log(`📚 [KB STEP] User KBs: ${kbNames.length > 0 ? kbNames.join(', ') : 'None'}`);
+          }
+        } catch (kbError) {
+          console.log(`⚠️ [KB STEP] Could not fetch user KBs: ${kbError.message}`);
+        }
         
         console.log(`[AUTO PS] Step 3: Fetching user document from /api/users/${userId}`);
+        console.log(`🔍 [KB STEP] Fetching user document to find uploaded files`);
         
         // Get user document from backend to find files
         const userResponse = await fetch(`/api/users/${userId}`);
@@ -436,8 +770,10 @@ export default defineComponent({
         
         const userData = await userResponse.json();
         console.log(`[AUTO PS] ✅ User document fetched, files count: ${userData.files?.length || 0}`);
+        console.log(`📋 [KB STEP] User document files:`, JSON.stringify(userData.files || [], null, 2));
         
         if (!userData.files || userData.files.length === 0) {
+          console.log('❌ [KB STEP] No files found in user document - automation cannot proceed');
           throw new Error('No files found in user document');
         }
         
@@ -446,9 +782,19 @@ export default defineComponent({
         console.log(`[AUTO PS] Step 4: Using most recent file "${recentFile.fileName}"`);
         console.log(`[AUTO PS]   - bucketKey: ${recentFile.bucketKey}`);
         console.log(`[AUTO PS]   - fileSize: ${recentFile.fileSize} bytes`);
+        console.log(`📄 [KB STEP] Selected file for KB creation: ${recentFile.fileName}`);
+        console.log(`🔗 [KB STEP] File bucket key: ${recentFile.bucketKey}`);
+        console.log(`📏 [KB STEP] File size: ${recentFile.fileSize} bytes`);
         
         // Step 5: Call backend automation endpoint
         console.log(`[AUTO PS] Step 5: Calling backend automation endpoint`);
+        console.log(`🔄 [KB STEP] Calling backend automation API`);
+        console.log(`📤 [KB STEP] Sending to backend:`, JSON.stringify({
+          userId: userId,
+          fileName: recentFile.fileName,
+          bucketKey: recentFile.bucketKey
+        }, null, 2));
+        
         const response = await fetch('/api/automate-kb-and-summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -460,6 +806,7 @@ export default defineComponent({
         });
         
         console.log(`[AUTO PS] Step 6: Backend responded with status ${response.status}`);
+        console.log(`📥 [KB STEP] Backend response status: ${response.status}`);
         
         if (!response.ok) {
           const error = await response.json();
@@ -472,6 +819,11 @@ export default defineComponent({
         console.log(`[AUTO PS]   - KB created: ${result.kbId || 'N/A'}`);
         console.log(`[AUTO PS]   - Tokens indexed: ${result.tokensIndexed || 0}`);
         console.log(`[AUTO PS]   - Summary generated: ${result.summary ? 'Yes' : 'No'}`);
+        console.log(`✅ [KB STEP] Backend automation completed successfully`);
+        console.log(`🆔 [KB STEP] KB ID: ${result.kbId || 'N/A'}`);
+        console.log(`📊 [KB STEP] Tokens indexed: ${result.tokensIndexed || 0}`);
+        console.log(`📝 [KB STEP] Summary generated: ${result.summary ? 'Yes' : 'No'}`);
+        console.log(`📥 [KB STEP] Full backend response:`, JSON.stringify(result, null, 2));
         
         // Step 7: Add patient summary to chat
         console.log('[PS SAVE2] 🖥️ Frontend received backend response');
@@ -704,8 +1056,12 @@ export default defineComponent({
       }
 
       // ✅ User has agent but no KB and just uploaded a file
-      // Show the Create KB Action modal
+      // Show the Create KB Action modal and fetch KB data
+      // Reset state when opening modal
+      filesOrganized.value = false;
+      organizedKBs.value = [];
       showCreateKBActionModal.value = true;
+      fetchUserKBs();
     };
 
     // Watch for user and agent changes to check if No Agent modal should be shown
@@ -1141,6 +1497,56 @@ const triggerUploadFile = (file: File) => {
       }
     });
 
+    // Helper function to format file size in MB
+    const formatFileSizeMB = (bytes) => {
+      if (!bytes) return '0 MB';
+      const mb = bytes / (1024 * 1024);
+      return `${mb.toFixed(2)} MB`;
+    };
+
+    // Computed: check if any files are marked as Pre KB
+    const hasPreKBFiles = computed(() => {
+      return kbFileLocations.value.some(file => {
+        return Object.keys(file.selectedLocations || {}).some(key => 
+          key.startsWith('preKB') && file.selectedLocations[key]
+        );
+      });
+    });
+
+    // Computed: table columns based on KB info
+    const tableColumns = computed(() => {
+      const cols = [
+        { name: 'fileName', label: 'File', field: 'fileName', align: 'left', style: 'max-width: 200px; overflow: hidden; text-overflow: ellipsis;' }
+      ];
+      
+      // Add Available column
+      cols.push({ name: 'available', label: 'Available', field: 'available', align: 'center' });
+      
+      // Add columns for each KB
+      kbInfo.value.forEach(kb => {
+        cols.push({ name: `preKB${kb.label}`, label: `Pre KB ${kb.label}`, field: `preKB${kb.label}`, align: 'center' });
+        cols.push({ name: `inKB${kb.label}`, label: `In KB ${kb.label}`, field: `inKB${kb.label}`, align: 'center' });
+      });
+      
+      return cols;
+    });
+
+    // Handle checkbox toggle
+    const toggleLocation = (file, locationKey) => {
+      if (!file.selectedLocations) file.selectedLocations = {};
+      
+      // If checking a location, uncheck others (only one location per file)
+      if (!file.selectedLocations[locationKey]) {
+        Object.keys(file.selectedLocations).forEach(key => {
+          file.selectedLocations[key] = false;
+        });
+        file.selectedLocations[locationKey] = true;
+      } else {
+        // Unchecking: allow it (for re-selection)
+        file.selectedLocations[locationKey] = false;
+      }
+    };
+
     return {
       // State
       appState,
@@ -1167,12 +1573,31 @@ const triggerUploadFile = (file: File) => {
       showSafariWarningModal,
       isSafari,
       showCreateKBActionModal,
+      userKBsFromAPI,
+      userKBsFromDB,
+      kbValidationError,
+      filesOrganized,
+      isPreparingFolder,
+      isLoadingKBData,
+      availableFiles,
+      organizedKBs,
+      kbFileLocations,
+      kbInfo,
+      formatFileSizeMB,
+      hasPreKBFiles,
+      tableColumns,
+      toggleLocation,
+      fetchUserKBs,
+      prepareFolder,
+      handleCreateKB,
+      handleCancelKBCreation,
+      automateKBCreationWithOrganizedFiles,
       triggerFileImport,
       handleOpenKBManager,
       handleImportFile,
+      handleContinueFromWelcome,
       handleOpenPublicKBManager,
       handleOpenAgentManagementFromNoKB,
-      handleDoItCreateKB,
       handleSupportRequested,
       checkForKnowledgeBaseWelcome,
       
@@ -1344,6 +1769,7 @@ const triggerUploadFile = (file: File) => {
       :current-user="currentUser"
       @open-manager="handleOpenKBManager"
       @import-file="handleImportFile"
+      @continue="handleContinueFromWelcome"
     />
 
     <PublicUserKBWelcomeModal
@@ -1362,26 +1788,125 @@ const triggerUploadFile = (file: File) => {
       @try-anyway="handleSignInAnyway"
     />
 
-    <!-- Create KB and Summary Action Modal -->
+    <!-- Enhanced KB Management Modal -->
     <QDialog v-model="showCreateKBActionModal" persistent>
-      <QCard style="min-width: 400px; max-width: 500px">
+      <QCard style="min-width: 500px; max-width: 600px">
         <QCardSection class="text-center q-pt-lg">
-          <div class="text-h5 q-mb-md">📚 Create a Knowledge Base and Patient Summary</div>
+          <div class="text-h5 q-mb-md">📚 Knowledge Base Management</div>
         </QCardSection>
 
+        <!-- Loading State -->
+        <QCardSection v-if="isLoadingKBData" class="text-center">
+          <QSpinner size="40px" color="primary" />
+          <div class="q-mt-md">Loading knowledge base information...</div>
+        </QCardSection>
+
+        <!-- Error State -->
+        <QCardSection v-else-if="kbValidationError" class="text-center">
+          <QIcon name="error" size="40px" color="negative" />
+          <div class="text-h6 q-mt-md text-negative">Database Inconsistency Detected</div>
+          <div class="q-mt-md text-body2" style="white-space: pre-line">{{ kbValidationError }}</div>
+          <div class="q-mt-md text-caption">
+            Please contact support to resolve this issue before proceeding.
+          </div>
+        </QCardSection>
+
+        <!-- Normal State - Table View -->
+        <QCardSection v-else>
+          <!-- Table View -->
+          <div v-if="kbFileLocations.length === 0" class="text-center text-grey-6 q-py-lg">
+            No files found
+          </div>
+          
+          <div v-else class="kb-file-table-container" style="max-height: 400px; overflow-x: auto;">
+            <table class="kb-location-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e0e0e0;">File</th>
+                  <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">Available</th>
+                  <template v-for="kb in kbInfo" :key="kb.kbName">
+                    <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">Pre KB {{ kb.label }}</th>
+                    <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">In KB {{ kb.label }}</th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="file in kbFileLocations" :key="file.fileName" style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 8px; min-width: 200px;">
+                    <div class="text-body2">
+                      <QIcon name="description" size="14px" class="q-mr-xs" />
+                      {{ file.fileName }}
+                      <div class="text-caption text-grey-6">
+                        {{ formatFileSizeMB(file.fileSize) }}
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <!-- Available Column -->
+                  <td style="padding: 8px; text-align: center;">
+                    <QCheckbox
+                      :model-value="file.selectedLocations?.available || false"
+                      @update:model-value="toggleLocation(file, 'available')"
+                      :disable="file.locations?.available === false"
+                    />
+                  </td>
+                  
+                  <!-- KB Columns (dynamic) -->
+                  <template v-for="kb in kbInfo" :key="kb.kbName">
+                    <!-- Pre KB Column -->
+                    <td style="padding: 8px; text-align: center;">
+                      <QCheckbox
+                        :model-value="file.selectedLocations?.[`preKB${kb.label}`] || false"
+                        @update:model-value="toggleLocation(file, `preKB${kb.label}`)"
+                        :disable="file.locations?.[`preKB${kb.label}`] === false"
+                      />
+                    </td>
+                    
+                    <!-- In KB Column -->
+                    <td style="padding: 8px; text-align: center;">
+                      <QCheckbox
+                        :model-value="file.selectedLocations?.[`inKB${kb.label}`] || false"
+                        @update:model-value="toggleLocation(file, `inKB${kb.label}`)"
+                        :disable="file.locations?.[`inKB${kb.label}`] === false"
+                      />
+                    </td>
+                  </template>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- KB Legend -->
+          <div v-if="kbInfo.length > 0" class="q-mt-lg q-pt-md" style="border-top: 1px solid #e0e0e0;">
+            <div class="text-caption text-grey-7 q-mb-xs"><strong>Knowledge Base Legend:</strong></div>
+            <div v-for="kb in kbInfo" :key="kb.kbName" class="text-caption" :class="{ 'text-grey-5': !kb.exists }">
+              KB {{ kb.label }}: {{ kb.kbName }}
+            </div>
+          </div>
+
+
+        </QCardSection>
+
+        <!-- Action Buttons -->
         <QCardActions align="center" class="q-pa-lg">
           <QBtn
             flat
-            label="Not yet"
-            @click="showCreateKBActionModal = false"
+            label="NOT YET"
+            @click="handleCancelKBCreation"
             class="q-mr-md"
+            :disable="isLoadingKBData"
           />
+          
+          <QSpace />
+          
+          <!-- CREATE KNOWLEDGE BASE Button -->
           <QBtn
             color="primary"
-            label="DO IT"
-            @click="handleDoItCreateKB"
-            class="q-px-xl"
+            label="CREATE KNOWLEDGE BASE"
+            @click="handleCreateKB"
+            class="q-px-xl q-ml-sm"
             unelevated
+            :disable="!hasPreKBFiles || isLoadingKBData"
           />
         </QCardActions>
       </QCard>

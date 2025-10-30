@@ -325,9 +325,8 @@ export class CacheManager {
         if (databaseName === 'maia_users') {
           // Only invalidate caches that are actually used
           this.invalidateCache('chats');
-          // NOTE: We do NOT invalidate 'users', 'all' anymore - it causes users to disappear
-          // Individual user entries are updated in-place via setCached above
-          console.log(`🔄 [CACHE] Updated user ${documentId} in cache (kept individual entry updated)`);
+          this.invalidateCache('users', 'all');
+          console.log(`🔄 [CACHE] Invalidated "all users" cache after saving user ${documentId}`);
         }
         
         // Log retry success if this wasn't the first attempt
@@ -508,12 +507,9 @@ export class CacheManager {
 
   /**
    * Cache users data
-   * @deprecated No longer using 'users', 'all' key - cache individual users instead
    */
   async cacheUsers(usersData) {
-    // DEPRECATED: Individual user entries should be cached via setCache('users', userId, userData)
-    // This method is kept for backward compatibility but does nothing
-    console.warn('⚠️ [CACHE] cacheUsers() is deprecated - use setCache for individual users');
+    this.setCached('users', 'all', usersData);
   }
 
   /**
@@ -530,8 +526,12 @@ export class CacheManager {
   }
 
   getCachedUsers() {
-    // DEPRECATED: No longer using 'users', 'all' key
-    // Use Array.from(this.cache.users.values()) instead
+    if (this.isCacheValid('users', 'all')) {
+      const cached = this.getCached('users', 'all');
+      if (cached) {
+        return cached;
+      }
+    }
     return null;
   }
 

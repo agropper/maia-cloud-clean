@@ -21,23 +21,39 @@
             <li>• To link to original documents for authenticity checks</li>
           </ul>
 
-          <p class="welcome-paragraph upload-instruction">
+          <p v-if="!hasUnindexedFiles" class="welcome-paragraph upload-instruction">
             <strong>📎 First Step:</strong> Upload your health documents using the paper clip icon at the bottom of the chat.
           </p>
           
-          <p class="welcome-paragraph">
-            After uploading files, open the Private AI Manager to select which documents to include in your knowledge base.
+          <p v-if="hasUnindexedFiles" class="welcome-paragraph upload-instruction next-step">
+            <strong>📎 Next Step:</strong> You have imported files that are not in any knowledge base.
+          </p>
+          
+          <p v-if="!hasUnindexedFiles" class="welcome-paragraph">
+            After importing files, click the Knowledge Base Status icon <QIcon name="book" size="20px" class="q-mx-xs" /> to turn them into a knowledge base.
+          </p>
+          
+          <p v-if="hasUnindexedFiles" class="welcome-paragraph">
+            Click Continue to create or update a knowledge base or click Import a file to import more files.
           </p>
         </div>
       </q-card-section>
 
       <q-card-actions class="q-px-xl q-pb-xl">
-        <q-space />
         <q-btn
           flat
-          label="Cancel"
+          label="CANCEL"
           @click="handleCancel"
           class="q-mr-sm"
+        />
+        <q-space />
+        <q-btn
+          :color="hasUnindexedFiles ? 'primary' : 'grey-6'"
+          :disable="!hasUnindexedFiles"
+          label="CONTINUE"
+          @click="handleContinue"
+          class="q-px-lg q-mr-sm"
+          unelevated
         />
         <q-btn
           color="primary"
@@ -45,6 +61,7 @@
           @click="handleImportFile"
           icon="attach_file"
           class="q-px-lg"
+          unelevated
         />
       </q-card-actions>
     </q-card>
@@ -52,14 +69,15 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import {
   QDialog,
   QCard,
   QCardSection,
   QCardActions,
   QBtn,
-  QSpace
+  QSpace,
+  QIcon
 } from 'quasar'
 
 // Props
@@ -75,20 +93,49 @@ const props = defineProps({
 })
 
 // Emits
-const emit = defineEmits(['update:modelValue', 'open-manager', 'import-file'])
+const emit = defineEmits(['update:modelValue', 'open-manager', 'import-file', 'continue'])
 
 // Reactive state
 const isOpen = ref(props.modelValue)
+const hasUnindexedFiles = ref(false)
+const isLoading = ref(false)
 
 // Watch for prop changes
 watch(() => props.modelValue, (newValue) => {
   isOpen.value = newValue
+  if (newValue) {
+    checkForUnindexedFiles()
+  }
 })
 
 // Watch for internal changes
 watch(isOpen, (newValue) => {
   emit('update:modelValue', newValue)
 })
+
+// Check for unindexed files in subfolders
+const checkForUnindexedFiles = async () => {
+  if (!props.currentUser?.userId || props.currentUser.userId === 'Public User') {
+    hasUnindexedFiles.value = false
+    return
+  }
+  
+  isLoading.value = true
+  try {
+    const response = await fetch(`/api/users/${encodeURIComponent(props.currentUser.userId)}/unindexed-subfolder-files`)
+    if (response.ok) {
+      const data = await response.json()
+      hasUnindexedFiles.value = data.hasUnindexedFiles || false
+    } else {
+      hasUnindexedFiles.value = false
+    }
+  } catch (error) {
+    console.error('Error checking for unindexed files:', error)
+    hasUnindexedFiles.value = false
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const handleCancel = () => {
   isOpen.value = false
@@ -103,6 +150,18 @@ const handleImportFile = () => {
   emit('import-file')
   isOpen.value = false
 }
+
+const handleContinue = () => {
+  emit('continue')
+  isOpen.value = false
+}
+
+// Check on mount if modal is open
+onMounted(() => {
+  if (props.modelValue) {
+    checkForUnindexedFiles()
+  }
+})
 </script>
 
 <style scoped>
@@ -125,10 +184,15 @@ const handleImportFile = () => {
 }
 
 .upload-instruction {
-  background-color: #e3f2fd;
+  background-color: #e3f invadedfd;
   padding: 0.75rem;
   border-radius: 4px;
   border-left: 4px solid #2196f3;
+}
+
+.upload-instruction.next-step {
+  background-color: #fff3e0;
+  border-left-color: #ff9800;
 }
 
 .feature-list {
