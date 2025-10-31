@@ -7999,6 +7999,7 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
     // Get all files in archived/ that are NOT in subfolders
     const archivedFiles = listResponse.Contents?.filter(obj => 
       !obj.Key.endsWith('/') && 
+      !obj.Key.endsWith('.folder-marker') &&
       !obj.Key.includes('/subfolder-') &&
       obj.Key.startsWith(`${userId}/archived/`) &&
       !obj.Key.startsWith(`${userId}/archived/${userId}-kb-`)
@@ -8526,6 +8527,15 @@ app.post('/api/update-kb-files', async (req, res) => {
       const dataSourceJob = kbData.last_indexing_job.data_source_jobs[0];
       dataSourceUuid = dataSourceJob.data_source_uuid;
       console.log(`📊 [KB STEP] Data source UUID: ${dataSourceUuid}`);
+      console.log(`📊 [KB STEP] Last job status: ${kbData.last_indexing_job.status}`);
+      console.log(`📊 [KB STEP] Last job finished_at: ${kbData.last_indexing_job.finished_at}`);
+      console.log(`📊 [KB STEP] Current time: ${new Date().toISOString()}`);
+      if (kbData.last_indexing_job.finished_at) {
+        const finishedAt = new Date(kbData.last_indexing_job.finished_at);
+        const now = new Date();
+        const secondsSinceCompletion = (now - finishedAt) / 1000;
+        console.log(`📊 [KB STEP] Seconds since last completion: ${secondsSinceCompletion}`);
+      }
     } else {
       console.warn(`⚠️ [KB STEP] No data source found in last_indexing_job`);
       // Fallback: get from data sources
@@ -8586,13 +8596,14 @@ app.post('/api/update-kb-files', async (req, res) => {
     console.log(`🚀 [KB STEP] Starting re-indexing job for KB: ${kbName}`);
     console.log(`🚀 [KB STEP] KB ID: ${kbId}`);
     console.log(`🚀 [KB STEP] Data Source UUID: ${dataSourceUuid}`);
-    // Use the KB-level indexing endpoint (same as reindex-specific-kb)
+    // Use the global indexing_jobs endpoint (as suggested by user)
     const indexingJobData = {
-      data_source_uuid: dataSourceUuid
+      knowledge_base_uuid: kbId,
+      data_source_uuids: [dataSourceUuid]
     };
     console.log(`🚀 [KB STEP] Request body: ${JSON.stringify(indexingJobData)}`);
-    console.log(`🚀 [KB STEP] Endpoint: /v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
-    const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
+    console.log(`🚀 [KB STEP] Endpoint: /v2/gen-ai/indexing_jobs`);
+    const indexingJobResponse = await doRequest(`/v2/gen-ai/indexing_jobs`, {
       method: 'POST',
       body: JSON.stringify(indexingJobData)
     });
