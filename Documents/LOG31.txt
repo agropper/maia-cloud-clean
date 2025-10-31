@@ -1,0 +1,634 @@
+adrian@MacBook-Pro-AG maia-cloud-clean % npm start
+
+> hie-openai-demo@1.0.0 start
+> node server.js
+
+  - NODE_ENV: undefined
+  - DOMAIN: not set
+  - PASSKEY_RPID: not set
+  - isLocalhost: true
+  - isCloud: false
+  - NODE_ENV: undefined
+  - Environment Detection:
+    - isLocalhost: true
+    - isCloud: false
+  - rpID: localhost
+  - origin: http://localhost:3001
+  - Auto-detected from:
+    - PASSKEY_RPID: not set
+    - DOMAIN: not set
+    - PORT: 3001 (default)
+    - HTTPS: not set
+📋 Configuration Summary:
+✅ Local development environment
+✅ rpID: localhost
+✅ origin: http://localhost:3001
+✅ [TEMPLATE] Agent Management Template cache initialized
+Warning: TT: undefined function: 32
+✅ [Database] Consistency check passed - Public User document valid
+✅ [STARTUP] Admin alert system initialized
+🔐 [STARTUP] Public KB whitelist loaded: 4 KBs
+🔐 [STARTUP]   - devon-viaapp-kb-06162025
+🔐 [STARTUP]   - casandra-timeline-mpnet-kb-06162025
+🔐 [STARTUP]   - waylon-timeline-kb-05262025
+🔐 [STARTUP]   - cgm-kb-05122025
+✅ [STARTUP] Server ready for authentication requests
+📚 [STARTUP] Loaded 17 saved chats into cache
+🔄 [STARTUP] Initializing users cache with bucket status...
+📊 [STARTUP] Fetched 16 total documents from maia_users
+✅ [STARTUP] Cached 14 individual user entries
+✅ [STARTUP] Loaded 10 agents to maia_agents and cacheManager
+✅ [STARTUP] Using database: genai-driftwood (881761c6-e72d-4f35-a48e-b320cd1f46e4)
+🔄 [STARTUP] Validating user agent assignments...
+🔄 [STARTUP] Checking for agents missing from user documents...
+✅ [STARTUP] Loaded 12 knowledge bases to maia_kb and cacheManager
+🔄 [STARTUP] Fetching models from DigitalOcean API...
+✅ [STARTUP] Cached 30 models for Admin2
+✅ Session: thu30
+[PAGE LOAD] private session created - thu30
+[POLLING] Added session_created update to 0 admin sessions
+[SESSION RESTORE] Created session for existing user: thu30
+🔓 [DEV] Admin authentication bypassed for localhost:3001 (development mode)
+[SESSION LOG] created - private user thu30
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+🔐 [KB SECURITY] Public User: 4 whitelisted KBs shown, 8 private KBs hidden
+🔍 [KB STEP] Fetching KBs from database for user: thu30
+📚 [KB STEP] Found 1 KBs in database for user thu30
+📝 [KBM STEP] Reconciled maia_kb for thu30-kb-1761870791553: 3 files, status=ready
+📋 [KBM STEP] KB Info (exists/labels): [ { kbName: 'thu30-kb-1761870791553', exists: true, label: 'A' } ]
+📁 [KBM STEP] Level 1 (archived/) files: 0
+📁 [KBM STEP] KB thu30-kb-1761870791553 Level 2 files: 3
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-2.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-3.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_26KB.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF | locations={"inKBA":true}
+Warning: TT: undefined function: 32
+✅ [CACHE] Updated bucket cache for user thu30: 4 files, 12803361 bytes
+[POLLING] Added user_file_uploaded update to 0 admin sessions
+[*] User thu30 uploaded file GROPPER_ADRIAN_09_24_25_1314-1.PDF to bucket
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+✅ Updated file metadata for user thu30: GROPPER_ADRIAN_09_24_25_1314-1.PDF
+[PAGE LOAD] admin session created - admin
+[POLLING] Added session_created update to session sess_1761874844421_1sz68dtqi
+[POLLING] Added session_created update to 1 admin sessions
+.[SESSION LOG] created - admin user admin
+🔐 [KB SECURITY] Public User: 4 whitelisted KBs shown, 8 private KBs hidden
+🔍 [KB STEP] Fetching KBs from database for user: thu30
+📚 [KB STEP] Found 1 KBs in database for user thu30
+📝 [KBM STEP] Reconciled maia_kb for thu30-kb-1761870791553: 3 files, status=ready
+📋 [KBM STEP] KB Info (exists/labels): [ { kbName: 'thu30-kb-1761870791553', exists: true, label: 'A' } ]
+📁 [KBM STEP] Level 1 (archived/) files: 1
+📁 [KBM STEP] KB thu30-kb-1761870791553 Level 2 files: 3
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1314-1.PDF | bucketKey=thu30/archived/GROPPER_ADRIAN_09_24_25_1314-1.PDF | locations={"available":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-2.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-3.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_26KB.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF | locations={"inKBA":true}
+📦 [KB STEP] MOVING file: thu30/archived/GROPPER_ADRIAN_09_24_25_1314-1.PDF to thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_09_24_25_1314-1.PDF from thu30/archived/GROPPER_ADRIAN_09_24_25_1314-1.PDF to thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📊 [KB STEP] Files in KB root after move: 4
+🔄 [KB STEP] Updating KB: thu30-kb-1761870791553 for user: thu30
+🔍 [KB STEP] Raw kbDetailsResponse: {
+  "knowledge_base": {
+    "uuid": "34b50ddc-b5f1-11f0-b074-4e013e2ddde4",
+    "name": "thu30-kb-1761870791553",
+    "created_at": "2025-10-31T00:33:22Z",
+    "updated_at": "2025-10-31T01:08:33Z",
+    "region": "tor1",
+    "embedding_model_uuid": "22653204-79ed-11ef-bf8f-4e013e2ddde4",
+    "project_id": "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+    "database_id": "881761c6-e72d-4f35-a48e-b320cd1f46e4",
+    "last_indexing_job": {
+      "uuid": "1f42713e-b5f6-11f0-b074-4e013e2ddde4",
+      "knowledge_base_uuid": "34b50ddc-b5f1-11f0-b074-4e013e2ddde4",
+      "created_at": "2025-10-31T01:08:33Z",
+      "updated_at": "2025-10-31T01:14:12Z",
+      "started_at": "2025-10-31T01:08:34Z",
+      "finished_at": "2025-10-31T01:14:12Z",
+      "phase": "BATCH_JOB_PHASE_SUCCEEDED",
+      "total_datasources": 1,
+      "completed_datasources": 1,
+      "status": "INDEX_JOB_STATUS_COMPLETED",
+      "data_source_jobs": [
+        {
+          "data_source_uuid": "34e57409-b5f1-11f0-b074-4e013e2ddde4",
+          "total_file_count": "3",
+          "indexed_file_count": "1",
+          "total_bytes": "6454487",
+          "total_bytes_indexed": "4672176",
+          "started_at": "2025-10-31T01:08:55Z",
+          "completed_at": "2025-10-31T01:13:59Z",
+          "indexed_item_count": "1",
+          "skipped_item_count": "2",
+          "status": "DATA_SOURCE_STATUS_UPDATED"
+        }
+      ],
+      "is_report_available": true
+    }
+  },
+  "database_status": "ONLINE"
+}
+🔍 [KB STEP] kbDetails keys: [ 'knowledge_base', 'database_status' ]
+🔍 [KB STEP] Looking for data source in KB details...
+🔍 [KB STEP] KB data keys: [
+  'uuid',
+  'name',
+  'created_at',
+  'updated_at',
+  'region',
+  'embedding_model_uuid',
+  'project_id',
+  'database_id',
+  'last_indexing_job'
+]
+✅ [KB STEP] Found data source info from last indexing job
+📊 [KB STEP] Data source UUID: 34e57409-b5f1-11f0-b074-4e013e2ddde4
+📊 [KB STEP] Last job status: INDEX_JOB_STATUS_COMPLETED
+📊 [KB STEP] Last job finished_at: 2025-10-31T01:14:12Z
+📊 [KB STEP] Current time: 2025-10-31T01:41:06.797Z
+📊 [KB STEP] Seconds since last completion: 1614.797
+✅ [KB STEP] Using data source UUID: 34e57409-b5f1-11f0-b074-4e013e2ddde4
+📄 [KB STEP] Found 4 files in Level 2 for KB thu30-kb-1761870791553
+🚀 [KB STEP] Starting re-indexing job for KB: thu30-kb-1761870791553
+🚀 [KB STEP] KB ID: 34b50ddc-b5f1-11f0-b074-4e013e2ddde4
+🚀 [KB STEP] Data Source UUID: 34e57409-b5f1-11f0-b074-4e013e2ddde4
+🚀 [KB STEP] Request body: {"knowledge_base_uuid":"34b50ddc-b5f1-11f0-b074-4e013e2ddde4","data_source_uuids":["34e57409-b5f1-11f0-b074-4e013e2ddde4"]}
+🚀 [KB STEP] Endpoint: /v2/gen-ai/indexing_jobs
+🔍 [KB STEP] Raw indexing job response: {
+  "job": {
+    "uuid": "abec7025-b5fa-11f0-b074-4e013e2ddde4",
+    "knowledge_base_uuid": "34b50ddc-b5f1-11f0-b074-4e013e2ddde4",
+    "created_at": "2025-10-31T01:41:07Z",
+    "updated_at": "2025-10-31T01:41:07Z",
+    "phase": "BATCH_JOB_PHASE_PENDING",
+    "status": "INDEX_JOB_STATUS_PENDING"
+  }
+}
+✅ [KB STEP] Re-indexing job created: NO UUID
+📊 [KB STEP] Indexing status (attempt 1 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/0
+📊 [KB STEP] Indexing status (attempt 2 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/0
+📊 [KB STEP] Indexing status (attempt 3 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/0
+📊 [KB STEP] Indexing status (attempt 4 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 5 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 6 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 7 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 8 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 9 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 10 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 11 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 12 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 13 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 14 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 15 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 16 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 17 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 18 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 19 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 20 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 21 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 22 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 23 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 24 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 25 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 26 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 27 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 28 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 29 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 30 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 31 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 32 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 33 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 34 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 35 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 36 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 37 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 38 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 39 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 40 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 41 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 42 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 43 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 44 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 45 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 46 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 47 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 48 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 49 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 50 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 51 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 52 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 53 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 54 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 55 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 56 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 57 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 58 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 59 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 60 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 61 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 62 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 63 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 64 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 65 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 66 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 67 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 68 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 69 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 70 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 71 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 72 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 73 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 74 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 75 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 76 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 77 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 78 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 79 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 80 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 81 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 82 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 83 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 84 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 85 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 86 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 87 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 88 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 89 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 90 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 91 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 92 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 93 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 94 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 95 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 96 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/4
+📊 [KB STEP] Indexing status (attempt 97 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/4
+📊 [KB STEP] Indexing status (attempt 98 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/4
+📊 [KB STEP] Indexing status (attempt 99 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/4
+📊 [KB STEP] Indexing status (attempt 100 / 500): INDEX_JOB_STATUS_COMPLETED, Phase: BATCH_JOB_PHASE_SUCCEEDED, Tokens: 170732, Files: 2/4
+✅ [KB STEP] Re-indexing complete! 170732 tokens indexed, 2 files indexed
+✅ [KB STEP] Updated maia_kb document for thu30-kb-1761870791553
+🔐 [KB SECURITY] Public User: 4 whitelisted KBs shown, 8 private KBs hidden
+🔍 [KB STEP] Fetching KBs from database for user: thu30
+📚 [KB STEP] Found 1 KBs in database for user thu30
+📝 [KBM STEP] Reconciled maia_kb for thu30-kb-1761870791553: 4 files, status=ready
+📋 [KBM STEP] KB Info (exists/labels): [ { kbName: 'thu30-kb-1761870791553', exists: true, label: 'A' } ]
+📁 [KBM STEP] Level 1 (archived/) files: 0
+📁 [KBM STEP] KB thu30-kb-1761870791553 Level 2 files: 4
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1314-1.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-2.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-3.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_26KB.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF | locations={"inKBA":true}
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+📋 [PATIENT SUMMARY] Using cached summary for thu30
+[*] AI Query: 10 tokens, 0KB context, 0 files
+[*] Current user: thu30, Agent: thu30-agent-10302025, Connected KBs: [thu30-kb-1761870791553]
+🔍 [API KEY LOOKUP] Starting lookup for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] Not in agentApiKeys cache, checking user cache...
+🔍 [API KEY LOOKUP] User cache has 14 entries
+🔑 [API KEY] Found user thu30 with agent 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] User has agentApiKey: true
+🔍 [API KEY LOOKUP] API key value: DHWn8nDYkl...
+🔑 Using database-stored API key for agent: thu30-agent-10302025 (user: thu30)
+🔑 ✅ API key found: DHWn8nDYkl...
+[*] AI Response time: 3991ms
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+🔐 [KB SECURITY] Public User: 4 whitelisted KBs shown, 8 private KBs hidden
+🔍 [KB STEP] Fetching KBs from database for user: thu30
+📚 [KB STEP] Found 1 KBs in database for user thu30
+📝 [KBM STEP] Reconciled maia_kb for thu30-kb-1761870791553: 4 files, status=ready
+📋 [KBM STEP] KB Info (exists/labels): [ { kbName: 'thu30-kb-1761870791553', exists: true, label: 'A' } ]
+📁 [KBM STEP] Level 1 (archived/) files: 0
+📁 [KBM STEP] KB thu30-kb-1761870791553 Level 2 files: 4
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1314-1.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-2.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-3.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_26KB.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF | locations={"inKBA":true}
+✅ [CACHE] Updated bucket cache for user thu30: 5 files, 12808870 bytes
+[POLLING] Added user_file_uploaded update to session sess_1761874844421_1sz68dtqi
+[POLLING] Added user_file_uploaded update to 1 admin sessions
+[*] User thu30 uploaded file GROPPER_ADRIAN_6KB.PDF to bucket
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+✅ Updated file metadata for user thu30: GROPPER_ADRIAN_6KB.PDF
+🔐 [KB SECURITY] Public User: 4 whitelisted KBs shown, 8 private KBs hidden
+🔍 [KB STEP] Fetching KBs from database for user: thu30
+📚 [KB STEP] Found 1 KBs in database for user thu30
+📝 [KBM STEP] Reconciled maia_kb for thu30-kb-1761870791553: 4 files, status=ready
+📋 [KBM STEP] KB Info (exists/labels): [ { kbName: 'thu30-kb-1761870791553', exists: true, label: 'A' } ]
+📁 [KBM STEP] Level 1 (archived/) files: 1
+📁 [KBM STEP] KB thu30-kb-1761870791553 Level 2 files: 4
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📄 [KBM STEP] Seen in Level 2 (inKB): thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_6KB.PDF | bucketKey=thu30/archived/GROPPER_ADRIAN_6KB.PDF | locations={"available":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1314-1.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-2.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_09_24_25_1336-3.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF | locations={"inKBA":true}
+📄 [KBM STEP] File summary: GROPPER_ADRIAN_26KB.PDF | bucketKey=thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF | locations={"inKBA":true}
+📦 [KB STEP] MOVING file: thu30/archived/GROPPER_ADRIAN_6KB.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_6KB.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_6KB.PDF from thu30/archived/GROPPER_ADRIAN_6KB.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_6KB.PDF
+📊 [KB STEP] Files in KB root after move: 1
+📦 [KB STEP] MOVING file: thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_09_24_25_1314-1.PDF from thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1314-1.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📊 [KB STEP] Files in KB root after move: 2
+📦 [KB STEP] MOVING file: thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_09_24_25_1336-2.PDF from thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-2.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1336-2.PDF
+📊 [KB STEP] Files in KB root after move: 3
+📦 [KB STEP] MOVING file: thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_09_24_25_1336-3.PDF from thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_09_24_25_1336-3.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1336-3.PDF
+📊 [KB STEP] Files in KB root after move: 4
+📦 [KB STEP] MOVING file: thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_26KB.PDF
+✅ [KB STEP] MOVED file: GROPPER_ADRIAN_26KB.PDF from thu30/archived/thu30-kb-1761870791553/GROPPER_ADRIAN_26KB.PDF to thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_26KB.PDF
+📊 [KB STEP] Files in KB root after move: 5
+🤖 [AUTO PS] Starting organized files automation for user thu30
+📁 [KB STEP] Using organized subfolder structure
+📄 [KB STEP] Found 0 files in archived/ folder to organize
+📂 [KB STEP] Found existing pre-KB folder: thu30/archived/thu30-kb-1761875760325/
+📂 [KB STEP] Using existing pre-KB folder: thu30/archived/thu30-kb-1761875760325/
+📊 [KB STEP] KB Name: thu30-kb-1761875760325
+📄 [KB STEP] Using file: GROPPER_ADRIAN_09_24_25_1314-1.PDF
+🔗 [KB STEP] File bucket key: thu30/archived/thu30-kb-1761875760325/GROPPER_ADRIAN_09_24_25_1314-1.PDF
+📂 [KB STEP] KB root path (Level 2): thu30/archived/thu30-kb-1761875760325/
+🤖 [AUTO PS] User has agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🤖 [AUTO PS] Using project: 90179b7c-8a42-4a71-a036-b4c2bea2fe59
+🔍 [DEBUG] Using database ID from global: 881761c6-e72d-4f35-a48e-b320cd1f46e4
+🤖 [AUTO PS] Using database: genai-driftwood (881761c6-e72d-4f35-a48e-b320cd1f46e4)
+🚀 [KB STEP] Creating KB with Level 2 (KB root) data source
+🤖 [AUTO PS] Using embedding model: GTE Large EN v1.5 (22653204-79ed-11ef-bf8f-4e013e2ddde4)
+🚀 [KB STEP] Creating KB with data: {
+  "name": "thu30-kb-1761875760325",
+  "description": "thu30-kb-1761875760325 - Auto-created with Level 2 structure from GROPPER_ADRIAN_09_24_25_1314-1.PDF",
+  "project_id": "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+  "database_id": "881761c6-e72d-4f35-a48e-b320cd1f46e4",
+  "embedding_model_uuid": "22653204-79ed-11ef-bf8f-4e013e2ddde4",
+  "region": "tor1",
+  "datasources": [
+    {
+      "spaces_data_source": {
+        "name": "thu30-kb-1761875760325-datasource-1",
+        "bucket_name": "maia",
+        "region": "tor1",
+        "item_path": "thu30/archived/thu30-kb-1761875760325/",
+        "access_key_id": "DO00EZW8AB23ECHG3AQF",
+        "secret_access_key": "f1Ru0xraU0lHApvOq65zSYMx9nzoylus4kn7F9XXSBs"
+      }
+    }
+  ]
+}
+✅ [KB STEP] KB created - DO API response: {
+  "knowledge_base": {
+    "uuid": "c83035b6-b5fc-11f0-b074-4e013e2ddde4",
+    "name": "thu30-kb-1761875760325",
+    "created_at": "2025-10-31T01:56:14Z",
+    "updated_at": "2025-10-31T01:56:21Z",
+    "region": "tor1",
+    "embedding_model_uuid": "22653204-79ed-11ef-bf8f-4e013e2ddde4",
+    "project_id": "90179b7c-8a42-4a71-a036-b4c2bea2fe59",
+    "database_id": "881761c6-e72d-4f35-a48e-b320cd1f46e4",
+    "last_indexing_job": {
+      "uuid": "cc2f56e9-b5fc-11f0-b074-4e013e2ddde4",
+      "knowledge_base_uuid": "c83035b6-b5fc-11f0-b074-4e013e2ddde4",
+      "created_at": "2025-10-31T01:56:21Z",
+      "updated_at": "2025-10-31T01:56:21Z",
+      "phase": "BATCH_JOB_PHASE_PENDING",
+      "total_datasources": 1,
+      "status": "INDEX_JOB_STATUS_PENDING",
+      "data_source_jobs": [
+        {
+          "data_source_uuid": "c8671e55-b5fc-11f0-b074-4e013e2ddde4",
+          "status": "DATA_SOURCE_STATUS_IN_PROGRESS"
+        }
+      ]
+    }
+  }
+}
+🆔 [KB STEP] KB ID: c83035b6-b5fc-11f0-b074-4e013e2ddde4
+✅ [KB STEP] Created maia_kb document for thu30-kb-1761875760325
+🤖 [AUTO PS] Indexing started automatically, polling for completion...
+📊 [KB STEP] Indexing status (attempt 1 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0
+📊 [KB STEP] Indexing status (attempt 2 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0
+📊 [KB STEP] Indexing status (attempt 3 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0
+.📊 [KB STEP] Indexing status (attempt 4 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 5 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 6 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 7 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 8 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 9 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 10 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 11 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 12 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 13 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 14 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 15 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 16 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 17 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 18 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 19 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 20 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 21 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 22 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 23 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 24 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 25 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 26 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 27 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 28 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 29 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 30 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 31 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 32 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 33 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 34 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 35 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 36 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 37 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 38 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 39 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 40 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 41 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 42 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 43 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 44 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 45 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 46 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 47 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 48 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 49 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 50 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 51 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 52 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 53 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 54 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 55 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 56 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 57 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 58 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 59 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 60 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 61 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 62 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 63 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 64 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 65 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 66 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 67 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 68 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 69 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 70 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 71 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 72 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 73 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 74 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 75 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 76 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 77 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 78 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 79 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 80 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 81 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 82 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 83 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 84 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 85 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 86 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 87 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 88 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 89 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 90 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 91 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 92 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 93 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 94 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 95 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 96 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 97 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 98 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 99 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 100 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 101 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 102 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 103 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 104 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 105 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 106 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 107 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 108 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 109 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 110 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 111 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 112 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 113 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 114 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 0, Files: 0/5
+📊 [KB STEP] Indexing status (attempt 115 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 116 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 117 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 118 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 119 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 120 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 121 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 122 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 123 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 124 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 125 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 126 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 127 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 128 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 129 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 130 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 131 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 132 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 133 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 134 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 135 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 136 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 137 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 138 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 139 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 140 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 141 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 142 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 143 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 144 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 145 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 146 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 147 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 148 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 149 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 150 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 151 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 152 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 153 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 154 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 155 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 170732, Files: 2/5
+📊 [KB STEP] Indexing status (attempt 156 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 218925, Files: 5/5
+📊 [KB STEP] Indexing status (attempt 157 / 500): INDEX_JOB_STATUS_IN_PROGRESS, Phase: BATCH_JOB_PHASE_RUNNING, Tokens: 218925, Files: 5/5
+📊 [KB STEP] Indexing status (attempt 158 / 500): INDEX_JOB_STATUS_COMPLETED, Phase: BATCH_JOB_PHASE_SUCCEEDED, Tokens: 218925, Files: 5/5
+✅ [KB STEP] Indexing complete! 218925 tokens indexed, 5 files indexed
+📦 [KB STEP] Indexing complete - files already in Level 2 (KB root)
+📄 [KB STEP] Found 5 indexed files in Level 2: GROPPER_ADRIAN_09_24_25_1314-1.PDF, GROPPER_ADRIAN_09_24_25_1336-2.PDF, GROPPER_ADRIAN_09_24_25_1336-3.PDF, GROPPER_ADRIAN_26KB.PDF, GROPPER_ADRIAN_6KB.PDF
+✅ [KB STEP] Updated maia_kb document with 5 indexed files
+🤖 [AUTO PS] Attaching KB to agent 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🤖 [AUTO PS] KB attached to agent successfully
+🤖 [AUTO PS] Requesting patient summary from agent 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🤖 [AUTO PS] Calling internal /api/personal-chat endpoint with forceRegenerate
+📋 [PATIENT SUMMARY] Bypassing cache - forceRegenerate flag set
+[*] AI Query: 19 tokens, 0KB context, 0 files
+[*] Current user: thu30, Agent: thu30-agent-10302025, Connected KBs: [thu30-kb-1761870791553, thu30-kb-1761875760325]
+🔍 [API KEY LOOKUP] Starting lookup for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] Found in agentApiKeys cache: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔑 Using cached API key for agent: thu30-agent-10302025
+[*] AI Response time: 18549ms
+📋 [PATIENT SUMMARY] Saving new patient summary for thu30
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+⚠️ [CACHE] Document conflict for maia_users:thu30, retrying in 100ms (attempt 1/3)
+🔄 [CACHE] Refreshed document revision for maia_users:thu30
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+✅ [CACHE] Save succeeded on attempt 2 for maia_users:thu30
+📋 [PATIENT SUMMARY] ✅ Patient summary saved successfully
+📋 [PATIENT SUMMARY] Template rebuilt for thu30
+🤖 [AUTO PS] ✅ Patient summary generated (3556 characters)
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+🔐 [KB SECURITY] Authenticated user thu30: 2 of 13 KBs shown
+📋 [PATIENT SUMMARY] Using cached summary for thu30
+📋 [PATIENT SUMMARY] Bypassing cache - forceRegenerate flag set
+[*] AI Query: 19 tokens, 0KB context, 0 files
+[*] Current user: thu30, Agent: thu30-agent-10302025, Connected KBs: [thu30-kb-1761875760325]
+🔍 [API KEY LOOKUP] Starting lookup for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] Found in agentApiKeys cache: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔑 Using cached API key for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+[*] AI Response time: 21972ms
+📋 [PATIENT SUMMARY] Saving new patient summary for thu30
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+⚠️ [CACHE] Document conflict for maia_users:thu30, retrying in 100ms (attempt 1/3)
+🔄 [CACHE] Refreshed document revision for maia_users:thu30
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+✅ [CACHE] Save succeeded on attempt 2 for maia_users:thu30
+📋 [PATIENT SUMMARY] ✅ Patient summary saved successfully
+📋 [PATIENT SUMMARY] Template rebuilt for thu30
+[*] AI Query: 10 tokens, 0KB context, 0 files
+[*] Current user: thu30, Agent: thu30-agent-10302025, Connected KBs: [thu30-kb-1761875760325]
+🔍 [API KEY LOOKUP] Starting lookup for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] Found in agentApiKeys cache: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔑 Using cached API key for agent: thu30-agent-10302025
+[*] AI Response time: 5252ms
+🔄 [CACHE] Invalidated "all users" cache after saving user thu30
+[*] AI Query: 11 tokens, 0KB context, 0 files
+[*] Current user: thu30, Agent: thu30-agent-10302025, Connected KBs: [thu30-kb-1761875760325]
+🔍 [API KEY LOOKUP] Starting lookup for agent: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔍 [API KEY LOOKUP] Found in agentApiKeys cache: 2d46fb7a-b5b1-11f0-b074-4e013e2ddde4
+🔑 Using cached API key for agent: thu30-agent-10302025
+[*] AI Response time: 5354ms
+^C
+adrian@MacBook-Pro-AG maia-cloud-clean % clear    
