@@ -8329,10 +8329,21 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
           if (lastJob) {
             const status = lastJob.status || 'unknown';
             const phase = lastJob.phase || 'unknown';
-            // Get current token count from KB data
-            const currentTokens = kbData.total_token_count || 0;
+            // Get current token count from lastJob or KB data
+            const currentTokens = lastJob.tokens || lastJob.total_tokens || kbData.total_token_count || 0;
             
-            console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}`);
+            // Get file count info from data_source_jobs if available
+            let fileInfo = '';
+            if (lastJob.data_source_jobs && lastJob.data_source_jobs.length > 0) {
+              const dsJob = lastJob.data_source_jobs[0];
+              const indexedFiles = dsJob.indexed_file_count || dsJob.indexed_item_count || 0;
+              const totalFiles = dsJob.total_file_count || 0;
+              if (totalFiles > 0) {
+                fileInfo = `, Files: ${indexedFiles}/${totalFiles}`;
+              }
+            }
+            
+            console.log(`📊 [KB STEP] Indexing status (attempt ${attempts} / ${maxAttempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}${fileInfo}`);
             
             // Update totalTokens during progress
             if (currentTokens > totalTokens) {
@@ -8346,15 +8357,16 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
             
             if (status === 'INDEX_JOB_STATUS_COMPLETED' || phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
               indexingComplete = true;
-              // Get final total tokens from the KB data
-              totalTokens = kbData.total_token_count || 0;
-              console.log(`✅ [KB STEP] Indexing complete! ${totalTokens} tokens indexed`);
+              // Get final total tokens
+              totalTokens = currentTokens;
+              const finalFileInfo = fileInfo ? `, ${lastJob.data_source_jobs[0].indexed_file_count || lastJob.data_source_jobs[0].indexed_item_count || 0} files indexed` : '';
+              console.log(`✅ [KB STEP] Indexing complete! ${totalTokens} tokens indexed${finalFileInfo}`);
             }
           } else {
-            console.log(`📊 [KB STEP] No indexing job found yet (attempt ${attempts})`);
+            console.log(`📊 [KB STEP] No indexing job found yet (attempt ${attempts} / ${maxAttempts})`);
           }
         } catch (pollError) {
-          console.warn(`⚠️ [KB STEP] Polling error: ${pollError.message}`);
+          console.warn(`⚠️ [KB STEP] Polling error (attempt ${attempts} / ${maxAttempts}): ${pollError.message}`);
         }
     }
     
@@ -8608,10 +8620,12 @@ app.post('/api/update-kb-files', async (req, res) => {
       body: JSON.stringify(indexingJobData)
     });
     
-    const indexingJob = indexingJobResponse.data || indexingJobResponse;
-    console.log(`✅ [KB STEP] Re-indexing job created: ${indexingJob.uuid}`);
+    console.log(`🔍 [KB STEP] Raw indexing job response:`, JSON.stringify(indexingJobResponse, null, 2));
+    const indexingJob = indexingJobResponse.indexing_job || indexingJobResponse.data?.indexing_job || indexingJobResponse.data || indexingJobResponse;
+    const jobUuid = indexingJob?.uuid || indexingJob?.id;
+    console.log(`✅ [KB STEP] Re-indexing job created: ${jobUuid || 'NO UUID'}`);
     
-    // Poll for completion
+    // Poll for completion using detailed job status endpoint
     let indexingComplete = false;
     let attempts = 0;
     const maxAttempts = 500;
@@ -8622,16 +8636,62 @@ app.post('/api/update-kb-files', async (req, res) => {
       attempts++;
       
       try {
-        const kbStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
-        const kbData = kbStatusResponse.knowledge_base || kbStatusResponse.data?.knowledge_base || kbStatusResponse.data || kbStatusResponse;
-        const lastJob = kbData.last_indexing_job;
+        // Use the specific indexing job endpoint if we have the job UUID
+        let jobData = null;
+        if (jobUuid && dataSourceUuid) {
+          try {
+            const jobStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/data_sources/${dataSourceUuid}/indexing_jobs/${jobUuid}`);
+            jobData = jobStatusResponse.job || jobStatusResponse.data?.job || jobStatusResponse.data || jobStatusResponse;
+          } catch (jobEndpointError) {
+            // Fallback to KB endpoint if specific job endpoint fails
+            console.log(`⚠️ [KB STEP] Job-specific endpoint failed, using KB endpoint`);
+          }
+        }
         
-        if (lastJob) {
-          const status = lastJob.status || 'unknown';
-          const phase = lastJob.phase || 'unknown';
-          const currentTokens = kbData.total_token_count || 0;
+        // Fallback to KB endpoint to get last job status
+        if (!jobData) {
+          const kbStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+          const kbData = kbStatusResponse.knowledge_base || kbStatusResponse.data?.knowledge_base || kbStatusResponse.data || kbStatusResponse;
+          const lastJob = kbData.last_indexing_job;
           
-          console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}`);
+          if (lastJob) {
+            jobData = lastJob;
+            // Also get data source job details
+            if (lastJob.data_source_jobs && lastJob.data_source_jobs.length > 0) {
+              const dsJob = lastJob.data_source_jobs[0];
+              const status = lastJob.status || 'unknown';
+              const phase = lastJob.phase || 'unknown';
+              const currentTokens = lastJob.tokens || lastJob.total_tokens || kbData.total_token_count || 0;
+              const indexedFiles = dsJob.indexed_file_count || dsJob.indexed_item_count || 0;
+              const totalFiles = dsJob.total_file_count || 0;
+              
+              console.log(`📊 [KB STEP] Indexing status (attempt ${attempts} / ${maxAttempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}, Files: ${indexedFiles}/${totalFiles}`);
+              
+              if (currentTokens > totalTokens) {
+                totalTokens = currentTokens;
+              }
+              
+              if (status === 'INDEX_JOB_STATUS_FAILED' || phase === 'BATCH_JOB_PHASE_FAILED') {
+                throw new Error('KB re-indexing failed');
+              }
+              
+              if (status === 'INDEX_JOB_STATUS_COMPLETED' || phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
+                indexingComplete = true;
+                totalTokens = currentTokens;
+                console.log(`✅ [KB STEP] Re-indexing complete! ${totalTokens} tokens indexed, ${indexedFiles} files indexed`);
+              }
+            }
+          }
+        } else {
+          // Using job-specific endpoint
+          const status = jobData.status || 'unknown';
+          const phase = jobData.phase || 'unknown';
+          const currentTokens = jobData.tokens || jobData.total_tokens || 0;
+          const indexedItems = jobData.total_items_indexed || jobData.indexed_item_count || 0;
+          const totalItems = jobData.total_items || 0;
+          
+          const fileInfo = totalItems > 0 ? `, Files: ${indexedItems}/${totalItems}` : '';
+          console.log(`📊 [KB STEP] Indexing status (attempt ${attempts} / ${maxAttempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}${fileInfo}`);
           
           if (currentTokens > totalTokens) {
             totalTokens = currentTokens;
@@ -8643,12 +8703,13 @@ app.post('/api/update-kb-files', async (req, res) => {
           
           if (status === 'INDEX_JOB_STATUS_COMPLETED' || phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
             indexingComplete = true;
-            totalTokens = kbData.total_token_count || 0;
-            console.log(`✅ [KB STEP] Re-indexing complete! ${totalTokens} tokens indexed`);
+            totalTokens = currentTokens;
+            const finalFileInfo = totalItems > 0 ? `, ${indexedItems} files indexed` : '';
+            console.log(`✅ [KB STEP] Re-indexing complete! ${totalTokens} tokens indexed${finalFileInfo}`);
           }
         }
       } catch (pollError) {
-        console.warn(`⚠️ [KB STEP] Polling error: ${pollError.message}`);
+        console.warn(`⚠️ [KB STEP] Polling error (attempt ${attempts} / ${maxAttempts}): ${pollError.message}`);
       }
     }
     
