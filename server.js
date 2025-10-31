@@ -1710,10 +1710,7 @@ app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
       existingKBNames = [];
     }
 
-    const resultFolders = [];
-    let hasLevel1Files = false;
-
-    // Check Level 1: Files directly in archived/ folder (not in any subfolder)
+    // Check Level 1: Files directly in archived/ folder (not in any KB folder)
     console.log(`🔍 [KB STEP] Checking Level 1 files in archived/ for user: ${userId}`);
     const listArchivedFiles = new ListObjectsV2Command({
       Bucket: bucketName,
@@ -1722,78 +1719,24 @@ app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
     });
     const archivedResp = await s3Client.send(listArchivedFiles);
     
-    // Get files directly in archived/ (not in KB subfolders)
+    // Get files directly in archived/ (not in KB folders)
     const directArchivedFiles = (archivedResp.Contents || []).filter(f => 
       !f.Key.endsWith('/') && 
       !f.Key.endsWith('.folder-marker') &&
-      !f.Key.includes('/subfolder-') &&
       !f.Key.includes(`${userId}-kb-`) &&
       f.Key.startsWith(`${userId}/archived/`)
     );
 
-    if (directArchivedFiles.length > 0) {
-      hasLevel1Files = true;
-      resultFolders.push({
-        kbName: 'available-files',
-        kbExists: false,
-        subfolderPath: `${userId}/archived/`,
-        fileCount: directArchivedFiles.length,
-        level: 1
-      });
+    const hasLevel1Files = directArchivedFiles.length > 0;
+    
+    if (hasLevel1Files) {
       console.log(`📄 [KB STEP] Found ${directArchivedFiles.length} Level 1 files in archived/`);
     }
 
-    // Check Level 3: Files in KB subfolders
-    console.log(`🔍 [KB STEP] Checking Level 3 files in KB subfolders for user: ${userId}`);
-    const listKBRoots = new ListObjectsV2Command({
-      Bucket: bucketName,
-      Prefix: `${userId}/archived/`,
-      Delimiter: '/'
-    });
-    const rootsResp = await s3Client.send(listKBRoots);
-    const kbRoots = (rootsResp.CommonPrefixes || [])
-      .map(p => p.Prefix)
-      .filter(prefix => prefix.includes(`${userId}/archived/${userId}-kb-`));
-
-    console.log(`📂 [KBM STEP] KB Roots discovered (${kbRoots.length}):`, kbRoots);
-
-    for (const kbRoot of kbRoots) {
-      const kbName = kbRoot.split('/').slice(-2, -1)[0];
-      const kbExists = existingKBNames.includes(kbName);
-
-      // For each kbRoot, check subfolder-* contents
-      const listSubfolders = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: kbRoot,
-        Delimiter: '/'
-      });
-      const subsResp = await s3Client.send(listSubfolders);
-      const subfolders = (subsResp.CommonPrefixes || []).map(p => p.Prefix).filter(p => p.includes('/subfolder-'));
-
-      // Count files inside subfolders
-      for (const sub of subfolders) {
-        const listFiles = new ListObjectsV2Command({ Bucket: bucketName, Prefix: sub });
-        const filesResp = await s3Client.send(listFiles);
-        const files = (filesResp.Contents || []).filter(f => !f.Key.endsWith('/') && !f.Key.endsWith('.folder-marker'));
-        if (files.length > 0) {
-          resultFolders.push({ 
-            kbName, 
-            kbExists, 
-            subfolderPath: sub, 
-            fileCount: files.length,
-            level: 3
-          });
-          console.log(`📄 [KB STEP] Found ${files.length} Level 3 files in ${sub}`);
-        }
-      }
-    }
-
-    // Consider unindexed if there are Level 1 files OR Level 3 files without corresponding KB
-    const hasUnindexedFiles = hasLevel1Files || resultFolders.some(f => f.fileCount > 0 && !f.kbExists);
+    // Consider unindexed if there are Level 1 files available for indexing
+    console.log(`📊 [KB STEP] Unindexed files check: Level1=${hasLevel1Files}, Total=${hasLevel1Files}`);
     
-    console.log(`📊 [KB STEP] Unindexed files check: Level1=${hasLevel1Files}, Level3=${resultFolders.filter(f => !f.kbExists).length} folders, Total=${hasUnindexedFiles}`);
-    
-    res.json({ hasUnindexedFiles, folders: resultFolders });
+    res.json({ hasUnindexedFiles: hasLevel1Files, folders: [] });
   } catch (error) {
     console.error('❌ Error checking unindexed subfolder files:', error);
     res.json({ hasUnindexedFiles: false, folders: [] });
@@ -1824,7 +1767,7 @@ app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
       }
     });
     
-    // List all KB folders in archived directory
+    // Check Level 1: Files directly in archived/ folder (not in any KB folder)
     const listCommand = new ListObjectsV2Command({
       Bucket: bucketName,
       Prefix: `${userId}/archived/`,
@@ -1832,62 +1775,19 @@ app.get('/api/users/:userId/unindexed-subfolder-files', async (req, res) => {
     });
     
     const listResponse = await s3Client.send(listCommand);
-    const kbFolders = listResponse.CommonPrefixes?.filter(prefix => 
-      prefix.Prefix.includes(`${userId}-kb-`)
-    ) || [];
+    const directFiles = (listResponse.Contents || []).filter(obj => 
+      !obj.Key.endsWith('/') && 
+      !obj.Key.endsWith('.folder-marker') &&
+      !obj.Key.includes(`${userId}-kb-`) &&
+      obj.Key.startsWith(`${userId}/archived/`)
+    );
     
-    // Get all KBs from DO API for this user
-    const allKBs = await cacheManager.getCachedKnowledgeBases();
-    const safeAllKBs = Array.isArray(allKBs) ? allKBs : [];
-    const userAPIKBs = safeAllKBs.filter(kb => kb.name && kb.name.startsWith(userId));
-    const existingKBNames = new Set(userAPIKBs.map(kb => kb.name));
-    
-    // Check each KB folder for files and whether KB exists
-    const kbFoldersWithFiles = [];
-    for (const folder of kbFolders) {
-      const folderPrefix = folder.Prefix;
-      // Extract KB name from folder path (e.g., "sun26/archived/sun26-kb-123456/subfolder-1/" -> "sun26-kb-123456")
-      const kbNameMatch = folderPrefix.match(/([^/]+-kb-\d+)/);
-      if (!kbNameMatch) continue;
-      
-      const kbName = kbNameMatch[1];
-      
-      // List files in this subfolder
-      const subfolderListCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: folderPrefix
-      });
-      
-      const subfolderResponse = await s3Client.send(subfolderListCommand);
-      const filesInSubfolder = (subfolderResponse.Contents || []).filter(obj => 
-        !obj.Key.endsWith('/') && !obj.Key.endsWith('.folder-marker')
-      );
-      
-      if (filesInSubfolder.length > 0) {
-        // Check if KB exists in DO API
-        const kbExists = existingKBNames.has(kbName);
-        
-        kbFoldersWithFiles.push({
-          kbName: kbName,
-          folderPath: folderPrefix,
-          fileCount: filesInSubfolder.length,
-          files: filesInSubfolder.map(f => ({
-            name: f.Key.split('/').pop(),
-            key: f.Key,
-            size: f.Size,
-            lastModified: f.LastModified
-          })),
-          kbExists: kbExists
-        });
-      }
-    }
-    
-    // Check if there are any folders with files where KB doesn't exist
-    const hasUnindexedFiles = kbFoldersWithFiles.some(folder => !folder.kbExists);
+    // Check if there are any Level 1 files available for indexing
+    const hasUnindexedFiles = directFiles.length > 0;
     
     res.json({
       hasUnindexedFiles: hasUnindexedFiles,
-      kbFolders: kbFoldersWithFiles
+      kbFolders: []
     });
     
   } catch (error) {
@@ -1988,57 +1888,12 @@ app.get('/api/users/:userId/kb-file-locations', async (req, res) => {
       });
     });
 
-    // Process each KB folder (Level 2 and Level 3)
+    // Process each KB folder (Level 2 only)
     for (const kbRoot of kbRoots) {
       const kbName = kbRoot.split('/').slice(-2, -1)[0];
       const kbInfoItem = kbInfo.find(k => k.kbName === kbName);
       if (!kbInfoItem) continue;
-
-      // List subfolders in this KB
-      const listSubfolders = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: kbRoot,
-        Delimiter: '/'
-      });
-      const subsResp = await s3Client.send(listSubfolders);
-      const subfolders = (subsResp.CommonPrefixes || []).map(p => p.Prefix).filter(p => p.includes('/subfolder-'));
-      console.log(`📁 [KBM STEP] KB ${kbName} (${kbInfoItem.exists ? 'exists' : 'pre-KB'}) subfolders: ${subfolders.length}`);
-
-      // Get files from each subfolder (Level 3)
-      for (const sub of subfolders) {
-        const listFiles = new ListObjectsV2Command({
-          Bucket: bucketName,
-          Prefix: sub
-        });
-        const filesResp = await s3Client.send(listFiles);
-        const files = (filesResp.Contents || []).filter(f => 
-          !f.Key.endsWith('/') && !f.Key.endsWith('.folder-marker')
-        );
-
-        files.forEach(f => {
-          const fileName = f.Key.split('/').pop();
-          if (!allFilesMap.has(fileName)) {
-            allFilesMap.set(fileName, {
-              fileName,
-              bucketKey: f.Key,
-              fileSize: f.Size,
-              locations: {}
-            });
-          }
-          const file = allFilesMap.get(fileName);
-          // Determine location key
-          if (kbInfoItem.exists) {
-            file.locations[`inKB${kbInfoItem.label}`] = true;
-          } else {
-            file.locations[`preKB${kbInfoItem.label}`] = true;
-          }
-          // Keep the most specific bucketKey (subfolder location)
-          if (f.Key.includes('/subfolder-')) {
-            file.bucketKey = f.Key;
-          }
-          console.log(`📄 [KBM STEP] Seen in ${kbInfoItem.exists ? 'Level 3 (inKB via subfolder)' : 'Level 3 (preKB)'}: ${f.Key}`);
-        });
-      }
+      // Subfolders eliminated by design
 
       // Level 2 files (post-indexing) under kb root (exclude subfolders)
       try {
@@ -8023,62 +7878,17 @@ app.post('/api/kb-move-file', async (req, res) => {
     let targetBucketKey = null;
     let sourceBucketKey = currentBucketKey;
     
-    // Determine target path based on location
+    // Determine target path based on location (Level 1/Level 2 only)
     if (targetLocation === 'available') {
       // Move back to archived/ folder (level 1)
       targetBucketKey = `${userId}/archived/${fileName}`;
-    } else if (targetLocation.startsWith('preKB')) {
-      // Move to pre-KB subfolder
-      // Extract KB label (A, B, etc.) and find corresponding KB name
-      const kbLabel = targetLocation.replace('preKB', '');
-      
-      // If kbName provided, use it; otherwise find existing pre-KB folder
+    } else if (targetLocation.startsWith('inKB')) {
+      // Move to KB root (level 2)
       let actualKbName = kbName;
       if (!actualKbName) {
-        // Find existing pre-KB folder by listing KB folders
-        const listCommand = new ListObjectsV2Command({
-          Bucket: bucketName,
-          Prefix: `${userId}/archived/`,
-          Delimiter: '/'
-        });
-        const listResponse = await s3Client.send(listCommand);
-        const kbFolders = listResponse.CommonPrefixes?.filter(prefix => 
-          prefix.Prefix.includes(`${userId}/archived/${userId}-kb-`)
-        ) || [];
-        
-        if (kbFolders.length > 0) {
-          // Get all KBs from database to find which is pre-KB
-          const allKBs = await cacheManager.getAllDocuments(couchDBClient, 'maia_kb') || [];
-          const kbNames = allKBs.map(kb => kb.kbName || kb._id).filter(Boolean);
-          
-          // Find first folder without a corresponding KB
-          for (const kbFolder of kbFolders) {
-            const folderName = kbFolder.Prefix.split('/').slice(-2, -1)[0];
-            if (!kbNames.includes(folderName)) {
-              actualKbName = folderName;
-              break;
-            }
-          }
-          
-          if (!actualKbName && kbFolders.length > 0) {
-            // Use the most recent one if no pre-KB found
-            actualKbName = kbFolders[kbFolders.length - 1].Prefix.split('/').slice(-2, -1)[0];
-          }
-        }
-        
-        if (!actualKbName) {
-          // Create new KB folder
-          actualKbName = `${userId}-kb-${Date.now()}`;
-        }
+        return res.status(400).json({ success: false, message: 'kbName is required when moving into a KB' });
       }
-      
-      targetBucketKey = `${userId}/archived/${actualKbName}/subfolder-1/${fileName}`;
-    } else if (targetLocation.startsWith('inKB')) {
-      // Cannot move to inKB locations - these are read-only
-      return res.status(400).json({
-        success: false,
-        message: `Cannot move files to ${targetLocation} location - files are already indexed`
-      });
+      targetBucketKey = `${userId}/archived/${actualKbName}/${fileName}`;
     }
     
     if (!targetBucketKey) {
@@ -8118,24 +7928,21 @@ app.post('/api/kb-move-file', async (req, res) => {
     
     console.log(`✅ [KB STEP] MOVED file: ${fileName} from ${sourceBucketKey} to ${targetBucketKey}`);
     
-    // Count files in subfolder after move
-    let filesInSubfolder = 0;
-    if (targetLocation.startsWith('preKB')) {
-      const subfolderPath = targetBucketKey.substring(0, targetBucketKey.lastIndexOf('/') + 1);
-      const listCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        Prefix: subfolderPath
-      });
+    // Count files in KB root after move (for feedback)
+    let filesInKBRoot = 0;
+    if (targetLocation.startsWith('inKB')) {
+      const kbRootPath = targetBucketKey.substring(0, targetBucketKey.lastIndexOf('/') + 1);
+      const listCommand = new ListObjectsV2Command({ Bucket: bucketName, Prefix: kbRootPath, Delimiter: '/' });
       const listResponse = await s3Client.send(listCommand);
-      filesInSubfolder = (listResponse.Contents || []).filter(obj => !obj.Key.endsWith('/')).length;
-      console.log(`📊 [KB STEP] Files in subfolder after move: ${filesInSubfolder}`);
+      filesInKBRoot = (listResponse.Contents || []).filter(obj => !obj.Key.endsWith('/') && !obj.Key.includes('/subfolder-') && !obj.Key.endsWith('.folder-marker')).length;
+      console.log(`📊 [KB STEP] Files in KB root after move: ${filesInKBRoot}`);
     }
     
     res.json({
       success: true,
       message: `File moved from ${sourceBucketKey} to ${targetBucketKey}`,
       newBucketKey: targetBucketKey,
-      filesInSubfolder: filesInSubfolder
+      filesInKBRoot: filesInKBRoot
     });
     
   } catch (error) {
@@ -8265,17 +8072,17 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
         throw new Error('No files found to organize. Please import files first.');
       }
     } else if (hasExistingPreKBFolder && existingPreKBFolder) {
-      // Files in archived folder, but pre-KB folder exists - use existing pre-KB folder
+      // Files in archived folder, but pre-KB folder exists - use existing pre-KB folder (Level 2)
       kbName = existingPreKBFolder.split('/').slice(-2, -1)[0];
       
-      // Use subfolder-1 within the KB folder as the target
-      subfolderPath = `${existingPreKBFolder}subfolder-1/`;
+      // Use Level 2 (KB root) directly, not subfolder
+      subfolderPath = existingPreKBFolder;
       
-      console.log(`📂 [KB STEP] Using existing pre-KB folder: ${existingPreKBFolder}`);
+      console.log(`📂 [KB STEP] Using existing pre-KB folder (Level 2): ${existingPreKBFolder}`);
       console.log(`📊 [KB STEP] KB Name: ${kbName}`);
-      console.log(`📄 [KB STEP] Will add ${archivedFiles.length} files to existing pre-KB subfolder: ${subfolderPath}`);
+      console.log(`📄 [KB STEP] Will add ${archivedFiles.length} files to existing pre-KB folder: ${subfolderPath}`);
       
-      // Move files to existing pre-KB subfolder
+      // Move files to existing pre-KB folder (Level 2)
       for (const file of archivedFiles) {
         const sourceKey = file.Key;
         const fileName = file.Key.split('/').pop();
@@ -8313,15 +8120,21 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
     } else {
       // No pre-KB folder exists - create a new one
       kbName = `${userId}-kb-${Date.now()}`;
-      subfolderPath = `${userId}/archived/${kbName}/subfolder-1/`;
+      // Use Level 2 (KB root) directly, not subfolder
+      subfolderPath = `${userId}/archived/${kbName}/`;
       
-      console.log(`📂 [KB STEP] Creating new KB subfolder: ${subfolderPath}`);
+      console.log(`📂 [KB STEP] Creating new KB folder (Level 2): ${subfolderPath}`);
       console.log(`📊 [KB STEP] KB Name: ${kbName}`);
       
-      // Move each file to the subfolder
+      // Move each file directly to Level 2 (KB root)
       for (const file of archivedFiles) {
         const sourceKey = file.Key;
         const fileName = file.Key.split('/').pop();
+        // Skip .folder-marker files - they're not real documents
+        if (fileName === '.folder-marker') {
+          console.log(`⏭️ [KB STEP] Skipping .folder-marker file`);
+          continue;
+        }
         const destKey = `${subfolderPath}${fileName}`;
         
         console.log(`📦 [KB STEP] MOVING ${sourceKey} to ${destKey}`);
@@ -8349,16 +8162,21 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
         }
       }
       
-      fileName = archivedFiles[0].Key.split('/').pop();
+      // Find first valid file (skip .folder-marker)
+      const validFile = archivedFiles.find(f => f.Key.split('/').pop() !== '.folder-marker');
+      if (!validFile) {
+        throw new Error('No valid files found to index (only .folder-marker found)');
+      }
+      fileName = validFile.Key.split('/').pop();
       bucketKey = `${subfolderPath}${fileName}`;
       
-      console.log(`📄 [KB STEP] Organized ${archivedFiles.length} files into KB subfolder`);
-      console.log(`📂 [KB STEP] Subfolder path: ${subfolderPath}`);
+      console.log(`📄 [KB STEP] Organized ${movedFiles.length} files into KB folder (Level 2)`);
+      console.log(`📂 [KB STEP] KB root path: ${subfolderPath}`);
     }
     
     console.log(`📄 [KB STEP] Using file: ${fileName}`);
     console.log(`🔗 [KB STEP] File bucket key: ${bucketKey}`);
-    console.log(`📂 [KB STEP] Subfolder path: ${subfolderPath}`);
+    console.log(`📂 [KB STEP] KB root path (Level 2): ${subfolderPath}`);
     
     // Step 2: Get user's assigned agent
     let userDoc = await cacheManager.getDocument(couchDBClient, 'maia_users', userId);
@@ -8393,8 +8211,8 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
     
     console.log(`🤖 [AUTO PS] Using database: genai-driftwood (${databaseId})`);
     
-    // Step 4: Create Knowledge Base using subfolder as data source
-    console.log(`🚀 [KB STEP] Creating KB with subfolder data source`);
+    // Step 4: Create Knowledge Base using Level 2 (KB root) as data source
+    console.log(`🚀 [KB STEP] Creating KB with Level 2 (KB root) data source`);
     
     const bucketRegion = bucketUrl ? bucketUrl.split('//')[1].split('.')[1] : 'tor1';
     
@@ -8433,10 +8251,10 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
       throw new Error('No embedding model available - cannot create knowledge base');
     }
     
-    // Create KB with subfolder as data source
+    // Create KB with Level 2 (KB root) as data source
     const kbData = {
       name: kbName,
-      description: `${kbName} - Auto-created with subfolder structure from ${fileName}`,
+      description: `${kbName} - Auto-created with Level 2 structure from ${fileName}`,
       project_id: projectId,
       database_id: databaseId,
       embedding_model_uuid: embeddingModelId,
@@ -8510,8 +8328,15 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
           if (lastJob) {
             const status = lastJob.status || 'unknown';
             const phase = lastJob.phase || 'unknown';
+            // Get current token count from KB data
+            const currentTokens = kbData.total_token_count || 0;
             
-            console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, Phase: ${phase}`);
+            console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}`);
+            
+            // Update totalTokens during progress
+            if (currentTokens > totalTokens) {
+              totalTokens = currentTokens;
+            }
             
             // Check indexing job status
             if (status === 'INDEX_JOB_STATUS_FAILED' || phase === 'BATCH_JOB_PHASE_FAILED') {
@@ -8520,7 +8345,7 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
             
             if (status === 'INDEX_JOB_STATUS_COMPLETED' || phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
               indexingComplete = true;
-              // Get total tokens from the KB data (not from job)
+              // Get final total tokens from the KB data
               totalTokens = kbData.total_token_count || 0;
               console.log(`✅ [KB STEP] Indexing complete! ${totalTokens} tokens indexed`);
             }
@@ -8536,58 +8361,32 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
       throw new Error('KB indexing timed out');
     }
     
-    // After indexing completes, move files from subfolder-1/ to KB folder (level 2)
-    console.log(`📦 [KB STEP] Indexing complete - moving files from subfolder to KB folder level`);
+    // Files are already in Level 2 (KB root) - just list them for maia_kb document
+    console.log(`📦 [KB STEP] Indexing complete - files already in Level 2 (KB root)`);
     const kbFolderPath = `${userId}/archived/${kbName}/`;
-    const filesInSubfolder = await s3Client.send(new ListObjectsV2Command({
+    const filesInKB = await s3Client.send(new ListObjectsV2Command({
       Bucket: bucketName,
-      Prefix: subfolderPath
+      Prefix: kbFolderPath,
+      Delimiter: '/'
     }));
     
-    const filesToMove = (filesInSubfolder.Contents || []).filter(obj => !obj.Key.endsWith('/'));
-    const indexedFiles = [];
+    // Filter out .folder-marker and folders
+    const indexedFilesList = (filesInKB.Contents || []).filter(obj => 
+      !obj.Key.endsWith('/') && !obj.Key.endsWith('.folder-marker')
+    );
+    const indexedFiles = indexedFilesList.map(file => ({
+      fileName: file.Key.split('/').pop(),
+      bucketKey: file.Key,
+      indexedAt: new Date().toISOString()
+    }));
     
-    for (const file of filesToMove) {
-      const sourceKey = file.Key;
-      const fileName = file.Key.split('/').pop();
-      const destKey = `${kbFolderPath}${fileName}`;
-      
-      console.log(`📦 [KB STEP] MOVING indexed file: ${sourceKey} to ${destKey}`);
-      
-      try {
-        const copyCommand = new CopyObjectCommand({
-          Bucket: bucketName,
-          CopySource: `${bucketName}/${sourceKey}`,
-          Key: destKey,
-          MetadataDirective: 'COPY'
-        });
-        
-        await s3Client.send(copyCommand);
-        
-        // Delete source file from subfolder
-        const deleteCommand = new DeleteObjectCommand({
-          Bucket: bucketName,
-          Key: sourceKey
-        });
-        await s3Client.send(deleteCommand);
-        
-        console.log(`✅ [KB STEP] MOVED indexed file: ${fileName}`);
-        
-        indexedFiles.push({
-          fileName: fileName,
-          bucketKey: destKey,
-          indexedAt: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error(`❌ [KB STEP] Failed to move indexed file ${fileName}:`, error.message);
-      }
-    }
+    console.log(`📄 [KB STEP] Found ${indexedFiles.length} indexed files in Level 2:`, indexedFiles.map(f => f.fileName).join(', '));
     
     // Update maia_kb document with indexed file list
     try {
       const existingDoc = await couchDBClient.getDocument('maia_kb', kbName);
       existingDoc.status = 'ready';
-      existingDoc.totalDocuments = filesToMove.length;
+      existingDoc.totalDocuments = indexedFiles.length;
       existingDoc.totalTokens = totalTokens;
       existingDoc.indexedFiles = indexedFiles;
       existingDoc.updatedAt = new Date().toISOString();
@@ -8598,6 +8397,68 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
       console.error(`❌ [KB STEP] Failed to update maia_kb document:`, updateError.message);
     }
     
+    // Step 5: Attach KB to agent (AFTER indexing completes)
+    console.log(`🤖 [AUTO PS] Attaching KB to agent ${agentId}`);
+    await doRequest(`/v2/gen-ai/agents/${agentId}/knowledge_bases/${kbId}`, {
+      method: 'POST'
+    });
+    console.log(`🤖 [AUTO PS] KB attached to agent successfully`);
+    
+    // Step 6: Generate patient summary via internal /api/personal-chat endpoint
+    console.log(`🤖 [AUTO PS] Requesting patient summary from agent ${agentId}`);
+    let summary = null;
+    
+    try {
+      const summaryPrompt = 'Create a comprehensive patient summary according to your agent instructions';
+      
+      console.log(`🤖 [AUTO PS] Calling internal /api/personal-chat endpoint with forceRegenerate`);
+      
+      // Get the maia_auth cookie value to pass to the internal endpoint
+      const authData = {
+        userId: userDoc._id,
+        displayName: userDoc.displayName || userDoc._id,
+        authenticatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      };
+      
+      // Use localhost for internal server-to-server calls
+      const port = process.env.PORT || 3001;
+      const baseUrl = `http://localhost:${port}`;
+      
+      const chatResponse = await fetch(`${baseUrl}/api/personal-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': `maia_auth=${JSON.stringify(authData)}`
+        },
+        body: JSON.stringify({
+          newValue: summaryPrompt,
+          chatHistory: [],
+          forceRegenerate: true
+        })
+      });
+      
+      if (!chatResponse.ok) {
+        throw new Error(`Personal chat API returned ${chatResponse.status}`);
+      }
+      
+      const chatData = await chatResponse.json();
+      
+      // Extract summary from chat history response (array of messages)
+      const assistantMessage = Array.isArray(chatData) ? chatData.find(msg => msg.role === 'assistant') : null;
+      const summaryContent = assistantMessage?.content;
+      
+      if (summaryContent && summaryContent.trim().length > 0) {
+        summary = summaryContent;
+        console.log(`🤖 [AUTO PS] ✅ Patient summary generated (${summary.length} characters)`);
+      } else {
+        console.warn(`🤖 [AUTO PS] ⚠️ No summary content in response`);
+      }
+    } catch (summaryError) {
+      console.error(`🤖 [AUTO PS] ❌ Failed to generate patient summary:`, summaryError.message);
+      summary = null;
+    }
+    
     res.json({
       success: true,
       message: 'KB created and indexed successfully with organized files',
@@ -8605,7 +8466,7 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
       kbName: kbName,
       tokensIndexed: totalTokens,
       indexedFiles: indexedFiles.length,
-      summary: null // Will be generated after indexing if needed
+      summary: summary
     });
     
   } catch (error) {
@@ -8613,6 +8474,212 @@ app.post('/api/automate-kb-with-organized-files', async (req, res) => {
     res.status(500).json({
       success: false,
       message: `Automation failed: ${error.message}`
+    });
+  }
+});
+
+// Update existing KB by triggering re-indexing of files in Level 2
+app.post('/api/update-kb-files', async (req, res) => {
+  try {
+    const { userId, kbName } = req.body;
+    
+    if (!userId || !kbName) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId and kbName are required'
+      });
+    }
+    
+    console.log(`🔄 [KB STEP] Updating KB: ${kbName} for user: ${userId}`);
+    
+    // Get KB from DO API
+    const kbResponse = await doRequest('/v2/gen-ai/knowledge_bases');
+    const kbList = kbResponse.knowledge_bases || [];
+    const targetKB = kbList.find(kb => kb.name === kbName);
+    
+    if (!targetKB) {
+      return res.status(404).json({
+        success: false,
+        message: `Knowledge base "${kbName}" not found`
+      });
+    }
+    
+    const kbId = targetKB.uuid || targetKB.id;
+    
+    // Get KB details to find data sources (match the working endpoint's parsing)
+    const kbDetailsResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+    const kbDetails = kbDetailsResponse.data || kbDetailsResponse;
+    
+    console.log(`🔍 [KB STEP] Raw kbDetailsResponse:`, JSON.stringify(kbDetailsResponse, null, 2));
+    console.log(`🔍 [KB STEP] kbDetails keys:`, Object.keys(kbDetails || {}));
+    
+    // Extract the knowledge base data from the nested structure
+    const kbData = kbDetails.knowledge_base || kbDetails;
+    console.log(`🔍 [KB STEP] Looking for data source in KB details...`);
+    console.log(`🔍 [KB STEP] KB data keys:`, Object.keys(kbData || {}));
+    
+    // Get data source UUID from last indexing job
+    let dataSourceUuid = null;
+    
+    if (kbData.last_indexing_job && kbData.last_indexing_job.data_source_jobs && kbData.last_indexing_job.data_source_jobs.length > 0) {
+      console.log(`✅ [KB STEP] Found data source info from last indexing job`);
+      const dataSourceJob = kbData.last_indexing_job.data_source_jobs[0];
+      dataSourceUuid = dataSourceJob.data_source_uuid;
+      console.log(`📊 [KB STEP] Data source UUID: ${dataSourceUuid}`);
+    } else {
+      console.warn(`⚠️ [KB STEP] No data source found in last_indexing_job`);
+      // Fallback: get from data sources
+      const dataSources = kbData.data_sources || kbData.datasources || [];
+      console.log(`📊 [KB STEP] Trying fallback - data sources:`, dataSources);
+      if (dataSources.length > 0) {
+        // For spaces_data_source, the UUID is nested
+        const firstSource = dataSources[0];
+        if (firstSource.spaces_data_source) {
+          dataSourceUuid = firstSource.spaces_data_source.uuid;
+          console.log(`📊 [KB STEP] Found spaces_data_source UUID: ${dataSourceUuid}`);
+        } else {
+          dataSourceUuid = firstSource.uuid || firstSource.id;
+          console.log(`📊 [KB STEP] Found direct UUID: ${dataSourceUuid}`);
+        }
+      }
+    }
+    
+    if (!dataSourceUuid) {
+      console.error(`❌ [KB STEP] No data source UUID found. KB details:`, JSON.stringify(kbDetails, null, 2));
+      return res.status(400).json({
+        success: false,
+        message: 'No data source found for this knowledge base'
+      });
+    }
+    
+    console.log(`✅ [KB STEP] Using data source UUID: ${dataSourceUuid}`);
+    
+    // List files in Level 2 (KB root)
+    const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const bucketUrl = process.env.DIGITALOCEAN_BUCKET;
+    const bucketName = bucketUrl ? bucketUrl.split('//')[1].split('.')[0] : 'maia.tor1';
+    
+    const s3Client = new S3Client({
+      endpoint: process.env.DIGITALOCEAN_ENDPOINT_URL || 'https://tor1.digitaloceanspaces.com',
+      region: 'us-east-1',
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.DIGITALOCEAN_AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.DIGITALOCEAN_AWS_SECRET_ACCESS_KEY
+      }
+    });
+    
+    const kbFolderPath = `${userId}/archived/${kbName}/`;
+    const filesInKB = await s3Client.send(new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: kbFolderPath,
+      Delimiter: '/'
+    }));
+    
+    const indexedFilesList = (filesInKB.Contents || []).filter(obj => 
+      !obj.Key.endsWith('/') && !obj.Key.endsWith('.folder-marker')
+    );
+    
+    console.log(`📄 [KB STEP] Found ${indexedFilesList.length} files in Level 2 for KB ${kbName}`);
+    
+    // Trigger re-indexing
+    console.log(`🚀 [KB STEP] Starting re-indexing job for KB: ${kbName}`);
+    console.log(`🚀 [KB STEP] KB ID: ${kbId}`);
+    console.log(`🚀 [KB STEP] Data Source UUID: ${dataSourceUuid}`);
+    // Use the KB-level indexing endpoint (same as reindex-specific-kb)
+    const indexingJobData = {
+      data_source_uuid: dataSourceUuid
+    };
+    console.log(`🚀 [KB STEP] Request body: ${JSON.stringify(indexingJobData)}`);
+    console.log(`🚀 [KB STEP] Endpoint: /v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`);
+    const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}/indexing_jobs`, {
+      method: 'POST',
+      body: JSON.stringify(indexingJobData)
+    });
+    
+    const indexingJob = indexingJobResponse.data || indexingJobResponse;
+    console.log(`✅ [KB STEP] Re-indexing job created: ${indexingJob.uuid}`);
+    
+    // Poll for completion
+    let indexingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 500;
+    let totalTokens = 0;
+    
+    while (!indexingComplete && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+      
+      try {
+        const kbStatusResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${kbId}`);
+        const kbData = kbStatusResponse.knowledge_base || kbStatusResponse.data?.knowledge_base || kbStatusResponse.data || kbStatusResponse;
+        const lastJob = kbData.last_indexing_job;
+        
+        if (lastJob) {
+          const status = lastJob.status || 'unknown';
+          const phase = lastJob.phase || 'unknown';
+          const currentTokens = kbData.total_token_count || 0;
+          
+          console.log(`📊 [KB STEP] Indexing status (attempt ${attempts}): ${status}, Phase: ${phase}, Tokens: ${currentTokens}`);
+          
+          if (currentTokens > totalTokens) {
+            totalTokens = currentTokens;
+          }
+          
+          if (status === 'INDEX_JOB_STATUS_FAILED' || phase === 'BATCH_JOB_PHASE_FAILED') {
+            throw new Error('KB re-indexing failed');
+          }
+          
+          if (status === 'INDEX_JOB_STATUS_COMPLETED' || phase === 'BATCH_JOB_PHASE_SUCCEEDED') {
+            indexingComplete = true;
+            totalTokens = kbData.total_token_count || 0;
+            console.log(`✅ [KB STEP] Re-indexing complete! ${totalTokens} tokens indexed`);
+          }
+        }
+      } catch (pollError) {
+        console.warn(`⚠️ [KB STEP] Polling error: ${pollError.message}`);
+      }
+    }
+    
+    if (!indexingComplete) {
+      throw new Error('KB re-indexing timed out');
+    }
+    
+    // Update maia_kb document
+    try {
+      const indexedFiles = indexedFilesList.map(file => ({
+        fileName: file.Key.split('/').pop(),
+        bucketKey: file.Key,
+        indexedAt: new Date().toISOString()
+      }));
+      
+      const existingDoc = await couchDBClient.getDocument('maia_kb', kbName);
+      existingDoc.status = 'ready';
+      existingDoc.totalDocuments = indexedFiles.length;
+      existingDoc.totalTokens = totalTokens;
+      existingDoc.indexedFiles = indexedFiles;
+      existingDoc.updatedAt = new Date().toISOString();
+      
+      await couchDBClient.saveDocument('maia_kb', existingDoc);
+      console.log(`✅ [KB STEP] Updated maia_kb document for ${kbName}`);
+    } catch (updateError) {
+      console.error(`❌ [KB STEP] Failed to update maia_kb document:`, updateError.message);
+    }
+    
+    res.json({
+      success: true,
+      message: `KB ${kbName} updated and re-indexed successfully`,
+      kbId: kbId,
+      kbName: kbName,
+      tokensIndexed: totalTokens,
+      indexedFiles: indexedFilesList.length
+    });
+    
+  } catch (error) {
+    console.error(`❌ [KB STEP] Failed to update KB:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to update KB: ${error.message}`
     });
   }
 });
@@ -9057,7 +9124,11 @@ app.post('/api/reindex-specific-kb', async (req, res) => {
         data_source_uuid: dataSourceUuid
       };
       
-//       console.log(`🚀 Creating re-indexing job for KB: ${targetKB.name}`);
+      console.log(`🚀 [REINDEX] Creating re-indexing job for KB: ${targetKB.name}`);
+      console.log(`🚀 [REINDEX] KB ID: ${targetKB.uuid}`);
+      console.log(`🚀 [REINDEX] Data Source UUID: ${dataSourceUuid}`);
+      console.log(`🚀 [REINDEX] Request body: ${JSON.stringify(indexingJobData)}`);
+      console.log(`🚀 [REINDEX] Endpoint: /v2/gen-ai/knowledge_bases/${targetKB.uuid}/indexing_jobs`);
       const startTime = Date.now();
       
       const indexingJobResponse = await doRequest(`/v2/gen-ai/knowledge_bases/${targetKB.uuid}/indexing_jobs`, {

@@ -212,8 +212,18 @@ export default defineComponent({
       showAgentManagementDialog.value = true;
     };
 
-    const triggerKBWelcome = () => {
-      showKnowledgeBaseWelcomeModal.value = true;
+    const triggerKBWelcome = async () => {
+      // If user has a KB, open the KB Management modal directly
+      if (currentKnowledgeBase.value) {
+        // User has KB - open KB Management dialog
+        filesOrganized.value = false;
+        organizedKBs.value = [];
+        showCreateKBActionModal.value = true;
+        await fetchUserKBs();
+      } else {
+        // User has no KB - open the Welcome modal
+        showKnowledgeBaseWelcomeModal.value = true;
+      }
     };
 
     // Handle deep link loading - only for actual deep link URLs
@@ -529,14 +539,7 @@ export default defineComponent({
             }
           }));
           
-          // Set default: mark all available files in Pre KB A
-          kbFileLocations.value.forEach(file => {
-            if (file.locations?.available && !file.locations?.preKBA && !file.locations?.inKBA) {
-              file.selectedLocations.preKBA = true;
-              file.selectedLocations.available = false;
-              console.log(`🟦 [KBM STEP] Defaulted to Pre KBA: ${file.fileName}`);
-            }
-          });
+          // No defaulting to Pre KB in new design
 
           // If there are available files, add a Preview KB (new KB) column as the next label
           const hasAvailable = kbFileLocations.value.some(f => f.locations?.available);
@@ -1595,13 +1598,28 @@ const triggerUploadFile = (file: File) => {
       // Replace Available with View column (eye icon)
       cols.push({ name: 'view', label: 'View', field: 'view', align: 'center' });
       
-      // Add columns for each KB
+      // Add columns for each KB (In KB only)
       kbInfo.value.forEach(kb => {
-        cols.push({ name: `preKB${kb.label}`, label: `Pre KB ${kb.label}`, field: `preKB${kb.label}`, align: 'center' });
         cols.push({ name: `inKB${kb.label}`, label: `In KB ${kb.label}`, field: `inKB${kb.label}`, align: 'center' });
       });
       
       return cols;
+    });
+
+    // Enablement computeds for action buttons (2-level design)
+    const hasUpdateForExisting = computed(() => {
+      const existing = kbInfo.value.filter((k: any) => k.exists);
+      if (existing.length === 0) return false;
+      return kbFileLocations.value.some((file: any) => existing.some((k: any) => {
+        const key = `inKB${k.label}`;
+        return (file.locations?.[key] || false) !== (file.originalLocations?.[key] || false);
+      }));
+    });
+    const hasCreateForNew = computed(() => {
+      const newKB = kbInfo.value.find((k: any) => !k.exists) || previewKB.value;
+      if (!newKB) return false;
+      const key = `inKB${newKB.label}`;
+      return kbFileLocations.value.some((file: any) => file.locations?.[key] === true);
     });
 
     // Handle checkbox toggle - moves files immediately
@@ -1621,9 +1639,9 @@ const triggerUploadFile = (file: File) => {
       let targetLocation = locationKey;
       let kbName = null;
       
-      if (locationKey.startsWith('preKB')) {
+      if (locationKey.startsWith('inKB')) {
         // Extract KB label (A, B, etc.) and find corresponding KB name
-        const kbLabel = locationKey.replace('preKB', '');
+        const kbLabel = locationKey.replace('inKB', '');
         const matchingKB = kbInfo.value.find((kb: any) => kb.label === kbLabel);
         if (matchingKB) {
           kbName = matchingKB.kbName;
@@ -1635,38 +1653,7 @@ const triggerUploadFile = (file: File) => {
         const fromLocation = currentLocation ? `(${currentLocation})` : '';
         console.log(`🔘 [KB STEP] CHECKBOX: Checking ${file.fileName} for location '${locationKey}' ${fromLocation}`);
         
-        // If selecting a preview (new KB), unselect and move out any other files previously assumed for existing KBs
-        const isSelectingPreview = locationKey.startsWith('preKB') && kbInfo.value.some((k: any) => !k.exists && `preKB${k.label}` === locationKey);
-        if (isSelectingPreview) {
-          const labelsExisting = new Set(kbInfo.value.filter((k: any) => k.exists).map((k: any) => `preKB${k.label}`));
-          for (const other of kbFileLocations.value) {
-            if (other === file) continue;
-            const selKey = Object.keys(other.selectedLocations || {}).find(k => other.selectedLocations[k]);
-            if (selKey && labelsExisting.has(selKey)) {
-              try {
-                const resp = await fetch('/api/kb-move-file', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    userId,
-                    fileName: other.fileName,
-                    currentBucketKey: other.bucketKey,
-                    targetLocation: 'available',
-                    kbName: null
-                  })
-                });
-                const rj = await resp.json();
-                if (rj.success) {
-                  other.bucketKey = rj.newBucketKey;
-                  Object.keys(other.selectedLocations).forEach(k => other.selectedLocations[k] = false);
-                  other.selectedLocations.available = true;
-                  other.locations = other.locations || {};
-                  other.locations.available = true;
-                }
-              } catch {}
-            }
-          }
-        }
+        // No preview preKB logic in new design
 
         // Call API to move file immediately
         try {
@@ -1686,7 +1673,7 @@ const triggerUploadFile = (file: File) => {
           
           if (result.success) {
             console.log(`✅ [KB STEP] MOVED file: ${file.fileName} from ${file.bucketKey} to ${result.newBucketKey}`);
-            console.log(`📊 [KB STEP] Files in subfolder after move: ${result.filesInSubfolder || 0}`);
+            console.log(`📊 [KB STEP] Files in KB root after move: ${result.filesInKBRoot || 0}`);
             
             // Update file's bucket key
             file.bucketKey = result.newBucketKey;
@@ -1697,18 +1684,18 @@ const triggerUploadFile = (file: File) => {
             });
             file.selectedLocations[locationKey] = true;
             
-            // Update file's locations to reflect new state
+            // Update file's locations to reflect new state (Level 1/2)
             file.locations = file.locations || {};
             // Update location flags based on new bucket key
             if (targetLocation === 'available') {
               file.locations.available = true;
-              // Clear any preKB flags so those columns remain enabled
+              // Clear any inKB flags
               Object.keys(file.locations).forEach((k: string) => {
-                if (k.startsWith('preKB')) delete (file.locations as any)[k];
+                if (k.startsWith('inKB')) delete (file.locations as any)[k];
               });
-            } else if (targetLocation.startsWith('preKB')) {
+            } else if (targetLocation.startsWith('inKB')) {
               file.locations.available = false;
-              // Set the specific preKB location to true
+              // Set the specific inKB location to true
               file.locations[targetLocation] = true;
             }
           } else {
@@ -1722,7 +1709,7 @@ const triggerUploadFile = (file: File) => {
           return;
         }
       } else {
-        // Unchecking: move back to available
+        // Unchecking: move back to available (Level 1)
         console.log(`🔘 [KB STEP] CHECKBOX: Unchecking ${file.fileName} from location '${locationKey}' - moving to available`);
         
         try {
@@ -1752,9 +1739,9 @@ const triggerUploadFile = (file: File) => {
             // Update file's locations
             file.locations = file.locations || {};
             file.locations.available = true;
-            // Clear preKB flags to re-enable choices
+            // Clear inKB flags
             Object.keys(file.locations).forEach((k: string) => {
-              if (k.startsWith('preKB')) delete (file.locations as any)[k];
+              if (k.startsWith('inKB')) delete (file.locations as any)[k];
             });
           } else {
             console.error(`❌ [KB STEP] Failed to move file back: ${result.message}`);
@@ -1764,31 +1751,78 @@ const triggerUploadFile = (file: File) => {
         }
       }
       
-      // Count files in subfolder after change
-      const filesInSubfolder = kbFileLocations.value.filter(f => 
-        Object.keys(f.selectedLocations || {}).some(key => key.startsWith('preKB') && f.selectedLocations[key])
-      ).length;
-      console.log(`📊 [KB STEP] Files in subfolder after checkbox: ${filesInSubfolder}`);
+      // Count files in KB root after change (approx via selection state)
+      const labels = kbInfo.value.map((k: any) => `inKB${k.label}`);
+      const filesInAnyKB = kbFileLocations.value.filter(f => labels.some(k => f.locations?.[k] === true)).length;
+      console.log(`📊 [KB STEP] Files in KB roots after checkbox: ${filesInAnyKB}`);
     };
 
     // Action button labels based on KB labels
     const existingKB = computed(() => kbInfo.value.find((k: any) => k.exists));
     const previewKBInfo = computed(() => kbInfo.value.find((k: any) => !k.exists));
-    const addToKBLabel = computed(() => `ADD TO KB ${existingKB.value?.label || 'A'}`);
-    const createNewKBLabel = computed(() => `CREATE NEW KB ${previewKBInfo.value?.label || previewKB.value?.label || 'B'}`);
+    const updateKBLabel = computed(() => `UPDATE KB ${existingKB.value?.label || 'A'}`);
+    const createNewKBLabel = computed(() => `CREATE NEW KB ${previewKBInfo.value?.label || previewKB.value?.label || 'A'}`);
 
     // Actions for buttons
     const handleAddToExistingKB = async () => {
-      // Placeholder: existing KB update flow (add datasource + index) to be implemented
       console.log('🟣 [KB STEP] ADD TO KNOWLEDGE BASE clicked - will update existing KB with selected files');
       // Ensure we do not create a new KB in this path
       previewKB.value = null;
-      // For now, reuse organized-files automation (backend should detect existing KB and attach datasource accordingly)
-      await handleCreateKB();
+      
+      // Find which KBs need updating (existing KBs with changed files)
+      const existingKBs = kbInfo.value.filter((k: any) => k.exists);
+      const kbNamesToUpdate = existingKBs.filter((kb: any) => {
+        const key = `inKB${kb.label}`;
+        return kbFileLocations.value.some((file: any) => {
+          const wasInKB = file.originalLocations?.[key] || false;
+          const isNowInKB = file.locations?.[key] || false;
+          return isNowInKB && !wasInKB; // File newly added to this KB
+        });
+      }).map((kb: any) => kb.kbName);
+      
+      if (kbNamesToUpdate.length === 0) {
+        console.warn('⚠️ [KB STEP] No KBs found to update');
+        return;
+      }
+      
+      console.log(`🔄 [KB STEP] Updating KBs: ${kbNamesToUpdate.join(', ')}`);
+      
+      // Call update endpoint for each KB
+      for (const kbName of kbNamesToUpdate) {
+        await updateExistingKB(currentUser.value.userId, kbName);
+      }
+      
+      // Refresh KB data
+      await fetchUserKBs();
+      showCreateKBActionModal.value = false;
     };
     const handleCreateNewKBAction = async () => {
       console.log('🟢 [KB STEP] CREATE A NEW KNOWLEDGE BASE clicked');
       await handleCreateKB();
+    };
+    
+    // Update an existing KB by triggering re-indexing
+    const updateExistingKB = async (userId: string, kbName: string) => {
+      try {
+        console.log(`🔄 [KB STEP] Updating existing KB: ${kbName}`);
+        const response = await fetch('/api/update-kb-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, kbName })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ [KB STEP] KB ${kbName} updated successfully`);
+        return result;
+      } catch (error: any) {
+        console.error(`❌ [KB STEP] Failed to update KB ${kbName}:`, error.message);
+        throw error;
+      }
     };
 
     // Open viewer for a file using the same modal code used in chat area
@@ -1848,14 +1882,17 @@ const triggerUploadFile = (file: File) => {
       toggleLocation,
       handleAddToExistingKB,
       handleCreateNewKBAction,
-      addToKBLabel,
+      updateKBLabel,
       createNewKBLabel,
+      hasCreateForNew,
+      hasUpdateForExisting,
       openKBFile,
       fetchUserKBs,
       prepareFolder,
       handleCreateKB,
       handleCancelKBCreation,
       automateKBCreationWithOrganizedFiles,
+      updateExistingKB,
       triggerFileImport,
       handleOpenKBManager,
       handleImportFile,
@@ -2091,7 +2128,6 @@ const triggerUploadFile = (file: File) => {
                   <th style="text-align: left; padding: 8px; border-bottom: 1px solid #e0e0e0;">File</th>
                   <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">Available</th>
                   <template v-for="kb in kbInfo" :key="kb.kbName">
-                    <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">Pre KB {{ kb.label }}</th>
                     <th style="text-align: center; padding: 8px; border-bottom: 1px solid #e0e0e0;">In KB {{ kb.label }}</th>
                   </template>
                 </tr>
@@ -2114,25 +2150,16 @@ const triggerUploadFile = (file: File) => {
                   </td>
                   
                   <!-- KB Columns (dynamic) -->
-                  <template v-for="kb in kbInfo" :key="kb.kbName">
-                    <!-- Pre KB Column -->
-                    <td style="padding: 8px; text-align: center;">
-                      <QCheckbox
-                        :model-value="file.selectedLocations?.[`preKB${kb.label}`] || false"
-                        @update:model-value="toggleLocation(file, `preKB${kb.label}`)"
-                        :disable="file.locations?.[`preKB${kb.label}`] === false"
-                      />
-                    </td>
-                    
-                    <!-- In KB Column (read-only), show solid blue when indexed -->
-                    <td style="padding: 8px; text-align: center;">
-                      <QCheckbox
-                        :model-value="file.locations?.[`inKB${kb.label}`] === true"
-                        color="primary"
-                        :disable="true"
-                      />
-                    </td>
-                  </template>
+          <template v-for="kb in kbInfo" :key="kb.kbName">
+            <!-- In KB Column (interactive) -->
+            <td style="padding: 8px; text-align: center;">
+              <QCheckbox
+                :model-value="file.locations?.[`inKB${kb.label}`] === true"
+                color="primary"
+                @update:model-value="toggleLocation(file, `inKB${kb.label}`)"
+              />
+            </td>
+          </template>
                 </tr>
               </tbody>
             </table>
@@ -2163,22 +2190,22 @@ const triggerUploadFile = (file: File) => {
           
           <!-- CREATE A NEW KNOWLEDGE BASE (enabled when files marked for preview KB) -->
           <QBtn
-            :color="hasPreKBForNew ? 'primary' : 'grey-6'"
+            :color="hasCreateForNew ? 'primary' : 'grey-6'"
             :label="createNewKBLabel"
             @click="handleCreateNewKBAction"
             class="q-px-md q-ml-sm"
             unelevated
-            :disable="!hasPreKBForNew || isLoadingKBData"
+            :disable="!hasCreateForNew || isLoadingKBData"
           />
 
           <!-- ADD TO KNOWLEDGE BASE (enabled when files marked for existing KBs) -->
           <QBtn
-            :color="hasPreKBForExisting ? 'primary' : 'grey-6'"
-            :label="addToKBLabel"
+            :color="hasUpdateForExisting ? 'primary' : 'grey-6'"
+            :label="updateKBLabel"
             @click="handleAddToExistingKB"
             class="q-px-md q-ml-sm"
             unelevated
-            :disable="!hasPreKBForExisting || isLoadingKBData"
+            :disable="!hasUpdateForExisting || isLoadingKBData"
           />
         </QCardActions>
       </QCard>
