@@ -11,9 +11,12 @@ This branch is an empty workspace for cataloging the existing MAIA server into t
 ## Inventory Artifacts
 - [`inventory/server-outline.md`](inventory/server-outline.md) — high-level map of `server.js` responsibilities with proposed destinations in the New Design.
 - [`inventory/admin-management-outline.md`](inventory/admin-management-outline.md) — breakdown of `src/routes/admin-management-routes.js` and how each admin feature maps to the split architecture.
+- [`inventory/components-admin-ui-outline.md`](inventory/components-admin-ui-outline.md) — summary of the large admin-facing Vue components and how they split across future apps.
+- [`inventory/components-chat-outline.md`](inventory/components-chat-outline.md) — inventory of chat prompt and chat area components shared between public and authenticated experiences.
+- [`inventory/routes-outline.md`](inventory/routes-outline.md) — overview of remaining legacy route modules (`passkey-routes.js`, `admin-routes.js`).
 
 ## Next Steps
-1. Expand the inventory to cover other large files (e.g. `src/routes/admin-routes.js`, key Vue components).
+1. Expand the inventory to cover other large files (e.g. remaining Vue layouts, utilities, and composables).
 2. Map environment configuration requirements per app (Admin/Public/User).
 3. Outline the minimum shared libraries required before copying code into the new apps.
 4. Record open questions and risks as we discover entanglements in the legacy architecture.
