@@ -14,6 +14,8 @@ This branch is an empty workspace for cataloging the existing MAIA server into t
 - [`inventory/components-admin-ui-outline.md`](inventory/components-admin-ui-outline.md) — summary of the large admin-facing Vue components and how they split across future apps.
 - [`inventory/components-chat-outline.md`](inventory/components-chat-outline.md) — inventory of chat prompt and chat area components shared between public and authenticated experiences.
 - [`inventory/routes-outline.md`](inventory/routes-outline.md) — overview of remaining legacy route modules (`passkey-routes.js`, `admin-routes.js`).
+- [`inventory/utilities-outline.md`](inventory/utilities-outline.md) — shared utility modules (cache manager, state manager, auth handling, CouchDB clients) and their future homes.
+- [`inventory/components-misc-outline.md`](inventory/components-misc-outline.md) — additional UI components (passkey dialog, KB list, saved chats, group management, file preview).
 
 ## Next Steps
 1. Expand the inventory to cover other large files (e.g. remaining Vue layouts, utilities, and composables).
