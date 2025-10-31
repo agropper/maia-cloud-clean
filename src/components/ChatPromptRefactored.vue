@@ -442,14 +442,19 @@ export default defineComponent({
         let userAPIKBs = [] as any[];
         try {
           // Attempt 1: get list (may fail due to upstream/cache issues)
-          const apiResponse = await fetch('/api/knowledge-bases');
-          if (apiResponse.ok) {
-            const allKBs = await apiResponse.json();
+          const kbListUrl = `/api/knowledge-bases?user=${encodeURIComponent(userId)}`;
+          const kbResponse = await fetch(kbListUrl, {
+            headers: {
+              'x-current-user': userId
+            }
+          });
+          if (kbResponse.ok) {
+            const allKBs = await kbResponse.json();
             if (Array.isArray(allKBs)) {
               userAPIKBs = allKBs.filter((kb: any) => kb.name && kb.name.startsWith(userId));
             }
           } else {
-            console.warn(`⚠️ [KB STEP] KB list API failed: ${apiResponse.status}`);
+            console.warn(`⚠️ [KB STEP] KB list API failed: ${kbResponse.status}`);
           }
         } catch (e: any) {
           console.warn(`⚠️ [KB STEP] KB list API error: ${e?.message || e}`);
