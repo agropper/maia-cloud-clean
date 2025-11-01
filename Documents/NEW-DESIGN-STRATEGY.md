@@ -293,6 +293,61 @@ app.post('/api/kb/create', async (req, res) => {
 6. No library > 500 lines
 7. All inventory docs describe migration path
 
+## Repository Organization
+
+With **new repos**, the final structure is:
+
+```
+maia-cloud-repos/
+├── lib-maia-do-client/         # Shared DigitalOcean client
+│   ├── package.json
+│   ├── src/
+│   │   ├── index.js            # Main export
+│   │   ├── kb.js               # KB operations
+│   │   ├── agent.js            # Agent operations
+│   │   └── indexing.js         # Indexing jobs
+│   └── README.md
+│
+├── lib-maia-cloudant/          # Shared Cloudant client
+│   ├── package.json
+│   ├── src/
+│   │   ├── index.js            # Main export
+│   │   ├── document-client.js  # getDocument, saveDocument
+│   │   └── session-store.js    # express-session store
+│   └── README.md
+│
+├── lib-maia-passkey/           # Shared passkey service
+│   ├── package.json
+│   ├── src/
+│   │   ├── index.js            # Main export
+│   │   ├── registration.js     # Registration flow
+│   │   └── authentication.js   # Authentication flow
+│   └── README.md
+│
+├── maia-cloud-user-app/        # User app (user.agropper.xyz)
+│   ├── package.json             # Dependencies on lib-*
+│   ├── server/
+│   ├── src/
+│   └── README.md
+│
+├── maia-cloud-public-app/      # Public app (public.agropper.xyz)
+│   ├── package.json             # Dependencies on lib-*
+│   ├── server/
+│   ├── src/
+│   └── README.md
+│
+└── maia-cloud-clean/           # Current repo (inventory only)
+    ├── inventory/
+    ├── Documents/
+    └── README.md
+```
+
+**Development workflow:**
+1. Libraries are independent npm packages
+2. Apps consume libraries via `npm install` or local symlinks
+3. Each app has its own `.env` and deployment config
+4. DigitalOcean App Platform deploys each app separately
+
 ## Next Steps
 
 1. Review and approve this strategy
