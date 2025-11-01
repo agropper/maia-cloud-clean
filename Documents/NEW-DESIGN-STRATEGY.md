@@ -343,10 +343,23 @@ maia-cloud-repos/
 ```
 
 **Development workflow:**
-1. Libraries are independent npm packages
-2. Apps consume libraries via `npm install` or local symlinks
-3. Each app has its own `.env` and deployment config
-4. DigitalOcean App Platform deploys each app separately
+1. Libraries are independent npm packages (publish to npm or use local symlinks during development)
+2. During development: use `npm link` to symlink libraries for instant changes
+3. During production: publish libraries to npm and `npm install` normally
+4. Each app has its own `.env` and deployment config
+5. DigitalOcean App Platform deploys each app separately
+
+**Example symlink workflow (development):**
+```bash
+# In lib-maia-do-client/
+npm link
+
+# In maia-cloud-user-app/
+npm link lib-maia-do-client
+
+# Now changes to lib-maia-do-client immediately reflect in user-app
+# No need to publish and reinstall
+```
 
 ## Next Steps
 
