@@ -36,7 +36,7 @@
 
 ### Backend
 - **Node.js** with Express.js
-- **Session Management** with in-memory storage
+- **Session Management** with Cloudant database-backed storage
 - **Rate Limiting** and security middleware
 - **RESTful API** design
 
@@ -66,6 +66,7 @@
 - **Free tier** available
 - **Transactional emails** for user notifications
 - **Admin notifications** and support communications
+- **Required** for email functionality (admin approvals, contact forms)
 
 ### AI Provider APIs
 - **Google Gemini**: `GEMINI_API_KEY`
@@ -120,8 +121,10 @@
 
 ### Free Services
 - **IBM Cloudant**: Free tier database
-- **Resend**: Free tier email service
+- **Resend**: Free tier email service (required for admin notifications and contact forms)
 - **AI APIs**: Pay-per-use (typically very low cost for on-demand usage)
+
+**Note**: While Resend offers a free tier, the `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `RESEND_ADMIN_EMAIL` environment variables must be configured for email features to function. The application will return errors if these are not set.
 
 ## 🔐 Environment Configuration
 
@@ -144,9 +147,10 @@ ANTHROPIC_API_KEY=your-anthropic-api-key-here
 CHATGPT_API_KEY=your-chatgpt-api-key-here
 DEEPSEEK_API_KEY=your-deepseek-api-key-here
 
-# Email Service
+# Email Service (Required for email functionality)
 RESEND_API_KEY=your-resend-api-key-here
 RESEND_FROM_EMAIL=your-from-email@yourdomain.com
+RESEND_ADMIN_EMAIL=admin@yourdomain.com
 ```
 
 ## 📚 Documentation

@@ -412,49 +412,60 @@ const uploadPDFFile = async (
             body: formData
           })
           .then(async (uploadResponse) => {
-            console.log(`📥 [KB STEP] Upload response status: ${uploadResponse.status}`);
-            
-            if (uploadResponse.ok) {
-              const uploadResult = await uploadResponse.json()
-              console.log(`✅ [KB STEP] Upload successful - Response:`, JSON.stringify(uploadResult, null, 2));
+            try {
+              console.log(`📥 [KB STEP] Upload response status: ${uploadResponse.status}`);
               
-              // Update the uploaded file with bucket info
-              uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
-              uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
-              
-              console.log(`📄 [KB STEP] Updated uploadedFile with bucket info:`);
-              console.log(`🔗 [KB STEP] Bucket key: ${uploadResult.fileInfo.bucketKey}`);
-              console.log(`📁 [KB STEP] Bucket path: ${uploadResult.fileInfo.userFolder}`);
-              
-              // Update user record with file metadata
-              await updateUserFileMetadata(resolvedUserId, {
-                fileName: file.name,
-                bucketKey: uploadResult.fileInfo.bucketKey,
-                bucketPath: uploadResult.fileInfo.userFolder,
-                fileSize: file.size,
-                fileType: 'pdf',
-                uploadedAt: new Date().toISOString()
-              })
-              
-              // Verify file was saved in correct location
-              if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
-                reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`))
-                return
+              if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json()
+                console.log(`✅ [KB STEP] Upload successful - Response:`, JSON.stringify(uploadResult, null, 2));
+                
+                // Update the uploaded file with bucket info
+                uploadedFile.bucketKey = uploadResult.fileInfo.bucketKey
+                uploadedFile.bucketPath = uploadResult.fileInfo.userFolder
+                
+                console.log(`📄 [KB STEP] Updated uploadedFile with bucket info:`);
+                console.log(`🔗 [KB STEP] Bucket key: ${uploadResult.fileInfo.bucketKey}`);
+                console.log(`📁 [KB STEP] Bucket path: ${uploadResult.fileInfo.userFolder}`);
+                
+                // Update user record with file metadata
+                try {
+                  await updateUserFileMetadata(resolvedUserId, {
+                    fileName: file.name,
+                    bucketKey: uploadResult.fileInfo.bucketKey,
+                    bucketPath: uploadResult.fileInfo.userFolder,
+                    fileSize: file.size,
+                    fileType: 'pdf',
+                    uploadedAt: new Date().toISOString()
+                  })
+                } catch (metadataError) {
+                  console.error(`❌ Error updating file metadata:`, metadataError)
+                  reject(new Error(`Failed to update file metadata: ${metadataError instanceof Error ? metadataError.message : String(metadataError)}`))
+                  return
+                }
+                
+                // Verify file was saved in correct location
+                if (userFolder !== 'root' && uploadResult.fileInfo.userFolder === 'root') {
+                  reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder '${userFolder}' but file was saved in 'root' folder`))
+                  return
+                }
+                if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
+                  reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`))
+                  return
+                }
+                
+                resolve() // Upload and metadata save complete
+              } else {
+                console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
+                reject(new Error(`Failed to save PDF to bucket: ${file.name}`))
               }
-              if (userFolder === 'root' && uploadResult.fileInfo.userFolder !== 'root') {
-                reject(new Error(`❌ FILE SAVED IN WRONG LOCATION: Expected folder 'root' but file was saved in '${uploadResult.fileInfo.userFolder}' folder`))
-                return
-              }
-              
-              resolve() // Upload and metadata save complete
-            } else {
-              console.error(`❌ Failed to save PDF to bucket: ${file.name}`)
-              reject(new Error(`Failed to save PDF to bucket: ${file.name}`))
+            } catch (responseError) {
+              console.error(`❌ Error processing upload response:`, responseError)
+              reject(responseError instanceof Error ? responseError : new Error(String(responseError)))
             }
           })
           .catch((bucketError) => {
             console.error(`❌ Error saving PDF to bucket:`, bucketError)
-            reject(bucketError as Error)
+            reject(bucketError instanceof Error ? bucketError : new Error(String(bucketError)))
           })
         } catch (uploadError) {
           reject(uploadError as Error)
