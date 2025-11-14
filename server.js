@@ -50,7 +50,11 @@ const app = express();
 app.use((req, res, next) => {
   // Skip redirect for health checks or internal routes if needed
   // For now, redirect everything
-  return res.redirect(308, 'https://maia.agropper.xyz' + req.path + (req.query ? '?' + new URLSearchParams(req.query).toString() : ''));
+  const queryString = req.query && Object.keys(req.query).length > 0 
+    ? '?' + new URLSearchParams(req.query).toString() 
+    : '';
+  const redirectUrl = 'https://maia.agropper.xyz' + (req.path === '/' ? '' : req.path) + queryString;
+  return res.redirect(308, redirectUrl);
 });
 
 // Unified Cloudant/CouchDB setup
