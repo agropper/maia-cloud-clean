@@ -13,4 +13,7 @@ services:
     instance_size_slug: basic-xxs
     http_port: 3001
     routes:
-      - path: / 
+      - path: /*
+        redirect:
+          destination: https://maia.agropper.xyz
+          status_code: 308 

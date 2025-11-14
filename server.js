@@ -45,6 +45,18 @@ import { initializeAlertSystem, sendAdminAlert, AlertCategory, AlertSeverity } f
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Redirect all traffic to maia.agropper.xyz (308 Permanent Redirect)
+// This runs before all other middleware and routes
+app.use((req, res, next) => {
+  // Skip redirect for health checks or internal routes if needed
+  // For now, redirect everything
+  const queryString = req.query && Object.keys(req.query).length > 0 
+    ? '?' + new URLSearchParams(req.query).toString() 
+    : '';
+  const redirectUrl = 'https://maia.agropper.xyz' + (req.path === '/' ? '' : req.path) + queryString;
+  return res.redirect(308, redirectUrl);
+});
+
 // Unified Cloudant/CouchDB setup
 import { createCouchDBClient } from './src/utils/couchdb-client.js';
 
@@ -4590,7 +4602,7 @@ const getAgentApiKey = async (agentId) => {
     console.log(`🔑 Using cached API key for agent: ${agentName}`);
     return agentApiKeys[agentId];
   }
-
+  
   // Check if we have the API key stored in the database
   // Instead of scanning all users, check individual user cache entries (faster and always fresh)
   try {
@@ -4602,7 +4614,7 @@ const getAgentApiKey = async (agentId) => {
     if (userWithAgent) {
       agentName = userWithAgent.assignedAgentName || userWithAgent._id || 'Unknown';
       console.log(`🔑 [API KEY] Found user ${userWithAgent.userId} with agent ${agentId}`);
-          } else {
+    } else {
       console.log(`🔑 [API KEY] No user found with assignedAgentId: ${agentId}`);
     }
     
