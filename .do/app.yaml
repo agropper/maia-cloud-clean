@@ -14,5 +14,6 @@ services:
     http_port: 3001
     routes:
       - path: /*
-        redirect: https://maia.agropper.xyz
-        redirect_code: 308 
+        redirect:
+          destination: https://maia.agropper.xyz
+          status_code: 308 

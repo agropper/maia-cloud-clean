@@ -45,6 +45,14 @@ import { initializeAlertSystem, sendAdminAlert, AlertCategory, AlertSeverity } f
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Redirect all traffic to maia.agropper.xyz (308 Permanent Redirect)
+// This runs before all other middleware and routes
+app.use((req, res, next) => {
+  // Skip redirect for health checks or internal routes if needed
+  // For now, redirect everything
+  return res.redirect(308, 'https://maia.agropper.xyz' + req.path + (req.query ? '?' + new URLSearchParams(req.query).toString() : ''));
+});
+
 // Unified Cloudant/CouchDB setup
 import { createCouchDBClient } from './src/utils/couchdb-client.js';
 
